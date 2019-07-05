@@ -1,0 +1,5 @@
+.stack-work/
+graph.cabal
+*~
+# graph files used in testing
+*.g
