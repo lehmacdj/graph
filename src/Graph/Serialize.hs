@@ -1,0 +1,53 @@
+{-|
+   This module introduces a serialization format for graphs that uses a
+   directory to store all of the data associated with the graph.
+   Every nodes links are serialized into a json file, links.json.
+   Every node may be associated with auxilliary binary data which is stored in,
+   nid.data where nid is the nid of the associated node.
+   The auxilliary data is available from the console, and should be thought of
+   as an unique edge to a file.
+ -}
+module Graph.Serialize where
+
+import Data.Aeson (ToJSON, FromJSON)
+import qualified Data.Aeson as Aeson
+
+import Data.ByteString.Lazy (ByteString)
+import qualified Data.ByteString.Lazy as B
+import qualified Data.ByteString.Lazy.Char8 as B
+
+import System.IO
+import System.Directory
+import Control.Exception
+
+import Graph.Types
+
+(</>) :: FilePath -> FilePath -> FilePath
+dir </> next = dir ++ "/" ++ next
+
+linksFile :: FilePath -> FilePath
+linksFile = (</> "links.json")
+
+nodeDataFile :: FilePath -> Id -> FilePath
+nodeDataFile base nid = base </> (show nid ++ ".data")
+
+-- | Write the contents of a graph into a directory at the specified location.
+serializeGraph
+  :: (Show t, ToJSON t, Ord t)
+  => Graph t -> FilePath -> IO (Maybe ())
+serializeGraph g base = (`catch` ioHandler) $ do
+  createDirectoryIfMissing True base
+  Just <$> B.writeFile (linksFile base) (Aeson.encode g)
+
+ioHandler :: IOError -> IO (Maybe a)
+ioHandler = pure . const Nothing
+
+-- | Load a graph from a directory.
+deserializeGraph
+  :: (FromJSON t, Read t, Show t, Ord t)
+  => FilePath -> IO (Maybe (Graph t))
+deserializeGraph base =
+  (Aeson.decode <$> B.readFile (linksFile base)) `catch` ioHandler
+
+getBinaryData :: FilePath -> Id -> IO ByteString
+getBinaryData = (B.readFile .) . nodeDataFile

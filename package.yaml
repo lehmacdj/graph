@@ -29,12 +29,14 @@ dependencies:
 - megaparsec
 - aeson
 - bytestring
+- base64-bytestring
+- directory
 
 library:
   source-dirs: src
 
 executables:
-  graph-exe:
+  ge:
     main:                Main.hs
     source-dirs:         app
     ghc-options:

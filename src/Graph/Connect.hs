@@ -1,9 +1,9 @@
 -- | Utilities for dealing with connects and following them.
 
-module Data.Graph.Connect where
+module Graph.Connect where
 
 import Data.Set (Set)
-import Data.Graph
+import Graph
 import Data.Foldable
 
 pairOfConnect :: Connect t -> (t, Id)

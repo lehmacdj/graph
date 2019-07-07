@@ -11,7 +11,7 @@ import Text.Megaparsec
 import Text.Megaparsec.Char
 import qualified Text.Megaparsec.Char.Lexer as L
 
-import Data.Graph (Id)
+import Graph (Id)
 
 import Command
 
@@ -29,7 +29,7 @@ identChar :: Parser Char
 identChar = alphaNumChar
 
 ident :: Parser String
-ident = L.lexeme s (some alphaNumChar <* lookAhead (space1 <|> eof))
+ident = L.lexeme s (some (alphaNumChar <|> oneOf "-_") <* lookAhead (space1 <|> eof))
 
 stringLiteral :: Parser String
 stringLiteral = L.lexeme s (char '"' >> manyTill L.charLiteral (char '"'))
@@ -57,6 +57,8 @@ pCommand
   <|> try pRemoveEdgeOut
   <|> try pRemoveEdgeIn
   <|> try pCloneNode
+  <|> try pShowImage
+  <|> try pSetBinaryData
 
 transition :: Parser String
 transition = ident <|> stringLiteral
@@ -111,6 +113,12 @@ pRemoveEdgeIn = (symbolFrom ["remove-in", "rmi"] $> RemoveEdgeIn) <*> transition
 
 pCloneNode :: Parser Command
 pCloneNode = (symbolFrom ["clone-node", "cp"] $> CloneNode) <*> nodeId
+
+pShowImage :: Parser Command
+pShowImage = symbolFrom ["show-image", "si"] $> ShowImage
+
+pSetBinaryData :: Parser Command
+pSetBinaryData = (symbolFrom ["set-binary-data", "sbd"] $> SetBinaryData) <*> some anySingle
 
 parseCommand :: String -> Either String Command
 parseCommand = left show . runParser pCommand "<interactive>"

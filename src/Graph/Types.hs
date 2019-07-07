@@ -3,8 +3,8 @@
 {-# LANGUAGE DeriveAnyClass #-}
 {-# LANGUAGE ConstraintKinds #-}
 
-module Data.Graph.Types
-  ( module Data.Graph.Types
+module Graph.Types
+  ( module Graph.Types
   ) where
 
 import Control.DeepSeq

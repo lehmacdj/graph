@@ -1,4 +1,5 @@
 {-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE OverloadedStrings #-}
 
 module Main where
 
@@ -12,25 +13,31 @@ import Control.Lens
 import Control.Lens.Zoom
 import Data.Set.Lens (setmapped)
 import Control.Monad.State
+import Data.ByteString.Lazy (ByteString)
+import qualified Data.ByteString.Lazy as B
 import qualified Data.ByteString.Lazy.Char8 as B
 import qualified Data.Aeson as Aeson
 import Control.Exception (catch)
 import Data.List (intercalate)
+import System.IO.Term.Image
+import System.Directory
 
-import Data.Graph
-import Data.Graph.Connect
+import Graph
+import Graph.Connect
+import Graph.Serialize
 
 import Command
 import Command.Parser
 
 data S = S
-  { _currentNID :: Id
+  { _filePath :: Maybe FilePath
+  , _currentNID :: Id
   , _graph :: Graph String
   }
   deriving (Show, Eq, Ord)
 makeLenses ''S
 
-emptyS = uncurry S $ (`runState` emptyGraph) $ do
+emptyS = uncurry (S Nothing) $ (`runState` emptyGraph) $ do
   f <- freshNode
   modify (insertNode f)
   pure (nidOf f)
@@ -44,6 +51,22 @@ printTransitions = putStrLn . unlines' . fmap show . toList where
 
 currentNode :: Repl S (Node String)
 currentNode = lookupNode <$> use graph <*> use currentNID
+
+currentNodeDataFile :: Repl S FilePath
+currentNodeDataFile = do
+  cnid <- use currentNID
+  path <- use filePath
+  case path of
+    Just base -> pure (nodeDataFile base cnid)
+    Nothing -> error "there is no current path"
+
+currentBinaryData :: Repl S ByteString
+currentBinaryData = do
+  cnid <- use currentNID
+  path <- use filePath
+  case path of
+    Just base -> liftIO $ getBinaryData base cnid
+    Nothing -> pure ""
 
 execCommand :: Command -> Repl S () -> Repl S ()
 execCommand c continue = case c of
@@ -91,15 +114,16 @@ execCommand c continue = case c of
     continue
   Dump fn -> do
     g <- use graph
-    result <- liftIO $ (Just <$> B.writeFile fn (Aeson.encode g)) `catch` ioExceptionHandler
+    result <- liftIO $ serializeGraph g fn
     case result of
-      Nothing -> liftIO (putStrLn ("error: failed to decode " ++ fn)) >> continue
-      Just () -> continue
+      Nothing -> liftIO (putStrLn ("error: failed to decode " ++ fn))
+      Just () -> pure ()
+    continue
   Load fn -> do
-    g <- liftIO $ (Aeson.decode <$> B.readFile fn) `catch` ioExceptionHandler
+    g <- liftIO (deserializeGraph fn)
     case g of
       Nothing -> liftIO (putStrLn ("error: failed to decode " ++ fn))
-      Just g' -> graph .= g'
+      Just g' -> graph .= g' >> filePath .= Just fn
     continue
   Debug -> do
     s <- get
@@ -130,6 +154,14 @@ execCommand c continue = case c of
             setNO = nodeOutgoing .~ selfLoopify (view nodeOutgoing n)
             n'' = (setNI . setNO) n'
         graph %= insertNode n''
+    continue
+  ShowImage -> do
+    bdata <- currentBinaryData
+    liftIO $ printImage bdata
+    continue
+  SetBinaryData fp -> do
+    dfp <- currentNodeDataFile
+    liftIO $ copyFile fp dfp
     continue
 
 ioExceptionHandler :: IOError -> IO (Maybe a)

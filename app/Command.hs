@@ -1,6 +1,6 @@
 module Command where
 
-import Data.Graph
+import Graph
 
 data Command
   = Quit
@@ -19,4 +19,6 @@ data Command
   | RemoveEdgeOut String
   | RemoveEdgeIn String
   | CloneNode Id
+  | ShowImage
+  | SetBinaryData FilePath
   deriving (Eq, Show, Ord)

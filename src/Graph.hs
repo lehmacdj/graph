@@ -1,9 +1,9 @@
 {-# LANGUAGE FlexibleContexts #-}
 
-module Data.Graph
-  ( module Data.Graph
-  , module Data.Graph.Types
-  , module Data.Graph.Edge
+module Graph
+  ( module Graph
+  , module Graph.Types
+  , module Graph.Edge
   ) where
 
 import Control.Lens
@@ -20,8 +20,8 @@ import Control.Monad.State
 
 import qualified Debug.Trace as Debug
 
-import Data.Graph.Types
-import Data.Graph.Edge
+import Graph.Types
+import Graph.Edge
 
 indegreeOf :: Node t -> Int
 indegreeOf = Set.size . view nodeIncoming

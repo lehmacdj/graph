@@ -1,7 +1,7 @@
-module Data.Graph.Edge where
+module Graph.Edge where
 
 import Control.Lens
-import Data.Graph.Types
+import Graph.Types
 
 outConnect :: Edge t -> Connect t
 outConnect (Edge _ l t) = Connect l t
