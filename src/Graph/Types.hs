@@ -14,7 +14,7 @@ import Data.Aeson
 
 import Control.Lens (makeLenses, view, over)
 
-import Data.IntMap (IntMap)
+import Data.Map (Map)
 
 import Data.Set (Set)
 
@@ -49,7 +49,7 @@ instance (ToJSON t, TransitionValid t) => ToJSON (Node t) where
 
 data Graph t = Graph
   { _graphAllocator :: Id
-  , _graphNodeMap :: IntMap (Node t)
+  , _graphNodeMap :: Map Id (Node t)
   } deriving (Show, Eq, Ord, Generic, NFData)
 makeLenses ''Graph
 
@@ -57,10 +57,10 @@ instance (FromJSON t, TransitionValid t) => FromJSON (Graph t)
 instance (ToJSON t, TransitionValid t) => ToJSON (Graph t) where
   toEncoding = genericToEncoding defaultOptions
 
-nodeMap :: Graph t -> IntMap (Node t)
+nodeMap :: Graph t -> Map Id (Node t)
 nodeMap = view graphNodeMap
 
-withNodeMap :: Graph t -> (IntMap (Node t) -> IntMap (Node t)) -> Graph t
+withNodeMap :: Graph t -> (Map Id (Node t) -> Map Id (Node t)) -> Graph t
 withNodeMap = flip (over graphNodeMap)
 
 -- | unbiased representation of an edge

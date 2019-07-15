@@ -9,8 +9,8 @@ module Graph
 import Control.Lens
 
 import Data.Foldable
-import qualified Data.IntMap as IM
-import qualified Data.IntMap.Internal.Debug as IMD
+import qualified Data.Map as M
+import qualified Data.Map.Internal.Debug as MD
 import Data.Maybe
 import Data.Set (Set)
 import Data.Set.Lens
@@ -43,9 +43,9 @@ lookupNode = flip nodeLookup
 
 nodeLookup :: TransitionValid t
            => Id -> Graph t -> Node t
-nodeLookup i g = fromMaybe err . IM.lookup i . nodeMap $ g where
+nodeLookup i g = fromMaybe err . M.lookup i . nodeMap $ g where
   err = error $ "expected to find " ++ show i ++ " in the Graph\n"
-             ++ IMD.showTree (nodeMap g)
+             ++ MD.showTree (nodeMap g)
 
 -- | Utility function for constructing a primed version of a function operating on ids instead of
 primed
@@ -67,8 +67,8 @@ primeds f i ig = f (pure nodeLookup <*> i <*> pure ig) ig
 
 delEdge :: TransitionValid t => Edge t -> Graph t -> Graph t
 delEdge e g = withNodeMap g $
-  IM.adjust (over nodeOutgoing (Set.delete (outConnect e))) (source e)
-  . IM.adjust (over nodeIncoming (Set.delete (inConnect e))) (sink e)
+  M.adjust (over nodeOutgoing (Set.delete (outConnect e))) (source e)
+  . M.adjust (over nodeIncoming (Set.delete (inConnect e))) (sink e)
 
 delEdges
   :: TransitionValid t
@@ -79,9 +79,9 @@ delEdges = listify delEdge
 -- nodes as well.
 delNode :: Node t -> Graph t -> Graph t
 delNode n g = withNodeMap g $
-  IM.map deleteIncoming
-  . IM.map deleteIncoming
-  . IM.delete nid where
+  M.map deleteIncoming
+  . M.map deleteIncoming
+  . M.delete nid where
     nid = _nodeId n
     del = Set.filter ((/=nid) . view connectNode)
     deleteIncoming = over nodeIncoming del
@@ -105,8 +105,8 @@ insertEdge
   :: TransitionValid t
   => Edge t -> Graph t -> Graph t
 insertEdge e g = withNodeMap g $
-  IM.adjust (over nodeOutgoing (Set.insert (outConnect e))) (source e)
-  . IM.adjust (over nodeIncoming (Set.insert (inConnect e))) (sink e)
+  M.adjust (over nodeOutgoing (Set.insert (outConnect e))) (source e)
+  . M.adjust (over nodeIncoming (Set.insert (inConnect e))) (sink e)
 
 insertEdges
   :: TransitionValid t
@@ -120,7 +120,7 @@ insertNode
   => Node t -> Graph t -> Graph t
 insertNode n g =
   insertEdges (incomingEs ++ outgoingEs)
-  $ withNodeMap g (IM.insert nid n) where
+  $ withNodeMap g (M.insert nid n) where
     nid = _nodeId n
     incomingEs = map (`incomingEdge` nid) (toList (_nodeIncoming n))
     outgoingEs = map (outgoingEdge nid) (toList (_nodeOutgoing n))
@@ -131,13 +131,13 @@ insertNodes
 insertNodes = listify insertNode
 
 nodesOf :: Graph t -> [Node t]
-nodesOf = IM.elems . nodeMap
+nodesOf = M.elems . nodeMap
 
 emptyGraph :: Graph t
-emptyGraph = Graph 0 IM.empty
+emptyGraph = Graph 0 M.empty
 
 isEmptyGraph :: Graph t -> Bool
-isEmptyGraph = IM.null . nodeMap
+isEmptyGraph = M.null . nodeMap
 
 nidOf :: Node t -> Id
 nidOf = _nodeId
@@ -173,13 +173,13 @@ outgoingTransitionsOf
 outgoingTransitionsOf = Set.map _connectTransition . outgoingConnectsOf
 
 maybeLookupNode :: Graph t -> Id -> Maybe (Node t)
-maybeLookupNode = flip IM.lookup . nodeMap
+maybeLookupNode = flip M.lookup . nodeMap
 
 traceGraph :: TransitionValid t => Graph t -> Graph t
 traceGraph g = withNodeMap g $ \nm -> Debug.trace (showDebug (Debug.trace "graph is:" g)) nm
 
 showDebug :: TransitionValid t => Graph t -> String
-showDebug = unlines . map show . IM.elems . nodeMap
+showDebug = unlines . map show . M.elems . nodeMap
 
 -- | Warning! Using this to create a node and inserting it into a graph can
 -- leave the graph with an invalid state, for future node allocation using
@@ -201,7 +201,7 @@ filterGraph
   :: (Node t -> Bool)
   -> Graph t
   -> Graph t
-filterGraph f g = IM.foldr maybeDelNode g (nodeMap g) where
+filterGraph f g = M.foldr maybeDelNode g (nodeMap g) where
   maybeDelNode x ig'
     | not $ f x = delNode x ig'
     | otherwise = ig'
@@ -210,7 +210,7 @@ mapGraph
   :: (Node t -> Node t)
   -> Graph t
   -> Graph t
-mapGraph f g = withNodeMap g $ \nm -> IM.map f nm
+mapGraph f g = withNodeMap g $ \nm -> M.map f nm
 
 dualizeGraph :: Graph t -> Graph t
 dualizeGraph = mapGraph dualizeNode where
@@ -218,6 +218,6 @@ dualizeGraph = mapGraph dualizeNode where
 
 -- | Return the id of an arbitrary node in the graph.
 arbitraryId :: Graph t -> Id
-arbitraryId = nidOf . head' . IM.elems . nodeMap where
+arbitraryId = nidOf . head' . M.elems . nodeMap where
   head' [] = error "expected there to be a node in the graph but there were none"
   head' (x:_) = x
