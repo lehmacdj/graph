@@ -26,6 +26,7 @@ import qualified Data.Map as Map
 import Graph
 import Graph.Connect
 import Graph.Serialize
+import qualified Graph.Serialize2 as S2
 
 import Command
 import Command.Parser
@@ -123,7 +124,7 @@ execCommand c continue = case c of
     continue
   Dump fn -> do
     g <- use graph
-    result <- liftIO $ serializeGraph g fn
+    result <- liftIO $ S2.serializeGraph g fn
     case result of
       Nothing -> liftIO (putStrLn ("error: failed to decode " ++ fn))
       Just () -> pure ()
