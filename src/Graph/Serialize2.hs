@@ -61,9 +61,9 @@ deserializeGraph
   => FilePath -> IO (Maybe (Graph t))
 deserializeGraph base = (`catch` ioHandler) $ do
   contents <- listDirectory base
-  let linkFiles = filter (".json" `isSuffixOf`) contents
-  nodeIds <- mapM (readIO . dropExtension) linkFiles
-  fileContents <- mapM B.readFile linkFiles
+  let linkFilenames = filter (".json" `isSuffixOf`) contents
+  nodeIds <- mapM (readIO . dropExtension) linkFilenames
+  fileContents <- mapM (B.readFile . linksFile base) nodeIds
   let nodes = mapM Aeson.decode fileContents
   pure $ nodes <&> \x -> Graph (Map.fromList (nodeIds `zip` x))
 

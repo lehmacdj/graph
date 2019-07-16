@@ -25,8 +25,7 @@ import qualified Data.Map as Map
 
 import Graph
 import Graph.Connect
-import Graph.Serialize
-import qualified Graph.Serialize2 as S2
+import Graph.Serialize2
 
 import Command
 import Command.Parser
@@ -50,6 +49,7 @@ freshNode = do
   nextId += 1
   pure (emptyNode nid)
 
+emptyS :: S
 emptyS = S Nothing 1 0 (insertNode (emptyNode 0) emptyGraph)
 
 errorNoEdge :: String -> Repl S ()
@@ -124,7 +124,7 @@ execCommand c continue = case c of
     continue
   Dump fn -> do
     g <- use graph
-    result <- liftIO $ S2.serializeGraph g fn
+    result <- liftIO $ serializeGraph g fn
     case result of
       Nothing -> liftIO (putStrLn ("error: failed to decode " ++ fn))
       Just () -> pure ()
