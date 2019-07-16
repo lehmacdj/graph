@@ -21,6 +21,7 @@ import Control.Exception (catch)
 import Data.List (intercalate)
 import System.IO.Term.Image
 import System.Directory
+import qualified Data.Map as Map
 
 import Graph
 import Graph.Connect
@@ -131,7 +132,11 @@ execCommand c continue = case c of
     g <- liftIO (deserializeGraph fn)
     case g of
       Nothing -> liftIO (putStrLn ("error: failed to decode " ++ fn))
-      Just g' -> graph .= g' >> filePath .= Just fn
+      Just g' -> do
+        graph .= g'
+        let maxId = maximum (0 : (Map.keys . nodeMap $ g'))
+        nextId .= maxId + 1
+        filePath .= Just fn
     continue
   Debug -> do
     s <- get
