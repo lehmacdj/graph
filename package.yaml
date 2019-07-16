@@ -31,6 +31,7 @@ dependencies:
 - bytestring
 - base64-bytestring
 - directory
+- filepath
 
 library:
   source-dirs: src

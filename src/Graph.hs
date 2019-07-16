@@ -134,7 +134,7 @@ nodesOf :: Graph t -> [Node t]
 nodesOf = M.elems . nodeMap
 
 emptyGraph :: Graph t
-emptyGraph = Graph 0 M.empty
+emptyGraph = Graph M.empty
 
 isEmptyGraph :: Graph t -> Bool
 isEmptyGraph = M.null . nodeMap
@@ -186,16 +186,6 @@ showDebug = unlines . map show . M.elems . nodeMap
 -- freshNode.
 emptyNode :: Id -> Node t
 emptyNode i = Node i Set.empty Set.empty
-
--- | Create a node with a unique id not yet in the graph
--- intended for use in larger monad states using zoom from Control.Lens.Zoom
--- Every node should be created using this method, this guarantees that every
--- new node has a unique id.
-freshNode :: MonadState (Graph t) m => m (Node t)
-freshNode = do
-  nid <- use graphAllocator
-  graphAllocator += 1
-  pure (emptyNode nid)
 
 filterGraph
   :: (Node t -> Bool)

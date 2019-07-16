@@ -47,9 +47,8 @@ instance (FromJSON t, TransitionValid t) => FromJSON (Node t)
 instance (ToJSON t, TransitionValid t) => ToJSON (Node t) where
   toEncoding = genericToEncoding defaultOptions
 
-data Graph t = Graph
-  { _graphAllocator :: Id
-  , _graphNodeMap :: Map Id (Node t)
+newtype Graph t = Graph
+  { _graphNodeMap :: Map Id (Node t)
   } deriving (Show, Eq, Ord, Generic, NFData)
 makeLenses ''Graph
 
