@@ -37,6 +37,8 @@ linksFile base nid = base </> (show nid ++ ".json")
 nodeDataFile :: FilePath -> Id -> FilePath
 nodeDataFile base nid = base </> (show nid ++ ".data")
 
+-- TODO: rewrite using System.Directory.Tree
+
 serializeNode
   :: (Show t, ToJSON t, Ord t)
   => Node t -> FilePath -> IO ()
