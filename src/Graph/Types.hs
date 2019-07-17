@@ -13,10 +13,11 @@ import GHC.Generics
 import Data.ByteString.Lazy (ByteString)
 import Data.Maybe (fromJust)
 import Data.List (stripPrefix)
+import Data.Char (toLower)
 
 import Data.Aeson
 
-import Control.Lens (makeLenses, view, over)
+import Control.Lens
 
 import Data.Map (Map)
 
@@ -57,9 +58,13 @@ data Prenode t = Prenode
   } deriving (Show, Eq, Ord, Generic, NFData)
 makeLenses ''Prenode
 
+lowercaseFirst :: String -> String
+lowercaseFirst [] = []
+lowercaseFirst (x:xs) = toLower x:xs
+
 prenodeOptions :: Options
 prenodeOptions = defaultOptions
-  { fieldLabelModifier = fromJust . stripPrefix "_prenodeId"
+  { fieldLabelModifier = lowercaseFirst . fromJust . stripPrefix "_prenode"
   }
 
 prenodeToNode :: Prenode t -> Node t

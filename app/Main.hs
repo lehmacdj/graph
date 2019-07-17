@@ -170,8 +170,10 @@ execCommand c continue = case c of
         graph %= insertNode n''
     continue
   ShowImage -> do
-    bdata <- currentBinaryData
-    liftIO $ printImage bdata
+    n <- currentNode
+    case view nodeData n of
+      Just i -> liftIO . printImage $ i
+      Nothing -> liftIO $ putStrLn "error: no image available for this node"
     continue
   SetBinaryData fp -> do
     dfp <- currentNodeDataFile

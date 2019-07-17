@@ -74,7 +74,7 @@ deserializeGraph base = (`catch` ioHandler) $ do
   let nodes = mapM Aeson.decode fileContents
   datas <- mapM (tryGetBinaryData base) nodeIds
   let nodesFinal = nodes <&> \x -> zipWith (nodeData .~) datas x
-  pure $ nodes <&> \x -> Graph (Map.fromList (nodeIds `zip` x))
+  pure $ nodesFinal <&> \x -> Graph (Map.fromList (nodeIds `zip` x))
 
 tryGetBinaryData :: FilePath -> Id -> IO (Maybe ByteString)
 tryGetBinaryData = (ioErrorToMaybe .) . (B.readFile .) . nodeDataFile
