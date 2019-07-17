@@ -185,7 +185,7 @@ showDebug = unlines . map show . M.elems . nodeMap
 -- leave the graph with an invalid state, for future node allocation using
 -- freshNode.
 emptyNode :: Id -> Node t
-emptyNode i = Node i Set.empty Set.empty
+emptyNode i = Node i Set.empty Set.empty Nothing
 
 filterGraph
   :: (Node t -> Bool)
@@ -204,7 +204,7 @@ mapGraph f g = withNodeMap g $ \nm -> M.map f nm
 
 dualizeGraph :: Graph t -> Graph t
 dualizeGraph = mapGraph dualizeNode where
-  dualizeNode (Node nid i o) = Node nid o i
+  dualizeNode (Node nid i o x) = Node nid o i x
 
 -- | Return the id of an arbitrary node in the graph.
 arbitraryId :: Graph t -> Id

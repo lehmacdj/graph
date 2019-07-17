@@ -38,6 +38,7 @@ nodeDataFile :: FilePath -> Id -> FilePath
 nodeDataFile base nid = base </> (show nid ++ ".data")
 
 -- TODO: rewrite using System.Directory.Tree
+-- yields better error handling that isn't quite as sketchy
 
 serializeNode
   :: (Show t, ToJSON t, Ord t)

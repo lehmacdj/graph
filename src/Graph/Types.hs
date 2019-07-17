@@ -2,6 +2,7 @@
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE DeriveAnyClass #-}
 {-# LANGUAGE ConstraintKinds #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 
 module Graph.Types
   ( module Graph.Types
@@ -9,6 +10,9 @@ module Graph.Types
 
 import Control.DeepSeq
 import GHC.Generics
+import Data.ByteString.Lazy (ByteString)
+import Data.Maybe (fromJust)
+import Data.List (stripPrefix)
 
 import Data.Aeson
 
@@ -40,12 +44,40 @@ data Node t = Node
   -- ^ unique node id
   , _nodeIncoming :: Set (Connect t)
   , _nodeOutgoing :: Set (Connect t)
+  , _nodeData :: Maybe ByteString
   } deriving (Show, Eq, Ord, Generic, NFData)
 makeLenses ''Node
 
-instance (FromJSON t, TransitionValid t) => FromJSON (Node t)
+-- | For the purpose of implementing from and ToJSON we use Prenode.
+data Prenode t = Prenode
+  { _prenodeId :: Id
+  -- ^ unique node id
+  , _prenodeIncoming :: Set (Connect t)
+  , _prenodeOutgoing :: Set (Connect t)
+  } deriving (Show, Eq, Ord, Generic, NFData)
+makeLenses ''Prenode
+
+prenodeOptions :: Options
+prenodeOptions = defaultOptions
+  { fieldLabelModifier = fromJust . stripPrefix "_prenodeId"
+  }
+
+prenodeToNode :: Prenode t -> Node t
+prenodeToNode (Prenode nid i o) = Node nid i o Nothing
+
+nodeToPrenode :: Node t -> Prenode t
+nodeToPrenode (Node nid i o _) = Prenode nid i o
+
+instance (FromJSON t, TransitionValid t) => FromJSON (Prenode t) where
+  parseJSON = genericParseJSON prenodeOptions
+instance (ToJSON t, TransitionValid t) => ToJSON (Prenode t) where
+  toEncoding = genericToEncoding prenodeOptions
+
+instance (FromJSON t, TransitionValid t) => FromJSON (Node t) where
+  parseJSON = fmap prenodeToNode . parseJSON
 instance (ToJSON t, TransitionValid t) => ToJSON (Node t) where
-  toEncoding = genericToEncoding defaultOptions
+  toJSON = toJSON . nodeToPrenode
+  toEncoding = toEncoding . nodeToPrenode
 
 newtype Graph t = Graph
   { _graphNodeMap :: Map Id (Node t)
