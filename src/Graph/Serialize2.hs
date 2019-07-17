@@ -27,6 +27,7 @@ import System.IO
 import System.Directory
 import Control.Exception
 import System.FilePath
+import System.Directory.Tree
 
 import Graph.Types
 import Graph (nidOf)
@@ -58,6 +59,9 @@ serializeGraph g base = (`catch` ioHandler) $ do
 ioHandler :: IOError -> IO (Maybe a)
 ioHandler = pure . const Nothing
 
+ioErrorToMaybe :: IO a -> IO (Maybe a)
+ioErrorToMaybe = (`catch` ioHandler) . (Just <$>)
+
 -- | Load a graph from a directory.
 deserializeGraph
   :: (FromJSON t, Read t, Show t, Ord t)
@@ -68,7 +72,12 @@ deserializeGraph base = (`catch` ioHandler) $ do
   nodeIds <- mapM (readIO . dropExtension) linkFilenames
   fileContents <- mapM (B.readFile . linksFile base) nodeIds
   let nodes = mapM Aeson.decode fileContents
+  datas <- mapM (tryGetBinaryData base) nodeIds
+  let nodesFinal = nodes <&> \x -> zipWith (nodeData .~) datas x
   pure $ nodes <&> \x -> Graph (Map.fromList (nodeIds `zip` x))
+
+tryGetBinaryData :: FilePath -> Id -> IO (Maybe ByteString)
+tryGetBinaryData = (ioErrorToMaybe .) . (B.readFile .) . nodeDataFile
 
 getBinaryData :: FilePath -> Id -> IO ByteString
 getBinaryData = (B.readFile .) . nodeDataFile
