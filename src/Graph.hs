@@ -181,9 +181,8 @@ traceGraph g = withNodeMap g $ \nm -> Debug.trace (showDebug (Debug.trace "graph
 showDebug :: TransitionValid t => Graph t -> String
 showDebug = unlines . map show . M.elems . nodeMap
 
--- | Warning! Using this to create a node and inserting it into a graph can
--- leave the graph with an invalid state, for future node allocation using
--- freshNode.
+-- | Warning! It is up to the user of the graph to ensure that node ids are
+-- unique within the graph
 emptyNode :: Id -> Node t
 emptyNode i = Node i Set.empty Set.empty Nothing
 
