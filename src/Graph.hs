@@ -179,6 +179,11 @@ setData
   => Maybe ByteString -> Node t -> Graph t -> Graph t
 setData d n g = insertNode (set nodeData d (nodeConsistentWithGraph g n)) g
 
+dataOf
+  :: TransitionValid t
+  => Node t -> Maybe ByteString
+dataOf = view nodeData
+
 maybeLookupNode :: Graph t -> Id -> Maybe (Node t)
 maybeLookupNode = flip M.lookup . nodeMap
 

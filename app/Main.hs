@@ -82,14 +82,6 @@ currentNodeDataFile = do
     Just base -> pure (nodeDataFile base cnid)
     Nothing -> error "there is no current path"
 
-currentBinaryData :: Repl S ByteString
-currentBinaryData = do
-  cnid <- use currentNID
-  path <- use filePath
-  case path of
-    Just base -> liftIO $ getBinaryData base cnid
-    Nothing -> pure ""
-
 execCommand :: Command -> Repl S () -> Repl S ()
 execCommand c continue = case c of
   Quit -> pure ()

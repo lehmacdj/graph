@@ -30,7 +30,7 @@ import System.FilePath
 import System.Directory.Tree
 
 import Graph.Types
-import Graph (nidOf)
+import Graph (nidOf, dataOf)
 
 linksFile :: FilePath -> Id -> FilePath
 linksFile base nid = base </> (show nid ++ ".json")
@@ -47,6 +47,9 @@ serializeNode
 serializeNode n base = do
   createDirectoryIfMissing True base
   B.writeFile (linksFile base (nidOf n)) (Aeson.encode n)
+  case dataOf n of
+    Just d -> B.writeFile (nodeDataFile base (nidOf n)) d
+    Nothing -> pure ()
 
 -- | Write the contents of a graph into a directory at the specified location.
 serializeGraph
@@ -78,6 +81,3 @@ deserializeGraph base = (`catch` ioHandler) $ do
 
 tryGetBinaryData :: FilePath -> Id -> IO (Maybe ByteString)
 tryGetBinaryData = (ioErrorToMaybe .) . (B.readFile .) . nodeDataFile
-
-getBinaryData :: FilePath -> Id -> IO ByteString
-getBinaryData = (B.readFile .) . nodeDataFile
