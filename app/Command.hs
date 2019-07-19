@@ -21,4 +21,5 @@ data Command
   | CloneNode Id
   | ShowImage
   | SetBinaryData FilePath
+  | Import FilePath
   deriving (Eq, Show, Ord)

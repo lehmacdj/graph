@@ -33,6 +33,7 @@ dependencies:
 - directory
 - filepath
 - directory-tree
+- SHA
 
 library:
   source-dirs: src

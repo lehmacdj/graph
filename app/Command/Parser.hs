@@ -59,6 +59,7 @@ pCommand
   <|> try pCloneNode
   <|> try pShowImage
   <|> try pSetBinaryData
+  <|> try pImport
 
 transition :: Parser String
 transition = ident <|> stringLiteral
@@ -119,6 +120,9 @@ pShowImage = symbolFrom ["show-image", "si"] $> ShowImage
 
 pSetBinaryData :: Parser Command
 pSetBinaryData = (symbolFrom ["set-binary-data", "sbd"] $> SetBinaryData) <*> some anySingle
+
+pImport :: Parser Command
+pImport = (symbolFrom [":import", ":i"] $> Import) <*> some anySingle
 
 parseCommand :: String -> Either String Command
 parseCommand = left show . runParser pCommand "<interactive>"

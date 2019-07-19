@@ -1,5 +1,8 @@
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE TypeSynonymInstances #-}
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
 
 module Main where
 
@@ -26,9 +29,12 @@ import qualified Data.Map as Map
 import Graph
 import Graph.Connect
 import Graph.Serialize2
+import Graph.Import.Filesystem
 
 import Command
 import Command.Parser
+
+import Control.Monad.Unique
 
 data S = S
   { _filePath :: Maybe FilePath
@@ -38,6 +44,12 @@ data S = S
   }
   deriving (Show, Eq, Ord)
 makeLenses ''S
+
+instance MonadUnique Id (Repl S) where
+  fresh = do
+    nid <- use nextId
+    nextId += 1
+    pure nid
 
 -- | Create a node with a unique id not yet in the graph
 -- intended for use in larger monad states using zoom from Control.Lens.Zoom
@@ -178,6 +190,12 @@ execCommand c continue = case c of
   SetBinaryData fp -> do
     dfp <- currentNodeDataFile
     liftIO $ copyFile fp dfp
+    continue
+  Import fp -> do
+    importer <- liftIO $ importDirectory fp
+    nid <- use currentNID
+    g <- use graph
+    importer nid g
     continue
 
 ioExceptionHandler :: IOError -> IO (Maybe a)

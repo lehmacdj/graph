@@ -8,6 +8,7 @@ module Graph
 
 import Control.Lens
 
+import Data.ByteString.Lazy (ByteString)
 import Data.Foldable
 import qualified Data.Map as M
 import qualified Data.Map.Internal.Debug as MD
@@ -50,8 +51,8 @@ nodeLookup i g = fromMaybe err . M.lookup i . nodeMap $ g where
 -- | Utility function for constructing a primed version of a function operating on ids instead of
 primed
   :: TransitionValid t
-  => (Node t -> Graph t -> Graph t)
-  -> (Id -> Graph t -> Graph t)
+  => (Node t -> Graph t -> a)
+  -> (Id -> Graph t -> a)
 primed f i ig = f (lookupNode ig i) ig
 
 listify
@@ -172,8 +173,21 @@ outgoingTransitionsOf
   => Node t -> Set t
 outgoingTransitionsOf = Set.map _connectTransition . outgoingConnectsOf
 
+-- | sets the data, setting to nothing is equivalent to deleting the data
+setData
+  :: TransitionValid t
+  => Maybe ByteString -> Node t -> Graph t -> Graph t
+setData d n g = insertNode (set nodeData d (nodeConsistentWithGraph g n)) g
+
 maybeLookupNode :: Graph t -> Id -> Maybe (Node t)
 maybeLookupNode = flip M.lookup . nodeMap
+
+nodeConsistentWithGraph
+  :: TransitionValid t
+  => Graph t -> Node t -> Node t
+nodeConsistentWithGraph g n
+  | lookupNode g (nidOf n) == n = n
+  | otherwise = error "node is inconsistent with the state of the graph"
 
 traceGraph :: TransitionValid t => Graph t -> Graph t
 traceGraph g = withNodeMap g $ \nm -> Debug.trace (showDebug (Debug.trace "graph is:" g)) nm
