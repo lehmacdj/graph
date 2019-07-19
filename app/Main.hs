@@ -195,7 +195,8 @@ execCommand c continue = case c of
     importer <- liftIO $ importDirectory fp
     nid <- use currentNID
     g <- use graph
-    importer nid g
+    g' <- importer nid g
+    graph .= g'
     continue
 
 ioExceptionHandler :: IOError -> IO (Maybe a)

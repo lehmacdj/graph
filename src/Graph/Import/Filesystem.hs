@@ -46,8 +46,9 @@ addDirectories dt' root gi = do
        go dt nid g = case dt of
           File fn (sha, contents) -> do
              (n', g') <- followMkEdgeFrom' sha fhid g
+             let g'' = setData (Just contents) n' g'
              -- TODO: possibly add handling of filename extensions, to categorize
-             pure $ insertEdge (Edge nid fn (nidOf n')) g'
+             pure $ insertEdge (Edge nid fn (nidOf n')) g''
           Dir fn [] -> do
              (_, g') <- followMkEdgeFrom' fn nid g
              pure g'
@@ -57,5 +58,5 @@ addDirectories dt' root gi = do
              g'' <- go x (nidOf n') g'
              -- then continue evaluating at this point
              go (Dir fn xs) nid g''
-          Failed _ _ -> pure g
+          Failed _ _ -> error "we failed"
    go dt' root gi'
