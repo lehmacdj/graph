@@ -13,8 +13,6 @@ import qualified Data.ByteString.Lazy as B
 import qualified Data.ByteString.Lazy.Char8 as B
 import Data.Digest.Pure.SHA
 
-import Control.Arrow ((&&&))
-
 import System.Directory.Tree
 
 import Graph
@@ -23,8 +21,10 @@ import Control.Monad.Unique
 
 import Graph.Advanced
 
-adjoinSHA :: ByteString -> (String, ByteString)
-adjoinSHA = showDigest . sha512 &&& id
+import Graph.Import.ByteString
+
+computeSHA :: ByteString -> String
+computeSHA = showDigest . sha512
 
 importDirectory
    :: MonadUnique Id m
@@ -35,20 +35,19 @@ importDirectory base = do
       then putStrLn $ "error: search failed at least partially, "
                    ++ "missed directories will be ignored"
       else pure ()
-   pure . addDirectories $ adjoinSHA <$> fileTree
+   pure . addDirectories $ fileTree
 
 addDirectories
    :: MonadUnique Id m
-   => DirTree (String, ByteString) -> Id -> Graph String -> m (Graph String)
+   => DirTree ByteString -> Id -> Graph String -> m (Graph String)
 addDirectories dt' root gi = do
    (fileHashes, gi') <- followMkEdgeFrom' "file-hashes" root gi
    let fhid = nidOf fileHashes
        go dt nid g = case dt of
-          File fn (sha, contents) -> do
-             (n', g') <- followMkEdgeFrom' sha fhid g
-             let g'' = setData (Just contents) n' g'
+          File fn contents -> do
+             (nid', g') <- importData fhid contents g
              -- TODO: possibly add handling of filename extensions, to categorize
-             pure $ insertEdge (Edge nid fn (nidOf n')) g''
+             pure $ insertEdge (Edge nid fn nid') g'
           Dir fn [] -> do
              (_, g') <- followMkEdgeFrom' fn nid g
              pure g'
