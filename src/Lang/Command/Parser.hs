@@ -41,8 +41,7 @@ symbolFrom (x:xs) = try (symbol x) <|> symbolFrom xs
 
 pCommand :: Parser Command
 pCommand
-  = try pQuit
-  <|> try pChangeNode
+  = try pChangeNode
   <|> try pDualize
   <|> try pMakeNode
   <|> try pNodeId
@@ -66,9 +65,6 @@ transition = ident <|> stringLiteral
 
 nodeId :: Parser Id
 nodeId = L.lexeme s (L.decimal <* lookAhead (space1 <|> eof))
-
-pQuit :: Parser Command
-pQuit = symbolFrom [":quit", ":q"] $> Quit
 
 pChangeNode :: Parser Command
 pChangeNode = (symbolFrom ["change-node", "cd", "cn"] $> ChangeNode) <*> transition

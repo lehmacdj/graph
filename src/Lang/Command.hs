@@ -3,8 +3,7 @@ module Lang.Command where
 import Graph
 
 data Command
-  = Quit
-  | ChangeNode String
+  = ChangeNode String
   | Dualize
   | MakeNode String
   | NodeId

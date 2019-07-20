@@ -82,16 +82,14 @@ currentNodeDataFile = do
     Just base -> pure (nodeDataFile base cnid)
     Nothing -> error "there is no current path"
 
-execCommand :: Command -> Repl S () -> Repl S ()
-execCommand c continue = case c of
-  Quit -> pure ()
+execCommand :: Command -> Repl S ()
+execCommand c = case c of
   ChangeNode s -> do
     n <- currentNode
     case matchConnect s (outgoingConnectsOf n) of
       Nothing -> errorNoEdge s
       Just nid -> currentNID .= nid
-    continue
-  Dualize -> modifying graph dualizeGraph >> continue
+  Dualize -> modifying graph dualizeGraph
   MakeNode s -> do
     nid <- use currentNID
     n' <- freshNode
@@ -99,40 +97,32 @@ execCommand c continue = case c of
     let e = Edge nid s nid'
     graph %= insertNode n'
     graph %= insertEdge e
-    continue
   NodeId -> do
     n <- use currentNID
     liftIO $ print n
-    continue
   ListOut -> do
     n <- currentNode
     liftIO $ printTransitions (outgoingTransitionsOf n)
-    continue
   ListIn -> do
     n <- currentNode
     liftIO $ printTransitions (incomingTransitionsOf n)
-    continue
   AddEdgeTo nid s -> do
     cnid <- use currentNID
     graph %= insertEdge (Edge cnid s nid)
-    continue
   AddEdgeFrom nid s -> do
     cnid <- use currentNID
     graph %= insertEdge (Edge nid s cnid)
-    continue
   Goto nid -> do
     g <- use graph
     case maybeLookupNode g nid of
       Just n -> currentNID .= nidOf n
       Nothing -> liftIO (putStrLn "error: no node with such node id")
-    continue
   Dump fn -> do
     g <- use graph
     result <- liftIO $ serializeGraph g fn
     case result of
       Nothing -> liftIO (putStrLn ("error: failed to decode " ++ fn))
       Just () -> pure ()
-    continue
   Load fn -> do
     g <- liftIO (deserializeGraph fn)
     case g of
@@ -142,23 +132,19 @@ execCommand c continue = case c of
         let maxId = maximum (0 : (Map.keys . nodeMap $ g'))
         nextId .= maxId + 1
         filePath .= Just fn
-    continue
   Debug -> do
     s <- get
     liftIO $ print s
-    continue
   RemoveEdgeOut s -> do
     n <- currentNode
     case matchConnect s (outgoingConnectsOf n) of
       Nothing -> pure ()
       Just nid -> graph %= delEdge (Edge (nidOf n) s nid)
-    continue
   RemoveEdgeIn s -> do
     n <- currentNode
     case matchConnect s (incomingConnectsOf n) of
       Nothing -> pure ()
       Just nid -> graph %= delEdge (Edge (nidOf n) s nid)
-    continue
   CloneNode nid -> do
     g <- use graph
     case maybeLookupNode g nid of
@@ -172,27 +158,23 @@ execCommand c continue = case c of
             setNO = nodeOutgoing .~ selfLoopify (view nodeOutgoing n)
             n'' = (setNI . setNO) n'
         graph %= insertNode n''
-    continue
   ShowImage -> do
     n <- currentNode
     case view nodeData n of
       Just i -> liftIO . printImage $ i
       Nothing -> liftIO $ putStrLn "error: no image available for this node"
-    continue
   SetBinaryData fp -> do
     dfp <- currentNodeDataFile
     liftIO $ copyFile fp dfp
-    continue
   Import fp -> do
     importer <- liftIO $ importDirectory fp
     nid <- use currentNID
     g <- use graph
     g' <- importer nid g
     graph .= g'
-    continue
 
 ioExceptionHandler :: IOError -> IO (Maybe a)
 ioExceptionHandler _ = pure Nothing
 
 main :: IO ()
-main = doRepl "g" parseCommand execCommand emptyS
+main = doRepl "g" (withDefaultQuitParser parseCommand) execCommand emptyS
