@@ -1,4 +1,4 @@
-module Command where
+module Lang.Command where
 
 import Graph
 

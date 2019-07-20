@@ -31,8 +31,8 @@ import Graph.Connect
 import Graph.Serialize2
 import Graph.Import.Filesystem
 
-import Command
-import Command.Parser
+import Lang.Command
+import Lang.Command.Parser
 
 import Control.Monad.Unique
 

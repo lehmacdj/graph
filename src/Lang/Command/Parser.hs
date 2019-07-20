@@ -1,4 +1,4 @@
-module Command.Parser
+module Lang.Command.Parser
   ( pCommand
   , parseCommand
   ) where
@@ -13,7 +13,7 @@ import qualified Text.Megaparsec.Char.Lexer as L
 
 import Graph (Id)
 
-import Command
+import Lang.Command
 
 type Parser = Parsec Void String
 
