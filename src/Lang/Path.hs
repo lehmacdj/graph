@@ -10,6 +10,11 @@ module Lang.Path where
 data Path t
   = Zero
   | One
+--  | Dual -- ^ a transition that dualizes the view of the graph
+--  | Wild -- ^ a transition matched by anything (top in the algebra)
+--  | Path t :\ Path t -- ^ set minus (useful with wild to restrict)
+--  | Negate (Path t) -- ^ negate a path, if included obsolesces other operators
+--  | Star (Path t) -- ^ kleene iteration: technically top in algebra is top^*
   | Literal t
   | Path t :. Path t -- ^ sequence
   | Path t :+ Path t -- ^ union
