@@ -7,9 +7,18 @@
  -}
 module Lang.Path where
 
+import Data.Set (Set)
+import qualified Data.Set as Set
+
+import Graph
+
+-- | a deterministic path is a list of path components
+type DPath t = [t]
+
 data Path t
-  = Zero
-  | One
+  = One
+--  | Zero (it might be useful to have a additive identity eventually)
+--          at least for algebraic reasons
 --  | Dual -- ^ a transition that dualizes the view of the graph
 --  | Wild -- ^ a transition matched by anything (top in the algebra)
 --  | Path t :\ Path t -- ^ set minus (useful with wild to restrict)
@@ -21,9 +30,17 @@ data Path t
   | Path t :& Path t -- ^ intersection
   deriving (Show, Eq, Ord)
 
--- TODO: implement these
--- follow: find set of nodes reachable in the graph
--- make: create nodes so that every path can be followed
--- consider trying to fold these two operations together into a single one
--- perhaps one that interprets paths as lists of traces with a marking difference
--- between nodes that exist and nodes that don't
+-- the semantics of a path at a specific node in the graph is
+-- the set of deterministic path segments up to the last node still in the graph
+-- for all possible deterministic paths, the node that reaches, and then the
+-- unfinished DPath beyond that
+--
+-- For example in a graph consisting of only a single node 0, the path
+-- a/b + c resolves to [(#, 0, a/b), (#, 0, c)]
+--
+-- In a graph with 0 -a> 1 the same path a/b + c resolves at 0 to
+-- [(a, 1, b), (#, 0, c)]
+resolvePath
+  :: TransitionValid t
+  => Path t -> Node t -> Graph t -> Set (DPath t, Node t, DPath t)
+resolvePath = undefined
