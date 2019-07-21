@@ -24,12 +24,14 @@ import Control.Exception (catch)
 import Data.List (intercalate)
 import System.IO.Term.Image
 import System.Directory
+import Network.HTTP.Conduit
 import qualified Data.Map as Map
 
 import Graph
 import Graph.Connect
 import Graph.Serialize2
 import Graph.Import.Filesystem
+import Graph.Import.ByteString
 
 import Lang.Command
 import Lang.Command.Parser
@@ -181,6 +183,16 @@ execCommand c = case c of
     g <- use graph
     g' <- importer nid g
     graph .= g'
+  ImportUrl uri -> do
+    md <- liftIO $ (Just <$> simpleHttp uri) `catch` ioExceptionHandler
+    case md of
+      Nothing -> liftIO $ putStrLn "error: couldn't fetch uri"
+      Just d -> do
+        nid <- use currentNID
+        g <- use graph
+        (nid', g') <- importData nid d g
+        graph .= g'
+        execCommand (Goto nid')
 
 ioExceptionHandler :: IOError -> IO (Maybe a)
 ioExceptionHandler _ = pure Nothing

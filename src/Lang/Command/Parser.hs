@@ -59,6 +59,7 @@ pCommand
   <|> try pShowImage
   <|> try pSetBinaryData
   <|> try pImport
+  <|> try pImportUrl
 
 transition :: Parser String
 transition = ident <|> stringLiteral
@@ -119,6 +120,9 @@ pSetBinaryData = (symbolFrom ["set-binary-data", "sbd"] $> SetBinaryData) <*> so
 
 pImport :: Parser Command
 pImport = (symbolFrom [":import", ":i"] $> Import) <*> some anySingle
+
+pImportUrl :: Parser Command
+pImportUrl = (symbolFrom [":import-url", ":iurl", "wget"] $> ImportUrl) <*> some anySingle
 
 parseCommand :: String -> Either String Command
 parseCommand = left show . runParser pCommand "<interactive>"

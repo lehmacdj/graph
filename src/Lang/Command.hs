@@ -21,4 +21,5 @@ data Command
   | ShowImage
   | SetBinaryData FilePath
   | Import FilePath
+  | ImportUrl String
   deriving (Eq, Show, Ord)
