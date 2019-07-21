@@ -32,8 +32,11 @@ importDirectory
 importDirectory base = do
    _ :/ fileTree <- readDirectoryWithL B.readFile base
    if anyFailed fileTree
-      then putStrLn $ "error: search failed at least partially, "
+      then do
+         putStrLn $ "error: search failed at least partially, "
                    ++ "missed directories will be ignored"
+         putStrLn "the failed files are:"
+         print $ failures fileTree
       else pure ()
    pure . addDirectories $ fileTree
 
@@ -57,5 +60,5 @@ addDirectories dt' root gi = do
              g'' <- go x (nidOf n') g'
              -- then continue evaluating at this point
              go (Dir fn xs) nid g''
-          Failed _ _ -> error "we failed"
+          Failed n r -> pure g
    go dt' root gi'
