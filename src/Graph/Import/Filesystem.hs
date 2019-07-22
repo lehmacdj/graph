@@ -10,7 +10,6 @@ module Graph.Import.Filesystem where
 
 import Data.ByteString.Lazy (ByteString)
 import qualified Data.ByteString.Lazy as B
-import qualified Data.ByteString.Lazy.Char8 as B
 import Data.Digest.Pure.SHA
 
 import System.Directory.Tree
@@ -47,8 +46,8 @@ addDirectories dt' root gi = do
    (fileHashes, gi') <- followMkEdgeFrom' "file-hashes" root gi
    let fhid = nidOf fileHashes
        go dt nid g = case dt of
-          File fn contents -> do
-             (nid', g') <- importData fhid contents g
+          File fn cs -> do
+             (nid', g') <- importData fhid cs g
              -- TODO: possibly add handling of filename extensions, to categorize
              pure $ insertEdge (Edge nid fn nid') g'
           Dir fn [] -> do
@@ -60,5 +59,5 @@ addDirectories dt' root gi = do
              g'' <- go x (nidOf n') g'
              -- then continue evaluating at this point
              go (Dir fn xs) nid g''
-          Failed n r -> pure g
+          Failed _ _ -> pure g
    go dt' root gi'

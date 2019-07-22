@@ -16,18 +16,14 @@ import qualified Data.Aeson as Aeson
 import Data.ByteString.Lazy (ByteString)
 import Data.Functor ((<&>))
 import Data.List (isSuffixOf)
-import Data.Maybe (mapMaybe)
 import qualified Data.ByteString.Lazy as B
-import qualified Data.ByteString.Lazy.Char8 as B
 import qualified Data.Map as Map
 
 import Control.Lens
 
-import System.IO
 import System.Directory
 import Control.Exception
 import System.FilePath
-import System.Directory.Tree
 
 import Graph.Types
 import Graph (nidOf, dataOf)
@@ -70,8 +66,8 @@ deserializeGraph
   :: (FromJSON t, Read t, Show t, Ord t)
   => FilePath -> IO (Maybe (Graph t))
 deserializeGraph base = (`catch` ioHandler) $ do
-  contents <- listDirectory base
-  let linkFilenames = filter (".json" `isSuffixOf`) contents
+  cs <- listDirectory base
+  let linkFilenames = filter (".json" `isSuffixOf`) cs
   nodeIds <- mapM (readIO . dropExtension) linkFilenames
   fileContents <- mapM (B.readFile . linksFile base) nodeIds
   let nodes = mapM Aeson.decode fileContents

@@ -3,12 +3,12 @@
 module Lang.Path.Parse where
 
 import Text.Megaparsec
+import Control.Monad.Combinators.Expr
 
 import Data.Void
 
 import Lang.Path
+import Lang.Parsing
 
-type Parser e = Parsec e String
-
-pPath :: Parser e (Path t)
+pPath :: Parser (Path t)
 pPath = undefined

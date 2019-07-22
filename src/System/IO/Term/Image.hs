@@ -5,9 +5,7 @@ module System.IO.Term.Image where
 import System.IO.Term.BinarySerialize
 import System.IO.Term.Image.Payload
 import Data.ByteString.Lazy (ByteString)
-import qualified Data.ByteString.Lazy as B
 import Data.ByteString.Builder
-import qualified Data.ByteString.Lazy.Char8 as B
 
 import System.IO
 

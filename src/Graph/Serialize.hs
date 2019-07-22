@@ -14,11 +14,9 @@ import qualified Data.Aeson as Aeson
 
 import Data.ByteString.Lazy (ByteString)
 import qualified Data.ByteString.Lazy as B
-import qualified Data.ByteString.Lazy.Char8 as B
 
-import System.IO
 import System.Directory
-import Control.Exception
+import Control.Exception (catch)
 
 import Graph.Types
 

@@ -26,6 +26,7 @@ dependencies:
 - deepseq
 - mtl
 - haskeline
+- parser-combinators
 - megaparsec
 - aeson
 - bytestring
