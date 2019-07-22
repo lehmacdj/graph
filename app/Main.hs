@@ -6,20 +6,13 @@
 
 module Main where
 
-import Lib
 import Control.Repl
-import Data.Functor
 import Data.Foldable (toList)
 import Data.Set (Set)
 import Text.Printf
 import Control.Lens
-import Control.Lens.Zoom
 import Data.Set.Lens (setmapped)
 import Control.Monad.State
-import Data.ByteString.Lazy (ByteString)
-import qualified Data.ByteString.Lazy as B
-import qualified Data.ByteString.Lazy.Char8 as B
-import qualified Data.Aeson as Aeson
 import Control.Exception (catch)
 import Data.List (intercalate)
 import System.IO.Term.Image
@@ -79,8 +72,8 @@ currentNode = lookupNode <$> use graph <*> use currentNID
 currentNodeDataFile :: Repl S FilePath
 currentNodeDataFile = do
   cnid <- use currentNID
-  path <- use filePath
-  case path of
+  p <- use filePath
+  case p of
     Just base -> pure (nodeDataFile base cnid)
     Nothing -> error "there is no current path"
 
