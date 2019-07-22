@@ -14,10 +14,8 @@ import qualified Data.Map as M
 import qualified Data.Map.Internal.Debug as MD
 import Data.Maybe
 import Data.Set (Set)
-import Data.Set.Lens
 import qualified Data.Set as Set
 
-import Control.Monad.State
 
 import qualified Debug.Trace as Debug
 
@@ -81,7 +79,7 @@ delEdges = listify delEdge
 delNode :: Node t -> Graph t -> Graph t
 delNode n g = withNodeMap g $
   M.map deleteIncoming
-  . M.map deleteIncoming
+  . M.map deleteOutgoing
   . M.delete nid where
     nid = _nodeId n
     del = Set.filter ((/=nid) . view connectNode)
