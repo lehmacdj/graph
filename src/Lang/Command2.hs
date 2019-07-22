@@ -13,4 +13,11 @@ data Command
   | AddLinksFromTo (APath String) (APath String) -- ^ ft
   | Remove (APath String) -- ^ rm
   | At (APath String) Command -- ^ at
+  | Dump FilePath
+  | Load FilePath
+  | NodeId
+  | Debug
+  | ShowImage
+  | Import FilePath
+  | ImportUrl String
   deriving (Eq, Show, Ord)
