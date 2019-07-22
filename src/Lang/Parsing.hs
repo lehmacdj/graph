@@ -17,24 +17,31 @@ identChar :: Parser Char
 identChar = alphaNumChar <|> oneOf "-_"
 
 ident :: Parser String
-ident = some identChar
+ident = L.lexeme s $ some identChar
 
 stringLiteral :: Parser String
-stringLiteral = char '"' >> manyTill L.charLiteral (char '"')
+stringLiteral = L.lexeme s $ char '"' >> manyTill L.charLiteral (char '"')
 
 symbol :: String -> Parser String
 symbol = L.symbol s
 
+transition :: Parser String
+transition = ident <|> stringLiteral
+
+nodeId :: Parser Id
+nodeId = L.lexeme s L.decimal
+
+parens :: Parser a -> Parser a
+parens = between (symbol "(") (symbol ")")
+
 -- these all lookahead for space to ensure that arguments are space separated
+-- the intended paradigm for commands is that commands all require a following
+-- space, then perform their own logic for argument separation as needed.
+-- All other parsers are expected to consume any following space
+-- indiscriminately.
 
 command :: String -> Parser String
 command i = L.lexeme s (string i <* lookAhead (space1 <|> eof))
-
-nodeId :: Parser Id
-nodeId = L.lexeme s (L.decimal <* lookAhead (space1 <|> eof))
-
-transition :: Parser String
-transition = L.lexeme s ((ident <|> stringLiteral) <* lookAhead (space1 <|> eof))
 
 commandFrom :: [String] -> Parser String
 commandFrom [] = empty
