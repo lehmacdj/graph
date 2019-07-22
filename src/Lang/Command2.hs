@@ -3,14 +3,14 @@ module Lang.Command2 where
 import Lang.APath
 
 data Command
-  = ChangeNode (APath String)
-  | Dualize
-  | Make (APath String)
-  | Merge (APath String)
-  | Clone (APath String) (APath String)
-  | List
-  | AddLinksToFrom (APath String) (APath String)
-  | AddLinksFromTo (APath String) (APath String)
-  | Remove (APath String)
-  | At (APath String) Command
+  = ChangeNode (APath String) -- ^ cd
+  | Dualize -- ^ d
+  | Make (APath String) -- ^ mk
+  | Merge (APath String) -- ^ mg
+  | Clone (APath String) (APath String) -- ^ cl
+  | List -- ^ ls
+  | AddLinksToFrom (APath String) (APath String) -- ^ tf
+  | AddLinksFromTo (APath String) (APath String) -- ^ ft
+  | Remove (APath String) -- ^ rm
+  | At (APath String) Command -- ^ at
   deriving (Eq, Show, Ord)

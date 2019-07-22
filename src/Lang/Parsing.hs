@@ -14,7 +14,7 @@ s :: Parser ()
 s = L.space space1 empty empty
 
 identChar :: Parser Char
-identChar = alphaNumChar <|> oneOf "-_"
+identChar = alphaNumChar <|> oneOf "-_."
 
 ident :: Parser String
 ident = L.lexeme s $ some identChar

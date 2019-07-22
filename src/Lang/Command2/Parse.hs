@@ -1,0 +1,56 @@
+module Lang.Command2.Parse where
+
+import Text.Megaparsec
+
+import Data.Functor
+
+import Lang.Parsing
+import Lang.APath
+import Lang.APath.Parse
+import Lang.Command2
+
+apath :: Parser (APath String)
+apath = pAPath transition
+
+pChangeNode :: Parser Command
+pChangeNode = (command "cd" $> ChangeNode) <*> apath
+
+pDualize :: Parser Command
+pDualize = command "d" $> Dualize
+
+pMake :: Parser Command
+pMake = (command "mk" $> Make) <*> apath
+
+pMerge :: Parser Command
+pMerge = (command "mg" $> Merge) <*> apath
+
+pClone :: Parser Command
+pClone = (command "cl" $> Clone) <*> apath <*> apath
+
+pList :: Parser Command
+pList = command "ls" $> List
+
+pAddLinksToFrom :: Parser Command
+pAddLinksToFrom = (command "tf" $> AddLinksToFrom) <*> apath <*> apath
+
+pAddLinksFromTo :: Parser Command
+pAddLinksFromTo = (command "ft" $> AddLinksFromTo) <*> apath <*> apath
+
+pRemove :: Parser Command
+pRemove = (command "rm" $> Remove) <*> apath
+
+pAt :: Parser Command
+pAt = (command "at" $> At) <*> apath <*> pCommand
+
+pCommand :: Parser Command
+pCommand =
+  try pChangeNode
+  <|> try pDualize
+  <|> try pMake
+  <|> try pMerge
+  <|> try pClone
+  <|> try pList
+  <|> try pAddLinksToFrom
+  <|> try pAddLinksFromTo
+  <|> try pRemove
+  <|> try pAt
