@@ -69,3 +69,5 @@ tests:
     - -Werror
     dependencies:
     - graph
+    - tasty
+    - tasty-hunit

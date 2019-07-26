@@ -2,6 +2,7 @@
 
 module Graph.Connect where
 
+import Control.Lens (view)
 import Data.Set (Set)
 import Graph
 import Data.Foldable
@@ -19,5 +20,8 @@ pairOfConnect (Connect x nid) = (x, nid)
 --  n2
 --
 -- And outN0 is the @outgoingConnectsOf n0@, then @matchConnect "a" n0 = n2@.
-matchConnect :: TransitionValid t => t -> Set (Connect t) -> Maybe Id
-matchConnect x cs = lookup x (pairOfConnect <$> toList cs)
+matchConnect :: TransitionValid t => t -> Set (Connect t) -> [Id]
+matchConnect x cs =
+  map (view connectNode)
+  . filter ((==x) . view connectTransition)
+  $ toList cs

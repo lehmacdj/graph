@@ -12,12 +12,20 @@ module Lang.Path where
 import Data.Set (Set)
 import qualified Data.Set as Set
 import Data.Foldable (toList)
+import Data.Maybe (mapMaybe)
 
 import Graph
 import Graph.Connect
 
+-- breadcrumb in a trail in the graph
+-- each piece denotes an edge from the specified via the transition
+data DPathComponent t = FromVia Id t
+  deriving (Show, Eq, Ord)
+
 -- | a deterministic path is a list of path components
-type DPath t = [t]
+-- along with a start node, from which those path components are constructed
+data DPath t = DPath [DPathComponent t] Id [t]
+  deriving (Show, Eq, Ord)
 
 data Path t
   = One
@@ -36,18 +44,19 @@ data Path t
 
 -- | Turn a path into a set of DPaths where the set denotes disjunction.
 -- Similar to converting to a DNF for paths.
-determinizePath
+-- Transitions are asumed to behave deterministically in this transition.
+listifyNewPath
   :: TransitionValid t
-  => Path t -> Set (DPath t)
-determinizePath = \case
+  => Path t -> Set [t]
+listifyNewPath = \case
   One -> Set.singleton []
   Literal t -> Set.singleton [t]
   p1 :/ p2 -> Set.fromList $ do
-    p1' <- toList $ determinizePath p1
-    p2' <- toList $ determinizePath p2
+    p1' <- toList $ listifyNewPath p1
+    p2' <- toList $ listifyNewPath p2
     pure $ p1' ++ p2'
-  p1 :+ p2 -> determinizePath p1 `Set.union` determinizePath p2
-  p1 :& p2 -> determinizePath p1 `Set.intersection` determinizePath p2
+  p1 :+ p2 -> listifyNewPath p1 `Set.union` listifyNewPath p2
+  p1 :& p2 -> listifyNewPath p1 `Set.intersection` listifyNewPath p2
 
 -- | the semantics of a path at a specific node in the graph is
 -- the set of deterministic path segments up to the last node still in the graph
@@ -61,20 +70,20 @@ determinizePath = \case
 -- [(a, 1, b), (#, 0, c)]
 resolvePath
   :: TransitionValid t
-  => Path t -> Node t -> Graph t -> Set (DPath t, Node t, DPath t)
+  => Path t -> Node t -> Graph t -> Set (DPath t)
 resolvePath p n g = nodeConsistentWithGraph g n `seq` case p of
-  One -> Set.singleton ([], n, [])
-  Literal t -> case matchConnect t (outgoingConnectsOf n) >>= maybeLookupNode g of
-    Just m -> Set.singleton ([t], m, [])
-    Nothing -> Set.singleton ([], n, [t])
+  One -> Set.singleton (DPath [] (nidOf n) [])
+  Literal t -> case mapMaybe (maybeLookupNode g) $ matchConnect t (outgoingConnectsOf n) of
+    [] -> Set.singleton (DPath [] (nidOf n) [t])
+    ms -> Set.fromList (DPath [nidOf n `FromVia` t] <$> (nidOf <$> ms) <*> pure [])
   p1 :/ p2 -> Set.fromList $ do
-    (pre, n', post) <- toList $ resolvePath p1 n g
+    DPath pre n' post <- toList $ resolvePath p1 n g
     if null post
        then do
-         (pre', n'', post') <- toList $ resolvePath p2 n' g
-         pure (pre ++ pre', n'', post')
+         DPath pre' n'' post' <- toList $ primed (resolvePath p2) n' g
+         pure $ DPath (pre ++ pre') n'' post'
        else do
-         post' <- toList $ determinizePath p2
-         pure (pre, n', post ++ post')
+         post' <- toList $ listifyNewPath p2
+         pure $ DPath pre n' (post ++ post')
   p1 :+ p2 -> resolvePath p1 n g `Set.union` resolvePath p2 n g
   p1 :& p2 -> resolvePath p1 n g `Set.intersection` resolvePath p2 n g

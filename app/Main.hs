@@ -91,8 +91,8 @@ execCommand c = case c of
   ChangeNode s -> do
     n <- currentNode
     case matchConnect s (outgoingConnectsOf n) of
-      Nothing -> errorNoEdge s
-      Just nid -> currentNID .= nid
+      [] -> errorNoEdge s
+      nid:_ -> currentNID .= nid
   Dualize -> modifying graph dualizeGraph
   MakeNode s -> do
     nid <- use currentNID
@@ -142,13 +142,13 @@ execCommand c = case c of
   RemoveEdgeOut s -> do
     n <- currentNode
     case matchConnect s (outgoingConnectsOf n) of
-      Nothing -> pure ()
-      Just nid -> graph %= delEdge (Edge (nidOf n) s nid)
+      [] -> pure ()
+      nid:_ -> graph %= delEdge (Edge (nidOf n) s nid)
   RemoveEdgeIn s -> do
     n <- currentNode
     case matchConnect s (incomingConnectsOf n) of
-      Nothing -> pure ()
-      Just nid -> graph %= delEdge (Edge (nidOf n) s nid)
+      [] -> pure ()
+      nid:_ -> graph %= delEdge (Edge (nidOf n) s nid)
   CloneNode nid -> do
     g <- use graph
     case maybeLookupNode g nid of
