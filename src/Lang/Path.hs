@@ -24,7 +24,11 @@ data DPathComponent t = FromVia Id t
 
 -- | a deterministic path is a list of path components
 -- along with a start node, from which those path components are constructed
-data DPath t = DPath [DPathComponent t] Id [t]
+--
+data DPath t = DPath
+  [DPathComponent t] -- the nids/transitions that are in the graph from start
+  Id -- the nid of the last node in the graph
+  [t] -- transitions that could not be realized within the graph
   deriving (Show, Eq, Ord)
 
 data Path t
@@ -87,3 +91,22 @@ resolvePath p n g = nodeConsistentWithGraph g n `seq` case p of
          pure $ DPath pre n' (post ++ post')
   p1 :+ p2 -> resolvePath p1 n g `Set.union` resolvePath p2 n g
   p1 :& p2 -> resolvePath p1 n g `Set.intersection` resolvePath p2 n g
+
+-- | Like resolvePath, but fails if there is more than one result and if
+-- there is unresolved path remaining after it.
+resolveSingle
+  :: TransitionValid t
+  => Path t -> Node t -> Graph t -> Maybe Id
+resolveSingle p n g = case toList $ resolvePath p n g of
+  [DPath _ nid []] -> Just nid
+  _ -> Nothing
+
+-- | Get all paths that terminate in a node. i.e. there are no transitions that
+-- move outside the bounds of the graph.
+-- This returns just the ids of the nodes where these paths terminate.
+resolveSuccesses
+  :: TransitionValid t
+  => Path t -> Node t -> Graph t -> [Id]
+resolveSuccesses p n g = mapMaybe projSuccess $ toList $ resolvePath p n g where
+  projSuccess (DPath _ i []) = Just i
+  projSuccess _ = Nothing
