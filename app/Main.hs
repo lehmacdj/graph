@@ -159,7 +159,7 @@ execCommand c = case c of
   Tag a b -> withTwoAPaths a b $ \n p n' p' -> do
     execCommand (Make (Absolute (nidOf n) p))
     g <- use graph
-    case (resolveSuccesses p n g, resolveSingle p' n' g) of
+    case (resolveSuccesses p (refreshNode g n) g, resolveSingle p' (refreshNode g n') g) of
       (nids, Just nid) -> graph .= mergeNodeIds g (nid:nids)
       _ -> errorNoEdge (show p' ++ "\n" ++ show p)
   Remove a -> withAPath a $ \n p -> graph %= deletePath p n

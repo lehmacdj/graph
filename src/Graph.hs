@@ -40,6 +40,10 @@ lookupNode :: TransitionValid t
 lookupNode = flip nodeLookup
 {-# INLINE lookupNode #-}
 
+refreshNode :: TransitionValid t
+            => Graph t -> Node t -> Node t
+refreshNode g = lookupNode g . nidOf
+
 nodeLookup :: TransitionValid t
            => Id -> Graph t -> Node t
 nodeLookup i g = fromMaybe err . M.lookup i . nodeMap $ g where

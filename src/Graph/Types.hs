@@ -12,14 +12,16 @@ import Control.DeepSeq
 import GHC.Generics
 import Data.ByteString.Lazy (ByteString)
 import Data.Maybe (fromJust)
-import Data.List (stripPrefix)
+import Data.List (stripPrefix, intercalate)
 import Data.Char (toLower)
+import Data.Foldable (toList)
 
 import Data.Aeson
 
 import Control.Lens
 
 import Data.Map (Map)
+import qualified Data.Map as Map
 
 import Data.Set (Set)
 
@@ -33,8 +35,11 @@ type Id = Int
 data Connect t = Connect
   { _connectTransition :: t
   , _connectNode :: Id
-  } deriving (Show, Eq, Ord, Generic, NFData)
+  } deriving (Eq, Ord, Generic, NFData)
 makeLenses ''Connect
+
+instance Show t => Show (Connect t) where
+  show (Connect t nid) = show t ++ " at " ++ show nid
 
 instance (FromJSON t, TransitionValid t) => FromJSON (Connect t)
 instance (ToJSON t, TransitionValid t) => ToJSON (Connect t) where
@@ -46,8 +51,14 @@ data Node t = Node
   , _nodeIncoming :: Set (Connect t)
   , _nodeOutgoing :: Set (Connect t)
   , _nodeData :: Maybe ByteString
-  } deriving (Show, Eq, Ord, Generic, NFData)
+  } deriving (Eq, Ord, Generic, NFData)
 makeLenses ''Node
+
+instance Show t => Show (Node t) where
+  show n =
+    show (_nodeId n) ++ "{"
+    ++ "in=" ++ show (toList . _nodeIncoming $ n)
+    ++ ", out=" ++ show (toList . _nodeOutgoing $ n) ++ "}"
 
 -- | For the purpose of implementing from and ToJSON we use Prenode.
 data Prenode t = Prenode
@@ -86,8 +97,12 @@ instance (ToJSON t, TransitionValid t) => ToJSON (Node t) where
 
 newtype Graph t = Graph
   { _graphNodeMap :: Map Id (Node t)
-  } deriving (Show, Eq, Ord, Generic, NFData)
+  } deriving (Eq, Ord, Generic, NFData)
 makeLenses ''Graph
+
+instance Show t => Show (Graph t) where
+  show = unlines' . map show . Map.elems . _graphNodeMap where
+    unlines' = intercalate "\n"
 
 instance (FromJSON t, TransitionValid t) => FromJSON (Graph t)
 instance (ToJSON t, TransitionValid t) => ToJSON (Graph t) where
