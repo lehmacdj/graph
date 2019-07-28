@@ -9,6 +9,8 @@ import Lang.APath
 import Lang.APath.Parse
 import Lang.Command2
 
+import Control.Arrow (left)
+
 apath :: Parser (APath String)
 apath = pAPath transition
 
@@ -82,3 +84,6 @@ pCommand =
   <|> try pShowImage
   <|> try pImport
   <|> try pImportUrl
+
+parseCommand :: String -> Either String Command
+parseCommand = left show . runParser pCommand "<interactive>"
