@@ -87,7 +87,10 @@ selfLoopify nid nid' = (setmapped . connectNode . filtered (==nid)) .~ nid'
 cloneNode
   :: (TransitionValid t, MonadUnique Id m)
   => Node t -> Graph t -> m (Node t, Graph t)
-cloneNode = undefined
+cloneNode n g = do
+  nnid <- fresh
+  let n' = Node nnid (incomingConnectsOf n) (outgoingConnectsOf n) (dataOf n)
+  pure (n', insertNode n' g)
 
 -- | Deletes the last edge along each successful path.
 deletePath
