@@ -46,13 +46,12 @@ mkNewPath (x:xs) n g =  do
   (n', g') <- followMkEdgeFrom x n g
   mkNewPath xs n' g'
 
--- TODO: make this interpret links currently in the graph nondeterministcally
--- if there are multiple
 mkPath
   :: (TransitionValid t, MonadUnique Id m)
   => Path t -> Node t -> Graph t -> m (Graph t)
-mkPath p n g = foldM go g . toList . listifyNewPath $ p where
-  go g' dpath = mkNewPath dpath n g'
+mkPath p n g = foldM go g xs where
+  xs = map (\(DPath _ nid ts) -> (nid, ts)) . toList $ resolvePath p n g
+  go g' (n', ts) = primed (mkNewPath ts) n' g'
 
 mergeNodes :: Node t -> Node t -> Graph t -> Graph t
 mergeNodes = undefined
@@ -65,7 +64,14 @@ mgPath = undefined
 selfLoopify :: Id -> Id -> Set (Connect String) -> Set (Connect String)
 selfLoopify nid nid' = (setmapped . connectNode . filtered (==nid)) .~ nid'
 
+-- | Creates an exact copy of a node returning it
 cloneNode
   :: (TransitionValid t, MonadUnique Id m)
   => Node t -> Graph t -> m (Node t, Graph t)
 cloneNode = undefined
+
+-- | Deletes the last edge along each successful path.
+deletePath
+  :: TransitionValid t
+  => Path t -> Node t -> Graph t -> Graph t
+deletePath = undefined
