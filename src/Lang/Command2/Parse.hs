@@ -32,8 +32,8 @@ pClone = (command "cl" $> Clone) <*> apath <*> transition
 pList :: Parser Command
 pList = command "ls" $> ListOut
 
-pAddLinksToFrom :: Parser Command
-pAddLinksToFrom = (command "tf" $> AddLinksToFrom) <*> apath <*> transition
+pQuery :: Parser Command
+pQuery = (commandFrom ["q", "query"] $> Query) <*> apath <*> transition
 
 pAddLinksFromTo :: Parser Command
 pAddLinksFromTo = (command "ft" $> AddLinksFromTo) <*> apath <*> transition
@@ -73,7 +73,7 @@ pCommand =
   <|> try pMerge
   <|> try pClone
   <|> try pList
-  <|> try pAddLinksToFrom
+  <|> try pQuery
   <|> try pAddLinksFromTo
   <|> try pRemove
   <|> try pAt

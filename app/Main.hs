@@ -148,7 +148,7 @@ execCommand c = case c of
         (n', g') <- cloneNode (lookupNode g nid) g
         let g'' = insertEdge (Edge cnid t (nidOf n')) g'
         graph .= g''
-  AddLinksToFrom a t -> withAPath a $ \n p -> do
+  Query a t -> withAPath a $ \n p -> do
     g <- use graph
     case resolveSuccesses' p n g of
       xs -> do

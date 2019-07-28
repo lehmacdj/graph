@@ -9,7 +9,7 @@ data Command
   | Merge (APath String)                 -- ^ mg
   | Clone (APath String) String          -- ^ cl
   | ListOut                              -- ^ ls
-  | AddLinksToFrom (APath String) String -- ^ tf
+  | Query (APath String) String -- ^ tf
   | AddLinksFromTo (APath String) String -- ^ ft
   | Remove (APath String)                -- ^ rm
   | At (APath String) Command            -- ^ at
