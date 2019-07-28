@@ -11,23 +11,22 @@ import Data.Foldable (toList)
 import Data.Set (Set)
 import Text.Printf
 import Control.Lens
-import Data.Set.Lens (setmapped)
 import Control.Monad.State
 import Control.Exception (catch)
 import Data.List (intercalate)
 import System.IO.Term.Image
-import System.Directory
 import Network.HTTP.Conduit
 import qualified Data.Map as Map
 
 import Graph
-import Graph.Connect
 import Graph.Serialize2
 import Graph.Import.Filesystem
 import Graph.Import.ByteString
+import Graph.Advanced
 
-import Lang.Command
-import Lang.Command.Parser
+import Lang.Command2
+import Lang.Command2.Parse
+import Lang.APath
 
 import Control.Monad.Unique
 
@@ -62,9 +61,10 @@ emptyS = S Nothing 1 0 (insertNode (emptyNode 0) emptyGraph)
 errorNoEdge :: String -> Repl S ()
 errorNoEdge = liftIO . printf "edge missing '%s': failed to execute command\n"
 
-printTransitions :: Set String -> IO ()
-printTransitions = putStrLn . unlines' . fmap show . toList where
+printTransitions :: Set (Connect String) -> IO ()
+printTransitions = putStrLn . unlines' . fmap dtransition . toList where
   unlines' = intercalate "\n"
+  dtransition (Connect t nid) = show t ++ " at " ++ show nid
 
 currentNode :: Repl S (Node String)
 currentNode = lookupNode <$> use graph <*> use currentNID
@@ -77,6 +77,40 @@ currentNodeDataFile = do
     Just base -> pure (nodeDataFile base cnid)
     Nothing -> error "there is no current path"
 
+describe :: String -> Maybe a -> Either String a
+describe s Nothing = Left s
+describe _ (Just x) = Right x
+
+apathResolve :: APath String -> Repl S (Either String (Node String, Path String))
+apathResolve (Absolute nid p) = do
+  g <- use graph
+  pure . describe ("invalid nid " ++ show nid) $ (\x -> (x, p)) <$> maybeLookupNode g nid
+apathResolve (Relative p) = Right <$> do
+  n <- currentNode
+  pure (n, p)
+
+withAPath
+  :: APath String
+  -> (Node String -> Path String -> Repl S ())
+  -> Repl S ()
+withAPath a f = do
+  r <- apathResolve a
+  case r of
+    Left e -> liftIO $ putStrLn e
+    Right (n, p) -> f n p
+
+withTwoAPaths
+  :: APath String
+  -> APath String
+  -> (Node String -> Path String -> Node String -> Path String -> Repl S ())
+  -> Repl S ()
+withTwoAPaths a b f = do
+  r <- apathResolve a
+  r' <- apathResolve b
+  case sequenceOf both (r, r') of
+    Left e -> liftIO $ putStrLn e
+    Right ((n, p), (n', p')) -> f n p n' p'
+
 -- | Style guide for commands for the future:
 -- All commands and paths are interpreted relative to the current location
 -- We can reintroduce the ability to execute commands relative to a different
@@ -88,39 +122,65 @@ currentNodeDataFile = do
 -- paths and if possible nondeterministic paths too
 execCommand :: Command -> Repl S ()
 execCommand c = case c of
-  ChangeNode s -> do
-    n <- currentNode
-    case matchConnect s (outgoingConnectsOf n) of
-      [] -> errorNoEdge s
-      nid:_ -> currentNID .= nid
+  ChangeNode a -> do
+    r <- apathResolve a
+    g <- use graph
+    case r of
+      Left e -> liftIO $ putStrLn e
+      Right (n, p) -> case resolveSingle p n g of
+        Nothing -> errorNoEdge (show p)
+        Just nid -> currentNID .= nid
   Dualize -> modifying graph dualizeGraph
-  MakeNode s -> do
-    nid <- use currentNID
-    n' <- freshNode
-    let nid' = nidOf n'
-    let e = Edge nid s nid'
-    graph %= insertNode n'
-    graph %= insertEdge e
+  Make a -> withAPath a $ \n p -> do
+    g <- use graph
+    g' <- mkPath p n g
+    graph .= g'
+  Merge a -> withAPath a $ \n p -> do
+    g <- use graph
+    let g' = mgPath p n g
+    graph .= g'
+  Clone a t -> withAPath a $ \n p -> do
+    g <- use graph
+    case resolveSingle p n g of
+      Nothing -> errorNoEdge (show p)
+      Just nid -> do
+        cnid <- use currentNID
+        (n', g') <- cloneNode (lookupNode g nid) g
+        let g'' = insertEdge (Edge cnid t (nidOf n')) g'
+        graph .= g''
+  AddLinksToFrom a t -> withAPath a $ \n p -> do
+    g <- use graph
+    case resolveSuccesses' p n g of
+      xs -> do
+        xnid <- use currentNID
+        (n', g') <- followMkEdgeFrom' t xnid g
+        graph .= g'
+        graph %= insertEdges (uncurry (Edge (nidOf n')) <$> xs)
+  AddLinksFromTo a t -> withAPath a $ \n p -> do
+    g <- use graph
+    case resolveSuccesses' p n g of
+      xs -> do
+        cnid <- use currentNID
+        (n', g') <- followMkEdgeFrom' t cnid g
+        graph .= g'
+        graph %= insertEdges (xs <&> \(name, nid) -> Edge nid name (nidOf n'))
+  Remove a -> withAPath a $ \n p -> graph %= deletePath p n
+  At a c' -> withAPath a $ \n p -> do
+    g <- use graph
+    case resolveSingle p n g of
+      Nothing -> errorNoEdge (show p)
+      Just nid -> do
+        cnid <- use currentNID
+        currentNID .= nid
+        execCommand c'
+        currentNID .= cnid
+  ListOut -> do
+    -- TODO: possibly make this also print node ids
+    n <- currentNode
+    liftIO $ printTransitions (outgoingConnectsOf n)
   NodeId -> do
     n <- use currentNID
     liftIO $ print n
-  ListOut -> do
-    n <- currentNode
-    liftIO $ printTransitions (outgoingTransitionsOf n)
-  ListIn -> do
-    n <- currentNode
-    liftIO $ printTransitions (incomingTransitionsOf n)
-  AddEdgeTo nid s -> do
-    cnid <- use currentNID
-    graph %= insertEdge (Edge cnid s nid)
-  AddEdgeFrom nid s -> do
-    cnid <- use currentNID
-    graph %= insertEdge (Edge nid s cnid)
-  Goto nid -> do
-    g <- use graph
-    case maybeLookupNode g nid of
-      Just n -> currentNID .= nidOf n
-      Nothing -> liftIO (putStrLn "error: no node with such node id")
   Dump fn -> do
     g <- use graph
     result <- liftIO $ serializeGraph g fn
@@ -139,37 +199,11 @@ execCommand c = case c of
   Debug -> do
     s <- get
     liftIO $ print s
-  RemoveEdgeOut s -> do
-    n <- currentNode
-    case matchConnect s (outgoingConnectsOf n) of
-      [] -> pure ()
-      nid:_ -> graph %= delEdge (Edge (nidOf n) s nid)
-  RemoveEdgeIn s -> do
-    n <- currentNode
-    case matchConnect s (incomingConnectsOf n) of
-      [] -> pure ()
-      nid:_ -> graph %= delEdge (Edge (nidOf n) s nid)
-  CloneNode nid -> do
-    g <- use graph
-    case maybeLookupNode g nid of
-      Nothing -> pure ()
-      Just n -> do
-        n' <- freshNode
-        let nid' = nidOf n'
-            selfLoopify :: Set (Connect String) -> Set (Connect String)
-            selfLoopify = (setmapped . connectNode . filtered (==nid)) .~ nid'
-            setNI = nodeIncoming .~ selfLoopify (view nodeIncoming n)
-            setNO = nodeOutgoing .~ selfLoopify (view nodeOutgoing n)
-            n'' = (setNI . setNO) n'
-        graph %= insertNode n''
   ShowImage -> do
     n <- currentNode
     case view nodeData n of
       Just i -> liftIO . printImage $ i
       Nothing -> liftIO $ putStrLn "error: no image available for this node"
-  SetBinaryData fp -> do
-    dfp <- currentNodeDataFile
-    liftIO $ copyFile fp dfp
   Import fp -> do
     importer <- liftIO $ importDirectory fp
     nid <- use currentNID
@@ -185,7 +219,7 @@ execCommand c = case c of
         g <- use graph
         (nid', g') <- importData nid d g
         graph .= g'
-        execCommand (Goto nid')
+        currentNID .= nid'
 
 ioExceptionHandler :: IOError -> IO (Maybe a)
 ioExceptionHandler _ = pure Nothing

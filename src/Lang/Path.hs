@@ -110,3 +110,17 @@ resolveSuccesses
 resolveSuccesses p n g = mapMaybe projSuccess $ toList $ resolvePath p n g where
   projSuccess (DPath _ i []) = Just i
   projSuccess _ = Nothing
+
+-- | Get all paths that terminate in a node. i.e. there are no transitions that
+-- move outside the bounds of the graph.
+-- This returns just the ids of the nodes where these paths terminate.
+-- Also returns a string which identifies the path that was taken to each id
+resolveSuccesses'
+  :: TransitionValid t
+  => Path t -> Node t -> Graph t -> [(String, Id)]
+resolveSuccesses' p n g = mapMaybe projSuccess $ toList $ resolvePath p n g where
+  projSuccess (DPath xs i []) = Just (projPath xs, i)
+  projSuccess _ = Nothing
+  projPath [] = "#"
+  projPath [FromVia _ x] = show x
+  projPath (FromVia _ x:xs) = show x ++ "/" ++ projPath xs
