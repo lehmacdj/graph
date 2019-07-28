@@ -61,8 +61,8 @@ mkPath p n g = foldM go g xs where
 -- merging two nodes with data
 mergeNodes
   :: forall t. TransitionValid t
-  => Node t -> Node t -> Graph t -> Graph t
-mergeNodes n1_ n2_ g = insertNode nNew $ delNodes [n1, n2] g
+  => Node t -> Node t -> Graph t -> (Node t, Graph t)
+mergeNodes n1_ n2_ g = (nNew, insertNode nNew $ delNodes [n1, n2] g)
   where
     n1 = nodeConsistentWithGraph g n1_
     n2 = nodeConsistentWithGraph g n2_
@@ -74,9 +74,13 @@ mergeNodes n1_ n2_ g = insertNode nNew $ delNodes [n1, n2] g
     cout = nodeOutgoing %~ fixSelfLoops . (`Set.union` outgoingConnectsOf n2)
 
 mgPath
-  :: (TransitionValid t, MonadUnique Id m)
-  => Path t -> Node t -> Graph t -> m (Graph t)
-mgPath = undefined
+  :: forall t. TransitionValid t
+  => Path t -> Node t -> Graph t -> Graph t
+mgPath p n g = go g $ lookupNode g <$> resolveSuccesses p n g where
+  go g' [] = g'
+  go g' [_] = g'
+  go g' (x:x':xs) = case mergeNodes x x' g' of
+    (xNew, g'') -> go g'' (xNew:xs)
 
 selfLoopify
   :: TransitionValid t
