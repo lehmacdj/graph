@@ -1,4 +1,5 @@
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 {-|
    Advanced graph functionality that depends on more modules.
  -}
@@ -53,15 +54,33 @@ mkPath p n g = foldM go g xs where
   xs = map (\(DPath _ nid ts) -> (nid, ts)) . toList $ resolvePath p n g
   go g' (n', ts) = primed (mkNewPath ts) n' g'
 
-mergeNodes :: Node t -> Node t -> Graph t -> Graph t
-mergeNodes = undefined
+-- | Merge all the connects from the first node into connects of the
+-- second node. The node chosen to be the final node is arbitrary.
+-- Data in the nodes is completely ignored.
+-- TODO: implement node data more as a link so that it can be saved when
+-- merging two nodes with data
+mergeNodes
+  :: forall t. TransitionValid t
+  => Node t -> Node t -> Graph t -> Graph t
+mergeNodes n1_ n2_ g = insertNode nNew $ delNodes [n1, n2] g
+  where
+    n1 = nodeConsistentWithGraph g n1_
+    n2 = nodeConsistentWithGraph g n2_
+    nNew = cin . cout $ n1
+    fixSelfLoops = selfLoopify (nidOf n2) (nidOf n1)
+    cin :: Node t -> Node t
+    cin = nodeIncoming %~ fixSelfLoops . (`Set.union` incomingConnectsOf n2)
+    cout :: Node t -> Node t
+    cout = nodeOutgoing %~ fixSelfLoops . (`Set.union` outgoingConnectsOf n2)
 
 mgPath
   :: (TransitionValid t, MonadUnique Id m)
   => Path t -> Node t -> Graph t -> m (Graph t)
 mgPath = undefined
 
-selfLoopify :: Id -> Id -> Set (Connect String) -> Set (Connect String)
+selfLoopify
+  :: TransitionValid t
+  => Id -> Id -> Set (Connect t) -> Set (Connect t)
 selfLoopify nid nid' = (setmapped . connectNode . filtered (==nid)) .~ nid'
 
 -- | Creates an exact copy of a node returning it
