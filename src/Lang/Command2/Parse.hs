@@ -35,8 +35,8 @@ pList = command "ls" $> ListOut
 pQuery :: Parser Command
 pQuery = (commandFrom ["q", "query"] $> Query) <*> apath <*> transition
 
-pAddLinksFromTo :: Parser Command
-pAddLinksFromTo = (command "ft" $> AddLinksFromTo) <*> apath <*> transition
+pTag :: Parser Command
+pTag = (commandFrom ["tag", "t"] $> Tag) <*> apath <*> apath
 
 pRemove :: Parser Command
 pRemove = (command "rm" $> Remove) <*> apath
@@ -74,7 +74,7 @@ pCommand =
   <|> try pClone
   <|> try pList
   <|> try pQuery
-  <|> try pAddLinksFromTo
+  <|> try pTag
   <|> try pRemove
   <|> try pAt
   <|> try pDump

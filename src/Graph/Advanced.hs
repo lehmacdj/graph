@@ -82,6 +82,15 @@ mgPath p n g = go g $ lookupNode g <$> resolveSuccesses p n g where
   go g' (x:x':xs) = case mergeNodes x x' g' of
     (xNew, g'') -> go g'' (xNew:xs)
 
+-- | Caution: all node ids are expected to be valid for this function to
+-- be well defined.
+mergeNodeIds :: TransitionValid t => Graph t -> [Id] -> Graph t
+mergeNodeIds g = go g . map (lookupNode g) where
+  go g' [] = g'
+  go g' [_] = g'
+  go g' (x:x':xs) = case mergeNodes x x' g' of
+    (xNew, g'') -> go g'' (xNew:xs)
+
 selfLoopify
   :: TransitionValid t
   => Id -> Id -> Set (Connect t) -> Set (Connect t)

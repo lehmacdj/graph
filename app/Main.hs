@@ -156,14 +156,12 @@ execCommand c = case c of
         (n', g') <- followMkEdgeFrom' t xnid g
         graph .= g'
         graph %= insertEdges (uncurry (Edge (nidOf n')) <$> xs)
-  AddLinksFromTo a t -> withAPath a $ \n p -> do
+  Tag a b -> withTwoAPaths a b $ \n p n' p' -> do
+    execCommand (Make (Absolute (nidOf n) p))
     g <- use graph
-    case resolveSuccesses' p n g of
-      xs -> do
-        cnid <- use currentNID
-        (n', g') <- followMkEdgeFrom' t cnid g
-        graph .= g'
-        graph %= insertEdges (xs <&> \(name, nid) -> Edge nid name (nidOf n'))
+    case (resolveSuccesses p n g, resolveSingle p' n' g) of
+      (nids, Just nid) -> graph .= mergeNodeIds g (nid:nids)
+      _ -> errorNoEdge (show p' ++ "\n" ++ show p)
   Remove a -> withAPath a $ \n p -> graph %= deletePath p n
   At a c' -> withAPath a $ \n p -> do
     g <- use graph
