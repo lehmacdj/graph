@@ -27,16 +27,16 @@ pMerge :: Parser Command
 pMerge = (command "mg" $> Merge) <*> apath
 
 pClone :: Parser Command
-pClone = (command "cl" $> Clone) <*> apath <*> apath
+pClone = (command "cl" $> Clone) <*> apath <*> transition
 
 pList :: Parser Command
-pList = command "ls" $> List
+pList = command "ls" $> ListOut
 
 pAddLinksToFrom :: Parser Command
-pAddLinksToFrom = (command "tf" $> AddLinksToFrom) <*> apath <*> apath
+pAddLinksToFrom = (command "tf" $> AddLinksToFrom) <*> apath <*> transition
 
 pAddLinksFromTo :: Parser Command
-pAddLinksFromTo = (command "ft" $> AddLinksFromTo) <*> apath <*> apath
+pAddLinksFromTo = (command "ft" $> AddLinksFromTo) <*> apath <*> transition
 
 pRemove :: Parser Command
 pRemove = (command "rm" $> Remove) <*> apath
