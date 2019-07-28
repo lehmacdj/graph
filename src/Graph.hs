@@ -190,7 +190,7 @@ nodeConsistentWithGraph
   => Graph t -> Node t -> Node t
 nodeConsistentWithGraph g n
   | lookupNode g (nidOf n) == n = n
-  | otherwise = error "node is inconsistent with the state of the graph"
+  | otherwise = error $ "node " ++ show n ++ " is inconsistent with the state of the graph"
 
 traceGraph :: TransitionValid t => Graph t -> Graph t
 traceGraph g = withNodeMap g $ \nm -> Debug.trace (showDebug (Debug.trace "graph is:" g)) nm
