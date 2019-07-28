@@ -3,3 +3,4 @@ graph.cabal
 *~
 # graph files used in testing
 *.g
+*.gs

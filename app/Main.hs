@@ -183,7 +183,7 @@ execCommand c = case c of
     g <- use graph
     result <- liftIO $ serializeGraph g fn
     case result of
-      Nothing -> liftIO (putStrLn ("error: failed to decode " ++ fn))
+      Nothing -> liftIO (putStrLn ("error: failed to encode " ++ fn))
       Just () -> pure ()
   Load fn -> do
     g <- liftIO (deserializeGraph fn)
