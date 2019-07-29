@@ -73,13 +73,13 @@ deserializeGraph base = do
       getNID = maybeToE (UE "couldn't read") . readMaybe . dropExtension
       nidRes = traverse getNID linkFilenames
   nidRes `ioBindE` \nodeIds -> do
-  fileContents <- mapM (B.readFile . linksFile base) nodeIds
-  let decode x = maybeToE (UE $ "failed to decode: " ++ show x) $ Aeson.decode x
-      nodeRes = traverse decode fileContents
-  nodeRes `ioBindE` \nodes -> do
-  datas <- mapM (tryGetBinaryData base) nodeIds
-  let nodesFinal = zipWith (nodeData .~) datas nodes
-  pure $ _Success # Graph (Map.fromList (nodeIds `zip` nodesFinal))
+    fileContents <- mapM (B.readFile . linksFile base) nodeIds
+    let decode x = maybeToE (UE $ "failed to decode: " ++ show x) $ Aeson.decode x
+        nodeRes = traverse decode fileContents
+    nodeRes `ioBindE` \nodes -> do
+      datas <- mapM (tryGetBinaryData base) nodeIds
+      let nodesFinal = zipWith (nodeData .~) datas nodes
+      pure $ _Success # Graph (Map.fromList (nodeIds `zip` nodesFinal))
 
 tryGetBinaryData :: FilePath -> Id -> IO (Maybe ByteString)
 tryGetBinaryData = (ioErrorToMaybe .) . (B.readFile .) . nodeDataFile
