@@ -30,6 +30,8 @@ import Lang.APath
 
 import Control.Monad.Unique
 
+import Error
+
 data S = S
   { _filePath :: Maybe FilePath
   , _nextId :: Id -- ^ next id that is unique within the current graph
@@ -182,18 +184,14 @@ execCommand c = case c of
   Dump fn -> do
     g <- use graph
     result <- liftIO $ serializeGraph g fn
-    case result of
-      Nothing -> liftIO (putStrLn ("error: failed to encode " ++ fn))
-      Just () -> pure ()
+    displayErr result
   Load fn -> do
-    g <- liftIO (deserializeGraph fn)
-    case g of
-      Nothing -> liftIO (putStrLn ("error: failed to decode " ++ fn))
-      Just g' -> do
-        graph .= g'
-        let maxId = maximum (0 : (Map.keys . nodeMap $ g'))
-        nextId .= maxId + 1
-        filePath .= Just fn
+    result <- liftIO (deserializeGraph fn)
+    displayErrOrGet result $ \g -> do
+    graph .= g
+    let maxId = maximum (0 : (Map.keys . nodeMap $ g))
+    nextId .= maxId + 1
+    filePath .= Just fn
   Debug -> do
     s <- get
     liftIO $ print s

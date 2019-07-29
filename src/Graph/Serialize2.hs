@@ -14,10 +14,10 @@ import Data.Aeson (ToJSON, FromJSON)
 import qualified Data.Aeson as Aeson
 
 import Data.ByteString.Lazy (ByteString)
-import Data.Functor ((<&>))
 import Data.List (isSuffixOf)
 import qualified Data.ByteString.Lazy as B
 import qualified Data.Map as Map
+import Text.Read (readMaybe)
 
 import Control.Lens
 
@@ -27,6 +27,8 @@ import System.FilePath
 
 import Graph.Types
 import Graph (nidOf, dataOf)
+
+import Error
 
 linksFile :: FilePath -> Id -> FilePath
 linksFile base nid = base </> (show nid ++ ".json")
@@ -39,8 +41,8 @@ nodeDataFile base nid = base </> (show nid ++ ".data")
 
 serializeNode
   :: (Show t, ToJSON t, Ord t)
-  => Node t -> FilePath -> IO ()
-serializeNode n base = do
+  => Node t -> FilePath -> IO (E ())
+serializeNode n base = ioToE $ do
   createDirectoryIfMissing True base
   B.writeFile (linksFile base (nidOf n)) (Aeson.encode n)
   case dataOf n of
@@ -50,10 +52,10 @@ serializeNode n base = do
 -- | Write the contents of a graph into a directory at the specified location.
 serializeGraph
   :: (Show t, ToJSON t, Ord t)
-  => Graph t -> FilePath -> IO (Maybe ())
-serializeGraph g base = (`catch` ioHandler) $ do
+  => Graph t -> FilePath -> IO (E ())
+serializeGraph g base = ioToE $ do
   createDirectoryIfMissing True base
-  Just <$> mapM_ (`serializeNode` base) (Map.elems (nodeMap g))
+  mapM_ (`serializeNode` base) (Map.elems (nodeMap g))
 
 ioHandler :: IOError -> IO (Maybe a)
 ioHandler = pure . const Nothing
@@ -64,16 +66,20 @@ ioErrorToMaybe = (`catch` ioHandler) . (Just <$>)
 -- | Load a graph from a directory.
 deserializeGraph
   :: (FromJSON t, Read t, Show t, Ord t)
-  => FilePath -> IO (Maybe (Graph t))
-deserializeGraph base = (`catch` ioHandler) $ do
+  => FilePath -> IO (E (Graph t))
+deserializeGraph base = do
   cs <- listDirectory base
   let linkFilenames = filter (".json" `isSuffixOf`) cs
-  nodeIds <- mapM (readIO . dropExtension) linkFilenames
+      getNID = maybeToE (UE "couldn't read") . readMaybe . dropExtension
+      nidRes = traverse getNID linkFilenames
+  nidRes `ioBindE` \nodeIds -> do
   fileContents <- mapM (B.readFile . linksFile base) nodeIds
-  let nodes = mapM Aeson.decode fileContents
+  let decode x = maybeToE (UE $ "failed to decode: " ++ show x) $ Aeson.decode x
+      nodeRes = traverse decode fileContents
+  nodeRes `ioBindE` \nodes -> do
   datas <- mapM (tryGetBinaryData base) nodeIds
-  let nodesFinal = nodes <&> \x -> zipWith (nodeData .~) datas x
-  pure $ nodesFinal <&> \x -> Graph (Map.fromList (nodeIds `zip` x))
+  let nodesFinal = zipWith (nodeData .~) datas nodes
+  pure $ _Success # Graph (Map.fromList (nodeIds `zip` nodesFinal))
 
 tryGetBinaryData :: FilePath -> Id -> IO (Maybe ByteString)
 tryGetBinaryData = (ioErrorToMaybe .) . (B.readFile .) . nodeDataFile

@@ -37,6 +37,7 @@ dependencies:
 - SHA
 - http-conduit
 - conduit
+- validation
 
 library:
   source-dirs: src
