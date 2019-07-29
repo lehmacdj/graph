@@ -27,7 +27,7 @@ followMkEdgeFrom
   :: (TransitionValid t, MonadUnique Id m)
   => t -> Node t -> Graph t -> m (Node t, Graph t)
 followMkEdgeFrom e n g = case matchConnect e (outgoingConnectsOf n) of
-  nid:_ -> pure (nodeLookup nid g, g)
+  nid:_ -> pure (nodeLookup nid (traceGraph g), g)
   [] -> do
     nnid <- fresh
     let newNode = Node nnid (Set.singleton (Connect e (nidOf n))) Set.empty Nothing
@@ -113,3 +113,6 @@ deletePath p n g = foldl' delDPath g . toList $ resolvePath p n g where
   delDPath g' (DPath xs@(_:_) nid' []) = case last xs of -- safe because list nonempty
     FromVia nid t -> delEdge (Edge nid t nid') g'
   delDPath g' _ = g'
+
+fixIntegrity :: Graph t -> Graph t
+fixIntegrity = undefined
