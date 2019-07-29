@@ -13,6 +13,7 @@ import Lang.Parsing
 pathTerm :: Parser t -> Parser (Path t)
 pathTerm pTransition =
   (symbol "#" $> One)
+  <|> (symbol "*" $> Wild)
   <|> (Literal <$> pTransition)
   <|> parens (pPath pTransition)
 

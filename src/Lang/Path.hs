@@ -31,12 +31,17 @@ data DPath t = DPath
   [t] -- transitions that could not be realized within the graph
   deriving (Show, Eq, Ord)
 
+projPath :: Show t => [DPathComponent t] -> String
+projPath [] = "#"
+projPath [FromVia _ x] = show x
+projPath (FromVia _ x:xs) = show x ++ "/" ++ projPath xs
+
 data Path t
   = One
 --  | Zero (it might be useful to have a additive identity eventually)
 --          at least for algebraic reasons
 --  | Dual -- ^ a transition that dualizes the view of the graph
---  | Wild -- ^ a transition matched by anything (top in the algebra)
+  | Wild -- ^ a transition matched by anything (top in the algebra)
 --  | Path t :\ Path t -- ^ set minus (useful with wild to restrict)
 --  | Negate (Path t) -- ^ negate a path, if included obsolesces other operators
 --  | Star (Path t) -- ^ kleene iteration: technically top in algebra is top^*
@@ -54,6 +59,9 @@ listifyNewPath
   => Path t -> Set [t]
 listifyNewPath = \case
   One -> Set.singleton []
+  Wild -> Set.empty -- we have to ignore paths that contain wild because we
+                    -- don't have the graph and can't add all possible
+                    -- transitions
   Literal t -> Set.singleton [t]
   p1 :/ p2 -> Set.fromList $ do
     p1' <- toList $ listifyNewPath p1
@@ -77,9 +85,12 @@ resolvePath
   => Path t -> Node t -> Graph t -> Set (DPath t)
 resolvePath p n g = nodeConsistentWithGraph g n `seq` case p of
   One -> Set.singleton (DPath [] (nidOf n) [])
-  Literal t -> case mapMaybe (maybeLookupNode g) $ matchConnect t (outgoingConnectsOf n) of
+  Wild -> Set.fromList $ do
+    Connect t nid <- toList $ outgoingConnectsOf n
+    pure $ DPath [nidOf n `FromVia` t] nid []
+  Literal t -> case matchConnect t (outgoingConnectsOf n) of
     [] -> Set.singleton (DPath [] (nidOf n) [t])
-    ms -> Set.fromList (DPath [nidOf n `FromVia` t] <$> (nidOf <$> ms) <*> pure [])
+    ms -> Set.fromList (DPath [nidOf n `FromVia` t] <$> ms <*> pure [])
   p1 :/ p2 -> Set.fromList $ do
     DPath pre n' post <- toList $ resolvePath p1 n g
     if null post
@@ -117,10 +128,7 @@ resolveSuccesses p n g = mapMaybe projSuccess $ toList $ resolvePath p n g where
 -- Also returns a string which identifies the path that was taken to each id
 resolveSuccesses'
   :: TransitionValid t
-  => Path t -> Node t -> Graph t -> [(String, Id)]
+  => Path t -> Node t -> Graph t -> [([DPathComponent t], Id)]
 resolveSuccesses' p n g = mapMaybe projSuccess $ toList $ resolvePath p n g where
-  projSuccess (DPath xs i []) = Just (projPath xs, i)
+  projSuccess (DPath xs i []) = Just (xs, i)
   projSuccess _ = Nothing
-  projPath [] = "#"
-  projPath [FromVia _ x] = show x
-  projPath (FromVia _ x:xs) = show x ++ "/" ++ projPath xs
