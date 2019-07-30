@@ -128,6 +128,9 @@ execCommand c = case c of
         graph .= g'
         graph %= insertEdges (uncurry (Edge (nidOf n')) <$> over (mapped._1) projPath xs)
   Tag a b -> withTwoAPaths a b $ \n p n' p' -> do
+    -- TODO: make the tag command guarnatee that the tag that is made is a new path
+    -- to a new node, not related to previous paths
+    -- i.e. tag a b; tag a b; should create two identical links a that point to b
     execCommand (Make (Absolute (nidOf n) p))
     g <- use graph
     case (resolveSuccesses p (refreshNode g n) g, resolveSingle p' (refreshNode g n') g) of

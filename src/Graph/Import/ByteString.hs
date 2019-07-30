@@ -20,4 +20,4 @@ importData
    => Id -> ByteString -> Graph String -> m (Id, Graph String)
 importData nid d g = do
   (n', g') <- followMkEdgeFrom' (computeSHA d) nid g
-  pure (nidOf n', setData (Just d) n' (traceGraph g'))
+  pure (nidOf n', setData (Just d) n' g')

@@ -27,7 +27,7 @@ followMkEdgeFrom
   :: (TransitionValid t, MonadUnique Id m)
   => t -> Node t -> Graph t -> m (Node t, Graph t)
 followMkEdgeFrom e n g = case matchConnect e (outgoingConnectsOf n) of
-  nid:_ -> pure (nodeLookup nid (traceGraph g), g)
+  nid:_ -> pure (nodeLookup nid g, g)
   [] -> do
     nnid <- fresh
     let newNode = Node nnid (Set.singleton (Connect e (nidOf n))) Set.empty Nothing
