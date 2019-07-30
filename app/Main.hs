@@ -27,7 +27,7 @@ import Lang.APath
 import Error
 
 import State
-import Completion
+-- import Completion
 
 errorNoEdge :: String -> Repl S ()
 errorNoEdge = liftIO . printf "edge missing '%s': failed to execute command\n"
@@ -126,7 +126,7 @@ execCommand c = case c of
         xnid <- use currentNID
         (n', g') <- followMkEdgeFrom' t xnid g
         graph .= g'
-        graph %= insertEdges (uncurry (Edge (nidOf n')) <$> xs)
+        graph %= insertEdges (uncurry (Edge (nidOf n')) <$> over (mapped._1) projPath xs)
   Tag a b -> withTwoAPaths a b $ \n p n' p' -> do
     execCommand (Make (Absolute (nidOf n) p))
     g <- use graph
@@ -136,13 +136,25 @@ execCommand c = case c of
   Remove a -> withAPath a $ \n p -> graph %= deletePath p n
   At a c' -> withAPath a $ \n p -> do
     g <- use graph
-    case resolveSingle p n g of
-      Nothing -> errorNoEdge (show p)
-      Just nid -> do
-        cnid <- use currentNID
-        currentNID .= nid
-        execCommand c'
-        currentNID .= cnid
+    let xs = resolveSuccesses p n g
+    forM_ xs $ \nid -> do
+      cnid <- use currentNID
+      currentNID .= nid
+      execCommand c'
+      currentNID .= cnid
+  Dedup s -> do
+    n <- currentNode
+    g <- use graph
+    let xs :: [String -> Edge String]
+        xs = [ \suffix -> Edge nid1 (t ++ suffix) nid2
+             | ([FromVia nid1 t], nid2) <- resolveSuccesses' (Literal s) n g
+             ]
+    let noSuffix = repeat ""
+        suffixes
+          | length xs < 2 = noSuffix
+          | otherwise = show <$> ([1..] :: [Int])
+    graph %= delEdges (zipWith ($) xs noSuffix)
+    graph %= insertEdges (zipWith ($) xs suffixes)
   ListOut -> do
     -- TODO: possibly make this also print node ids
     n <- currentNode

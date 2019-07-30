@@ -56,6 +56,9 @@ pNodeId = command "nid" $> NodeId
 pDebug :: Parser Command
 pDebug = commandFrom [":debug", ":d"] $> Debug
 
+pDedup :: Parser Command
+pDedup = (commandFrom ["dedup", "dd"] $> Dedup) <*> transition
+
 pShowImage :: Parser Command
 pShowImage = commandFrom ["show-image", "si"] $> ShowImage
 
@@ -77,6 +80,7 @@ pCommand =
   <|> try pTag
   <|> try pRemove
   <|> try pAt
+  <|> try pDedup
   <|> try pDump
   <|> try pLoad
   <|> try pNodeId

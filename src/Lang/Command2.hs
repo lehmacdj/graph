@@ -13,6 +13,7 @@ data Command
   | Tag (APath String) (APath String) -- ^ t
   | Remove (APath String)             -- ^ rm
   | At (APath String) Command         -- ^ at
+  | Dedup String                      -- ^ dd
   | Dump FilePath
   | Load FilePath
   | NodeId
