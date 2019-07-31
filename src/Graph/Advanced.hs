@@ -28,11 +28,16 @@ followMkEdgeFrom
   => t -> Node t -> Graph t -> m (Node t, Graph t)
 followMkEdgeFrom e n g = case matchConnect e (outgoingConnectsOf n) of
   nid:_ -> pure (nodeLookup nid g, g)
-  [] -> do
-    nnid <- fresh
-    let newNode = Node nnid (Set.singleton (Connect e (nidOf n))) Set.empty Nothing
-        g' = insertNode newNode g
-    pure (newNode, g')
+  [] -> mkEdgeFrom e n g
+
+mkEdgeFrom
+  :: (TransitionValid t, MonadUnique Id m)
+  => t -> Node t -> Graph t -> m (Node t, Graph t)
+mkEdgeFrom e n g = do
+  nnid <- fresh
+  let newNode = Node nnid (Set.singleton (Connect e (nidOf n))) Set.empty Nothing
+      g' = insertNode newNode g
+  pure (newNode, g')
 
 followMkEdgeFrom'
   :: (TransitionValid t, MonadUnique Id m)
@@ -44,7 +49,7 @@ mkNewPath
   => [t] -> Node t -> Graph t -> m (Graph t)
 mkNewPath [] _ g = pure g
 mkNewPath (x:xs) n g =  do
-  (n', g') <- followMkEdgeFrom x n g
+  (n', g') <- mkEdgeFrom x n g
   mkNewPath xs n' g'
 
 mkPath

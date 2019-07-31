@@ -34,4 +34,6 @@ completePath :: (String, String) -> Base (String, [Completion])
 completePath = undefined
 
 completionFunction :: (String, String) -> Base (String, [Completion])
-completionFunction = undefined
+completionFunction =
+  completeCommand
+  `fallbackCompletion` completePath
