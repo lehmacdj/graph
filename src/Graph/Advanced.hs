@@ -49,7 +49,7 @@ mkNewPath
   => [t] -> Node t -> Graph t -> m (Graph t)
 mkNewPath [] _ g = pure g
 mkNewPath (x:xs) n g =  do
-  (n', g') <- mkEdgeFrom x n g
+  (n', g') <- followMkEdgeFrom x n g
   mkNewPath xs n' g'
 
 mkPath
