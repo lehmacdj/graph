@@ -5,10 +5,11 @@ module Main where
 import Control.Repl
 import Control.Lens
 import Control.Monad.State
-import Control.Exception (catch)
+import Control.Exception (try)
 import System.IO.Term.Image
 import Network.HTTP.Conduit
 import qualified Data.Map as Map
+import Data.ByteString.Lazy (ByteString)
 
 import Graph
 import Graph.Serialize2
@@ -134,10 +135,10 @@ execCommand c = case c of
     g' <- importer nid g
     graph .= g'
   ImportUrl uri -> do
-    md <- liftIO $ (Just <$> simpleHttp uri) `catch` ioExceptionHandler
+    md <- liftIO (try (simpleHttp uri) :: IO (Either HttpException ByteString))
     case md of
-      Nothing -> liftIO $ putStrLn "error: couldn't fetch uri"
-      Just d -> do
+      Left e -> liftIO $ putStrLn $ "error: couldn't fetch uri\n" ++ show e
+      Right d -> do
         g <- use graph
         (n, g') <- followMkEdgeFrom' "file-hashes" 0 g
         (nid', g'') <- importData (nidOf n) d g'
