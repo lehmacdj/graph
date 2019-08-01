@@ -1,5 +1,3 @@
-{-# LANGUAGE ViewPatterns #-}
-
 -- | Completion stuff for the interface
 module Completion where
 
@@ -8,7 +6,6 @@ import Data.List
 import Data.Foldable
 import Data.Maybe
 import Control.Repl (ReplBase)
-import Control.Monad.IO.Class
 
 import System.Console.Haskeline
 
@@ -19,8 +16,6 @@ import Lang.APath
 
 import Lang.Path.Partial
 import Graph
-
-import Debug.Trace
 
 type Base a = ReplBase S a
 
@@ -47,10 +42,10 @@ completeCommand = completeWordWithPrev Nothing " " getCommandCompletions
 -- transition currently on as much as possible, then tries to complete from
 -- that location
 completePath :: (String, String) -> Base (String, [Completion])
-completePath (i, e) = case getPartialPath (takeRelevantFromEnd i) of
+completePath (i, _) = case getPartialPath (takeRelevantFromEnd i) of
   Nothing -> pure (i, [])
   Just (MissingSlash _ _) -> pure (i, [simpleCompletion "/"])
-  Just (ppp@(PartialPath nid pp end)) -> do
+  Just (PartialPath nid pp end) -> do
     let p' = foldr (:/) One pp
     withAPath' (pure (i, [])) (mkAPath nid p') $ \n p -> do
       g <- use graph
