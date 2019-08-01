@@ -1,6 +1,7 @@
 module Lang.Parsing where
 
 import Data.Void
+import Data.Char
 
 import Text.Megaparsec
 import Text.Megaparsec.Char
@@ -16,8 +17,17 @@ s = L.space space1 empty empty
 lexeme :: Parser a -> Parser a
 lexeme = L.lexeme s
 
+-- | The additional characters that are allowed in a transition without quoting
+-- it.
+-- extraIdentChars :: [Char]
+extraIdentChars :: String
+extraIdentChars = "-._"
+
+isIdentChar :: Char -> Bool
+isIdentChar = (||) <$> isAlphaNum <*> (`elem` extraIdentChars)
+
 identChar :: Parser Char
-identChar = alphaNumChar <|> oneOf "-_."
+identChar = alphaNumChar <|> oneOf extraIdentChars
 
 ident :: Parser String
 ident = L.lexeme s $ some identChar

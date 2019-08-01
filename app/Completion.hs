@@ -6,6 +6,7 @@ import Data.List
 import Data.Foldable
 import Data.Maybe
 import Control.Repl (ReplBase)
+import Control.Arrow
 
 import System.Console.Haskeline
 
@@ -15,6 +16,7 @@ import Lang.Path
 import Lang.APath
 
 import Lang.Path.Partial
+import Lang.Parsing
 import Graph
 
 type Base a = ReplBase S a
@@ -25,7 +27,7 @@ commands = []
 -- | takes a list of strings and a reversed input string, and produces
 -- words from the list that complete the previous thing
 mkCompleter :: [String] -> String -> [Completion]
-mkCompleter xs x = map simpleCompletion $ filter (x `isPrefixOf`) xs
+mkCompleter xs x = map simpleCompletion' $ filter (x `isPrefixOf`) xs
 
 getCommandCompletions :: String -> String -> Base [Completion]
 getCommandCompletions x y
@@ -36,6 +38,30 @@ getCommandCompletions x y
 
 completeCommand :: (String, String) -> Base (String, [Completion])
 completeCommand = completeWordWithPrev Nothing " " getCommandCompletions
+
+quoteUnusualTransition :: String -> String
+quoteUnusualTransition x
+  | isUnusualTransition x = show x
+  | otherwise = x
+
+isUnusualTransition :: String -> Bool
+isUnusualTransition = any (not . isIdentChar)
+
+-- | simpleCompletion except the completion is not treated as finished,
+-- thus no space is added after
+simpleCompletion' :: String -> Completion
+simpleCompletion' x = Completion x x False
+
+mkTransitionCompleter :: [String] -> String -> [Completion]
+mkTransitionCompleter xs x =
+  quotify $ filter check xs where
+    quotify z
+      | any isUnusualTransition z = map (simpleCompletion' . show) z
+      | otherwise = map simpleCompletion' z
+    check =
+      quoteUnusualTransition &&& id
+      >>> over both (x `isPrefixOf`)
+      >>> uncurry (||)
 
 -- this tries to parse as much of a path as possible, and then deduce what
 -- the current word being completed is, it then tries to complete a
