@@ -13,6 +13,8 @@ import Data.Set (Set)
 import qualified Data.Set as Set
 import Data.Foldable (toList)
 import Data.Maybe (mapMaybe)
+import Data.List (intersectBy)
+import Data.Function (on)
 
 import Graph
 import Graph.Connect
@@ -35,6 +37,9 @@ projPath :: Show t => [DPathComponent t] -> String
 projPath [] = "#"
 projPath [FromVia _ x] = show x
 projPath (FromVia _ x:xs) = show x ++ "/" ++ projPath xs
+
+endPoint :: DPath t -> Id
+endPoint (DPath _ x _) = x
 
 data Path t
   = One
@@ -101,7 +106,9 @@ resolvePath p n g = nodeConsistentWithGraph g n `seq` case p of
          post' <- toList $ listifyNewPath p2
          pure $ DPath pre n' (post ++ post')
   p1 :+ p2 -> resolvePath p1 n g `Set.union` resolvePath p2 n g
-  p1 :& p2 -> resolvePath p1 n g `Set.intersection` resolvePath p2 n g
+  p1 :& p2 -> Set.fromList $ intersectBy ((==) `on` endPoint) p1r p2r where
+    p1r = toList $ resolvePath p1 n g
+    p2r = toList $ resolvePath p2 n g
 
 -- | Like resolvePath, but fails if there is more than one result and if
 -- there is unresolved path remaining after it.
