@@ -1,19 +1,45 @@
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE FlexibleInstances #-}
+
 module Control.Repl
     ( makeRepl
     , runRepl
     , doRepl
+    , doRepl'
+    , runRepl'
     , liftIO
-    , Repl
+    , Repl(..)
+    , ReplBase(..)
     , withDefaultQuitParser
     , C(..)
+    , Settings
+    , setComplete
+    , defaultSettings
     ) where
 
-import Control.Monad.State (liftIO, StateT, runStateT, lift)
+import Control.Monad.IO.Class
+import Control.Monad.State (liftIO, StateT(..), runStateT, MonadState(..), lift)
 import Data.Functor
 
-import System.Console.Haskeline (InputT, defaultSettings, runInputT, getInputLine)
+import System.Console.Haskeline (InputT, defaultSettings, runInputT
+    , getInputLine, Settings, MonadException(..), RunIO(..), setComplete)
 
-type Repl s = StateT s (InputT IO)
+newtype ReplBase s a = ReplBase { unReplBase :: StateT s IO a }
+  deriving (Functor, Monad, MonadState s, MonadIO, Applicative)
+
+instance MonadException (ReplBase s) where
+    controlIO f =
+      ReplBase . StateT $ \s -> controlIO $ \(RunIO run) ->
+        let run' = RunIO (fmap (ReplBase . StateT . const) . run . flip runStateT s . unReplBase)
+         in (`runStateT` s) . unReplBase <$> f run'
+
+newtype Repl s a = Repl { unRepl :: InputT (ReplBase s) a }
+  deriving (Functor, Monad, MonadIO, Applicative)
+
+instance MonadState s (Repl s) where
+  state = Repl . lift . state
+
 
 data C c
   = Quit
@@ -30,15 +56,24 @@ makeRepl :: String
          -> Repl s ()
 makeRepl title reader execute = repl where
     repl = do
-        command <- lift $ (reader <$>) <$> getInputLine (title ++ "> ")
-        case command of
+        command <- Repl $ getInputLine (title ++ "> ")
+        case reader <$> command of
             Nothing -> liftIO (putStrLn "Goodbye!") $> ()
             Just (Right Quit) -> liftIO (putStrLn "Goodbye!") $> ()
             Just (Right (C command')) -> execute command' >> repl
             Just (Left err) -> liftIO (putStrLn err) >> repl
 
+runRepl' :: Settings (ReplBase s) -> Repl s a -> s -> IO a
+runRepl' settings repl s =
+  fmap fst
+  . (`runStateT` s)
+  . unReplBase
+  . runInputT settings
+  . unRepl
+  $ repl
+
 runRepl :: Repl s a -> s -> IO a
-runRepl repl s = runInputT defaultSettings $ fst <$> runStateT repl s
+runRepl = runRepl' defaultSettings
 
 -- | Takes :q and :quit as quit and otherwise defers to the main parser
 withDefaultQuitParser
@@ -52,4 +87,12 @@ doRepl :: String
        -> (c -> Repl s ())
        -> s
        -> IO ()
-doRepl = ((runRepl.).). makeRepl
+doRepl = doRepl' defaultSettings
+
+doRepl' :: Settings (ReplBase s)
+       -> String
+       -> (String -> Either String (C c))
+       -> (c -> Repl s ())
+       -> s
+       -> IO ()
+doRepl' settings = ((runRepl' settings.).). makeRepl

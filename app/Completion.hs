@@ -3,14 +3,23 @@
 -- | Completion stuff for the interface
 module Completion where
 
-import Control.Monad.State
+import Control.Lens
 import Data.List
+import Data.Foldable
+import Data.Maybe
+import Control.Repl (ReplBase)
 
 import System.Console.Haskeline
 
 import State
 
-type Base a = StateT S IO a
+import Lang.Path
+import Lang.APath
+
+import Lang.Path.Partial
+import Graph
+
+type Base a = ReplBase S a
 
 commands :: [String]
 commands = []
@@ -30,8 +39,25 @@ getCommandCompletions x y
 completeCommand :: (String, String) -> Base (String, [Completion])
 completeCommand = completeWordWithPrev Nothing " " getCommandCompletions
 
+-- this tries to parse as much of a path as possible, and then deduce what
+-- the current word being completed is, it then tries to complete a
+-- transition currently on as much as possible, then tries to complete from
+-- that location
 completePath :: (String, String) -> Base (String, [Completion])
-completePath = undefined
+completePath (i, _) = case getPartialPath (takeRelevantFromEnd i) of
+  Nothing -> pure (i, [])
+  Just (MissingSlash _ _) -> pure (i, [simpleCompletion "/"])
+  Just (PartialPath nid pp end) -> do
+    let p' = foldr (:/) One pp
+    withAPath' (pure (i, [])) (mkAPath nid p') $ \n p -> do
+      g <- use graph
+      let
+        octs = do
+          ntid <- resolveSuccesses p n g
+          nt <- maybeToList $ maybeLookupNode g ntid
+          oc <- toList $ outgoingConnectsOf nt
+          pure $ view connectTransition oc
+      pure (i, mkCompleter octs end)
 
 completionFunction :: (String, String) -> Base (String, [Completion])
 completionFunction =

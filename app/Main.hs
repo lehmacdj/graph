@@ -3,13 +3,9 @@
 module Main where
 
 import Control.Repl
-import Data.Foldable (toList)
-import Data.Set (Set)
-import Text.Printf
 import Control.Lens
 import Control.Monad.State
 import Control.Exception (catch)
-import Data.List (intercalate)
 import System.IO.Term.Image
 import Network.HTTP.Conduit
 import qualified Data.Map as Map
@@ -27,60 +23,7 @@ import Lang.APath
 import Error
 
 import State
--- import Completion
-
-errorNoEdge :: String -> Repl S ()
-errorNoEdge = liftIO . printf "edge missing '%s': failed to execute command\n"
-
-printTransitions :: Set (Connect String) -> IO ()
-printTransitions = putStrLn . unlines' . fmap dtransition . toList where
-  unlines' = intercalate "\n"
-  dtransition (Connect t nid) = show t ++ " at " ++ show nid
-
-currentNode :: Repl S (Node String)
-currentNode = lookupNode <$> use graph <*> use currentNID
-
-currentNodeDataFile :: Repl S FilePath
-currentNodeDataFile = do
-  cnid <- use currentNID
-  p <- use filePath
-  case p of
-    Just base -> pure (nodeDataFile base cnid)
-    Nothing -> error "there is no current path"
-
-describe :: String -> Maybe a -> Either String a
-describe s Nothing = Left s
-describe _ (Just x) = Right x
-
-apathResolve :: APath String -> Repl S (Either String (Node String, Path String))
-apathResolve (Absolute nid p) = do
-  g <- use graph
-  pure . describe ("invalid nid " ++ show nid) $ (\x -> (x, p)) <$> maybeLookupNode g nid
-apathResolve (Relative p) = Right <$> do
-  n <- currentNode
-  pure (n, p)
-
-withAPath
-  :: APath String
-  -> (Node String -> Path String -> Repl S ())
-  -> Repl S ()
-withAPath a f = do
-  r <- apathResolve a
-  case r of
-    Left e -> liftIO $ putStrLn e
-    Right (n, p) -> f n p
-
-withTwoAPaths
-  :: APath String
-  -> APath String
-  -> (Node String -> Path String -> Node String -> Path String -> Repl S ())
-  -> Repl S ()
-withTwoAPaths a b f = do
-  r <- apathResolve a
-  r' <- apathResolve b
-  case sequenceOf both (r, r') of
-    Left e -> liftIO $ putStrLn e
-    Right ((n, p), (n', p')) -> f n p n' p'
+import Completion
 
 -- | Style guide for commands for the future:
 -- All commands and paths are interpreted relative to the current location
@@ -204,5 +147,8 @@ execCommand c = case c of
 ioExceptionHandler :: IOError -> IO (Maybe a)
 ioExceptionHandler _ = pure Nothing
 
+replSettings :: Settings (ReplBase S)
+replSettings = setComplete completionFunction defaultSettings
+
 main :: IO ()
-main = doRepl "g" (withDefaultQuitParser parseCommand) execCommand emptyS
+main = doRepl' replSettings "g" (withDefaultQuitParser parseCommand) execCommand emptyS

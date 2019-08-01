@@ -15,3 +15,7 @@ data APath t
   = Relative (Path t)
   | Absolute Id (Path t)
   deriving (Show, Eq, Ord)
+
+mkAPath :: Maybe Id -> Path t -> APath t
+mkAPath (Just nid) p = Absolute nid p
+mkAPath Nothing p = Relative p

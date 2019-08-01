@@ -5,6 +5,7 @@ import qualified Data.Set as Set
 
 import Graph
 import Lang.Path
+import Lang.Path.Partial
 
 main :: IO ()
 main = defaultMain allTests
@@ -21,9 +22,15 @@ testGraph =
   $ emptyGraph
 
 allTests :: TestTree
-allTests = testGroup "path tests"
-  [ assert pathLit
-  , assert pathLitNondet
+allTests = testGroup "graph"
+  [ pathTests
+  , completionTests
+  ]
+
+pathTests :: TestTree
+pathTests = testGroup "path"
+  [ testCase "pathLit" pathLit
+  , testCase "pathLitNondet" pathLitNondet
   ] where
     resolvePath' = primed . resolvePath
     pathLit =
@@ -33,6 +40,20 @@ allTests = testGroup "path tests"
         ] @=?
       resolvePath' (Literal "a" :/ Literal "b") 0 testGraph
     pathLitNondet =
-      [DPath [FromVia 0 "a", FromVia 1 "c"] 2 []]
+      Set.fromList [DPath [FromVia 0 "a", FromVia 1 "c"] 2 []]
       @=?
       resolvePath' (Literal "a" :/ Literal "c") 0 testGraph
+
+completionTests :: TestTree
+completionTests = testGroup "completion" [ takeRelevantFromEndTests ]
+
+takeRelevantFromEndTests :: TestTree
+takeRelevantFromEndTests = testGroup "takeRelevantFromEnd"
+  [ takeRelevantFromEnd' "a/(b + c" "a/ c"
+  , takeRelevantFromEnd' "a/(b + c/d" "a/ c/d"
+  , takeRelevantFromEnd' "(a + b)/e + (c + d)" " (c + d)"
+  , takeRelevantFromEnd' "(a + b)/(e + (c + d)" "(a + b)/ (c + d)"
+  , takeRelevantFromEnd' "a & b/" " b/"
+  , takeRelevantFromEnd' "a & b/(a + b & c/(d + e" " b/ c/ e"
+  ] where
+    takeRelevantFromEnd' i e = testCase i $ e @=? (takeRelevantFromEnd . reverse $ i)

@@ -13,6 +13,9 @@ type Parser = Parsec Void String
 s :: Parser ()
 s = L.space space1 empty empty
 
+lexeme :: Parser a -> Parser a
+lexeme = L.lexeme s
+
 identChar :: Parser Char
 identChar = alphaNumChar <|> oneOf "-_."
 
