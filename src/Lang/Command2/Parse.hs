@@ -90,4 +90,4 @@ pCommand =
   <|> try pImportUrl
 
 parseCommand :: String -> Either String Command
-parseCommand = left show . runParser pCommand "<interactive>"
+parseCommand = left errorBundlePretty . runParser pCommand "<interactive>"
