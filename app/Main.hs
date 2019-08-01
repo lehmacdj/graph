@@ -138,10 +138,12 @@ execCommand c = case c of
     case md of
       Nothing -> liftIO $ putStrLn "error: couldn't fetch uri"
       Just d -> do
-        nid <- use currentNID
         g <- use graph
-        (nid', g') <- importData nid d g
-        graph .= g'
+        (n, g') <- followMkEdgeFrom' "file-hashes" 0 g
+        (nid', g'') <- importData (nidOf n) d g'
+        (m, g''') <- followMkEdgeFrom' "import-urls" 0 g''
+        graph .= g'''
+        graph %= insertEdge (Edge (nidOf m) uri nid')
         currentNID .= nid'
 
 ioExceptionHandler :: IOError -> IO (Maybe a)
