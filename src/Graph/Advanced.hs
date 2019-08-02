@@ -39,6 +39,11 @@ mkEdgeFrom e n g = do
       g' = insertNode newNode g
   pure (newNode, g')
 
+mkEdgeFrom'
+  :: (TransitionValid t, MonadUnique Id m)
+  => t -> Id -> Graph t -> m (Node t, Graph t)
+mkEdgeFrom' = primed . mkEdgeFrom
+
 followMkEdgeFrom'
   :: (TransitionValid t, MonadUnique Id m)
   => t -> Id -> Graph t -> m (Node t, Graph t)
@@ -90,9 +95,13 @@ mgPath p n g = go g $ lookupNode g <$> resolveSuccesses p n g where
 -- | Caution: all node ids are expected to be valid for this function to
 -- be well defined.
 mergeNodeIds :: TransitionValid t => Graph t -> [Id] -> Graph t
-mergeNodeIds g = go g . map (lookupNode g) where
-  go g' [] = g'
-  go g' [_] = g'
+mergeNodeIds g = snd . mergeNodeIds' g
+
+-- | mergeNodeIds but also return the nid that the new node has if it exists
+mergeNodeIds' :: TransitionValid t => Graph t -> [Id] -> (Maybe Id, Graph t)
+mergeNodeIds' g = go g . map (lookupNode g) where
+  go g' [] = (Nothing, g')
+  go g' [x] = (Just (nidOf x), g')
   go g' (x:x':xs) = case mergeNodes x x' g' of
     (xNew, g'') -> go g'' (xNew:xs)
 
