@@ -38,6 +38,13 @@ dependencies:
 - http-conduit
 - conduit
 - validation
+- unix
+- random-shuffle
+- xml-conduit
+- html-conduit
+- text
+- conduit
+- conduit-extra
 
 library:
   source-dirs: src

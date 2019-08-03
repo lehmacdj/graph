@@ -44,6 +44,9 @@ transition = ident <|> stringLiteral
 nodeId :: Parser Id
 nodeId = L.lexeme s L.decimal
 
+number :: Parser Int
+number = L.lexeme s L.decimal
+
 parens :: Parser a -> Parser a
 parens = between (symbol "(") (symbol ")")
 

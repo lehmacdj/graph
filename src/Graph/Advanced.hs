@@ -64,6 +64,11 @@ mkPath p n g = foldM go g xs where
   xs = map (\(DPath _ nid ts) -> (nid, ts)) . toList $ resolvePath p n g
   go g' (n', ts) = primed (mkNewPath ts) n' g'
 
+mkPath'
+  :: (TransitionValid t, MonadUnique Id m)
+  => Path t -> Id -> Graph t -> m (Graph t)
+mkPath' = primed . mkPath
+
 -- | Merge all the connects from the first node into connects of the
 -- second node. The node chosen to be the final node is arbitrary.
 -- Data in the nodes is completely ignored.
