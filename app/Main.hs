@@ -136,14 +136,7 @@ execCommand c = case c of
     r <- importUrl 0 uri g'
     case r of
       Left e -> liftIO $ putStrLn $ "error: couldn't fetch uri\n" ++ show e
-      Right (nid, g) -> currentNID .= nid >> graph .= g
-        g <- use graph
-        (n, g') <- followMkEdgeFrom' "file-hashes" 0 g
-        (nid', g'') <- importData (nidOf n) d g'
-        (m, g''') <- followMkEdgeFrom' "import-urls" 0 g''
-        graph .= g'''
-        graph %= insertEdge (Edge (nidOf m) uri nid')
-        currentNID .= nid'
+      Right (nid, g) -> graph .= g >> currentNID .= nid
 
 ioExceptionHandler :: IOError -> IO (Maybe a)
 ioExceptionHandler _ = pure Nothing
