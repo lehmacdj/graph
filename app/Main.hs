@@ -117,6 +117,7 @@ execCommand c = case c of
       let maxId = maximum (0 : (Map.keys . nodeMap $ g))
       nextId .= maxId + 1
       filePath .= Just fn
+      currentNID .= minimum (0 : (Map.keys . nodeMap $ g))
   Debug -> do
     s <- get
     liftIO $ print s

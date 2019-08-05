@@ -62,7 +62,7 @@ pLastPartialPath =
   try (c *> pPartialPath <* eof)
   <|> c *> pAPath transition *> pPartialPath <* eof
   where
-    c = lexeme (many (oneOf ":.-_" <|> alphaNumChar) <* lookAhead s)
+    c = lexeme (many (oneOf (":.-_" :: String) <|> alphaNumChar) <* lookAhead s)
 
 consUnless :: Bool -> a -> [a] -> [a]
 consUnless False = (:)

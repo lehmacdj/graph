@@ -21,7 +21,7 @@ lexeme = L.lexeme s
 -- it.
 -- extraIdentChars :: [Char]
 extraIdentChars :: String
-extraIdentChars = "-._"
+extraIdentChars = "-._'"
 
 isIdentChar :: Char -> Bool
 isIdentChar = (||) <$> isAlphaNum <*> (`elem` extraIdentChars)
