@@ -1,3 +1,5 @@
+{-# LANGUAGE LambdaCase #-}
+
 module Error
   ( module Error
   , module Data.Validation
@@ -14,27 +16,34 @@ import Control.Arrow (left)
 
 import Data.Validation
 import Control.Monad.IO.Class
+import Control.Monad.Freer
+import Control.Monad.Freer.Error
 
-data Error
+data Err
   = UE String
   | IOFail IOError
   deriving (Eq)
 
-newtype Errors = Errors (NonEmpty Error)
+type Errors = NonEmpty Err
 
-instance Show Error where
+instance Show Err where
   show (UE s) = s
   show (IOFail e) = show e
 
-type E a = Validation (NonEmpty Error) a
+type E a = Validation (NonEmpty Err) a
 
 throwUE :: String -> E a
 throwUE s = _Failure # (UE s :| [])
 
-throwE :: Error -> E a
+throwE :: Err -> E a
 throwE e = _Failure # (e :| [])
 
-maybeToE :: Error -> Maybe a -> E a
+rethrowE :: Member (Error Errors) effs => E a -> Eff effs a
+rethrowE = \case
+  Success x -> pure x
+  Failure e' -> throwError e'
+
+maybeToE :: Err -> Maybe a -> E a
 maybeToE e Nothing = throwE e
 maybeToE _ (Just x) = pure x
 
@@ -44,6 +53,9 @@ ioToE = fmap (view revalidate . left ((:| []) . IOFail)) . tryIOError
 putStrErr :: String -> IO ()
 putStrErr = hPutStrLn stderr
 
+printErr :: Show a => a -> IO ()
+printErr = putStrErr . show
+
 displayErrOrGet :: MonadIO m => E a -> (a -> m ()) -> m ()
 displayErrOrGet (Failure e) _ = liftIO $ mapM_ (putStrErr . show) e
 displayErrOrGet (Success x) f = f x
@@ -51,7 +63,22 @@ displayErrOrGet (Success x) f = f x
 displayErr :: MonadIO m => E a -> m ()
 displayErr e = displayErrOrGet e (const (pure ()))
 
+displayErrF
+  :: (MonadIO m, LastMember m effs)
+  => Eff (Error Errors ': effs) () -> Eff effs ()
+displayErrF = (`handleError` printer) where
+  printer err = liftIO $ printErr err
+
 ioBindE :: E a -> (a -> IO (E b)) -> IO (E b)
 ioBindE (Failure e) _ = pure $ _Failure # e
 ioBindE (Success x) f = f x
 
+eToMaybe :: E a -> Maybe a
+eToMaybe = \case
+  Success a -> Just a
+  Failure _ -> Nothing
+
+isFailed :: E a -> Bool
+isFailed = \case
+  Failure _ -> True
+  Success _ -> False

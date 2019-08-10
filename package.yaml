@@ -46,12 +46,20 @@ dependencies:
 - conduit
 - conduit-extra
 - foreign-store
+- free
+- freer-simple
 
 library:
   source-dirs: src
   ghc-options:
     - -Wall
     - -Werror
+    - -XGADTs
+    - -XFlexibleContexts
+    - -XTypeOperators
+    - -XDataKinds
+    - -XAllowAmbiguousTypes
+    - -XScopedTypeVariables
 
 executables:
   ge:

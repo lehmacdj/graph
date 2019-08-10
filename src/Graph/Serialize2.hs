@@ -40,7 +40,7 @@ nodeDataFile base nid = base </> (show nid ++ ".data")
 -- yields better error handling that isn't quite as sketchy
 
 serializeNode
-  :: (Show t, ToJSON t, Ord t)
+  :: (ToJSON (Node t), TransitionValid t)
   => Node t -> FilePath -> IO (E ())
 serializeNode n base = ioToE $ do
   createDirectoryIfMissing True base
@@ -51,7 +51,7 @@ serializeNode n base = ioToE $ do
 
 -- | Write the contents of a graph into a directory at the specified location.
 serializeGraph
-  :: (Show t, ToJSON t, Ord t)
+  :: (ToJSON (Node t), TransitionValid t)
   => Graph t -> FilePath -> IO (E ())
 serializeGraph g base = ioToE $ do
   createDirectoryIfMissing True base
@@ -63,9 +63,21 @@ ioHandler = pure . const Nothing
 ioErrorToMaybe :: IO a -> IO (Maybe a)
 ioErrorToMaybe = (`catch` ioHandler) . (Just <$>)
 
+deserializeNode
+  :: (FromJSON (Node t), TransitionValid t)
+  => FilePath -> Id -> IO (E (Node t))
+deserializeNode base nid = do
+  readRes <- ioToE (B.readFile (linksFile base nid))
+  readRes `ioBindE` \fileContents -> do
+    let decode x = maybeToE (UE $ "failed to decode: " ++ show x) $ Aeson.decode x
+        nodeRes = decode fileContents
+    nodeRes `ioBindE` \node -> do
+      d <- tryGetBinaryData base nid
+      pure $ _Success # (nodeData .~ d) node
+
 -- | Load a graph from a directory.
 deserializeGraph
-  :: (FromJSON t, Read t, Show t, Ord t)
+  :: (FromJSON (Node t), TransitionValid t)
   => FilePath -> IO (E (Graph t))
 deserializeGraph base = do
   cs <- listDirectory base
