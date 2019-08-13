@@ -181,6 +181,11 @@ setData
   => Maybe ByteString -> Node t -> Graph t -> Graph t
 setData d n g = insertNode (set nodeData d (nodeConsistentWithGraph g n)) g
 
+setData'
+  :: TransitionValid t
+  => Maybe ByteString -> Id -> Graph t -> Graph t
+setData' d = primed (setData d)
+
 dataOf
   :: TransitionValid t
   => Node t -> Maybe ByteString
