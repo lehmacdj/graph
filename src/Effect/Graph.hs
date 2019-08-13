@@ -1,14 +1,20 @@
 {-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE NoImplicitPrelude #-}
+{-# LANGUAGE ConstraintKinds #-}
 
-module Effect.Graph where
+module Effect.Graph
+  ( module Effect.Graph
+  , Id
+  , Node
+  ) where
+
+import ClassyPrelude
 
 import Control.Monad.Freer
 import Control.Monad.Freer.State
 import Control.Monad.Freer.Error
 
 import Graph.Types
-
-import Control.Monad.IO.Class
 
 import Graph.Serialize2
 import qualified Graph as G
@@ -24,6 +30,8 @@ data WriteGraph t a where
   DeleteNode :: Id -> WriteGraph t ()
   InsertEdge :: Edge t -> WriteGraph t ()
   DeleteEdge :: Edge t -> WriteGraph t ()
+
+type HasGraph t effs = (Member (ReadGraph t) effs, Member (WriteGraph t) effs)
 
 getNode :: Member (ReadGraph t) effs => Id -> Eff effs (Maybe (Node t))
 getNode nid = send (GetNode nid)
