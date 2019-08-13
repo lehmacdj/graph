@@ -26,18 +26,18 @@ data ReadGraph t a where
   GetNode :: Id -> ReadGraph t (Maybe (Node t))
 
 data WriteGraph t a where
-  SetNode :: Node t -> WriteGraph t ()
-  DeleteNode :: Id -> WriteGraph t ()
-  InsertEdge :: Edge t -> WriteGraph t ()
-  DeleteEdge :: Edge t -> WriteGraph t ()
+  TouchNode :: Id -> WriteGraph t () -- ^ make the node with that id exist
+  DeleteNode :: Id -> WriteGraph t () -- ^ delete a node and all edges to/from it
+  InsertEdge :: Edge t -> WriteGraph t () -- ^ insert edge if both nodes in graph
+  DeleteEdge :: Edge t -> WriteGraph t () -- ^ delete edge
 
 type HasGraph t effs = (Member (ReadGraph t) effs, Member (WriteGraph t) effs)
 
 getNode :: Member (ReadGraph t) effs => Id -> Eff effs (Maybe (Node t))
 getNode nid = send (GetNode nid)
 
-setNode :: Member (WriteGraph t) effs => Node t -> Eff effs ()
-setNode n = send (SetNode n)
+touchNode :: Member (WriteGraph t) effs => Node t -> Eff effs ()
+touchNode n = send (TouchNode n :: WriteGraph t ())
 
 deleteNode :: forall t effs. Member (WriteGraph t) effs => Id -> Eff effs ()
 deleteNode nid = send (DeleteNode nid :: WriteGraph t ())
@@ -69,7 +69,7 @@ runWriteGraphState
   :: forall t effs. (Member (State (Graph t)) effs, TransitionValid t)
   => Eff (WriteGraph t ': effs) ~> Eff effs
 runWriteGraphState = interpret $ \case
-  SetNode n -> modify (G.insertNode n)
+  TouchNode n -> modify (G.insertNode n)
   DeleteNode nid -> modify (G.delNode' nid :: Graph t -> Graph t)
   InsertEdge e -> modify (G.insertEdge e)
   DeleteEdge e -> modify (G.delEdge e)
@@ -81,7 +81,7 @@ runWriteGraphIO
      , FromJSON (Node t), ToJSON (Node t), TransitionValid t)
   => FilePath -> Eff (WriteGraph t ': effs) a -> Eff effs a
 runWriteGraphIO dir = interpret $ \case
-  SetNode node -> do
+  TouchNode node -> do
     -- | TODO: match semantics on modifying/adding edges based on nodes
     -- data, so that we don't end up with huge problems there
     -- This will probably require deserializing a bunch of nodes
