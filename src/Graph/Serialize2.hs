@@ -93,5 +93,16 @@ deserializeGraph base = do
       let nodesFinal = zipWith (nodeData .~) datas nodes
       pure $ _Success # Graph (Map.fromList (nodeIds `zip` nodesFinal))
 
+-- | Execute a function on a node stored in the filesystem at a specified location
+-- ignore nodes that don't exist or if an error occurs
+withSerializedNode
+  :: (FromJSON (Node t), ToJSON (Node t), TransitionValid t)
+  => (Node t -> Node t) -> FilePath -> Id -> IO ()
+withSerializedNode f base nid = do
+  nr <- deserializeNode base nid
+  _ <- nr `ioBindE` \n -> serializeNode (f n) base
+  -- we intentionally ignore any errors that might have been returned
+  pure ()
+
 tryGetBinaryData :: FilePath -> Id -> IO (Maybe ByteString)
 tryGetBinaryData = (ioErrorToMaybe .) . (B.readFile .) . nodeDataFile
