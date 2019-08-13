@@ -48,6 +48,8 @@ dependencies:
 - foreign-store
 - free
 - freer-simple
+- classy-prelude
+- witherable
 
 library:
   source-dirs: src
@@ -60,6 +62,7 @@ library:
     - -XDataKinds
     - -XAllowAmbiguousTypes
     - -XScopedTypeVariables
+    - -XRankNTypes
 
 executables:
   ge:
