@@ -108,6 +108,10 @@ runWriteGraphIO dir = interpret $ \case
             neighborsOut = toListOf (nodeOutgoing . folded . connectNode) n
             neighbors = ordNub (neighborsIn ++ neighborsOut)
         liftIO $ forM_ neighbors $ withSerializedNode (delIn . delOut) dir
-  InsertEdge _ -> undefined
-  DeleteEdge _ -> undefined
-  SetData nid d -> undefined
+  InsertEdge (Edge i t o) -> liftIO $ do
+    withSerializedNode (nodeOutgoing %~ insertSet (Connect t o)) dir i
+    withSerializedNode (nodeIncoming %~ insertSet (Connect t i)) dir i
+  DeleteEdge (Edge i t o) -> liftIO $ do
+    withSerializedNode (nodeOutgoing %~ deleteSet (Connect t o)) dir i
+    withSerializedNode (nodeIncoming %~ deleteSet (Connect t i)) dir i
+  SetData nid d -> liftIO $ withSerializedNode (nodeData .~ d :: Node t -> Node t) dir nid
