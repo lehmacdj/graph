@@ -19,9 +19,12 @@ import Control.Monad.IO.Class
 import Control.Monad.Freer
 import Control.Monad.Freer.Error
 
+import Graph (Id)
+
 data Err
   = UE String
   | IOFail IOError
+  | MissingNode Id
   deriving (Eq)
 
 type Errors = NonEmpty Err
@@ -29,6 +32,7 @@ type Errors = NonEmpty Err
 instance Show Err where
   show (UE s) = s
   show (IOFail e) = show e
+  show (MissingNode nid) = "node " ++ show nid ++ " is missing"
 
 type E a = Validation (NonEmpty Err) a
 

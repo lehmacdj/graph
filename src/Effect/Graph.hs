@@ -37,7 +37,11 @@ data WriteGraph t a where
   DeleteEdge :: Edge t -> WriteGraph t () -- ^ delete edge
   SetData :: Id -> Maybe LByteString -> WriteGraph t () -- ^ delete if Nothing
 
-type HasGraph t effs = (Member (ReadGraph t) effs, Member (WriteGraph t) effs)
+type HasGraph t effs =
+  ( Member (ReadGraph t) effs
+  , Member (WriteGraph t) effs
+  , TransitionValid t
+  )
 
 getNode :: Member (ReadGraph t) effs => Id -> Eff effs (Maybe (Node t))
 getNode nid = send (GetNode nid)
