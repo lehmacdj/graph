@@ -96,3 +96,15 @@ mergeNodes
   :: forall t effs. (Members [Fresh, ThrowMissing] effs, HasGraph t effs)
   => NonNull [Id] -> Eff effs Id
 mergeNodes (splitFirst -> (nid, nids)) = foldM (mergeNode @t) nid nids
+
+cloneNode
+  :: forall t effs. (Members [Fresh, ThrowMissing] effs, HasGraph t effs)
+  => Id -> Eff effs Id
+cloneNode nid = do
+  nid' <- fresh
+  n <- getNode' nid
+  let
+    i = selfLoopify nid nid' $ incomingConnectsOf n
+    o = selfLoopify nid nid' $ outgoingConnectsOf n
+  insertNode @t (Node nid' i o (dataOf n))
+  pure nid'
