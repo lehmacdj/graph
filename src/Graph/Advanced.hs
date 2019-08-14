@@ -125,6 +125,3 @@ deletePath p n g = foldl' delDPath g . toList $ resolvePath p n g where
   delDPath g' (DPath xs@(_:_) nid' []) = case last xs of -- safe because list nonempty
     FromVia nid t -> delEdge (Edge nid t nid') g'
   delDPath g' _ = g'
-
-fixIntegrity :: Graph t -> Graph t
-fixIntegrity = undefined
