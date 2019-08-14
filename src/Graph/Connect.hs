@@ -22,6 +22,7 @@ pairOfConnect (Connect x nid) = (x, nid)
 --  n2
 --
 -- And outN0 is the @outgoingConnectsOf n0@, then @matchConnect "a" n0 = n2@.
+-- TODO: make this return (Set Id)
 matchConnect :: TransitionValid t => t -> Set (Connect t) -> [Id]
 matchConnect x cs =
   map (view connectNode)
