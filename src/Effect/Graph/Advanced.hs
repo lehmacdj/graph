@@ -48,7 +48,7 @@ insertNode n = do
   pure ()
 
 currentNode
-  :: Members [ReadGraph t, NodeLocated, ThrowMissing] effs
+  :: Members [ReadGraph t, GetLocation, ThrowMissing] effs
   => Eff effs (Node t)
 currentNode = currentLocation >>= getNode'
 
