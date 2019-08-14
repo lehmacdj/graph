@@ -1,5 +1,6 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE NoImplicitPrelude #-}
 
 {- | Data structure representing the information needed for the serialization
     of images for the iTerm2 terminal emulator.
@@ -7,7 +8,8 @@
  -}
 module System.IO.Term.Image.Payload where
 
-import Data.ByteString.Lazy (ByteString)
+import MyPrelude
+
 import Data.ByteString.Builder
 import Data.ByteString.Base64.Lazy
 import Data.String (fromString)
@@ -16,7 +18,6 @@ import Control.Lens
 import Control.Monad.State
 
 import System.IO.Term.BinarySerialize
-import Util
 
 data Dimension
   = Cells Int -- ^ character cells the image should take up
@@ -26,10 +27,10 @@ data Dimension
   deriving (Show, Eq, Ord)
 
 instance BinarySerialize Dimension where
-  toBuilder (Cells x) = fromString (show x)
-  toBuilder (Pixels x) = fromString (show x) <> "px"
-  toBuilder (Percent x) = fromString (show x) <> "%"
-  toBuilder Auto = "auto"
+  intoBuilder (Cells x) = fromString (show x)
+  intoBuilder (Pixels x) = fromString (show x) <> "px"
+  intoBuilder (Percent x) = fromString (show x) <> "%"
+  intoBuilder Auto = "auto"
 
 data PayloadArgs
   = PayloadArgs
@@ -44,13 +45,13 @@ data PayloadArgs
 makeLenses ''PayloadArgs
 
 instance BinarySerialize PayloadArgs where
-  toBuilder a = (`execState` "") $ do
+  intoBuilder a = (`execState` "") $ do
     withJust (view payloadArgsFilename a) (\x ->
       modify (<> ("name=" <> fnEncode x <> ";")))
     withJust (view payloadArgsSize a) (\x ->
       modify (<> ("size=" <> fromString (show x) <> ";")))
-    modify (<> ("width=" <> toBuilder (view payloadArgsWidth a) <> ";"))
-    modify (<> ("height=" <> toBuilder (view payloadArgsHeight a) <> ";"))
+    modify (<> ("width=" <> intoBuilder (view payloadArgsWidth a) <> ";"))
+    modify (<> ("height=" <> intoBuilder (view payloadArgsHeight a) <> ";"))
     modify (<> ("preserveAspectRatio=" <> bEncode (view payloadArgsPreserveAspectRatio a) <> ";"))
     modify (<> ("inline=" <> bEncode (view payloadArgsInline a)))
     where
@@ -61,12 +62,12 @@ instance BinarySerialize PayloadArgs where
 data Payload
   = Payload
   { _payloadArgs :: PayloadArgs
-  , _payloadData :: ByteString -- ^ needs to be base 64 encoded
+  , _payloadData :: LByteString -- ^ needs to be base 64 encoded
   } deriving (Show, Eq, Ord)
 makeLenses ''Payload
 
 instance BinarySerialize Payload where
-  toBuilder p =
+  intoBuilder p =
     charUtf8 '\x1b' <> "]" <> "1337" <> ";"
-    <> "File=[" <> toBuilder (view payloadArgs p) <> "]"
+    <> "File=[" <> intoBuilder (view payloadArgs p) <> "]"
     <> ":" <> lazyByteString (encode (view payloadData p)) <> charUtf8 '\x07'

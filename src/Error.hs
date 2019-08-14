@@ -25,7 +25,8 @@ data Err
   = UE String
   | IOFail IOError
   | MissingNode Id
-  deriving (Eq)
+  | NotSingleton String -- ^ report that the thing that has a given
+                        -- representation wasn't a singleton
 
 type Errors = NonEmpty Err
 
@@ -33,6 +34,7 @@ instance Show Err where
   show (UE s) = s
   show (IOFail e) = show e
   show (MissingNode nid) = "node " ++ show nid ++ " is missing"
+  show (NotSingleton xs) = xs ++ " was expected to be a singleton but wasn't"
 
 type E a = Validation (NonEmpty Err) a
 

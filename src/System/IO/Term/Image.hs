@@ -11,7 +11,7 @@ import System.IO
 
 printImage :: ByteString -> IO ()
 printImage d = do
-  hPutBuilder stdout . toBuilder $ payload
+  hPutBuilder stdout . intoBuilder $ payload
   putStrLn ""
   where
     payload = Payload (PayloadArgs (Just "unnamed.jpg") Nothing Auto Auto True True) d

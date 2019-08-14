@@ -36,7 +36,6 @@ newtype Repl s a = Repl { unRepl :: InputT (ReplBase s) a }
 instance MonadState s (Repl s) where
   state = Repl . lift . state
 
-
 data C c
   = Quit
   | C c

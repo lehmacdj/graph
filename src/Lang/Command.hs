@@ -24,7 +24,6 @@ data Command
   | ImportUrl String
   deriving (Eq, Show, Ord)
 
-
 -- Commands we want:
 -- # mv path* path1: move many things to be linked to by the thing linked to
 -- # rn path1 path1: rename a path to another path

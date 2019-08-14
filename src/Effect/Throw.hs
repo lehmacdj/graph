@@ -1,4 +1,6 @@
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE NoImplicitPrelude #-}
+{-# LANGUAGE ViewPatterns #-}
 
 module Effect.Throw
   ( module Control.Monad.Freer.Error
@@ -30,3 +32,15 @@ throwMissing = throwError . Missing
 
 subsumeMissing :: Member Throw effs => Eff (ThrowMissing ': effs) ~> Eff effs
 subsumeMissing = (`handleError` (throwErr . MissingNode . unMissing))
+
+the
+  :: (MonoFoldable mono, Show mono, Member Throw effs)
+  => mono -> Eff effs (Element mono)
+the = the' (\xs -> NotSingleton (show xs))
+
+the'
+  :: (MonoFoldable mono, Member Throw effs)
+  => (mono -> Err) -> mono -> Eff effs (Element mono)
+the' toErr = \case
+  (toList -> [x]) -> pure x
+  xs -> throwErr (toErr xs)

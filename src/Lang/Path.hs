@@ -1,4 +1,5 @@
 {-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE NoImplicitPrelude #-}
 
 {-|
    Describe sets of nodes using path specifications.
@@ -9,15 +10,22 @@
  -}
 module Lang.Path where
 
+import MyPrelude
+
 import Data.Set (Set)
 import qualified Data.Set as Set
-import Data.Foldable (toList)
 import Data.Maybe (mapMaybe)
 import Data.List (intersectBy)
 import Data.Function (on)
+import Control.Lens hiding (pre)
 
 import Graph
 import Graph.Connect
+
+import Control.Monad.Freer
+import Effect.Graph
+import Effect.Throw
+import Effect.Graph.Advanced
 
 -- breadcrumb in a trail in the graph
 -- each piece denotes an edge from the specified via the transition
@@ -55,6 +63,23 @@ data Path t
   | Path t :+ Path t -- ^ union
   | Path t :& Path t -- ^ intersection
   deriving (Show, Eq, Ord)
+
+resolvePathSuccesses
+  :: forall t effs. (Members [ReadGraph t, ThrowMissing] effs, TransitionValid t)
+  => Id -> Path t -> Eff effs (Set Id)
+resolvePathSuccesses nid = \case
+  One -> pure mempty
+  Wild -> do
+    n <- getNode' nid
+    pure $ toSetOf (folded . connectNode) (outgoingConnectsOf @t n)
+  Literal x -> do
+    n <- getNode' nid
+    pure . setFromList $ matchConnect x (outgoingConnectsOf @t n)
+  p :/ q -> do
+    pResolved <- toList <$> resolvePathSuccesses nid p
+    mconcat <$> (traverse (`resolvePathSuccesses` q) pResolved)
+  p :+ q -> union <$> resolvePathSuccesses nid p <*> resolvePathSuccesses nid q
+  p :& q -> intersect <$> resolvePathSuccesses nid p <*> resolvePathSuccesses nid q
 
 -- | Turn a path into a set of DPaths where the set denotes disjunction.
 -- Similar to converting to a DNF for paths.
