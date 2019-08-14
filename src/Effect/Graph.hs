@@ -47,16 +47,21 @@ getNode :: Member (ReadGraph t) effs => Id -> Eff effs (Maybe (Node t))
 getNode nid = send (GetNode nid)
 
 touchNode :: forall t effs. Member (WriteGraph t) effs => Id -> Eff effs ()
-touchNode n = send (TouchNode n :: WriteGraph t ())
+touchNode n = send (TouchNode @t n)
 
 deleteNode :: forall t effs. Member (WriteGraph t) effs => Id -> Eff effs ()
-deleteNode nid = send (DeleteNode nid :: WriteGraph t ())
+deleteNode nid = send (DeleteNode @t nid)
 
 insertEdge :: Member (WriteGraph t) effs => Edge t -> Eff effs ()
 insertEdge e = send (InsertEdge e)
 
 deleteEdge :: Member (WriteGraph t) effs => Edge t -> Eff effs ()
 deleteEdge e = send (DeleteEdge e)
+
+setData
+  :: forall t effs. Member (WriteGraph t) effs
+  => Id -> Maybe LByteString -> Eff effs ()
+setData nid d = send (SetData @t nid d)
 
 -- | Run a graph computation in the io monad, using a directory in the
 -- serialization format to access the graph

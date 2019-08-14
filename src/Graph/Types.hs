@@ -119,5 +119,5 @@ data Edge t = Edge
   { _edgeSource :: Id
   , _edgeTransition :: t
   , _edgeSink :: Id
-  }
+  } deriving (Eq, Ord, Generic, NFData)
 makeLenses ''Edge

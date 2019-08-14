@@ -7,8 +7,6 @@ module Graph.Advanced where
 
 import Control.Monad
 import Data.Foldable
-import Data.Set.Lens (setmapped)
-import Data.Set (Set)
 import Control.Lens
 
 import Graph
@@ -109,11 +107,6 @@ mergeNodeIds' g = go g . map (lookupNode g) where
   go g' [x] = (Just (nidOf x), g')
   go g' (x:x':xs) = case mergeNodes x x' g' of
     (xNew, g'') -> go g'' (xNew:xs)
-
-selfLoopify
-  :: TransitionValid t
-  => Id -> Id -> Set (Connect t) -> Set (Connect t)
-selfLoopify nid nid' = (setmapped . connectNode . filtered (==nid)) .~ nid'
 
 -- | Creates an exact copy of a node returning it
 cloneNode
