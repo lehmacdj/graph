@@ -77,6 +77,7 @@ transitionsFreshVia nid t = do
   insertEdge (Edge nid t nid')
   pure nid'
 
+-- | Create one node that has all of the connects of the two nodes combined.
 mergeNode
   :: forall t effs. (Members [Fresh, ThrowMissing] effs, HasGraph t effs)
   => Id -> Id -> Eff effs Id
@@ -92,11 +93,15 @@ mergeNode nid1 nid2 = do
   insertNode @t nNew
   pure (nidOf nNew)
 
+-- | Create one node that unions together all of the connects of all of the
+-- other nodes
 mergeNodes
   :: forall t effs. (Members [Fresh, ThrowMissing] effs, HasGraph t effs)
   => NonNull [Id] -> Eff effs Id
 mergeNodes (splitFirst -> (nid, nids)) = foldM (mergeNode @t) nid nids
 
+-- | Create a node with the same transitions as the original node.
+-- Self loops are preserved as self loops on the new node.
 cloneNode
   :: forall t effs. (Members [Fresh, ThrowMissing] effs, HasGraph t effs)
   => Id -> Eff effs Id
