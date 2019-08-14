@@ -25,6 +25,7 @@ dependencies:
 - lens
 - deepseq
 - mtl
+- transformers
 - haskeline
 - parser-combinators
 - megaparsec

@@ -19,20 +19,16 @@ module Control.Repl
     ) where
 
 import Control.Monad.IO.Class
-import Control.Monad.State (liftIO, StateT(..), runStateT, MonadState(..), lift)
+import Control.Monad.Trans (lift)
+import Control.Monad.Trans.State.Strict (StateT(..), runStateT)
+import Control.Monad.State.Class
 import Data.Functor
 
 import System.Console.Haskeline (InputT, defaultSettings, runInputT
     , getInputLine, Settings, MonadException(..), RunIO(..), setComplete)
 
 newtype ReplBase s a = ReplBase { unReplBase :: StateT s IO a }
-  deriving (Functor, Monad, MonadState s, MonadIO, Applicative)
-
-instance MonadException (ReplBase s) where
-    controlIO f =
-      ReplBase . StateT $ \s -> controlIO $ \(RunIO run) ->
-        let run' = RunIO (fmap (ReplBase . StateT . const) . run . flip runStateT s . unReplBase)
-         in (`runStateT` s) . unReplBase <$> f run'
+  deriving (Functor, Monad, MonadState s, MonadIO, Applicative, MonadException)
 
 newtype Repl s a = Repl { unRepl :: InputT (ReplBase s) a }
   deriving (Functor, Monad, MonadIO, Applicative)
