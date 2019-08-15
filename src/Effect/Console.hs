@@ -8,6 +8,6 @@ import ClassyPrelude
 import Control.Monad.Freer.TH
 
 data Console a where
-  Echo :: String -> Console ()
-  PrintImage :: LByteString -> Console ()
+  Echo :: String -> Console () -- ^ print a string followed by a newline
+  DisplayImage :: LByteString -> Console () -- ^ print a LBS as an image
 makeEffect ''Console

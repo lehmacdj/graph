@@ -3,15 +3,19 @@
 
 module Lang.Command2 where
 
-import ClassyPrelude
+import MyPrelude
 
+import Control.Monad (zipWithM)
 import Control.Monad.Freer
+
+import Graph (Edge(..), Connect(..), outgoingConnectsOf, dataOf)
 
 import Effect.Console
 import Effect.Throw
 import Effect.NodeLocated
 import Effect.Graph
 import Effect.Graph.Advanced
+import Control.Monad.Freer.Fresh
 
 import Lang.APath
 
@@ -36,14 +40,82 @@ data Command
   | ImportUrl String
   deriving (Eq, Show, Ord)
 
+singleErr :: String -> Err
+singleErr cmd = UE $ cmd ++ " needs a path that resolves to a single node"
+
+printTransitions
+  :: Member Console effs
+  => Set (Connect String) -> Eff effs ()
+printTransitions = mapM_ (echo . dtransition) where
+  dtransition (Connect t nid) = show t ++ " at " ++ show nid
+
 interpretCommand
-  :: ( Members [Console, Throw, SetLocation, GetLocation] effs
+  :: ( Members [Console, Throw, SetLocation, GetLocation, Fresh] effs
      , HasGraph String effs
      )
   => Command -> Eff effs ()
 interpretCommand = \case
   ChangeNode a -> do
     (nid, p) <- relativizeAPath a
-    let err = const (UE "cd needs a path that resolves to a single node as an argument")
+    let err = const $ singleErr "cd"
     nid' <- the' err =<< subsumeMissing (resolvePathSuccesses nid p)
     changeLocation nid'
+  NodeId -> currentLocation >>= echo . show
+  Dualize -> undefined
+  Make _ -> undefined
+  Merge a -> do
+    (nid, p) <- relativizeAPath a
+    nids <- subsumeMissing (resolvePathSuccesses nid p)
+    whenNonNull (setToList nids) $
+      \xs -> subsumeMissing (mergeNodes @String xs) >> pure ()
+  Remove _ -> undefined
+  Clone a t -> do
+    (nid, p) <- relativizeAPath a
+    let err = const $ singleErr "clone"
+    nid' <- the' err =<< subsumeMissing (resolvePathSuccesses nid p)
+    nid'' <- subsumeMissing (cloneNode @String nid')
+    cnid <- currentLocation
+    insertEdge $ Edge cnid t nid''
+  Query _ _  -> undefined
+  Tag a b -> do
+    (nid, p) <- relativizeAPath a
+    (nid', q) <- relativizeAPath b
+    -- mk path here for the path p from nid
+    -- maybe make sure that the ends of the paths are unique paths
+    -- tags <- resolvePathSuccesses nid p
+    let err = const $ singleErr "the last argument of tag"
+    target <- the' err =<< subsumeMissing (resolvePathSuccesses nid' q)
+    -- merge tagged paths and
+    undefined
+  At a c -> do
+    (nid, p) <- relativizeAPath a
+    locations <- subsumeMissing (resolvePathSuccesses nid p)
+    cnid <- currentLocation
+    forM_ locations $ \nid' -> do
+      changeLocation nid'
+      interpretCommand c
+    changeLocation cnid
+  Dedup t -> do
+    nid <- currentLocation
+    ambiguities <- subsumeMissing (resolvePathSuccesses nid (Literal t))
+    let
+      noSuffix = repeat ""
+      suffixes
+        | length ambiguities < 2 = noSuffix
+        | otherwise = show <$> ([1..] :: [Int])
+    forM_ ambiguities $ \amb -> deleteEdge (Edge nid t amb)
+    _ <- zipWithM (\a s -> insertEdge (Edge nid (t ++ s) a))
+                  (toList ambiguities)
+                  suffixes
+    pure ()
+  ListOut -> do
+    n <- subsumeMissing currentNode
+    printTransitions (outgoingConnectsOf n)
+  Dump _ -> error "unsupported"
+  Load _ -> error "unsupported"
+  Debug -> error "unsupported"
+  ShowImage -> do
+    n <- subsumeMissing (currentNode @String)
+    forM_ (dataOf n) $ subsumeMissing . displayImage
+  Import _ -> undefined
+  ImportUrl _ -> undefined

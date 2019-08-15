@@ -14,7 +14,7 @@ import Graph.Import.Filesystem
 import Graph.Import.ByteString
 import Graph.Advanced
 
-import Lang.Command2
+import Lang.Command2 hiding (printTransitions)
 import Lang.Command2.Parse
 import Lang.APath
 
