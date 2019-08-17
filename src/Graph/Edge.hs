@@ -26,3 +26,6 @@ incomingEdge (Connect l s) = Edge s l
 
 edgeBetween :: Node t -> t -> Node t -> Edge t
 edgeBetween s l t = Edge (_nodeId s) l (_nodeId t)
+
+dualizeEdge :: Edge t -> Edge t
+dualizeEdge (Edge i t o) = Edge o t i

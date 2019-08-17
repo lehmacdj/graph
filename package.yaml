@@ -65,6 +65,7 @@ library:
     - -XScopedTypeVariables
     - -XRankNTypes
     - -XTypeApplications
+    - -XTypeFamilies
 
 executables:
   ge:

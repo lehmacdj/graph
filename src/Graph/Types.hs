@@ -114,6 +114,9 @@ nodeMap = view graphNodeMap
 withNodeMap :: Graph t -> (Map Id (Node t) -> Map Id (Node t)) -> Graph t
 withNodeMap = flip (over graphNodeMap)
 
+dualizeNode :: Node t -> Node t
+dualizeNode (Node nid i o x) = Node nid o i x
+
 -- | unbiased representation of an edge
 data Edge t = Edge
   { _edgeSource :: Id

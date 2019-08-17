@@ -1,6 +1,7 @@
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE NoImplicitPrelude #-}
 {-# LANGUAGE ConstraintKinds #-}
+{-# LANGUAGE ViewPatterns #-}
 
 module Effect.Graph
   ( module Effect.Graph
@@ -8,13 +9,14 @@ module Effect.Graph
   , Node
   ) where
 
-import ClassyPrelude
+import ClassyPrelude hiding (Reader, ask)
 
 import Control.Lens
 
 import Control.Monad.Freer
 import Control.Monad.Freer.State
 import Control.Monad.Freer.Error
+import Control.Monad.Freer.Reader
 import qualified Data.Set as Set
 
 import System.Directory (doesFileExist)
@@ -29,6 +31,26 @@ import Data.Aeson (FromJSON(..), ToJSON(..))
 
 data ReadGraph t a where
   GetNode :: Id -> ReadGraph t (Maybe (Node t))
+
+newtype IsDual = IsDual { isDual :: Bool }
+  deriving (Show, Eq, Ord)
+
+type instance Element IsDual = Bool
+instance MonoFunctor IsDual where
+  omap f (IsDual x) = IsDual (f x)
+
+-- | Intended for use in view patters to process edges when the might be
+-- dualized. Also acts generally on edges to process them relative to a
+-- dualization parameter.
+ifDualized :: IsDual -> (a -> a) -> a -> a
+ifDualized dual f
+  | isDual dual = f
+  | otherwise = id
+
+type Dualizeable = State IsDual
+
+dualize :: Member Dualizeable effs => Eff effs ()
+dualize = modify @IsDual (omap not)
 
 data WriteGraph t a where
   TouchNode :: Id -> WriteGraph t () -- ^ make the node with that id exist
@@ -66,13 +88,58 @@ setData nid d = send (SetData @t nid d)
 -- | Run a graph computation in the io monad, using a directory in the
 -- serialization format to access the graph
 runReadGraphIO
-  :: (MonadIO m, LastMember m effs
+  :: (MonadIO m, LastMember m (Reader IsDual : effs), LastMember m effs
      , FromJSON (Node t), ToJSON (Node t), TransitionValid t)
-  => FilePath -> Eff (ReadGraph t ': effs) a -> Eff effs a
-runReadGraphIO dir = interpret $ \case
+  => FilePath -> Eff (ReadGraph t ': effs) ~> Eff effs
+runReadGraphIO dir = runReader (IsDual False) . runReadGraphIODualizeable dir
+
+-- | Run a graph computation in the io monad, using a directory in the
+-- serialization format to access the graph, while allowing for the
+-- possibility of the graph being dualized.
+runReadGraphIODualizeable
+  :: (MonadIO m, LastMember m (Reader IsDual : effs)
+     , FromJSON (Node t), ToJSON (Node t), TransitionValid t)
+  => FilePath -> Eff (ReadGraph t ': effs) ~> Eff (Reader IsDual : effs)
+runReadGraphIODualizeable dir = reinterpret $ \case
   GetNode nid -> do
     n <- liftIO $ deserializeNode dir nid
-    pure (eToMaybe n)
+    dual <- ask
+    pure $ eToMaybe n <&> ifDualized dual dualizeNode
+
+-- | Run a graph in IO with the ambient ability for the graph to be
+-- dualizeable.
+runReadGraphDualizeableIO
+  :: (MonadIO m, LastMember m (Reader IsDual : effs)
+     , Member Dualizeable effs
+     , FromJSON (Node t), ToJSON (Node t), TransitionValid t)
+  => FilePath -> Eff (ReadGraph t ': effs) ~> Eff effs
+runReadGraphDualizeableIO dir =
+  runReaderAsState
+  . runReadGraphIODualizeable dir
+
+-- run Dualizeable as a state that also flips the graph in a state to
+-- reflect its value
+-- runDualizeableState
+--   :: Member (State (Graph t)) effs
+--   => Eff (Dualizeable : effs) ~> Eff effs
+-- runDualizeableState = interpret $ modify dualize
+
+runDualizeable :: Eff (Dualizeable : effs) ~> Eff effs
+runDualizeable = map fst . runState (IsDual False)
+
+-- We can't write this because it fails to choose an instance for MemberLast
+-- However, for any concrete list of effects this works, so it should be
+-- possible to compose these handlers in this way for final application
+-- runHasGraphDualizeableIO
+--   :: ( LastMember m effs, MonadIO m
+--      , Members [Error Errors, m] effs
+--      , FromJSON (Node t), ToJSON (Node t), TransitionValid t)
+--   => FilePath
+--   -> Eff (WriteGraph t : ReadGraph t : Dualizeable : effs) ~> Eff effs
+-- runHasGraphDualizeableIO dir =
+--   runDualizeable
+--   . runReadGraphDualizeableIO dir
+--   . runWriteGraphDualizeableIO dir
 
 runReadGraphState
   :: (Member (State (Graph t)) effs)
@@ -94,10 +161,31 @@ runWriteGraphState = interpret $ \case
 -- serialization format to access the graph
 runWriteGraphIO
   :: forall t m effs.
-    ( MonadIO m, LastMember m effs, Member (Error Errors) effs
+    ( MonadIO m, LastMember m (Reader IsDual : effs), Member (Error Errors) effs
     , FromJSON (Node t), ToJSON (Node t), TransitionValid t)
   => FilePath -> Eff (WriteGraph t ': effs) ~> Eff effs
-runWriteGraphIO dir = interpret $ \case
+runWriteGraphIO dir = runReader (IsDual False) . runWriteGraphIODualizeable dir
+
+-- | Utility function to interpret a reader effect as a State effect, via a
+-- the inclusion Reader < State.
+runReaderAsState
+  :: forall r effs a. Member (State r) effs
+  => Eff (Reader r : effs) a -> Eff effs a
+runReaderAsState = interpret $ \Ask -> get
+
+-- | General handler for WriteGraph parameterized so that it is possible
+-- to specify if the computation is dualized or not
+-- If the computation is dualized, all operations on edges will be inverted.
+-- That is InsertEdge (Edge 0 "x" 1) will result in the same effect as
+-- InsertEdge (Edge 1 "x" 0) if the IsDual parameter is true.
+-- We obtain whether the compuation is dualized through a reader parameter
+runWriteGraphIODualizeable
+  :: forall t m effs.
+    ( MonadIO m, LastMember m (Reader IsDual : effs)
+    , Member (Error Errors) effs
+    , FromJSON (Node t), ToJSON (Node t), TransitionValid t)
+  => FilePath -> Eff (WriteGraph t : effs) ~> Eff (Reader IsDual : effs)
+runWriteGraphIODualizeable dir = reinterpret $ \case
   TouchNode nid -> do
     dfe <- liftIO (doesFileExist (linksFile dir nid))
     if not dfe
@@ -117,10 +205,28 @@ runWriteGraphIO dir = interpret $ \case
             neighborsOut = toListOf (nodeOutgoing . folded . connectNode) n
             neighbors = ordNub (neighborsIn ++ neighborsOut)
         liftIO $ forM_ neighbors $ withSerializedNode (delIn . delOut) dir
-  InsertEdge (Edge i t o) -> liftIO $ do
-    withSerializedNode (nodeOutgoing %~ insertSet (Connect t o)) dir i
-    withSerializedNode (nodeIncoming %~ insertSet (Connect t i)) dir i
-  DeleteEdge (Edge i t o) -> liftIO $ do
-    withSerializedNode (nodeOutgoing %~ deleteSet (Connect t o)) dir i
-    withSerializedNode (nodeIncoming %~ deleteSet (Connect t i)) dir i
+  InsertEdge e -> do
+    dual <- ask
+    let (Edge i t o) = ifDualized dual G.dualizeEdge e
+    liftIO $ withSerializedNode (nodeOutgoing %~ insertSet (Connect t o)) dir i
+    liftIO $ withSerializedNode (nodeIncoming %~ insertSet (Connect t i)) dir i
+  DeleteEdge e -> do
+    dual <- ask
+    let (Edge i t o) = ifDualized dual G.dualizeEdge e
+    liftIO $ withSerializedNode (nodeOutgoing %~ deleteSet (Connect t o)) dir i
+    liftIO $ withSerializedNode (nodeIncoming %~ deleteSet (Connect t i)) dir i
   SetData nid d -> liftIO $ withSerializedNode (nodeData .~ d :: Node t -> Node t) dir nid
+
+-- | Run both the Dualizeable effect and the WriteGraph in IO
+-- The default state of all graphs stored on disk is that they are not dual
+-- thus we simply set IsDual False as our initial state parameter for
+-- Dualizeable.
+runWriteGraphDualizeableIO
+  :: forall t m effs.
+    ( MonadIO m, LastMember m (Reader IsDual : effs), LastMember m effs
+    , Members [Dualizeable, Error Errors] effs
+    , FromJSON (Node t), ToJSON (Node t), TransitionValid t)
+  => FilePath -> Eff (WriteGraph t : effs) ~> Eff effs
+runWriteGraphDualizeableIO dir =
+  runReaderAsState
+  . runWriteGraphIODualizeable dir

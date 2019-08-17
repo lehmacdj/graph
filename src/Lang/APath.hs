@@ -17,9 +17,7 @@ import Graph
 import Lang.Path
 
 import Control.Monad.Freer
-import Effect.Graph
 import Effect.NodeLocated
-import Effect.Throw
 
 data APath t
   = Relative (Path t)

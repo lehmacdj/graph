@@ -228,8 +228,7 @@ mapGraph
 mapGraph f g = withNodeMap g $ \nm -> M.map f nm
 
 dualizeGraph :: Graph t -> Graph t
-dualizeGraph = mapGraph dualizeNode where
-  dualizeNode (Node nid i o x) = Node nid o i x
+dualizeGraph = mapGraph dualizeNode
 
 -- | Return the id of an arbitrary node in the graph.
 arbitraryId :: Graph t -> Id
