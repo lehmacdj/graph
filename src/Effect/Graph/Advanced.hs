@@ -77,6 +77,16 @@ transitionsFreshVia nid t = do
   insertEdge (Edge nid t nid')
   pure nid'
 
+-- | The list of nodes are taken in the graph, unless they don't exist or
+-- except for the last edge which is always unique
+transitionsViaManyFresh
+  :: forall t effs. (Members [Fresh, ThrowMissing] effs, HasGraph t effs)
+  => Id -> [t] -> Eff effs Id
+transitionsViaManyFresh nid = \case
+  [] -> pure nid
+  [x] -> transitionsFreshVia nid x
+  x:xs -> transitionsVia nid x >>= (`transitionsViaManyFresh` xs)
+
 -- | Create one node that has all of the connects of the two nodes combined.
 mergeNode
   :: forall t effs. (Members [Fresh, ThrowMissing] effs, HasGraph t effs)

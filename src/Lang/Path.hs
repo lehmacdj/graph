@@ -23,6 +23,7 @@ import Graph
 import Graph.Connect
 
 import Control.Monad.Freer
+import Control.Monad.Freer.Fresh
 import Effect.Graph
 import Effect.Throw
 import Effect.Graph.Advanced
@@ -80,6 +81,15 @@ resolvePathSuccesses nid = \case
     mconcat <$> (traverse (`resolvePathSuccesses` q) pResolved)
   p :+ q -> union <$> resolvePathSuccesses nid p <*> resolvePathSuccesses nid q
   p :& q -> intersect <$> resolvePathSuccesses nid p <*> resolvePathSuccesses nid q
+
+-- | Create a path such that the end points of the path are all new nodes
+-- intersection and union are both interpreted as a splitting point
+-- where both paths should be created. This is perhaps a bad implementation...
+mkPath
+  :: forall t effs. (Members [Fresh, ThrowMissing] effs, HasGraph t effs)
+  => Id -> Path t -> Eff effs (Set Id)
+mkPath nid p = fmap setFromList . forM (toList (listifyNewPath p)) $
+  transitionsViaManyFresh nid
 
 -- | Turn a path into a set of DPaths where the set denotes disjunction.
 -- Similar to converting to a DNF for paths.

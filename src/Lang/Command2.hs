@@ -50,7 +50,7 @@ printTransitions = mapM_ (echo . dtransition) where
   dtransition (Connect t nid) = show t ++ " at " ++ show nid
 
 interpretCommand
-  :: ( Members [Console, Throw, SetLocation, GetLocation, Fresh] effs
+  :: ( Members [Console, Throw, SetLocation, GetLocation, Fresh, Dualizeable] effs
      , HasGraph String effs
      )
   => Command -> Eff effs ()
@@ -61,8 +61,10 @@ interpretCommand = \case
     nid' <- the' err =<< subsumeMissing (resolvePathSuccesses nid p)
     changeLocation nid'
   NodeId -> currentLocation >>= echo . show
-  Dualize -> undefined
-  Make _ -> undefined
+  Dualize -> dualize
+  Make a -> do
+    (nid, p) <- relativizeAPath a
+    subsumeMissing $ mkPath nid p >> pure ()
   Merge a -> do
     (nid, p) <- relativizeAPath a
     nids <- subsumeMissing (resolvePathSuccesses nid p)
@@ -76,17 +78,20 @@ interpretCommand = \case
     nid'' <- subsumeMissing (cloneNode @String nid')
     cnid <- currentLocation
     insertEdge $ Edge cnid t nid''
-  Query _ _  -> undefined
+  Query a t  -> do
+    (nid, p) <- relativizeAPath a
+    nids <- subsumeMissing (resolvePathSuccesses nid p)
+    nnid <- subsumeMissing (nid `transitionsFreshVia` t)
+    _ <- subsumeMissing (mergeNodes @String (nnid `ncons` toList nids))
+    pure ()
   Tag a b -> do
     (nid, p) <- relativizeAPath a
     (nid', q) <- relativizeAPath b
-    -- mk path here for the path p from nid
-    -- maybe make sure that the ends of the paths are unique paths
-    -- tags <- resolvePathSuccesses nid p
+    nnids <- subsumeMissing (mkPath nid p)
     let err = const $ singleErr "the last argument of tag"
     target <- the' err =<< subsumeMissing (resolvePathSuccesses nid' q)
-    -- merge tagged paths and
-    undefined
+    _ <- subsumeMissing (mergeNodes @String (target `ncons` toList nnids))
+    pure ()
   At a c -> do
     (nid, p) <- relativizeAPath a
     locations <- subsumeMissing (resolvePathSuccesses nid p)

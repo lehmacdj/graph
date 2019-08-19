@@ -16,7 +16,7 @@ import Graph.Advanced
 
 import Lang.Command2 hiding (printTransitions)
 import Lang.Command2.Parse
-import Lang.APath
+import Lang.APath hiding (mkPath)
 
 import Error
 

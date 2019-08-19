@@ -14,7 +14,7 @@ import Graph.Connect
 import Control.Monad.Unique
 import qualified Data.Set as Set
 
-import Lang.Path
+import Lang.Path hiding (mkPath)
 
 -- | Create an edge from the specified node to a new node if the edge does not
 -- exist, or return the edge that does exist otherwise.
