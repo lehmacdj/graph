@@ -1,3 +1,5 @@
+{-# LANGUAGE NoImplicitPrelude #-}
+
 module MyPrelude
   ( module MyPrelude
   , module ClassyPrelude
@@ -5,7 +7,7 @@ module MyPrelude
 
 import ClassyPrelude
 
-import Control.Lens
+import Control.Lens hiding (op)
 
 -- | execute a computation only if it is Just
 withJust :: Monad m => Maybe a -> (a -> m ()) -> m ()
@@ -29,3 +31,8 @@ foldlM1
   -> NonNull mono
   -> m (Element mono)
 foldlM1 f m = uncurry (foldlM f) (splitFirst m)
+
+-- | Taken from extras-1.6.17
+concatMapM :: Monad m => (a -> m [b]) -> [a] -> m [b]
+concatMapM op = foldr f (return [])
+    where f x xs = do x' <- op x; if null x' then xs else do xs' <- xs; return $ x'++xs'

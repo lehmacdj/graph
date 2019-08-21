@@ -17,6 +17,7 @@ import qualified Data.Set as Set
 import Data.Maybe (mapMaybe)
 import Data.List (intersectBy)
 import Data.Function (on)
+import Data.Functor ((<&>))
 import Control.Lens hiding (pre)
 
 import Graph
@@ -82,14 +83,66 @@ resolvePathSuccesses nid = \case
   p :+ q -> union <$> resolvePathSuccesses nid p <*> resolvePathSuccesses nid q
   p :& q -> intersect <$> resolvePathSuccesses nid p <*> resolvePathSuccesses nid q
 
+resolvePathSuccessesDetail
+  :: forall t effs. (Members [ReadGraph t, ThrowMissing] effs, TransitionValid t)
+  => Id -> Path t -> Eff effs (Set (DPath t))
+resolvePathSuccessesDetail nid = \case
+  One -> pure $ Set.singleton (DPath [] nid [])
+  Wild -> getNode' nid <&> \n -> Set.fromList $ do
+    Connect t nid' <- toList $ outgoingConnectsOf n
+    pure $ DPath [nidOf n `FromVia` t] nid' []
+  Literal t -> getNode' nid <&> \n ->
+    case matchConnect t (outgoingConnectsOf n) of
+      [] -> Set.singleton (DPath [] (nidOf n) [t])
+      ms -> Set.fromList (DPath [nidOf n `FromVia` t] <$> ms <*> pure [])
+  p1 :/ p2 -> do
+    r1 <- toList <$> resolvePathSuccessesDetail nid p1
+    fmap setFromList . (`concatMapM` r1) $ \(DPath pre nid' post) ->
+      if null post
+         then do
+           r2 <- toList <$> resolvePathSuccessesDetail nid' p2
+           forM r2 $ \(DPath pre' nid'' post') -> pure $ DPath (pre ++ pre') nid'' post'
+         else do
+           let r2 = toList $ listifyNewPath p2
+           forM r2 $ \post' -> pure $ DPath pre nid' (post ++ post')
+  p1 :+ p2 -> union <$> p1r <*> p2r where
+    p1r = resolvePathSuccessesDetail nid p1
+    p2r = resolvePathSuccessesDetail nid p2
+  p1 :& p2 -> setFromList <$> (intersect' <$> p1r <*> p2r) where
+    intersect' = intersectBy ((==) `on` endPoint)
+    p1r = toList <$> resolvePathSuccessesDetail nid p1
+    p2r = toList <$> resolvePathSuccessesDetail nid p2
+
 -- | Create a path such that the end points of the path are all new nodes
 -- intersection and union are both interpreted as a splitting point
 -- where both paths should be created. This is perhaps a bad implementation...
 mkPath
-  :: forall t effs. (Members [Fresh, ThrowMissing] effs, HasGraph t effs)
+  :: forall t effs.
+  ( Members [Fresh, ThrowMissing] effs
+  , HasGraph t effs
+  )
   => Id -> Path t -> Eff effs (Set Id)
 mkPath nid p = fmap setFromList . forM (toList (listifyNewPath p)) $
   transitionsViaManyFresh nid
+
+-- | Construct a graph that contains only the edges passed through
+-- by the literal edges in the path.
+-- nids are the same as in the original graph
+tracePath
+  :: forall t effs. Members [Fresh, ThrowMissing, ReadGraph t] effs
+  => Id -> Path t -> Eff effs (Graph t)
+tracePath _ _ = error "unimplemented"
+
+delPath
+  :: forall t effs.
+  ( Members [Fresh, ThrowMissing] effs
+  , HasGraph t effs
+  )
+  => Id -> Path t -> Eff effs ()
+delPath nid p = resolvePathSuccessesDetail nid p >>= mapM_ delDPath where
+  delDPath (DPath xs@(_:_) nid' []) = case lastEx xs of -- safe because list nonempty
+    FromVia nid2 t -> deleteEdge (Edge nid2 t nid')
+  delDPath _ = pure ()
 
 -- | Turn a path into a set of DPaths where the set denotes disjunction.
 -- Similar to converting to a DNF for paths.

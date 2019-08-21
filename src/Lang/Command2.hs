@@ -70,7 +70,9 @@ interpretCommand = \case
     nids <- subsumeMissing (resolvePathSuccesses nid p)
     whenNonNull (setToList nids) $
       \xs -> subsumeMissing (mergeNodes @String xs) >> pure ()
-  Remove _ -> undefined
+  Remove a -> do
+    (nid, p) <- relativizeAPath a
+    subsumeMissing $ delPath nid p
   Clone a t -> do
     (nid, p) <- relativizeAPath a
     let err = const $ singleErr "clone"
