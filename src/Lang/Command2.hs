@@ -19,6 +19,7 @@ import Effect.Filesystem
 import Effect.Graph.Import.Filesystem
 import Effect.Graph.Import.ByteString
 import Effect.Web
+import Effect.Load
 import Control.Monad.Freer.Fresh
 
 import Lang.APath
@@ -55,7 +56,7 @@ printTransitions = mapM_ (echo . dtransition) where
 
 interpretCommand
   :: ( Members [Console, Throw, SetLocation, GetLocation, Fresh, Dualizeable] effs
-     , Members [FileSystemTree, Web] effs
+     , Members [FileSystemTree, Web, Load] effs
      , HasGraph String effs
      )
   => Command -> Eff effs ()
@@ -130,6 +131,6 @@ interpretCommand = \case
   -- layers of commands that can be handled at different levels
   Import fp -> currentLocation >>= subsumeMissing . importDirectory fp
   ImportUrl uri -> subsumeMissing (importUrl 0 uri) >> pure ()
-  Dump _ -> error "unsupported"
-  Load _ -> error "unsupported"
+  Dump _ -> error "unsupported currently"
+  Load fp -> setLoaded fp
   Debug -> error "unsupported"
