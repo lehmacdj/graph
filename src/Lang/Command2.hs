@@ -15,6 +15,10 @@ import Effect.Throw
 import Effect.NodeLocated
 import Effect.Graph
 import Effect.Graph.Advanced
+import Effect.Filesystem
+import Effect.Graph.Import.Filesystem
+import Effect.Graph.Import.ByteString
+import Effect.Web
 import Control.Monad.Freer.Fresh
 
 import Lang.APath
@@ -51,6 +55,7 @@ printTransitions = mapM_ (echo . dtransition) where
 
 interpretCommand
   :: ( Members [Console, Throw, SetLocation, GetLocation, Fresh, Dualizeable] effs
+     , Members [FileSystemTree, Web] effs
      , HasGraph String effs
      )
   => Command -> Eff effs ()
@@ -123,8 +128,8 @@ interpretCommand = \case
     forM_ (dataOf n) $ subsumeMissing . displayImage
   -- it probably would make sense to factor these commands out into separate
   -- layers of commands that can be handled at different levels
-  Import _ -> undefined
-  ImportUrl _ -> undefined
+  Import fp -> currentLocation >>= subsumeMissing . importDirectory fp
+  ImportUrl uri -> subsumeMissing (importUrl 0 uri) >> pure ()
   Dump _ -> error "unsupported"
   Load _ -> error "unsupported"
   Debug -> error "unsupported"

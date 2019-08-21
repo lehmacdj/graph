@@ -7,8 +7,14 @@ import ClassyPrelude
 
 import Control.Monad.Freer.TH
 
-data Filesystem r where
-  ReadFile :: FilePath -> Filesystem ByteString
-  WriteFile :: FilePath -> ByteString -> Filesystem ()
+import System.Directory.Tree
+
+data FileSystem r where
+  ReadFile :: FilePath -> FileSystem ByteString
+  WriteFile :: FilePath -> ByteString -> FileSystem ()
   -- TODO: add effects for more things, make sure we can implement fileystem import
-makeEffect ''Filesystem
+makeEffect ''FileSystem
+
+data FileSystemTree r where
+  ReadDirectory :: FilePath -> FileSystemTree (DirTree LByteString)
+makeEffect ''FileSystemTree

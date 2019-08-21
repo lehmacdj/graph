@@ -10,6 +10,7 @@ module Graph.Import.Filesystem where
 
 import Data.ByteString.Lazy (ByteString)
 import qualified Data.ByteString.Lazy as B
+import qualified Data.ByteString.Lazy.Char8 as B
 import Data.Digest.Pure.SHA
 
 import System.Directory.Tree
