@@ -118,11 +118,13 @@ interpretCommand = \case
   ListOut -> do
     n <- subsumeMissing currentNode
     printTransitions (outgoingConnectsOf n)
-  Dump _ -> error "unsupported"
-  Load _ -> error "unsupported"
-  Debug -> error "unsupported"
   ShowImage -> do
     n <- subsumeMissing (currentNode @String)
     forM_ (dataOf n) $ subsumeMissing . displayImage
+  -- it probably would make sense to factor these commands out into separate
+  -- layers of commands that can be handled at different levels
   Import _ -> undefined
   ImportUrl _ -> undefined
+  Dump _ -> error "unsupported"
+  Load _ -> error "unsupported"
+  Debug -> error "unsupported"
