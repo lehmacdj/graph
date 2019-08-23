@@ -47,4 +47,4 @@ the' toErr = \case
 
 printErrors :: (MonadIO m, LastMember m effs)
             => Eff (Throw : effs) () -> Eff effs ()
-printErrors c = handleError c $ \e -> liftIO . putStrErr . show $ e
+printErrors c = handleError c $ traverse_ (liftIO . putStrErr . show)

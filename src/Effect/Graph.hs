@@ -19,8 +19,10 @@ import Control.Monad.Freer.State
 import Control.Monad.Freer.Error
 import Control.Monad.Freer.Reader
 import qualified Data.Set as Set
+import Text.Read (readMaybe)
 
-import System.Directory (doesFileExist)
+import System.Directory (doesFileExist, listDirectory)
+import System.FilePath (dropExtension)
 
 import Graph.Types
 
@@ -32,6 +34,7 @@ import Data.Aeson (FromJSON(..), ToJSON(..))
 
 data ReadGraph t a where
   GetNode :: Id -> ReadGraph t (Maybe (Node t))
+  NodeManifest :: ReadGraph t [Id]
 
 newtype IsDual = IsDual { isDual :: Bool }
   deriving (Show, Eq, Ord)
@@ -68,6 +71,9 @@ type HasGraph t effs =
 
 getNode :: Member (ReadGraph t) effs => Id -> Eff effs (Maybe (Node t))
 getNode nid = send (GetNode nid)
+
+nodeManifest :: forall t effs. Member (ReadGraph t) effs => Eff effs [Id]
+nodeManifest = send (NodeManifest @t)
 
 touchNode :: forall t effs. Member (WriteGraph t) effs => Id -> Eff effs ()
 touchNode n = send @(WriteGraph t) @effs (TouchNode @t n)
@@ -106,6 +112,11 @@ runReadGraphIODualizeable dir = reinterpret $ \case
     n <- liftIO $ deserializeNode dir nid
     dual <- ask
     pure $ eToMaybe n <&> ifDualized dual dualizeNode
+  NodeManifest -> do
+    cs <- liftIO $ listDirectory dir
+    let linkFiles = filter (".json" `isSuffixOf`) cs
+        nodes = mapMaybe (readMaybe . dropExtension) linkFiles
+    pure nodes
 
 -- | Run a graph in IO with the ambient ability for the graph to be
 -- dualizeable.
@@ -129,10 +140,11 @@ runDualizeable :: Eff (Dualizeable : effs) ~> Eff effs
 runDualizeable = map fst . runState (IsDual False)
 
 runReadGraphState
-  :: (Member (State (Graph t)) effs)
+  :: forall t effs a. (Member (State (Graph t)) effs)
   => Eff (ReadGraph t ': effs) a -> Eff effs a
 runReadGraphState = interpret $ \case
   GetNode nid -> G.maybeLookupNode <$> get <*> pure nid
+  NodeManifest -> keys . G.nodeMap <$> get @(Graph t)
 
 runWriteGraphState
   :: forall t effs. (Member (State (Graph t)) effs, TransitionValid t)

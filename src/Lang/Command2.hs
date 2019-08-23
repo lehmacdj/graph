@@ -44,8 +44,9 @@ data Command
   | ImportUrl String
   deriving (Eq, Show, Ord)
 
-singleErr :: String -> Err
-singleErr cmd = UE $ cmd ++ " needs a path that resolves to a single node"
+singleErr :: String -> Set Id -> Err
+singleErr cmd xs = UE $ cmd ++ " needs a path that resolves to a single node\n"
+                            ++ "but it resolved to: " ++ show (setToList xs)
 
 printTransitions
   :: Member Console effs
@@ -62,7 +63,7 @@ interpretCommand
 interpretCommand = \case
   ChangeNode a -> do
     (nid, p) <- relativizeAPath a
-    let err = const $ singleErr "cd"
+    let err = singleErr "cd"
     nid' <- the' err =<< subsumeMissing (resolvePathSuccesses nid p)
     changeLocation nid'
   NodeId -> currentLocation >>= echo . show
@@ -80,7 +81,7 @@ interpretCommand = \case
     subsumeMissing $ delPath nid p
   Clone a t -> do
     (nid, p) <- relativizeAPath a
-    let err = const $ singleErr "clone"
+    let err = singleErr "clone"
     nid' <- the' err =<< subsumeMissing (resolvePathSuccesses nid p)
     nid'' <- subsumeMissing (cloneNode @String nid')
     cnid <- currentLocation
@@ -95,7 +96,7 @@ interpretCommand = \case
     (nid, p) <- relativizeAPath a
     (nid', q) <- relativizeAPath b
     nnids <- subsumeMissing (mkPath nid p)
-    let err = const $ singleErr "the last argument of tag"
+    let err = singleErr "the last argument of tag"
     target <- the' err =<< subsumeMissing (resolvePathSuccesses nid' q)
     _ <- subsumeMissing (mergeNodes @String (target `ncons` toList nnids))
     pure ()
@@ -131,4 +132,8 @@ interpretCommand = \case
   Import fp -> currentLocation >>= subsumeMissing . importDirectory fp
   ImportUrl uri -> subsumeMissing (importUrl 0 uri) >> pure ()
   Load fp -> setLoaded fp
-  Debug -> currentLocation >>= subsumeMissing . getNode' >>= echo . show @(Node String)
+  Debug -> do
+    echo "current node:"
+    currentLocation >>= subsumeMissing . getNode' >>= echo . show @(Node String)
+    echo "present node-ids:"
+    nodeManifest @String >>= echo . show
