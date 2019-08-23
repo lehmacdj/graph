@@ -141,7 +141,9 @@ interpretCommand = \case
   -- it probably would make sense to factor these commands out into separate
   -- layers of commands that can be handled at different levels
   Import fp -> currentLocation >>= subsumeMissing . importDirectory fp
-  ImportUrl uri -> subsumeMissing (importUrl 0 uri) >> pure ()
+  ImportUrl uri -> do
+    nid <- subsumeMissing (importUrl 0 uri)
+    changeLocation nid
   Load fp -> do
     setLoaded fp
   Debug -> do
