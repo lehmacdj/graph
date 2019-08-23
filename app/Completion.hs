@@ -95,7 +95,7 @@ completePath (i, _) = case getPartialPath (takeRelevantFromEnd i) of
           ntids <- toList <$> resolvePathSuccesses (fromMaybe l nid) p
           nts <- getNodes @String ntids
           let
-            octs = --outgoing connect transitions
+            octs = -- outgoing connect transitions
               toListOf (folded . nodeOutgoing . folded . connectTransition) nts
           pure (fromMaybe i (stripPrefix (reverse end) i), mkCompleter octs end)
 
