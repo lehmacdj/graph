@@ -18,6 +18,7 @@ import Control.Monad.Freer
 import Control.Monad.Freer.State
 import Control.Monad.Freer.Error
 import Control.Monad.Freer.Reader
+import Effect.Util
 import qualified Data.Set as Set
 import Text.Read (readMaybe)
 
@@ -165,13 +166,6 @@ runWriteGraphIO
   => FilePath -> Eff (WriteGraph t ': effs) ~> Eff effs
 runWriteGraphIO dir = runReader (IsDual False) . runWriteGraphIODualizeable dir
 
--- | Utility function to interpret a reader effect as a State effect, via a
--- the inclusion Reader < State.
-runReaderAsState
-  :: forall r effs a. Member (State r) effs
-  => Eff (Reader r : effs) a -> Eff effs a
-runReaderAsState = interpret $ \Ask -> get
-
 -- | General handler for WriteGraph parameterized so that it is possible
 -- to specify if the computation is dualized or not
 -- If the computation is dualized, all operations on edges will be inverted.
@@ -207,13 +201,15 @@ runWriteGraphIODualizeable dir = reinterpret $ \case
   InsertEdge e -> do
     dual <- ask
     let (Edge i t o) = ifDualized dual G.dualizeEdge e
+    runWriteGraphIODualizeable @t dir (touchNode @t i)
+    runWriteGraphIODualizeable @t dir (touchNode @t o)
     liftIO $ withSerializedNode (nodeOutgoing %~ insertSet (Connect t o)) dir i
-    liftIO $ withSerializedNode (nodeIncoming %~ insertSet (Connect t i)) dir i
+    liftIO $ withSerializedNode (nodeIncoming %~ insertSet (Connect t i)) dir o
   DeleteEdge e -> do
     dual <- ask
     let (Edge i t o) = ifDualized dual G.dualizeEdge e
     liftIO $ withSerializedNode (nodeOutgoing %~ deleteSet (Connect t o)) dir i
-    liftIO $ withSerializedNode (nodeIncoming %~ deleteSet (Connect t i)) dir i
+    liftIO $ withSerializedNode (nodeIncoming %~ deleteSet (Connect t i)) dir o
   SetData nid d -> liftIO $ withSerializedNode (nodeData .~ d :: Node t -> Node t) dir nid
 
 -- | Run both the Dualizeable effect and the WriteGraph in IO

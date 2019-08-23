@@ -65,6 +65,12 @@ pImport = (commandFrom [":import", ":i"] $> Import) <*> some anySingle
 pImportUrl :: Parser Command
 pImportUrl = (commandFrom [":import-url", ":iurl", "wget"] $> ImportUrl) <*> some anySingle
 
+pCheck :: Parser Command
+pCheck = command "fsck" $> Check
+
+pFix :: Parser Command
+pFix = command "fix" $> Fix
+
 pCommand :: Parser Command
 pCommand =
   try pChangeNode
@@ -84,6 +90,8 @@ pCommand =
   <|> try pShowImage
   <|> try pImport
   <|> try pImportUrl
+  <|> try pCheck
+  <|> try pFix
 
 parseCommand :: String -> Either String Command
 parseCommand = left errorBundlePretty . runParser pCommand "<interactive>"

@@ -20,6 +20,7 @@ import Effect.Graph.Import.Filesystem
 import Effect.Graph.Import.ByteString
 import Effect.Web
 import Effect.Load
+import Effect.Graph.Check
 import Control.Monad.Freer.Fresh
 
 import Lang.APath
@@ -42,6 +43,8 @@ data Command
   | ShowImage
   | Import FilePath
   | ImportUrl String
+  | Check
+  | Fix
   deriving (Eq, Show, Ord)
 
 singleErr :: String -> Set Id -> Err
@@ -137,3 +140,5 @@ interpretCommand = \case
     currentLocation >>= subsumeMissing . getNode' >>= echo . show @(Node String)
     echo "present node-ids:"
     nodeManifest @String >>= echo . show
+  Check -> reportToConsole @String (fsck @String)
+  Fix -> fixErrors @String (fsck @String)

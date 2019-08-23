@@ -4,7 +4,7 @@
 -- monad.
 module App where
 
-import ClassyPrelude
+import ClassyPrelude hiding (ask, Reader)
 
 import Control.Lens
 import Control.Repl
@@ -21,6 +21,7 @@ import Effect.Console
 import Effect.Load
 import Effect.NodeLocated
 import Effect.Filesystem
+import Effect.Util
 
 import Control.Arrow ((>>>))
 
@@ -60,30 +61,37 @@ runLoadAppBase
 runLoadAppBase = interpret $ \case
   SetLoaded s -> sendM $ modifyOf filePath (const (Just s)) >> pure ()
 
+runReaderAppBaseIORef
+  :: LastMember AppBase effs
+  => Lens' Env (IORef r) -> Eff (Reader r : effs) ~> Eff effs
+runReaderAppBaseIORef l = runStateAppBaseIORef l . translate (\Ask -> Get)
+
 interpretAsAppBase
   ::
   (forall effs. -- ^ this is an extistential type
     ( Members [Console, Throw, SetLocation, GetLocation, Fresh, Dualizeable] effs
-    , Members [FileSystemTree, Web, Load] effs
+    , Members [FileSystemTree, Web, Load, Error None] effs
     , HasGraph String effs
     ) => Eff effs ())
   -> AppBase ()
 interpretAsAppBase v = do
-  fp <- view filePath >>= readIORef
-  case fp of
-    Nothing -> liftIO $ putStrErr "no filepath means we can't access the graph!"
-    Just fp' -> do
-      let
-        handler =
-          runReadGraphDualizeableIO @String fp'
-          >>> runWriteGraphDualizeableIO @String fp'
-          >>> runWebIO
-          >>> runFileSystemTreeIO
-          >>> interpretConsoleIO
-          >>> runDualizeableAppBase
-          >>> printErrors
-          >>> runLocableAppBase
-          >>> runLoadAppBase
-          >>> evalFreshAppBase
-          >>> runM
-      handler v
+  let
+    handler =
+      fmap paramToReader (flip (runReadGraphDualizeableIO @String))
+      >>> readThrowMaybe
+      >>> subsume
+      >>> fmap paramToReader (flip (runWriteGraphDualizeableIO @String))
+      >>> readThrowMaybe
+      >>> subsume
+      >>> (`handleError` (\None -> echo "there is no set filepath so we can't access the graph"))
+      >>> runReaderAppBaseIORef filePath
+      >>> runWebIO
+      >>> runFileSystemTreeIO
+      >>> runDualizeableAppBase
+      >>> interpretConsoleIO
+      >>> printErrors
+      >>> runLocableAppBase
+      >>> runLoadAppBase
+      >>> evalFreshAppBase
+      >>> runM
+  handler v

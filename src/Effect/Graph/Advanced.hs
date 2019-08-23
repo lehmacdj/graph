@@ -75,6 +75,7 @@ transitionsFreshVia nid t = do
   -- we need to actually try to fetch to throw if it is missing
   _ <- getNode' @t nid
   nid' <- fresh
+  touchNode @t nid'
   insertEdge (Edge nid t nid')
   pure nid'
 

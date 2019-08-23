@@ -38,4 +38,5 @@ main = do
   env <- emptyEnv
   args :: [String] <- map unpack <$> getArgs
   writeIORef (view filePath env) (index args 0)
+  writeIORef (view nextId env) 1
   doRepl' replSettings "g" (withDefaultQuitParser parseCommand) execCommand env
