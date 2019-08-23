@@ -44,9 +44,6 @@ pRemove = (command "rm" $> Remove) <*> apath
 pAt :: Parser Command
 pAt = (command "at" $> At) <*> apath <*> pCommand
 
-pDump :: Parser Command
-pDump = (commandFrom [":dump", ":d"] $> Dump) <*> some anySingle
-
 pLoad :: Parser Command
 pLoad = (commandFrom [":load", ":l"] $> Load) <*> some anySingle
 
@@ -81,7 +78,6 @@ pCommand =
   <|> try pRemove
   <|> try pAt
   <|> try pDedup
-  <|> try pDump
   <|> try pLoad
   <|> try pNodeId
   <|> try pDebug

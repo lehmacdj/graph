@@ -36,7 +36,6 @@ data Command
   | Remove (APath String)             -- ^ rm
   | At (APath String) Command         -- ^ at
   | Dedup String                      -- ^ dd
-  | Dump FilePath
   | Load FilePath
   | NodeId
   | Debug
@@ -131,6 +130,5 @@ interpretCommand = \case
   -- layers of commands that can be handled at different levels
   Import fp -> currentLocation >>= subsumeMissing . importDirectory fp
   ImportUrl uri -> subsumeMissing (importUrl 0 uri) >> pure ()
-  Dump _ -> error "unsupported currently"
   Load fp -> setLoaded fp
-  Debug -> error "unsupported"
+  Debug -> currentLocation >>= subsumeMissing . getNode' >>= echo . show @(Node String)
