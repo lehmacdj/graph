@@ -15,6 +15,10 @@ import Env
 import App
 import Completion
 
+import System.Directory
+import Text.Read (readMaybe)
+import System.FilePath
+
 -- | Style guide for commands for the future:
 -- All commands and paths are interpreted relative to the current location
 -- We can reintroduce the ability to execute commands relative to a different
@@ -37,6 +41,11 @@ main :: IO ()
 main = do
   env <- emptyEnv
   args :: [String] <- map unpack <$> getArgs
-  writeIORef (view filePath env) (index args 0)
-  writeIORef (view nextId env) 1
-  doRepl' replSettings "g" (withDefaultQuitParser parseCommand) execCommand env
+  case index args 0 of
+    Nothing -> putStrLn . pack $ "needs one command line argument"
+    Just dir -> do
+      writeIORef (view filePath env) (Just dir)
+      linkFileNames <- filter (".json" `isSuffixOf`) <$> listDirectory dir
+      let nids = mapMaybe (readMaybe . dropExtension) linkFileNames
+      writeIORef (view nextId env) (maximum (1 `ncons` nids))
+      doRepl' replSettings "g" (withDefaultQuitParser parseCommand) execCommand env

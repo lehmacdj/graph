@@ -32,7 +32,6 @@ import Graph.Types
 import Graph.Serialize2
 import qualified Graph as G
 
-import Error
 import Data.Aeson (FromJSON(..), ToJSON(..))
 
 data ReadGraph t a where
@@ -201,9 +200,9 @@ runWriteGraphIODualizeable dir = reinterpret $ \case
             neighborsOut = toListOf (nodeOutgoing . folded . connectNode) n
             neighbors = ordNub (neighborsIn ++ neighborsOut)
         liftIO $ forM_ neighbors $ withSerializedNode (delIn . delOut) dir
-        convertError @Errors . join . fmap rethrowE . liftIO . ioToE $ do
-          removeFile $ linksFile dir nid
-          removeFile $ nodeDataFile dir nid
+        let rethrow = join . fmap rethrowE . liftIO . ioToE
+        convertError @Errors . rethrow . removeFile $ linksFile dir nid
+        (`handleError` \(_ :: Errors) -> pure ()) . rethrow . removeFile $ nodeDataFile dir nid
   InsertEdge e -> do
     dual <- ask
     let (Edge i t o) = ifDualized dual G.dualizeEdge e

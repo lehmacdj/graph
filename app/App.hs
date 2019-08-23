@@ -27,6 +27,10 @@ import Effect.Util
 
 import Control.Arrow ((>>>))
 
+import System.Directory
+import System.FilePath
+import Text.Read (readMaybe)
+
 type App = Repl Env
 type AppBase = ReplBase Env
 
@@ -61,8 +65,11 @@ runLoadAppBase
   :: (LastMember AppBase effs, HasGraph String effs, Member (Writer Id) effs)
   => Eff (Load : effs) ~> Eff effs
 runLoadAppBase = interpret $ \case
-  SetLoaded s -> do
-    sendM $ modifyOf filePath (const (Just s)) >> pure ()
+  SetLoaded dir -> do
+    sendM $ modifyOf filePath (const (Just dir)) >> pure ()
+    linkFileNames <- liftIO $ filter (".json" `isSuffixOf`) <$> listDirectory dir
+    let nids = mapMaybe (readMaybe . dropExtension) linkFileNames
+    sendM $ modifyOf nextId (const (maximum (1 `ncons` nids))) >> pure ()
 
 runReaderAppBaseIORef
   :: LastMember AppBase effs

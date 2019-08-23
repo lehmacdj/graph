@@ -109,7 +109,7 @@ interpretCommand = \case
     nnids <- subsumeMissing (mkPath nid p)
     let err = singleErr "the last argument of tag"
     target <- the' err =<< subsumeMissing (resolvePathSuccesses nid' q)
-    _ <- subsumeMissing (mergeNodes @String (traceShowId (target `ncons` toList nnids)))
+    _ <- subsumeMissing (mergeNodes @String (target `ncons` toList nnids))
     pure ()
   At a c -> do
     (nid, p) <- relativizeAPath a
