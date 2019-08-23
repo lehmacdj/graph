@@ -1,9 +1,12 @@
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE NoImplicitPrelude #-}
 
 module Main where
 
+import ClassyPrelude
+import Control.Lens hiding (index)
+
 import Control.Repl
-import Control.Monad.State
 
 import Lang.Command2 hiding (printTransitions)
 import Lang.Command2.Parse
@@ -33,4 +36,6 @@ replSettings = setComplete completionFunction defaultSettings
 main :: IO ()
 main = do
   env <- emptyEnv
+  args :: [String] <- map unpack <$> getArgs
+  writeIORef (view filePath env) (index args 0)
   doRepl' replSettings "g" (withDefaultQuitParser parseCommand) execCommand env
