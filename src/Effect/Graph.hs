@@ -19,10 +19,12 @@ import Control.Monad.Freer.State
 import Control.Monad.Freer.Error
 import Control.Monad.Freer.Reader
 import Effect.Util
+import Effect.Warn
+import Effect.Throw
 import qualified Data.Set as Set
 import Text.Read (readMaybe)
 
-import System.Directory (doesFileExist, listDirectory)
+import System.Directory (doesFileExist, listDirectory, removeFile)
 import System.FilePath (dropExtension)
 
 import Graph.Types
@@ -161,7 +163,7 @@ runWriteGraphState = interpret $ \case
 -- serialization format to access the graph
 runWriteGraphIO
   :: forall t m effs.
-    ( MonadIO m, LastMember m (Reader IsDual : effs), Member (Error Errors) effs
+    ( MonadIO m, LastMember m (Reader IsDual : effs), Members [Throw, Warn Errors] effs
     , FromJSON (Node t), ToJSON (Node t), TransitionValid t)
   => FilePath -> Eff (WriteGraph t ': effs) ~> Eff effs
 runWriteGraphIO dir = runReader (IsDual False) . runWriteGraphIODualizeable dir
@@ -176,6 +178,7 @@ runWriteGraphIODualizeable
   :: forall t m effs.
     ( MonadIO m, LastMember m (Reader IsDual : effs)
     , Member (Error Errors) effs
+    , Member (Warn Errors) effs
     , FromJSON (Node t), ToJSON (Node t), TransitionValid t)
   => FilePath -> Eff (WriteGraph t : effs) ~> Eff (Reader IsDual : effs)
 runWriteGraphIODualizeable dir = reinterpret $ \case
@@ -198,6 +201,9 @@ runWriteGraphIODualizeable dir = reinterpret $ \case
             neighborsOut = toListOf (nodeOutgoing . folded . connectNode) n
             neighbors = ordNub (neighborsIn ++ neighborsOut)
         liftIO $ forM_ neighbors $ withSerializedNode (delIn . delOut) dir
+        convertError @Errors . join . fmap rethrowE . liftIO . ioToE $ do
+          removeFile $ linksFile dir nid
+          removeFile $ nodeDataFile dir nid
   InsertEdge e -> do
     dual <- ask
     let (Edge i t o) = ifDualized dual G.dualizeEdge e
@@ -219,7 +225,7 @@ runWriteGraphIODualizeable dir = reinterpret $ \case
 runWriteGraphDualizeableIO
   :: forall t m effs.
     ( MonadIO m, LastMember m (Reader IsDual : effs), LastMember m effs
-    , Members [Dualizeable, Error Errors] effs
+    , Members [Dualizeable, Throw, Warn Errors] effs
     , FromJSON (Node t), ToJSON (Node t), TransitionValid t)
   => FilePath -> Eff (WriteGraph t : effs) ~> Eff effs
 runWriteGraphDualizeableIO dir =

@@ -37,13 +37,13 @@ instance Show t => Show (ReportMissing t r) where
   show = \case
     NodeMissing nid -> "node " ++ show nid ++ " is missing from the graph"
     ConnectMissing d nid' (Connect t nid) ->
-      show nid ++ " has a" ++ dir ++ " edge " ++ show t
-      ++ " to " ++ show nid'
-      ++ " but the opposite edge doesn't exist"
+      show nid ++ " has a" ++ dir1 ++ " edge " ++ show t
+      ++ " " ++ dir2 ++ " " ++ show nid'
+      ++ " but the corresponding " ++ dir3 ++ " one doesn't exist"
         where
-          dir
-            | d == In = "n incoming"
-            | otherwise = " outgoing"
+          (dir1, dir2, dir3)
+            | d == In = (" outgoing", "to", "incoming")
+            | otherwise = ("n incoming", "from", "outgoing")
 
 reportToConsole
   :: forall t effs. (Member Console effs, Show t)
@@ -52,16 +52,20 @@ reportToConsole = interpret $ \case
   c@(NodeMissing{}) -> echo $ show c
   c@(ConnectMissing{}) -> echo $ show c
 
+dirToCombineEdges :: Direction -> Id -> Connect t -> Edge t
+dirToCombineEdges d nid c
+  | d == In = incomingEdge c nid
+  | otherwise = outgoingEdge nid c
+
 fixErrors
   :: forall t effs. (Member (WriteGraph t) effs, TransitionValid t)
   => Eff (ReportMissing t : effs) ~> Eff effs
 fixErrors = interpret $ \case
   NodeMissing nid -> touchNode @t nid
-  ConnectMissing _ nid (Connect t nid') -> do
+  ConnectMissing d nid c@(Connect _ nid') -> do
     touchNode @t nid
     touchNode @t nid'
-    insertEdge (Edge nid t nid')
-    insertEdge (Edge nid' t nid)
+    insertEdge (dirToCombineEdges d nid c)
 
 nodeMissing
   :: forall t effs. Member (ReportMissing t) effs

@@ -41,6 +41,9 @@ pTag = (commandFrom ["tag", "t"] $> Tag) <*> apath <*> apath
 pRemove :: Parser Command
 pRemove = (command "rm" $> Remove) <*> apath
 
+pRemoveNode :: Parser Command
+pRemoveNode = (command "rmnf" $> RemoveNode) <*> apath
+
 pAt :: Parser Command
 pAt = (command "at" $> At) <*> apath <*> pCommand
 
@@ -82,6 +85,7 @@ pCommand =
   <|> try pQuery
   <|> try pTag
   <|> try pRemove
+  <|> try pRemoveNode
   <|> try pAt
   <|> try pDedup
   <|> try pLoad

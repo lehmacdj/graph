@@ -35,6 +35,7 @@ data Command
   | Query (APath String) String       -- ^ q
   | Tag (APath String) (APath String) -- ^ t
   | Remove (APath String)             -- ^ rm
+  | RemoveNode (APath String)
   | At (APath String) Command         -- ^ at
   | Dedup String                      -- ^ dd
   | Load FilePath
@@ -85,6 +86,10 @@ interpretCommand = \case
   Remove a -> do
     (nid, p) <- relativizeAPath a
     subsumeMissing $ delPath nid p
+  RemoveNode a -> do
+    (nid, p) <- relativizeAPath a
+    nids <- subsumeMissing (resolvePathSuccesses nid p)
+    forM_ nids $ deleteNode @String
   Clone a t -> do
     (nid, p) <- relativizeAPath a
     let err = singleErr "clone"
@@ -104,7 +109,7 @@ interpretCommand = \case
     nnids <- subsumeMissing (mkPath nid p)
     let err = singleErr "the last argument of tag"
     target <- the' err =<< subsumeMissing (resolvePathSuccesses nid' q)
-    _ <- subsumeMissing (mergeNodes @String (target `ncons` toList nnids))
+    _ <- subsumeMissing (mergeNodes @String (traceShowId (target `ncons` toList nnids)))
     pure ()
   At a c -> do
     (nid, p) <- relativizeAPath a
@@ -139,12 +144,10 @@ interpretCommand = \case
   ImportUrl uri -> subsumeMissing (importUrl 0 uri) >> pure ()
   Load fp -> do
     setLoaded fp
-    nids <- nodeManifest @String
-    resetFresh (maximum (0 `ncons` nids))
   Debug -> do
     echo "current node:"
     currentLocation >>= subsumeMissing . getNode' >>= echo . show @(Node String)
-    echo "node-ids in the graph:"
-    nodeManifest @String >>= echo . show
+    -- echo "node-ids in the graph:"
+    -- nodeManifest @String >>= echo . show
   Check -> reportToConsole @String (fsck @String)
   Fix -> fixErrors @String (fsck @String)

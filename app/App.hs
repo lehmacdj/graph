@@ -17,6 +17,7 @@ import Control.Monad.Freer.Fresh
 import Control.Monad.Freer.Writer
 import Effect.Graph
 import Effect.Throw
+import Effect.Warn
 import Effect.Web
 import Effect.Console
 import Effect.Load
@@ -57,10 +58,11 @@ runDualizeableAppBase
 runDualizeableAppBase = runStateAppBaseIORef isDualized
 
 runLoadAppBase
-  :: LastMember AppBase effs
+  :: (LastMember AppBase effs, HasGraph String effs, Member (Writer Id) effs)
   => Eff (Load : effs) ~> Eff effs
 runLoadAppBase = interpret $ \case
-  SetLoaded s -> sendM $ modifyOf filePath (const (Just s)) >> pure ()
+  SetLoaded s -> do
+    sendM $ modifyOf filePath (const (Just s)) >> pure ()
 
 runReaderAppBaseIORef
   :: LastMember AppBase effs
@@ -76,17 +78,18 @@ interpretAsAppBase
   ::
   (forall effs. -- ^ this is an extistential type
     ( Members [Console, Throw, SetLocation, GetLocation, Fresh, Dualizeable] effs
-    , Members [FileSystemTree, Web, Load, Error None, Writer Id] effs
+    , Members [FileSystemTree, Web, Load, Error None, Writer Id, Warn Errors] effs
     , HasGraph String effs
     ) => Eff effs ())
   -> AppBase ()
 interpretAsAppBase v = do
   let
     handler =
-      fmap paramToReader (flip (runReadGraphDualizeableIO @String))
+      runLoadAppBase
+      >>> paramToReader . (flip (runReadGraphDualizeableIO @String))
       >>> readThrowMaybe
       >>> subsume
-      >>> fmap paramToReader (flip (runWriteGraphDualizeableIO @String))
+      >>> paramToReader . (flip (runWriteGraphDualizeableIO @String))
       >>> readThrowMaybe
       >>> subsume
       >>> (`handleError` (\None -> echo "there is no set filepath so we can't access the graph"))
@@ -95,10 +98,9 @@ interpretAsAppBase v = do
       >>> runFileSystemTreeIO
       >>> runDualizeableAppBase
       >>> interpretConsoleIO
+      >>> printWarnings @Errors
       >>> printErrors
       >>> runLocableAppBase
-      >>> runLoadAppBase
-      >>> runWriterAppBaseIORef nextId
       >>> evalFreshAppBase
       >>> runM
   handler v

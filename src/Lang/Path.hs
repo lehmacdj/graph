@@ -123,7 +123,7 @@ mkPath
   )
   => Id -> Path t -> Eff effs (Set Id)
 mkPath nid p = fmap setFromList . forM (toList (listifyNewPath p)) $
-  \x -> transitionsViaManyFresh nid (traceShowId x)
+  \x -> transitionsViaManyFresh nid x
 
 -- | Construct a graph that contains only the edges passed through
 -- by the literal edges in the path.

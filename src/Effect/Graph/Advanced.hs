@@ -42,8 +42,8 @@ insertNode n = do
   touchNode @t nid
   setData @t nid (dataOf n)
   let
-    esOut = toListOf (folded . to (outgoingEdge nid)) $ outgoingConnectsOf n
-    esIn = toListOf (folded . to (`incomingEdge` nid)) $ incomingConnectsOf n
+    esOut = toListOf (nodeOutgoing . folded . to (outgoingEdge nid)) n
+    esIn = toListOf (nodeIncoming . folded . to (`incomingEdge` nid)) n
   forM_ esIn $ insertEdge
   forM_ esOut $ insertEdge
   pure ()
