@@ -57,7 +57,11 @@ fixErrors
   => Eff (ReportMissing t : effs) ~> Eff effs
 fixErrors = interpret $ \case
   NodeMissing nid -> touchNode @t nid
-  ConnectMissing _ nid (Connect t nid') -> insertEdge (Edge nid t nid')
+  ConnectMissing _ nid (Connect t nid') -> do
+    touchNode @t nid
+    touchNode @t nid'
+    insertEdge (Edge nid t nid')
+    insertEdge (Edge nid' t nid)
 
 nodeMissing
   :: forall t effs. Member (ReportMissing t) effs
