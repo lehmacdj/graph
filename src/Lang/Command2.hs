@@ -57,9 +57,12 @@ printTransitions
 printTransitions = mapM_ (echo . dtransition) where
   dtransition (Connect t nid) = show t ++ " at " ++ show nid
 
+resetFresh :: Member (Writer Id) effs => Id -> Eff effs ()
+resetFresh = tell
+
 interpretCommand
   :: ( Members [Console, Throw, SetLocation, GetLocation, Fresh, Dualizeable] effs
-     , Members [FileSystemTree, Web, Load] effs
+     , Members [FileSystemTree, Web, Load, Writer Id] effs
      , HasGraph String effs
      )
   => Command -> Eff effs ()
@@ -134,11 +137,14 @@ interpretCommand = \case
   -- layers of commands that can be handled at different levels
   Import fp -> currentLocation >>= subsumeMissing . importDirectory fp
   ImportUrl uri -> subsumeMissing (importUrl 0 uri) >> pure ()
-  Load fp -> setLoaded fp
+  Load fp -> do
+    setLoaded fp
+    nids <- nodeManifest @String
+    resetFresh (maximum (0 `ncons` nids))
   Debug -> do
     echo "current node:"
     currentLocation >>= subsumeMissing . getNode' >>= echo . show @(Node String)
-    echo "present node-ids:"
+    echo "node-ids in the graph:"
     nodeManifest @String >>= echo . show
   Check -> reportToConsole @String (fsck @String)
   Fix -> fixErrors @String (fsck @String)

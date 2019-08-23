@@ -14,6 +14,7 @@ import Control.Monad.Freer.State
 
 import Control.Monad.Freer
 import Control.Monad.Freer.Fresh
+import Control.Monad.Freer.Writer
 import Effect.Graph
 import Effect.Throw
 import Effect.Web
@@ -66,11 +67,16 @@ runReaderAppBaseIORef
   => Lens' Env (IORef r) -> Eff (Reader r : effs) ~> Eff effs
 runReaderAppBaseIORef l = runStateAppBaseIORef l . translate (\Ask -> Get)
 
+runWriterAppBaseIORef
+  :: LastMember AppBase effs
+  => Lens' Env (IORef r) -> Eff (Writer r : effs) ~> Eff effs
+runWriterAppBaseIORef l = runStateAppBaseIORef l . translate (\(Tell x) -> Put x)
+
 interpretAsAppBase
   ::
   (forall effs. -- ^ this is an extistential type
     ( Members [Console, Throw, SetLocation, GetLocation, Fresh, Dualizeable] effs
-    , Members [FileSystemTree, Web, Load, Error None] effs
+    , Members [FileSystemTree, Web, Load, Error None, Writer Id] effs
     , HasGraph String effs
     ) => Eff effs ())
   -> AppBase ()
@@ -92,6 +98,7 @@ interpretAsAppBase v = do
       >>> printErrors
       >>> runLocableAppBase
       >>> runLoadAppBase
+      >>> runWriterAppBaseIORef nextId
       >>> evalFreshAppBase
       >>> runM
   handler v
