@@ -70,7 +70,7 @@ resolvePathSuccesses
   :: forall t effs. (Members [ReadGraph t, ThrowMissing] effs, TransitionValid t)
   => Id -> Path t -> Eff effs (Set Id)
 resolvePathSuccesses nid = \case
-  One -> pure mempty
+  One -> pure $ singleton nid
   Wild -> do
     n <- getNode' nid
     pure $ toSetOf (folded . connectNode) (outgoingConnectsOf @t n)

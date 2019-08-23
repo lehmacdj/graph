@@ -52,20 +52,22 @@ dependencies:
 - classy-prelude
 - witherable
 
+default-extensions:
+- GADTs
+- FlexibleContexts
+- TypeOperators
+- DataKinds
+- ScopedTypeVariables
+- RankNTypes
+- TypeApplications
+- TypeFamilies
+- LambdaCase
+
+ghc-options:
+- -Wall
+
 library:
   source-dirs: src
-  ghc-options:
-    - -Wall
-    - -Werror
-    - -XGADTs
-    - -XFlexibleContexts
-    - -XTypeOperators
-    - -XDataKinds
-    - -XScopedTypeVariables
-    - -XRankNTypes
-    - -XTypeApplications
-    - -XTypeFamilies
-    - -XLambdaCase
 
 executables:
   ge:
@@ -75,17 +77,6 @@ executables:
     - -threaded
     - -rtsopts
     - -with-rtsopts=-N
-    - -Wall
-    - -Werror
-    - -XGADTs
-    - -XFlexibleContexts
-    - -XTypeOperators
-    - -XDataKinds
-    - -XScopedTypeVariables
-    - -XRankNTypes
-    - -XTypeApplications
-    - -XTypeFamilies
-    - -XLambdaCase
     dependencies:
     - graph
 
@@ -98,7 +89,6 @@ tests:
     - -rtsopts
     - -with-rtsopts=-N
     - -Wall
-    - -Werror
     dependencies:
     - graph
     - tasty
