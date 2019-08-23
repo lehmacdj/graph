@@ -61,11 +61,11 @@ library:
     - -XFlexibleContexts
     - -XTypeOperators
     - -XDataKinds
-    - -XAllowAmbiguousTypes
     - -XScopedTypeVariables
     - -XRankNTypes
     - -XTypeApplications
     - -XTypeFamilies
+    - -XLambdaCase
 
 executables:
   ge:
@@ -77,6 +77,15 @@ executables:
     - -with-rtsopts=-N
     - -Wall
     - -Werror
+    - -XGADTs
+    - -XFlexibleContexts
+    - -XTypeOperators
+    - -XDataKinds
+    - -XScopedTypeVariables
+    - -XRankNTypes
+    - -XTypeApplications
+    - -XTypeFamilies
+    - -XLambdaCase
     dependencies:
     - graph
 

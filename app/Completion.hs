@@ -1,25 +1,31 @@
+{-# LANGUAGE NoImplicitPrelude #-}
+
 -- | Completion stuff for the interface
 module Completion where
 
+import ClassyPrelude
+
 import Control.Lens
-import Data.List
-import Data.Foldable
-import Data.Maybe
-import Control.Repl (ReplBase)
 import Control.Arrow
 
 import System.Console.Haskeline
 
-import State
+import Env
+import App
 
 import Lang.Path
-import Lang.APath
 
 import Lang.Path.Partial
 import Lang.Parsing
 import Graph
 
-type Base a = ReplBase S a
+import Control.Monad.Freer
+import Effect.Graph
+import Effect.Graph.Advanced
+import Effect.NodeLocated
+import Effect.Throw
+
+type Base a = AppBase a
 
 commands :: [String]
 commands = []
@@ -72,16 +78,26 @@ completePath (i, _) = case getPartialPath (takeRelevantFromEnd i) of
   Nothing -> pure (i, [])
   Just (MissingSlash _ _) -> pure (i, [simpleCompletion "/"])
   Just (PartialPath nid pp end) -> do
-    let p' = foldr (:/) One pp
-    withAPath' (pure (i, [])) (mkAPath nid p') $ \n p -> do
-      g <- use graph
-      let
-        octs = do
-          ntid <- resolveSuccesses p n g
-          nt <- maybeToList $ maybeLookupNode g ntid
-          oc <- toList $ outgoingConnectsOf nt
-          pure $ view connectTransition oc
-      pure (fromMaybe i (stripPrefix (reverse end) i), mkCompleter octs end)
+    fp' <- view filePath >>= readIORef
+    case fp' of
+      Nothing -> pure (i, [])
+      Just fp -> do
+        let
+          handler =
+            runReadGraphDualizeableIO @String fp
+            >>> runDualizeableAppBase
+            >>> runLocableAppBase
+            >>> (\x -> handleError @Missing x (\_ -> pure (i, [])))
+            >>> runM
+        handler $ do
+          let p = foldr (:/) One pp
+          l <- currentLocation
+          ntids <- toList <$> resolvePathSuccesses (fromMaybe l nid) p
+          nts <- getNodes @String ntids
+          let
+            octs = --outgoing connect transitions
+              toListOf (folded . nodeOutgoing . folded . connectTransition) nts
+          pure (fromMaybe i (stripPrefix (reverse end) i), mkCompleter octs end)
 
 completionFunction :: (String, String) -> Base (String, [Completion])
 completionFunction =

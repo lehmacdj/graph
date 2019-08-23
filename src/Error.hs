@@ -19,6 +19,8 @@ import Control.Monad.IO.Class
 import Control.Monad.Freer
 import Control.Monad.Freer.Error
 
+import Network.HTTP.Conduit (HttpException)
+
 import Graph (Id)
 
 data Err
@@ -27,6 +29,7 @@ data Err
   | MissingNode Id
   | NotSingleton String -- ^ report that the thing that has a given
                         -- representation wasn't a singleton
+  | WebError String HttpException -- ^ url and the error that occured
 
 type Errors = NonEmpty Err
 
@@ -35,6 +38,7 @@ instance Show Err where
   show (IOFail e) = show e
   show (MissingNode nid) = "node " ++ show nid ++ " is missing"
   show (NotSingleton xs) = xs ++ " was expected to be a singleton but wasn't"
+  show (WebError uri e) = "couldn't fetch " ++ uri ++ "\n" ++ show e
 
 type E a = Validation (NonEmpty Err) a
 

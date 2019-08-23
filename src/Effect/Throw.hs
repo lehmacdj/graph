@@ -44,3 +44,7 @@ the'
 the' toErr = \case
   (toList -> [x]) -> pure x
   xs -> throwErr (toErr xs)
+
+printErrors :: (MonadIO m, LastMember m effs)
+            => Eff (Throw : effs) () -> Eff effs ()
+printErrors c = handleError c $ \e -> liftIO . putStrErr . show $ e

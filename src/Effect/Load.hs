@@ -1,4 +1,4 @@
-{-# LANAGUAGE NoImplicitPrelude #-}
+{-# LANGUAGE NoImplicitPrelude #-}
 {-# LANGUAGE TemplateHaskell #-}
 
 module Effect.Load where

@@ -20,21 +20,23 @@ module Control.Repl
 
 import Control.Monad.IO.Class
 import Control.Monad.Trans (lift)
-import Control.Monad.Trans.State.Strict (StateT(..), runStateT)
-import Control.Monad.State.Class
+import Control.Monad.Trans.Reader (ReaderT(..), runReaderT)
+import Control.Monad.Reader.Class
 import Data.Functor
 
 import System.Console.Haskeline (InputT, defaultSettings, runInputT
-    , getInputLine, Settings, MonadException(..), RunIO(..), setComplete)
+    , getInputLine, Settings, MonadException(..), RunIO(..), setComplete
+    , mapInputT)
 
-newtype ReplBase s a = ReplBase { unReplBase :: StateT s IO a }
-  deriving (Functor, Monad, MonadState s, MonadIO, Applicative, MonadException)
+newtype ReplBase r a = ReplBase { unReplBase :: ReaderT r IO a }
+  deriving (Functor, Monad, MonadReader r, MonadIO, Applicative, MonadException)
 
-newtype Repl s a = Repl { unRepl :: InputT (ReplBase s) a }
+newtype Repl r a = Repl { unRepl :: InputT (ReplBase r) a }
   deriving (Functor, Monad, MonadIO, Applicative)
 
-instance MonadState s (Repl s) where
-  state = Repl . lift . state
+instance MonadReader r (Repl r) where
+  ask = Repl . lift $ ask
+  local f m = Repl $ mapInputT (local f) (unRepl m)
 
 data C c
   = Quit
@@ -47,27 +49,26 @@ data C c
 -- * an executor for commands
 makeRepl :: String
          -> (String -> Either String (C c))
-         -> (c -> Repl s ())
-         -> Repl s ()
-makeRepl title reader execute = repl where
+         -> (c -> Repl r ())
+         -> Repl r ()
+makeRepl title parser execute = repl where
     repl = do
         command <- Repl $ getInputLine (title ++ "> ")
-        case reader <$> command of
+        case parser <$> command of
             Nothing -> liftIO (putStrLn "Goodbye!") $> ()
             Just (Right Quit) -> liftIO (putStrLn "Goodbye!") $> ()
             Just (Right (C command')) -> execute command' >> repl
             Just (Left err) -> liftIO (putStrLn err) >> repl
 
-runRepl' :: Settings (ReplBase s) -> Repl s a -> s -> IO a
-runRepl' settings repl s =
-  fmap fst
-  . (`runStateT` s)
+runRepl' :: Settings (ReplBase r) -> Repl r a -> r -> IO a
+runRepl' settings repl r =
+  (`runReaderT` r)
   . unReplBase
   . runInputT settings
   . unRepl
   $ repl
 
-runRepl :: Repl s a -> s -> IO a
+runRepl :: Repl r a -> r -> IO a
 runRepl = runRepl' defaultSettings
 
 -- | Takes :q and :quit as quit and otherwise defers to the main parser
@@ -79,15 +80,15 @@ withDefaultQuitParser p s
 
 doRepl :: String
        -> (String -> Either String (C c))
-       -> (c -> Repl s ())
-       -> s
+       -> (c -> Repl r ())
+       -> r
        -> IO ()
 doRepl = doRepl' defaultSettings
 
-doRepl' :: Settings (ReplBase s)
+doRepl' :: Settings (ReplBase r)
        -> String
        -> (String -> Either String (C c))
-       -> (c -> Repl s ())
-       -> s
+       -> (c -> Repl r ())
+       -> r
        -> IO ()
 doRepl' settings = ((runRepl' settings.).). makeRepl

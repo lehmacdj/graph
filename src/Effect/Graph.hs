@@ -2,6 +2,7 @@
 {-# LANGUAGE NoImplicitPrelude #-}
 {-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE ViewPatterns #-}
+{-# LANGUAGE AllowAmbiguousTypes #-}
 
 module Effect.Graph
   ( module Effect.Graph
@@ -69,7 +70,7 @@ getNode :: Member (ReadGraph t) effs => Id -> Eff effs (Maybe (Node t))
 getNode nid = send (GetNode nid)
 
 touchNode :: forall t effs. Member (WriteGraph t) effs => Id -> Eff effs ()
-touchNode n = send (TouchNode @t n)
+touchNode n = send @(WriteGraph t) @effs (TouchNode @t n)
 
 deleteNode :: forall t effs. Member (WriteGraph t) effs => Id -> Eff effs ()
 deleteNode nid = send (DeleteNode @t nid)
@@ -109,7 +110,7 @@ runReadGraphIODualizeable dir = reinterpret $ \case
 -- | Run a graph in IO with the ambient ability for the graph to be
 -- dualizeable.
 runReadGraphDualizeableIO
-  :: (MonadIO m, LastMember m (Reader IsDual : effs)
+  :: forall t m effs. (MonadIO m, LastMember m (Reader IsDual : effs)
      , Member Dualizeable effs
      , FromJSON (Node t), ToJSON (Node t), TransitionValid t)
   => FilePath -> Eff (ReadGraph t ': effs) ~> Eff effs
@@ -126,20 +127,6 @@ runReadGraphDualizeableIO dir =
 
 runDualizeable :: Eff (Dualizeable : effs) ~> Eff effs
 runDualizeable = map fst . runState (IsDual False)
-
--- We can't write this because it fails to choose an instance for MemberLast
--- However, for any concrete list of effects this works, so it should be
--- possible to compose these handlers in this way for final application
--- runHasGraphDualizeableIO
---   :: ( LastMember m effs, MonadIO m
---      , Members [Error Errors, m] effs
---      , FromJSON (Node t), ToJSON (Node t), TransitionValid t)
---   => FilePath
---   -> Eff (WriteGraph t : ReadGraph t : Dualizeable : effs) ~> Eff effs
--- runHasGraphDualizeableIO dir =
---   runDualizeable
---   . runReadGraphDualizeableIO dir
---   . runWriteGraphDualizeableIO dir
 
 runReadGraphState
   :: (Member (State (Graph t)) effs)
