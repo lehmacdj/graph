@@ -69,7 +69,7 @@ runLoadAppBase = interpret $ \case
     sendM $ modifyOf filePath (const (Just dir)) >> pure ()
     linkFileNames <- liftIO $ filter (".json" `isSuffixOf`) <$> listDirectory dir
     let nids = mapMaybe (readMaybe . dropExtension) linkFileNames
-    sendM $ modifyOf nextId (const (maximum (1 `ncons` nids))) >> pure ()
+    sendM $ modifyOf nextId (const (maximum (1 `ncons` nids) + 1)) >> pure ()
 
 runReaderAppBaseIORef
   :: LastMember AppBase effs
