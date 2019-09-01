@@ -47,5 +47,5 @@ main = do
       writeIORef (view filePath env) (Just dir)
       linkFileNames <- filter (".json" `isSuffixOf`) <$> listDirectory dir
       let nids = mapMaybe (readMaybe . dropExtension) linkFileNames
-      writeIORef (view nextId env) (maximum (1 `ncons` nids))
+      writeIORef (view nextId env) (maximum (1 `ncons` nids) + 1)
       doRepl' replSettings "g" (withDefaultQuitParser parseCommand) execCommand env
