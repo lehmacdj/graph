@@ -9,7 +9,7 @@ import Control.Lens
 import Graph
 import Data.Foldable
 
-pairOfConnect :: Connect t -> (t, Id)
+pairOfConnect :: Connect t -> (t, NID)
 pairOfConnect (Connect x nid) = (x, nid)
 
 -- | Follow a connect if one exists returning the matching id if it is present.
@@ -22,8 +22,8 @@ pairOfConnect (Connect x nid) = (x, nid)
 --  n2
 --
 -- And outN0 is the @outgoingConnectsOf n0@, then @matchConnect "a" n0 = n2@.
--- TODO: make this return (Set Id)
-matchConnect :: TransitionValid t => t -> Set (Connect t) -> [Id]
+-- TODO: make this return (Set NID)
+matchConnect :: TransitionValid t => t -> Set (Connect t) -> [NID]
 matchConnect x cs =
   map (view connectNode)
   . filter ((==x) . view connectTransition)
@@ -32,5 +32,5 @@ matchConnect x cs =
 -- | selfLoopify n1 n2 is a function that makes self loops on n1 self loops on n2
 selfLoopify
   :: TransitionValid t
-  => Id -> Id -> Set (Connect t) -> Set (Connect t)
+  => NID -> NID -> Set (Connect t) -> Set (Connect t)
 selfLoopify nid nid' = (setmapped . connectNode . filtered (==nid)) .~ nid'

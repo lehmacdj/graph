@@ -26,8 +26,8 @@ computeSHA :: ByteString -> String
 computeSHA = showDigest . sha512
 
 importDirectory
-   :: MonadUnique Id m
-   => FilePath -> IO (Id -> Graph String -> m (Graph String))
+   :: MonadUnique NID m
+   => FilePath -> IO (NID -> Graph String -> m (Graph String))
 importDirectory base = do
    _ :/ fileTree <- readDirectoryWithL B.readFile base
    if anyFailed fileTree
@@ -40,8 +40,8 @@ importDirectory base = do
    pure . addDirectories $ fileTree
 
 addDirectories
-   :: MonadUnique Id m
-   => DirTree ByteString -> Id -> Graph String -> m (Graph String)
+   :: MonadUnique NID m
+   => DirTree ByteString -> NID -> Graph String -> m (Graph String)
 addDirectories dt' root gi = do
    (fileHashes, gi') <- followMkEdgeFrom' "file-hashes" root gi
    let fhid = nidOf fileHashes

@@ -22,14 +22,14 @@ import Lang.Path hiding (mkPath)
 -- Could potentially use a stateful version at some point.
 -- The monad unique should generate ids that aren't in the graph.
 followMkEdgeFrom
-  :: (TransitionValid t, MonadUnique Id m)
+  :: (TransitionValid t, MonadUnique NID m)
   => t -> Node t -> Graph t -> m (Node t, Graph t)
 followMkEdgeFrom e n g = case matchConnect e (outgoingConnectsOf n) of
   nid:_ -> pure (nodeLookup nid g, g)
   [] -> mkEdgeFrom e n g
 
 mkEdgeFrom
-  :: (TransitionValid t, MonadUnique Id m)
+  :: (TransitionValid t, MonadUnique NID m)
   => t -> Node t -> Graph t -> m (Node t, Graph t)
 mkEdgeFrom e n g = do
   nnid <- fresh
@@ -38,17 +38,17 @@ mkEdgeFrom e n g = do
   pure (newNode, g')
 
 mkEdgeFrom'
-  :: (TransitionValid t, MonadUnique Id m)
-  => t -> Id -> Graph t -> m (Node t, Graph t)
+  :: (TransitionValid t, MonadUnique NID m)
+  => t -> NID -> Graph t -> m (Node t, Graph t)
 mkEdgeFrom' = primed . mkEdgeFrom
 
 followMkEdgeFrom'
-  :: (TransitionValid t, MonadUnique Id m)
-  => t -> Id -> Graph t -> m (Node t, Graph t)
+  :: (TransitionValid t, MonadUnique NID m)
+  => t -> NID -> Graph t -> m (Node t, Graph t)
 followMkEdgeFrom' = primed . followMkEdgeFrom
 
 mkNewPath
-  :: (TransitionValid t, MonadUnique Id m)
+  :: (TransitionValid t, MonadUnique NID m)
   => [t] -> Node t -> Graph t -> m (Graph t)
 mkNewPath [] _ g = pure g
 mkNewPath (x:xs) n g =  do
@@ -56,15 +56,15 @@ mkNewPath (x:xs) n g =  do
   mkNewPath xs n' g'
 
 mkPath
-  :: (TransitionValid t, MonadUnique Id m)
+  :: (TransitionValid t, MonadUnique NID m)
   => Path t -> Node t -> Graph t -> m (Graph t)
 mkPath p n g = foldM go g xs where
   xs = map (\(DPath _ nid ts) -> (nid, ts)) . toList $ resolvePath p n g
   go g' (n', ts) = primed (mkNewPath ts) n' g'
 
 mkPath'
-  :: (TransitionValid t, MonadUnique Id m)
-  => Path t -> Id -> Graph t -> m (Graph t)
+  :: (TransitionValid t, MonadUnique NID m)
+  => Path t -> NID -> Graph t -> m (Graph t)
 mkPath' = primed . mkPath
 
 -- | Merge all the connects from the first node into connects of the
@@ -97,11 +97,11 @@ mgPath p n g = go g $ lookupNode g <$> resolveSuccesses p n g where
 
 -- | Caution: all node ids are expected to be valid for this function to
 -- be well defined.
-mergeNodeIds :: TransitionValid t => Graph t -> [Id] -> Graph t
+mergeNodeIds :: TransitionValid t => Graph t -> [NID] -> Graph t
 mergeNodeIds g = snd . mergeNodeIds' g
 
 -- | mergeNodeIds but also return the nid that the new node has if it exists
-mergeNodeIds' :: TransitionValid t => Graph t -> [Id] -> (Maybe Id, Graph t)
+mergeNodeIds' :: TransitionValid t => Graph t -> [NID] -> (Maybe NID, Graph t)
 mergeNodeIds' g = go g . map (lookupNode g) where
   go g' [] = (Nothing, g')
   go g' [x] = (Just (nidOf x), g')
@@ -110,7 +110,7 @@ mergeNodeIds' g = go g . map (lookupNode g) where
 
 -- | Creates an exact copy of a node returning it
 cloneNode
-  :: (TransitionValid t, MonadUnique Id m)
+  :: (TransitionValid t, MonadUnique NID m)
   => Node t -> Graph t -> m (Node t, Graph t)
 cloneNode n g = do
   nnid <- fresh

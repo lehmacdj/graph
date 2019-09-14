@@ -9,15 +9,15 @@ data Command
   | NodeId
   | ListOut
   | ListIn
-  | AddEdgeTo Id String
-  | AddEdgeFrom Id String
+  | AddEdgeTo NID String
+  | AddEdgeFrom NID String
   | Dump FilePath
   | Load FilePath
-  | Goto Id
+  | Goto NID
   | Debug
   | RemoveEdgeOut String
   | RemoveEdgeIn String
-  | CloneNode Id
+  | CloneNode NID
   | ShowImage
   | SetBinaryData FilePath
   | Import FilePath

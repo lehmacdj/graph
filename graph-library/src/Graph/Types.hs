@@ -27,14 +27,14 @@ import Data.Set (Set)
 
 type TransitionValid t = (Show t, Eq t, Ord t)
 
-type Id = Int
+type NID = Int
 
 -- | A transition from/to a node to/from another node.
 -- The first node isn't represented here, because this is used only in the node
 -- structure where the first node is clear from context.
 data Connect t = Connect
   { _connectTransition :: t
-  , _connectNode :: Id
+  , _connectNode :: NID
   } deriving (Eq, Ord, Generic, NFData)
 makeLenses ''Connect
 
@@ -46,7 +46,7 @@ instance (ToJSON t, TransitionValid t) => ToJSON (Connect t) where
   toEncoding = genericToEncoding defaultOptions
 
 data Node t = Node
-  { _nodeId :: Id
+  { _nodeId :: NID
   -- ^ unique node id
   , _nodeIncoming :: Set (Connect t)
   , _nodeOutgoing :: Set (Connect t)
@@ -62,7 +62,7 @@ instance Show t => Show (Node t) where
 
 -- | For the purpose of implementing from and ToJSON we use Prenode.
 data Prenode t = Prenode
-  { _prenodeId :: Id
+  { _prenodeId :: NID
   -- ^ unique node id
   , _prenodeIncoming :: Set (Connect t)
   , _prenodeOutgoing :: Set (Connect t)
@@ -96,7 +96,7 @@ instance (ToJSON t, TransitionValid t) => ToJSON (Node t) where
   toEncoding = toEncoding . nodeToPrenode
 
 newtype Graph t = Graph
-  { _graphNodeMap :: Map Id (Node t)
+  { _graphNodeMap :: Map NID (Node t)
   } deriving (Eq, Ord, Generic, NFData)
 makeLenses ''Graph
 
@@ -108,10 +108,10 @@ instance (FromJSON t, TransitionValid t) => FromJSON (Graph t)
 instance (ToJSON t, TransitionValid t) => ToJSON (Graph t) where
   toEncoding = genericToEncoding defaultOptions
 
-nodeMap :: Graph t -> Map Id (Node t)
+nodeMap :: Graph t -> Map NID (Node t)
 nodeMap = view graphNodeMap
 
-withNodeMap :: Graph t -> (Map Id (Node t) -> Map Id (Node t)) -> Graph t
+withNodeMap :: Graph t -> (Map NID (Node t) -> Map NID (Node t)) -> Graph t
 withNodeMap = flip (over graphNodeMap)
 
 dualizeNode :: Node t -> Node t
@@ -119,8 +119,8 @@ dualizeNode (Node nid i o x) = Node nid o i x
 
 -- | unbiased representation of an edge
 data Edge t = Edge
-  { _edgeSource :: Id
+  { _edgeSource :: NID
   , _edgeTransition :: t
-  , _edgeSink :: Id
+  , _edgeSink :: NID
   } deriving (Eq, Ord, Generic, NFData, Show)
 makeLenses ''Edge

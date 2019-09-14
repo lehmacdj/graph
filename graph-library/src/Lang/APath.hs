@@ -8,7 +8,7 @@
 module Lang.APath
   ( module Lang.APath
   , module Lang.Path
-  , Id
+  , NID
   ) where
 
 import ClassyPrelude
@@ -21,16 +21,16 @@ import Effect.NodeLocated
 
 data APath t
   = Relative (Path t)
-  | Absolute Id (Path t)
+  | Absolute NID (Path t)
   deriving (Show, Eq, Ord)
 
-mkAPath :: Maybe Id -> Path t -> APath t
+mkAPath :: Maybe NID -> Path t -> APath t
 mkAPath (Just nid) p = Absolute nid p
 mkAPath Nothing p = Relative p
 
 relativizeAPath
   :: Member GetLocation effs
-  => APath t -> Eff effs (Id, Path t)
+  => APath t -> Eff effs (NID, Path t)
 relativizeAPath = \case
   Relative p -> (,) <$> currentLocation <*> pure p
   Absolute nid p -> pure (nid, p)

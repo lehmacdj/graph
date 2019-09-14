@@ -16,8 +16,8 @@ computeSHA :: ByteString -> String
 computeSHA = showDigest . sha512
 
 importUrl
-  :: (MonadUnique Id m, MonadIO m)
-  => Id -> String -> Graph String -> m (Either HttpException (Id, Graph String))
+  :: (MonadUnique NID m, MonadIO m)
+  => NID -> String -> Graph String -> m (Either HttpException (NID, Graph String))
 importUrl nid url g = do
   md <- liftIO (try (simpleHttp url) :: IO (Either HttpException ByteString))
   case md of
@@ -34,8 +34,8 @@ importUrl nid url g = do
 -- a new file labeled with its hash
 -- Returns the nid of the new node and the updated graph
 importData
-   :: MonadUnique Id m
-   => Id -> ByteString -> Graph String -> m (Id, Graph String)
+   :: MonadUnique NID m
+   => NID -> ByteString -> Graph String -> m (NID, Graph String)
 importData nid d g = do
   (n', g') <- followMkEdgeFrom' (computeSHA d) nid g
   pure (nidOf n', setData (Just d) n' g')

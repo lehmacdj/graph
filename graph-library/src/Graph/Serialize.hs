@@ -26,7 +26,7 @@ dir </> next = dir ++ "/" ++ next
 linksFile :: FilePath -> FilePath
 linksFile = (</> "links.json")
 
-nodeDataFile :: FilePath -> Id -> FilePath
+nodeDataFile :: FilePath -> NID -> FilePath
 nodeDataFile base nid = base </> (show nid ++ ".data")
 
 -- | Write the contents of a graph into a directory at the specified location.
@@ -47,5 +47,5 @@ deserializeGraph
 deserializeGraph base =
   (Aeson.decode <$> B.readFile (linksFile base)) `catch` ioHandler
 
-getBinaryData :: FilePath -> Id -> IO ByteString
+getBinaryData :: FilePath -> NID -> IO ByteString
 getBinaryData = (B.readFile .) . nodeDataFile

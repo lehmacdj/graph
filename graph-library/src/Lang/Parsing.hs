@@ -7,7 +7,7 @@ import Text.Megaparsec
 import Text.Megaparsec.Char
 import qualified Text.Megaparsec.Char.Lexer as L
 
-import Graph (Id)
+import Graph (NID)
 
 type Parser = Parsec Void String
 
@@ -41,7 +41,7 @@ symbol = L.symbol s
 transition :: Parser String
 transition = ident <|> stringLiteral
 
-nodeId :: Parser Id
+nodeId :: Parser NID
 nodeId = L.lexeme s L.decimal
 
 number :: Parser Int

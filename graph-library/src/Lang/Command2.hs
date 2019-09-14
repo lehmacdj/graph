@@ -48,7 +48,7 @@ data Command
   | Fix
   deriving (Eq, Show, Ord)
 
-singleErr :: String -> Set Id -> Err
+singleErr :: String -> Set NID -> Err
 singleErr cmd xs = UE $ cmd ++ " needs a path that resolves to a single node\n"
                             ++ "but it resolved to: " ++ show (setToList xs)
 
@@ -58,12 +58,12 @@ printTransitions
 printTransitions = mapM_ (echo . dtransition) where
   dtransition (Connect t nid) = show t ++ " at " ++ show nid
 
-resetFresh :: Member (Writer Id) effs => Id -> Eff effs ()
+resetFresh :: Member (Writer NID) effs => NID -> Eff effs ()
 resetFresh = tell
 
 interpretCommand
   :: ( Members [Console, Throw, SetLocation, GetLocation, Fresh, Dualizeable] effs
-     , Members [FileSystemTree, Web, Load, Writer Id] effs
+     , Members [FileSystemTree, Web, Load, Writer NID] effs
      , HasGraph String effs
      )
   => Command -> Eff effs ()

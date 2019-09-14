@@ -34,7 +34,7 @@ importDirectory
    :: ( Members [Fresh, FileSystemTree, Console, ThrowMissing] effs
       , HasGraph String effs
       )
-   => FilePath -> Id -> Eff effs ()
+   => FilePath -> NID -> Eff effs ()
 importDirectory base nid = do
    fileTree <- readDirectory base
    if anyFailed fileTree
@@ -48,7 +48,7 @@ importDirectory base nid = do
 
 addDirectories
    :: (Members [Fresh, ThrowMissing] effs, HasGraph String effs)
-   => DirTree LByteString -> Id -> Eff effs ()
+   => DirTree LByteString -> NID -> Eff effs ()
 addDirectories dt' root = do
    fileHashes <- root `transitionsVia` "file-hashes"
    let

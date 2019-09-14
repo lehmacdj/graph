@@ -8,7 +8,7 @@ import Lang.Path.Parse
 import Lang.APath.Parse
 import Lang.Parsing
 
-import Graph (Id)
+import Graph (NID)
 
 -- | from Text.Megaparsec
 initialState :: String -> s -> MP.State s
@@ -40,8 +40,8 @@ unsnoc xs@(_:_) = Just (init xs, last xs)
 
 -- | a list of path segments that are interpreted as being separated by
 -- concatenation, followed by a string that represents the last
-data PartialPath = PartialPath (Maybe Id) [Path String] String
-                 | MissingSlash (Maybe Id) [Path String]
+data PartialPath = PartialPath (Maybe NID) [Path String] String
+                 | MissingSlash (Maybe NID) [Path String]
                  deriving (Show, Eq, Ord)
 
 pPartialPath :: Parser PartialPath

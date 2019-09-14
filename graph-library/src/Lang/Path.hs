@@ -31,7 +31,7 @@ import Effect.Graph.Advanced
 
 -- breadcrumb in a trail in the graph
 -- each piece denotes an edge from the specified via the transition
-data DPathComponent t = FromVia Id t
+data DPathComponent t = FromVia NID t
   deriving (Show, Eq, Ord)
 
 -- | a deterministic path is a list of path components
@@ -39,7 +39,7 @@ data DPathComponent t = FromVia Id t
 --
 data DPath t = DPath
   [DPathComponent t] -- the nids/transitions that are in the graph from start
-  Id -- the nid of the last node in the graph
+  NID -- the nid of the last node in the graph
   [t] -- transitions that could not be realized within the graph
   deriving (Show, Eq, Ord)
 
@@ -48,7 +48,7 @@ projPath [] = "#"
 projPath [FromVia _ x] = show x
 projPath (FromVia _ x:xs) = show x ++ "/" ++ projPath xs
 
-endPoint :: DPath t -> Id
+endPoint :: DPath t -> NID
 endPoint (DPath _ x _) = x
 
 data Path t
@@ -68,7 +68,7 @@ data Path t
 
 resolvePathSuccesses
   :: forall t effs. (Members [ReadGraph t, ThrowMissing] effs, TransitionValid t)
-  => Id -> Path t -> Eff effs (Set Id)
+  => NID -> Path t -> Eff effs (Set NID)
 resolvePathSuccesses nid = \case
   One -> pure $ singleton nid
   Wild -> do
@@ -85,7 +85,7 @@ resolvePathSuccesses nid = \case
 
 resolvePathSuccessesDetail
   :: forall t effs. (Members [ReadGraph t, ThrowMissing] effs, TransitionValid t)
-  => Id -> Path t -> Eff effs (Set (DPath t))
+  => NID -> Path t -> Eff effs (Set (DPath t))
 resolvePathSuccessesDetail nid = \case
   One -> pure $ Set.singleton (DPath [] nid [])
   Wild -> getNode' nid <&> \n -> Set.fromList $ do
@@ -121,7 +121,7 @@ mkPath
   ( Members [Fresh, ThrowMissing] effs
   , HasGraph t effs
   )
-  => Id -> Path t -> Eff effs (Set Id)
+  => NID -> Path t -> Eff effs (Set NID)
 mkPath nid p = fmap setFromList . forM (toList (listifyNewPath p)) $
   \x -> transitionsViaManyFresh nid x
 
@@ -130,7 +130,7 @@ mkPath nid p = fmap setFromList . forM (toList (listifyNewPath p)) $
 -- nids are the same as in the original graph
 tracePath
   :: forall t effs. Members [Fresh, ThrowMissing, ReadGraph t] effs
-  => Id -> Path t -> Eff effs (Graph t)
+  => NID -> Path t -> Eff effs (Graph t)
 tracePath _ _ = error "unimplemented"
 
 delPath
@@ -138,7 +138,7 @@ delPath
   ( Members [Fresh, ThrowMissing] effs
   , HasGraph t effs
   )
-  => Id -> Path t -> Eff effs ()
+  => NID -> Path t -> Eff effs ()
 delPath nid p = resolvePathSuccessesDetail nid p >>= mapM_ delDPath where
   delDPath (DPath xs@(_:_) nid' []) = case lastEx xs of -- safe because list nonempty
     FromVia nid2 t -> deleteEdge (Edge nid2 t nid')
@@ -202,7 +202,7 @@ resolvePath p n g = nodeConsistentWithGraph g n `seq` case p of
 -- there is unresolved path remaining after it.
 resolveSingle
   :: TransitionValid t
-  => Path t -> Node t -> Graph t -> Maybe Id
+  => Path t -> Node t -> Graph t -> Maybe NID
 resolveSingle p n g = case toList $ resolvePath p n g of
   [DPath _ nid []] -> Just nid
   _ -> Nothing
@@ -212,7 +212,7 @@ resolveSingle p n g = case toList $ resolvePath p n g of
 -- This returns just the ids of the nodes where these paths terminate.
 resolveSuccesses
   :: TransitionValid t
-  => Path t -> Node t -> Graph t -> [Id]
+  => Path t -> Node t -> Graph t -> [NID]
 resolveSuccesses p n g = mapMaybe projSuccess $ toList $ resolvePath p n g where
   projSuccess (DPath _ i []) = Just i
   projSuccess _ = Nothing
@@ -223,7 +223,7 @@ resolveSuccesses p n g = mapMaybe projSuccess $ toList $ resolvePath p n g where
 -- Also returns a string which identifies the path that was taken to each id
 resolveSuccesses'
   :: TransitionValid t
-  => Path t -> Node t -> Graph t -> [([DPathComponent t], Id)]
+  => Path t -> Node t -> Graph t -> [([DPathComponent t], NID)]
 resolveSuccesses' p n g = mapMaybe projSuccess $ toList $ resolvePath p n g where
   projSuccess (DPath xs i []) = Just (xs, i)
   projSuccess _ = Nothing

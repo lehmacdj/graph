@@ -62,7 +62,7 @@ runDualizeableAppBase
 runDualizeableAppBase = runStateAppBaseIORef isDualized
 
 runLoadAppBase
-  :: (LastMember AppBase effs, HasGraph String effs, Member (Writer Id) effs)
+  :: (LastMember AppBase effs, HasGraph String effs, Member (Writer NID) effs)
   => Eff (Load : effs) ~> Eff effs
 runLoadAppBase = interpret $ \case
   SetLoaded dir -> do
@@ -85,7 +85,7 @@ interpretAsAppBase
   ::
   (forall effs. -- ^ this is an extistential type
     ( Members [Console, Throw, SetLocation, GetLocation, Fresh, Dualizeable] effs
-    , Members [FileSystemTree, Web, Load, Error None, Writer Id, Warn Errors] effs
+    , Members [FileSystemTree, Web, Load, Error None, Writer NID, Warn Errors] effs
     , HasGraph String effs
     ) => Eff effs ())
   -> AppBase ()

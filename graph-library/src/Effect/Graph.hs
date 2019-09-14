@@ -6,7 +6,7 @@
 
 module Effect.Graph
   ( module Effect.Graph
-  , Id
+  , NID
   , Node
   ) where
 
@@ -35,8 +35,8 @@ import qualified Graph as G
 import Data.Aeson (FromJSON(..), ToJSON(..))
 
 data ReadGraph t a where
-  GetNode :: Id -> ReadGraph t (Maybe (Node t))
-  NodeManifest :: ReadGraph t [Id]
+  GetNode :: NID -> ReadGraph t (Maybe (Node t))
+  NodeManifest :: ReadGraph t [NID]
 
 newtype IsDual = IsDual { isDual :: Bool }
   deriving (Show, Eq, Ord)
@@ -59,11 +59,11 @@ dualize :: Member Dualizeable effs => Eff effs ()
 dualize = modify @IsDual (omap not)
 
 data WriteGraph t a where
-  TouchNode :: Id -> WriteGraph t () -- ^ make the node with that id exist
-  DeleteNode :: Id -> WriteGraph t () -- ^ delete a node and all edges to/from it
+  TouchNode :: NID -> WriteGraph t () -- ^ make the node with that id exist
+  DeleteNode :: NID -> WriteGraph t () -- ^ delete a node and all edges to/from it
   InsertEdge :: Edge t -> WriteGraph t () -- ^ insert edge if both nodes in graph
   DeleteEdge :: Edge t -> WriteGraph t () -- ^ delete edge
-  SetData :: Id -> Maybe LByteString -> WriteGraph t () -- ^ delete if Nothing
+  SetData :: NID -> Maybe LByteString -> WriteGraph t () -- ^ delete if Nothing
 
 type HasGraph t effs =
   ( Member (ReadGraph t) effs
@@ -71,16 +71,16 @@ type HasGraph t effs =
   , TransitionValid t
   )
 
-getNode :: Member (ReadGraph t) effs => Id -> Eff effs (Maybe (Node t))
+getNode :: Member (ReadGraph t) effs => NID -> Eff effs (Maybe (Node t))
 getNode nid = send (GetNode nid)
 
-nodeManifest :: forall t effs. Member (ReadGraph t) effs => Eff effs [Id]
+nodeManifest :: forall t effs. Member (ReadGraph t) effs => Eff effs [NID]
 nodeManifest = send (NodeManifest @t)
 
-touchNode :: forall t effs. Member (WriteGraph t) effs => Id -> Eff effs ()
+touchNode :: forall t effs. Member (WriteGraph t) effs => NID -> Eff effs ()
 touchNode n = send @(WriteGraph t) @effs (TouchNode @t n)
 
-deleteNode :: forall t effs. Member (WriteGraph t) effs => Id -> Eff effs ()
+deleteNode :: forall t effs. Member (WriteGraph t) effs => NID -> Eff effs ()
 deleteNode nid = send (DeleteNode @t nid)
 
 insertEdge :: Member (WriteGraph t) effs => Edge t -> Eff effs ()
@@ -91,7 +91,7 @@ deleteEdge e = send (DeleteEdge e)
 
 setData
   :: forall t effs. Member (WriteGraph t) effs
-  => Id -> Maybe LByteString -> Eff effs ()
+  => NID -> Maybe LByteString -> Eff effs ()
 setData nid d = send (SetData @t nid d)
 
 -- | Run a graph computation in the io monad, using a directory in the

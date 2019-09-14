@@ -30,10 +30,10 @@ import Graph (nidOf, dataOf)
 
 import Error
 
-linksFile :: FilePath -> Id -> FilePath
+linksFile :: FilePath -> NID -> FilePath
 linksFile base nid = base </> (show nid ++ ".json")
 
-nodeDataFile :: FilePath -> Id -> FilePath
+nodeDataFile :: FilePath -> NID -> FilePath
 nodeDataFile base nid = base </> (show nid ++ ".data")
 
 -- TODO: rewrite using System.Directory.Tree
@@ -65,7 +65,7 @@ ioErrorToMaybe = (`catch` ioHandler) . (Just <$>)
 
 deserializeNode
   :: (FromJSON (Node t), TransitionValid t)
-  => FilePath -> Id -> IO (E (Node t))
+  => FilePath -> NID -> IO (E (Node t))
 deserializeNode base nid = do
   readRes <- ioToE (B.readFile (linksFile base nid))
   readRes `ioBindE` \fileContents -> do
@@ -97,12 +97,12 @@ deserializeGraph base = do
 -- ignore nodes that don't exist or if an error occurs
 withSerializedNode
   :: (FromJSON (Node t), ToJSON (Node t), TransitionValid t)
-  => (Node t -> Node t) -> FilePath -> Id -> IO ()
+  => (Node t -> Node t) -> FilePath -> NID -> IO ()
 withSerializedNode f base nid = do
   nr <- deserializeNode base nid
   _ <- nr `ioBindE` \n -> serializeNode (f n) base
   -- we intentionally ignore any errors that might have been returned
   pure ()
 
-tryGetBinaryData :: FilePath -> Id -> IO (Maybe ByteString)
+tryGetBinaryData :: FilePath -> NID -> IO (Maybe ByteString)
 tryGetBinaryData = (ioErrorToMaybe .) . (B.readFile .) . nodeDataFile

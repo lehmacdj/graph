@@ -20,8 +20,8 @@ import Effect.Graph (IsDual(..))
 
 data Env = Env
   { _filePath :: IORef (Maybe FilePath)
-  , _nextId :: IORef Id -- ^ next id that is unique within the current graph
-  , _currentNID :: IORef Id
+  , _nextId :: IORef NID -- ^ next id that is unique within the current graph
+  , _currentNID :: IORef NID
   , _isDualized :: IORef IsDual
   }
 makeLenses ''Env
@@ -36,10 +36,10 @@ modifyOf l f = do
   pure r
 
 -- | Create a new unique NID
-freshNID :: (MonadReader Env m, MonadIO m) => m Id
+freshNID :: (MonadReader Env m, MonadIO m) => m NID
 freshNID = modifyOf nextId (+1)
 
-instance MonadUnique Id (Repl Env) where
+instance MonadUnique NID (Repl Env) where
   fresh = freshNID
 
 emptyEnv :: IO Env

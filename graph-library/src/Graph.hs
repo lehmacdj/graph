@@ -30,13 +30,13 @@ outdegreeOf = Set.size . view nodeOutgoing
 
 -- | Utility function for converting lookups into actual node values with error
 -- reporting.
-assertNodeInGraph :: Id -> Maybe a -> a
+assertNodeInGraph :: NID -> Maybe a -> a
 assertNodeInGraph _ (Just n) = n
 assertNodeInGraph i Nothing =
   error $ "expected " ++ show i ++ " to be in the graph"
 
 lookupNode :: TransitionValid t
-           => Graph t -> Id -> Node t
+           => Graph t -> NID -> Node t
 lookupNode = flip nodeLookup
 {-# INLINE lookupNode #-}
 
@@ -45,7 +45,7 @@ refreshNode :: TransitionValid t
 refreshNode g = lookupNode g . nidOf
 
 nodeLookup :: TransitionValid t
-           => Id -> Graph t -> Node t
+           => NID -> Graph t -> Node t
 nodeLookup i g = fromMaybe err . M.lookup i . nodeMap $ g where
   err = error $ "expected to find " ++ show i ++ " in the Graph\n"
              ++ MD.showTree (nodeMap g)
@@ -54,7 +54,7 @@ nodeLookup i g = fromMaybe err . M.lookup i . nodeMap $ g where
 primed
   :: TransitionValid t
   => (Node t -> Graph t -> a)
-  -> (Id -> Graph t -> a)
+  -> (NID -> Graph t -> a)
 primed f i ig = f (lookupNode ig i) ig
 
 listify
@@ -65,7 +65,7 @@ listify f nodes ig = foldl' (flip f) ig nodes
 primeds
   :: TransitionValid t
   => ([Node t] -> Graph t -> Graph t)
-  -> ([Id] -> Graph t -> Graph t)
+  -> ([NID] -> Graph t -> Graph t)
 primeds f i ig = f (pure nodeLookup <*> i <*> pure ig) ig
 
 delEdge :: TransitionValid t => Edge t -> Graph t -> Graph t
@@ -92,7 +92,7 @@ delNode n g = withNodeMap g $
 
 delNode'
   :: TransitionValid t
-  => Id -> Graph t -> Graph t
+  => NID -> Graph t -> Graph t
 delNode' = primed delNode
 
 delNodes
@@ -101,7 +101,7 @@ delNodes = listify delNode
 
 delNodes'
   :: TransitionValid t
-  => [Id] -> Graph t -> Graph t
+  => [NID] -> Graph t -> Graph t
 delNodes' = primeds delNodes
 
 insertEdge
@@ -142,7 +142,7 @@ emptyGraph = Graph M.empty
 isEmptyGraph :: Graph t -> Bool
 isEmptyGraph = M.null . nodeMap
 
-nidOf :: Node t -> Id
+nidOf :: Node t -> NID
 nidOf = _nodeId
 
 incomingConnectsOf
@@ -157,7 +157,7 @@ outgoingConnectsOf = _nodeOutgoing
 
 incomingNeighborsOf
   :: TransitionValid t
-  => Node t -> Set Id
+  => Node t -> Set NID
 incomingNeighborsOf = Set.map _connectNode . incomingConnectsOf
 
 incomingTransitionsOf
@@ -167,7 +167,7 @@ incomingTransitionsOf = Set.map _connectTransition . incomingConnectsOf
 
 outgoingNeighborsOf
   :: TransitionValid t
-  => Node t -> Set Id
+  => Node t -> Set NID
 outgoingNeighborsOf = Set.map _connectNode . incomingConnectsOf
 
 outgoingTransitionsOf
@@ -183,7 +183,7 @@ setData d n g = insertNode (set nodeData d (nodeConsistentWithGraph g n)) g
 
 setData'
   :: TransitionValid t
-  => Maybe ByteString -> Id -> Graph t -> Graph t
+  => Maybe ByteString -> NID -> Graph t -> Graph t
 setData' d = primed (setData d)
 
 dataOf
@@ -191,7 +191,7 @@ dataOf
   => Node t -> Maybe ByteString
 dataOf = view nodeData
 
-maybeLookupNode :: Graph t -> Id -> Maybe (Node t)
+maybeLookupNode :: Graph t -> NID -> Maybe (Node t)
 maybeLookupNode = flip M.lookup . nodeMap
 
 nodeConsistentWithGraph
@@ -209,7 +209,7 @@ showDebug = unlines . map show . M.elems . nodeMap
 
 -- | Warning! It is up to the user of the graph to ensure that node ids are
 -- unique within the graph
-emptyNode :: Id -> Node t
+emptyNode :: NID -> Node t
 emptyNode i = Node i Set.empty Set.empty Nothing
 
 filterGraph
@@ -231,7 +231,7 @@ dualizeGraph :: Graph t -> Graph t
 dualizeGraph = mapGraph dualizeNode
 
 -- | Return the id of an arbitrary node in the graph.
-arbitraryId :: Graph t -> Id
+arbitraryId :: Graph t -> NID
 arbitraryId = nidOf . head' . M.elems . nodeMap where
   head' [] = error "expected there to be a node in the graph but there were none"
   head' (x:_) = x

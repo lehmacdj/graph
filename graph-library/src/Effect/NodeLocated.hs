@@ -12,20 +12,20 @@ import Control.Monad.Freer
 import Control.Monad.Freer.Reader
 import Control.Monad.Freer.Writer
 import Control.Monad.Freer.Internal
-import Graph (Id)
+import Graph (NID)
 
-type GetLocation = Reader Id
-type SetLocation = Writer Id
+type GetLocation = Reader NID
+type SetLocation = Writer NID
 
-currentLocation :: Member GetLocation effs => Eff effs Id
+currentLocation :: Member GetLocation effs => Eff effs NID
 currentLocation = ask
 
-changeLocation :: Member SetLocation effs => Id -> Eff effs ()
+changeLocation :: Member SetLocation effs => NID -> Eff effs ()
 changeLocation = tell
 
 -- | Implementation mostly taken from
 -- https://hackage.haskell.org/package/freer-0.2.4.1/docs/src/Control-Monad-Freer-StateRW.html
-runLocable :: Eff (SetLocation : GetLocation : effs) a -> Id -> Eff effs a
+runLocable :: Eff (SetLocation : GetLocation : effs) a -> NID -> Eff effs a
 runLocable m s = fst <$> loop s m
  where
    loop :: s -> Eff (Writer s ': Reader s ': r) w -> Eff r (w,s)

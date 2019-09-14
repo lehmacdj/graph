@@ -20,14 +20,14 @@ import Graph
 -- | An effect for simple errors
 type Throw = Error Errors
 
-newtype Missing = Missing { unMissing :: Id }
+newtype Missing = Missing { unMissing :: NID }
   deriving (Show, Eq, Ord)
 type ThrowMissing = Error Missing
 
 throwErr :: Member Throw effs => Err -> Eff effs a
 throwErr = throwError . (:| [])
 
-throwMissing :: Member ThrowMissing effs => Id -> Eff effs a
+throwMissing :: Member ThrowMissing effs => NID -> Eff effs a
 throwMissing = throwError . Missing
 
 subsumeMissing :: Member Throw effs => Eff (ThrowMissing ': effs) ~> Eff effs

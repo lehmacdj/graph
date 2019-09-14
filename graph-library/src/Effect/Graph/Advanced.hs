@@ -19,12 +19,12 @@ import Effect.Graph
 import Effect.NodeLocated
 import Effect.Throw
 
-getNodes :: Member (ReadGraph t) effs => [Id] -> Eff effs [Node t]
+getNodes :: Member (ReadGraph t) effs => [NID] -> Eff effs [Node t]
 getNodes = wither getNode
 
 getNode'
   :: Members [ReadGraph t, ThrowMissing] effs
-  => Id -> Eff effs (Node t)
+  => NID -> Eff effs (Node t)
 getNode' nid = getNode nid >>= \case
   Nothing -> throwMissing nid
   Just n -> pure n
@@ -57,7 +57,7 @@ currentNode = currentLocation >>= getNode'
 -- transition t from the node at nid. ThrowMissing if nid not in graph
 transitionsVia
   :: (Members [Fresh, ThrowMissing] effs, HasGraph t effs)
-  => Id -> t -> Eff effs Id
+  => NID -> t -> Eff effs NID
 transitionsVia nid t = do
   n <- getNode' nid
   case matchConnect t (outgoingConnectsOf n) of
@@ -70,7 +70,7 @@ transitionsVia nid t = do
 -- and returns the error, or throws if something went wrong
 transitionsFreshVia
   :: forall t effs. (Members [Fresh, ThrowMissing] effs, HasGraph t effs)
-  => Id -> t -> Eff effs Id
+  => NID -> t -> Eff effs NID
 transitionsFreshVia nid t = do
   -- we need to actually try to fetch to throw if it is missing
   _ <- getNode' @t nid
@@ -83,7 +83,7 @@ transitionsFreshVia nid t = do
 -- except for the last edge which is always unique
 transitionsViaManyFresh
   :: forall t effs. (Members [Fresh, ThrowMissing] effs, HasGraph t effs)
-  => Id -> [t] -> Eff effs Id
+  => NID -> [t] -> Eff effs NID
 transitionsViaManyFresh nid = \case
   [] -> pure nid
   [x] -> transitionsFreshVia nid x
@@ -92,7 +92,7 @@ transitionsViaManyFresh nid = \case
 -- | Create one node that has all of the connects of the two nodes combined.
 mergeNode
   :: forall t effs. (Members [Fresh, ThrowMissing] effs, HasGraph t effs)
-  => Id -> Id -> Eff effs Id
+  => NID -> NID -> Eff effs NID
 mergeNode nid1 nid2 = do
   n1 <- getNode' nid1
   n2 <- getNode' nid2
@@ -112,16 +112,16 @@ mergeNodes
     ( Members [Fresh, ThrowMissing] effs
     , HasGraph t effs
     , IsSequence mono
-    , Element mono ~ Id
+    , Element mono ~ NID
     )
-  => NonNull mono -> Eff effs Id
+  => NonNull mono -> Eff effs NID
 mergeNodes nids = foldlM1 (mergeNode @t) nids
 
 -- | Create a node with the same transitions as the original node.
 -- Self loops are preserved as self loops on the new node.
 cloneNode
   :: forall t effs. (Members [Fresh, ThrowMissing] effs, HasGraph t effs)
-  => Id -> Eff effs Id
+  => NID -> Eff effs NID
 cloneNode nid = do
   nid' <- fresh
   n <- getNode' nid

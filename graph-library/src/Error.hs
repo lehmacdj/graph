@@ -21,12 +21,12 @@ import Control.Monad.Freer.Error
 
 import Network.HTTP.Conduit (HttpException)
 
-import Graph (Id)
+import Graph (NID)
 
 data Err
   = UE String
   | IOFail IOError
-  | MissingNode Id
+  | MissingNode NID
   | NotSingleton String -- ^ report that the thing that has a given
                         -- representation wasn't a singleton
   | WebError String HttpException -- ^ url and the error that occured

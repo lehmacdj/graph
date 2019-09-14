@@ -28,8 +28,8 @@ dirToLens = \case
   Out -> nodeOutgoing
 
 data ReportMissing t r where
-  NodeMissing :: Id -> ReportMissing t ()
-  ConnectMissing :: Direction -> Id -> Connect t -> ReportMissing t ()
+  NodeMissing :: NID -> ReportMissing t ()
+  ConnectMissing :: Direction -> NID -> Connect t -> ReportMissing t ()
 deriving instance Eq t => Eq (ReportMissing t r)
 deriving instance Ord t => Ord (ReportMissing t r)
 
@@ -52,7 +52,7 @@ reportToConsole = interpret $ \case
   c@(NodeMissing{}) -> echo $ show c
   c@(ConnectMissing{}) -> echo $ show c
 
-dirToCombineEdges :: Direction -> Id -> Connect t -> Edge t
+dirToCombineEdges :: Direction -> NID -> Connect t -> Edge t
 dirToCombineEdges d nid c
   | d == In = incomingEdge c nid
   | otherwise = outgoingEdge nid c
@@ -69,12 +69,12 @@ fixErrors = interpret $ \case
 
 nodeMissing
   :: forall t effs. Member (ReportMissing t) effs
-  => Id -> Eff effs ()
+  => NID -> Eff effs ()
 nodeMissing nid = send (NodeMissing @t nid)
 
 connectMissing
   :: forall t effs. Member (ReportMissing t) effs
-  => Direction -> Id -> Connect t -> Eff effs ()
+  => Direction -> NID -> Connect t -> Eff effs ()
 connectMissing d nid c = send (ConnectMissing d nid c)
 
 fsck
@@ -93,7 +93,7 @@ reportMissingNode e = handleError e $ \case
 checkConnectExists
   :: forall t effs. (Member (ReportMissing t) effs, HasGraph t effs)
   => Direction
-  -> Id -- ^ nid of the node to check
+  -> NID -- ^ nid of the node to check
   -> Connect t -- ^ connect to ensure existence of
   -> Eff effs ()
 checkConnectExists dir nid c = reportMissingNode @t $ do
@@ -102,12 +102,12 @@ checkConnectExists dir nid c = reportMissingNode @t $ do
      then pure ()
      else connectMissing dir nid c
 
-swapConnect :: Id -> Connect t -> (Id, Connect t)
+swapConnect :: NID -> Connect t -> (NID, Connect t)
 swapConnect nid (Connect t nid') = (nid', Connect t nid)
 
 checkNode
   :: forall t effs. (Member (ReportMissing t) effs, HasGraph t effs)
-  => Id -> Eff effs ()
+  => NID -> Eff effs ()
 checkNode nid = reportMissingNode @t $ do
   -- every node needs to exist (error handled above)
   n <- getNode' @t nid

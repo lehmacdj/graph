@@ -20,7 +20,7 @@ computeSHA = showDigest . sha512
 
 importUrl
   :: (Members [Web, Fresh, ThrowMissing] effs, HasGraph String effs)
-  => Id -> String -> Eff effs Id
+  => NID -> String -> Eff effs NID
 importUrl nid url = do
   d <- getHttp url
   fileHashes <- nid `transitionsVia` "file-hashes"
@@ -34,7 +34,7 @@ importUrl nid url = do
 -- Returns the nid of the new node and the updated graph
 importData
    :: (Members [Fresh, ThrowMissing] effs, HasGraph String effs)
-   => Id -> LByteString -> Eff effs Id
+   => NID -> LByteString -> Eff effs NID
 importData nid d = do
   nnid <- nid `transitionsVia` computeSHA d
   setData @String nnid (Just d)
