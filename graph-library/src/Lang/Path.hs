@@ -1,5 +1,5 @@
-{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE NoImplicitPrelude #-}
+{-# LANGUAGE ViewPatterns #-}
 
 {-|
    Describe sets of nodes using path specifications.
@@ -18,9 +18,9 @@ import Data.Maybe (mapMaybe)
 import Data.List (intersectBy)
 import Data.Function (on)
 import Data.Functor ((<&>))
-import Control.Lens hiding (pre)
+import Control.Lens hiding (pre, unsnoc)
 
-import Graph
+import Graph hiding (insertEdge)
 import Graph.Connect
 
 import Control.Monad.Freer
@@ -47,6 +47,15 @@ projPath :: Show t => [DPathComponent t] -> String
 projPath [] = "#"
 projPath [FromVia _ x] = show x
 projPath (FromVia _ x:xs) = show x ++ "/" ++ projPath xs
+
+-- | Take a path and split off the last edge transition;
+-- if the path has components that could not be realized in the graph;
+-- then this returns nothing.
+splitLast :: DPath t -> Maybe (DPath t, t, NID)
+splitLast = \case
+  DPath (unsnoc -> Just (xs, pnid `FromVia` t)) nid [] ->
+    Just (DPath xs pnid [], t, nid)
+  _  -> Nothing
 
 endPoint :: DPath t -> NID
 endPoint (DPath _ x _) = x
@@ -143,6 +152,53 @@ delPath nid p = resolvePathSuccessesDetail nid p >>= mapM_ delDPath where
   delDPath (DPath xs@(_:_) nid' []) = case lastEx xs of -- safe because list nonempty
     FromVia nid2 t -> deleteEdge (Edge nid2 t nid')
   delDPath _ = pure ()
+
+mvPath
+  :: forall t effs.
+  ( Members [Fresh, ThrowMissing] effs
+  , HasGraph t effs
+  )
+  => NID -> Path t -> NID -> Eff effs ()
+mvPath s p target =
+  resolvePathSuccessesDetail s p >>= mapM_ (mvDPathTo target)
+
+mvDPathTo
+  :: forall t effs.
+  ( Members [Fresh, ThrowMissing] effs
+  , HasGraph t effs
+  )
+  => NID -> DPath t -> Eff effs ()
+mvDPathTo target (DPath xs@(_:_) nid []) = case lastEx xs of
+  FromVia nid2 t -> do
+    deleteEdge (Edge nid2 t nid)
+    insertEdge (Edge target t nid)
+mvDPathTo _ _ = pure ()
+
+-- | rename a one path to another path
+-- the renaming only operates on the last / separated path segment
+renameDPath
+  :: forall t effs.
+  ( Members [Fresh, ThrowMissing] effs
+  , HasGraph t effs
+  )
+  => DPath t
+  -> DPath t -- ^ this path must either be of the form DPath _ nid [t]
+             -- or of the form (splitLast -> Just (DPath _ nid _, t, _))
+  -> Eff effs ()
+renameDPath dpathFrom dpathTo =
+  withJust (splitLast dpathFrom) $ \(DPath _ oldRoot _, t, nid) ->
+     case dpathTo of
+       DPath _ newRoot [t'] -> do
+         deleteEdge (Edge oldRoot t nid)
+         nid' <- newRoot `transitionsFreshVia` t'
+         _ <- mergeNode @t nid' nid
+         pure ()
+       (splitLast -> Just (DPath _ newRoot _, t', _)) -> do
+         deleteEdge (Edge oldRoot t nid)
+         nid' <- newRoot `transitionsFreshVia` t'
+         _ <- mergeNode @t nid' nid
+         pure ()
+       _ -> pure ()
 
 -- | Turn a path into a set of DPaths where the set denotes disjunction.
 -- Similar to converting to a DNF for paths.

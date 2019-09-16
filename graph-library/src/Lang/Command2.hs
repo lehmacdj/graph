@@ -46,6 +46,8 @@ data Command
   | ImportUrl String
   | Check
   | Fix
+  | Move (APath String) (APath String)
+  | Rename (APath String) (APath String)
   deriving (Eq, Show, Ord)
 
 singleErr :: String -> Set NID -> Err
@@ -153,3 +155,18 @@ interpretCommand = \case
     -- nodeManifest @String >>= echo . show
   Check -> reportToConsole @String (fsck @String)
   Fix -> fixErrors @String (fsck @String)
+  Move a b -> do
+    (nid, p) <- relativizeAPath a
+    (nid', q) <- relativizeAPath b
+    let err = singleErr "the last argument of mv"
+    target <- the' err =<< subsumeMissing (resolvePathSuccesses nid' q)
+    subsumeMissing (mvPath nid p target)
+  Rename a b -> do
+    (nid, p) <- relativizeAPath a
+    (nid', q) <- relativizeAPath b
+    let err xs = UE $ "both arguments to rn require the path to only resolve to "
+                   ++ "one node but they resolved to \n"
+                   ++ (show . map endPoint . setToList $ xs)
+    c <- the' err =<< subsumeMissing (resolvePathSuccessesDetail nid p)
+    d <- the' err =<< subsumeMissing (resolvePathSuccessesDetail nid' q)
+    subsumeMissing (renameDPath c d)

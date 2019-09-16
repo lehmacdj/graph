@@ -74,6 +74,12 @@ pCheck = command "fsck" $> Check
 pFix :: Parser Command
 pFix = command "fix" $> Fix
 
+pMove :: Parser Command
+pMove = (command "mv" $> Move) <*> apath <*> apath
+
+pRename :: Parser Command
+pRename = (command "rn" $> Rename) <*> apath <*> apath
+
 pCommand :: Parser Command
 pCommand =
   try pChangeNode
@@ -96,6 +102,8 @@ pCommand =
   <|> try pImportUrl
   <|> try pCheck
   <|> try pFix
+  <|> try pMove
+  <|> try pRename
 
 parseCommand :: String -> Either String Command
 parseCommand = left errorBundlePretty . runParser pCommand "<interactive>"
