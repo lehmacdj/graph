@@ -182,23 +182,21 @@ renameDPath
   , HasGraph t effs
   )
   => DPath t
-  -> DPath t -- ^ this path must either be of the form DPath _ nid [t]
+  -> NID
+  -> Path t -- ^ this path must either be of the form DPath _ nid [t]
              -- or of the form (splitLast -> Just (DPath _ nid _, t, _))
   -> Eff effs ()
-renameDPath dpathFrom dpathTo =
-  withJust (splitLast dpathFrom) $ \(DPath _ oldRoot _, t, nid) ->
-     case dpathTo of
-       DPath _ newRoot [t'] -> do
+renameDPath dpathFrom nidPathStart pathTo =
+  withJust (splitLast dpathFrom) $ \(DPath _ oldRoot _, t, nid) -> do
+    successes <- resolvePathSuccessesDetail nidPathStart pathTo
+    forM_ successes $ \case
+      (DPath _ newRoot [t']) -> do
+        deleteEdge (Edge oldRoot t nid)
+        insertEdge (Edge newRoot t' nid)
+      (splitLast -> Just (DPath _ newRoot _, t', _)) -> do
          deleteEdge (Edge oldRoot t nid)
-         nid' <- newRoot `transitionsFreshVia` t'
-         _ <- mergeNode @t nid' nid
-         pure ()
-       (splitLast -> Just (DPath _ newRoot _, t', _)) -> do
-         deleteEdge (Edge oldRoot t nid)
-         nid' <- newRoot `transitionsFreshVia` t'
-         _ <- mergeNode @t nid' nid
-         pure ()
-       _ -> pure ()
+         insertEdge (Edge newRoot t' nid)
+      _ -> pure ()
 
 -- | Turn a path into a set of DPaths where the set denotes disjunction.
 -- Similar to converting to a DNF for paths.

@@ -164,9 +164,8 @@ interpretCommand = \case
   Rename a b -> do
     (nid, p) <- relativizeAPath a
     (nid', q) <- relativizeAPath b
-    let err xs = UE $ "both arguments to rn require the path to only resolve to "
+    let err xs = UE $ "the first argument to rn require the path to only resolve to "
                    ++ "one node but they resolved to \n"
                    ++ (show . map endPoint . setToList $ xs)
     c <- the' err =<< subsumeMissing (resolvePathSuccessesDetail nid p)
-    d <- the' err =<< subsumeMissing (resolvePathSuccessesDetail nid' q)
-    subsumeMissing (renameDPath c d)
+    subsumeMissing (renameDPath c nid' q)
