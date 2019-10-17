@@ -1,4 +1,4 @@
-module Lang.Command2.Parse where
+module Lang.Command.Parse where
 
 import Text.Megaparsec
 
@@ -7,7 +7,7 @@ import Data.Functor
 import Lang.Parsing
 import Lang.APath
 import Lang.APath.Parse
-import Lang.Command2
+import Lang.Command
 
 import Control.Arrow (left)
 

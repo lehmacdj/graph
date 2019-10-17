@@ -1,7 +1,7 @@
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE NoImplicitPrelude #-}
 
-module Lang.Command2 where
+module Lang.Command where
 
 import MyPrelude
 

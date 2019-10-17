@@ -8,8 +8,8 @@ import Control.Lens hiding (index)
 
 import Control.Repl
 
-import Lang.Command2 hiding (printTransitions)
-import Lang.Command2.Parse
+import Lang.Command hiding (printTransitions)
+import Lang.Command.Parse
 
 import Env
 import App
