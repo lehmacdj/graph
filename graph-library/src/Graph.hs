@@ -142,44 +142,13 @@ emptyGraph = Graph M.empty
 isEmptyGraph :: Graph t -> Bool
 isEmptyGraph = M.null . nodeMap
 
-nidOf :: Node t -> NID
-nidOf = _nodeId
-
-incomingConnectsOf
-  :: TransitionValid t
-  => Node t -> Set (Connect t)
-incomingConnectsOf = _nodeIncoming
-
-outgoingConnectsOf
-  :: TransitionValid t
-  => Node t -> Set (Connect t)
-outgoingConnectsOf = _nodeOutgoing
-
-incomingNeighborsOf
-  :: TransitionValid t
-  => Node t -> Set NID
-incomingNeighborsOf = Set.map _connectNode . incomingConnectsOf
-
-incomingTransitionsOf
-  :: TransitionValid t
-  => Node t -> Set t
-incomingTransitionsOf = Set.map _connectTransition . incomingConnectsOf
-
-outgoingNeighborsOf
-  :: TransitionValid t
-  => Node t -> Set NID
-outgoingNeighborsOf = Set.map _connectNode . incomingConnectsOf
-
-outgoingTransitionsOf
-  :: TransitionValid t
-  => Node t -> Set t
-outgoingTransitionsOf = Set.map _connectTransition . outgoingConnectsOf
-
 -- | sets the data, setting to nothing is equivalent to deleting the data
+-- this is a terrible function that should probably not be used
 setData
   :: TransitionValid t
   => Maybe ByteString -> Node t -> Graph t -> Graph t
 setData d n g = insertNode (set nodeData d (nodeConsistentWithGraph g n)) g
+{-# DEPRECATED setData "use Effect.Graph and interpreters for Graph t instead" #-}
 
 setData'
   :: TransitionValid t
