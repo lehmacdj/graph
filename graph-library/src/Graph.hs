@@ -154,6 +154,7 @@ setData'
   :: TransitionValid t
   => Maybe ByteString -> NID -> Graph t -> Graph t
 setData' d = primed (setData d)
+{-# DEPRECATED setData' "use Effect.Graph and interpreters for Graph t instead" #-}
 
 dataOf
   :: TransitionValid t
