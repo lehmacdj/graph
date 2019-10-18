@@ -4,6 +4,7 @@ module Graph
   ( module Graph
   , module Graph.Types
   , module Graph.Edge
+  , module Graph.Node
   ) where
 
 import Control.Lens
@@ -13,20 +14,14 @@ import Data.Foldable
 import qualified Data.Map as M
 import qualified Data.Map.Internal.Debug as MD
 import Data.Maybe
-import Data.Set (Set)
 import qualified Data.Set as Set
 
 
 import qualified Debug.Trace as Debug
 
 import Graph.Types
+import Graph.Node
 import Graph.Edge
-
-indegreeOf :: Node t -> Int
-indegreeOf = Set.size . view nodeIncoming
-
-outdegreeOf :: Node t -> Int
-outdegreeOf = Set.size . view nodeOutgoing
 
 -- | Utility function for converting lookups into actual node values with error
 -- reporting.
@@ -156,11 +151,6 @@ setData'
 setData' d = primed (setData d)
 {-# DEPRECATED setData' "use Effect.Graph and interpreters for Graph t instead" #-}
 
-dataOf
-  :: TransitionValid t
-  => Node t -> Maybe ByteString
-dataOf = view nodeData
-
 maybeLookupNode :: Graph t -> NID -> Maybe (Node t)
 maybeLookupNode = flip M.lookup . nodeMap
 
@@ -176,11 +166,6 @@ traceGraph g = withNodeMap g $ \nm -> Debug.trace (showDebug (Debug.trace "graph
 
 showDebug :: TransitionValid t => Graph t -> String
 showDebug = unlines . map show . M.elems . nodeMap
-
--- | Warning! It is up to the user of the graph to ensure that node ids are
--- unique within the graph
-emptyNode :: NID -> Node t
-emptyNode i = Node i Set.empty Set.empty Nothing
 
 filterGraph
   :: (Node t -> Bool)

@@ -26,7 +26,7 @@ import Control.Exception
 import System.FilePath
 
 import Graph.Types
-import Graph (nidOf, dataOf)
+import Graph.Node (nidOf, dataOf)
 
 import Error
 
