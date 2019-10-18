@@ -35,6 +35,9 @@ lookupNode :: TransitionValid t
 lookupNode = flip nodeLookup
 {-# INLINE lookupNode #-}
 
+-- | Gets the most up to date version of the node from the graph.
+-- This does not imply that graphs have version control, it simply means that
+-- the original node might be out of date otherwise.
 refreshNode :: TransitionValid t
             => Graph t -> Node t -> Node t
 refreshNode g = lookupNode g . nidOf
