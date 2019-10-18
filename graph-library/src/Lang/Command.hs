@@ -26,28 +26,28 @@ import Control.Monad.Freer.Fresh
 import Lang.APath
 
 data Command
-  = ChangeNode (APath String)         -- ^ cd
-  | Dualize                           -- ^ d
-  | Make (APath String)               -- ^ mk
-  | Merge (APath String)              -- ^ mg
-  | Clone (APath String) String       -- ^ cl
-  | ListOut                           -- ^ ls
-  | Query (APath String) String       -- ^ q
-  | Tag (APath String) (APath String) -- ^ t
-  | Remove (APath String)             -- ^ rm
-  | RemoveNode (APath String)
-  | At (APath String) Command         -- ^ at
-  | Dedup String                      -- ^ dd
-  | Load FilePath
-  | NodeId
-  | Debug
-  | ShowImage
-  | Import FilePath
-  | ImportUrl String
-  | Check
-  | Fix
-  | Move (APath String) (APath String)
-  | Rename (APath String) (APath String)
+  = ChangeNode (APath String)            -- ^ cd
+  | Dualize                              -- ^ d
+  | Make (APath String)                  -- ^ mk
+  | Merge (APath String)                 -- ^ mg
+  | Clone (APath String) String          -- ^ cl
+  | ListOut                              -- ^ ls
+  | Query (APath String) String          -- ^ q
+  | Tag (APath String) (APath String)    -- ^ t
+  | Remove (APath String)                -- ^ rm
+  | RemoveNode (APath String)            -- ^ rmnf
+  | At (APath String) Command            -- ^ at
+  | Dedup String                         -- ^ dd
+  | Load FilePath                        -- ^ :l
+  | NodeId                               -- ^ nid
+  | Debug                                -- ^ :d
+  | ShowImage                            -- ^ si
+  | Import FilePath                      -- ^ :i
+  | ImportUrl String                     -- ^ wget
+  | Check                                -- ^ fsck
+  | Fix                                  -- ^ fix
+  | Move (APath String) (APath String)   -- ^ mv
+  | Rename (APath String) (APath String) -- ^ rn
   deriving (Eq, Show, Ord)
 
 singleErr :: String -> Set NID -> Err
