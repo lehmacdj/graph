@@ -60,6 +60,7 @@ printTransitions
 printTransitions = mapM_ (echo . dtransition) where
   dtransition (Connect t nid) = show t ++ " at " ++ show nid
 
+-- | set the freshness to a certain number
 resetFresh :: Member (Writer NID) effs => NID -> Eff effs ()
 resetFresh = tell
 
