@@ -18,6 +18,7 @@ withJust Nothing _ = pure ()
 toSetOf  :: Getting (Set a) s a -> s -> Set a
 toSetOf l s = getConst (l (\x -> Const (singleton x)) s)
 
+-- | do something when a mono is NonNull
 whenNonNull
   :: (MonoFoldable mono, Applicative f)
   => mono -> (NonNull mono -> f ()) -> f ()
@@ -25,6 +26,7 @@ whenNonNull mono f = case fromNullable mono of
   Nothing -> pure ()
   Just xs -> f xs
 
+-- | generalized foldl1 monadically
 foldlM1
   :: (IsSequence mono, Monad m)
   => (Element mono -> Element mono -> m (Element mono))
