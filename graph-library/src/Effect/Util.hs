@@ -24,9 +24,11 @@ runReaderAsState
   => Eff (Reader r : effs) a -> Eff effs a
 runReaderAsState = interpret $ \Ask -> get
 
--- unit for readThrowMaybe
+-- | unit for readThrowMaybe
 data None = None
 
+-- | Relaxes a reader such that it can work for a reader that only has maybe
+-- TODO: add a more descriptive error than None
 readThrowMaybe
   :: forall r effs. Member (Error None) effs
   => Eff (Reader r : effs) ~> Eff (Reader (Maybe r) : effs)
