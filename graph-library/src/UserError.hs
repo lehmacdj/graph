@@ -14,11 +14,9 @@ import MyPrelude
 import Data.List.NonEmpty (NonEmpty(..))
 import Control.Lens
 import System.IO
-import System.IO.Error
 import Control.Arrow (left)
 
 import Data.Validation
-import Control.Monad.IO.Class
 import Control.Monad.Freer
 import Control.Monad.Freer.Error
 
@@ -34,7 +32,7 @@ data UserError
                         -- representation wasn't a singleton
   | WebError String HttpException -- ^ url and the error that occured
 
-instance Show Err where
+instance Show UserError where
   show (OtherError s) = s
   show (IOFail e) = show e
   show (MissingNode nid) = "node " ++ show nid ++ " is missing"
@@ -43,11 +41,11 @@ instance Show Err where
 
 type ThrowUserError = Error (NonEmpty UserError)
 
-throwString :: String -> E a
+throwString :: Member ThrowUserError effs => String -> Eff effs a
 throwString = throw . OtherError
 
-throw :: Err -> E a
-throw e = throwError . singleton
+throw :: Member ThrowUserError effs => UserError -> Eff effs a
+throw = throwError . (singleton :: UserError -> NonEmpty UserError)
 
 throwIfNothing
   :: Member ThrowUserError effs
@@ -59,7 +57,7 @@ throwLeft
   :: Member ThrowUserError effs
   => Either UserError a -> Eff effs a
 throwLeft (Right x) = pure x
-throw (Left err) = throw err
+throwLeft (Left err) = throw err
 
 -- | Trap an IO error in the Eff monad
 -- It remains to be seen if this is actually useful, because it requires
@@ -67,7 +65,7 @@ throw (Left err) = throw err
 trapIOError
   :: Member ThrowUserError effs
   => IO a -> IO (Eff effs a)
-trapIOError = fmap (throwLeft . left (singleton . IOFail)) . tryIOError
+trapIOError = fmap (throwLeft . left IOFail) . tryIOError
 
 putStrErr :: String -> IO ()
 putStrErr = hPutStrLn stderr
@@ -78,5 +76,5 @@ printUserError = putStrErr . show
 displayError
   :: (MonadIO m, LastMember m effs)
   => Eff (Error UserError ': effs) () -> Eff effs ()
-displayErrF = (`handleError` printer) where
+displayError = (`handleError` printer) where
   printer err = liftIO $ printUserError err
