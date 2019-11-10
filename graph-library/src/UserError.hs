@@ -31,6 +31,9 @@ data UserError
   | NotSingleton String -- ^ report that the thing that has a given
                         -- representation wasn't a singleton
   | WebError String HttpException -- ^ url and the error that occured
+  | AesonDeserialize String -- ^ deserialization fails
+
+type UserErrors = NonEmpty UserError
 
 instance Show UserError where
   show (OtherError s) = s
@@ -63,18 +66,17 @@ throwLeft (Left err) = throw err
 -- It remains to be seen if this is actually useful, because it requires
 -- it to be possible to unwrap Eff in order to escape the IO monad on the outside
 trapIOError
-  :: Member ThrowUserError effs
-  => IO a -> IO (Eff effs a)
-trapIOError = fmap (throwLeft . left IOFail) . tryIOError
+  :: (MonadIO m, Member ThrowUserError effs)
+  => IO a -> m (Eff effs a)
+trapIOError = liftIO . fmap (throwLeft . left IOFail) . tryIOError
 
-putStrErr :: String -> IO ()
-putStrErr = hPutStrLn stderr
-
-printUserError :: Show a => a -> IO ()
-printUserError = putStrErr . show
+trapIOError'
+  :: (MonadIO m, Member ThrowUserError effs, LastMember m effs)
+  => IO a -> Eff effs a
+trapIOError' = join . trapIOError
 
 displayError
   :: (MonadIO m, LastMember m effs)
   => Eff (Error UserError ': effs) () -> Eff effs ()
 displayError = (`handleError` printer) where
-  printer err = liftIO $ printUserError err
+  printer err = liftIO $ eprint err

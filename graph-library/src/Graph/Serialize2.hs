@@ -10,6 +10,9 @@
  -}
 module Graph.Serialize2 where
 
+import Control.Monad.Freer
+import UserError
+
 import Data.Aeson (ToJSON, FromJSON)
 import qualified Data.Aeson as Aeson
 
@@ -42,7 +45,12 @@ nodeDataFile base nid = base </> (show nid ++ ".data")
 serializeNode
   :: (ToJSON (Node t), TransitionValid t)
   => Node t -> FilePath -> IO (E ())
-serializeNode n base = ioToE $ do
+serializeNode = (ioToE .) . serializeNodeEx
+
+serializeNodeEx
+  :: (ToJSON (Node t), TransitionValid t)
+  => Node t -> FilePath -> IO ()
+serializeNodeEx n base = do
   createDirectoryIfMissing True base
   B.writeFile (linksFile base (nidOf n)) (Aeson.encode n)
   case dataOf n of
@@ -74,6 +82,15 @@ deserializeNode base nid = do
     nodeRes `ioBindE` \node -> do
       d <- tryGetBinaryData base nid
       pure $ _Success # (nodeData .~ d) node
+
+deserializeNodeF
+  :: (MonadIO m, FromJSON (Node t), TransitionValid t, LastMember m effs)
+  => FilePath -> NID -> Eff effs(Node t)
+deserializeNodeF base nid = do
+  fileContents <- trapIOError' (B.readFile (linksFile base nid))
+  node <- throwLeft $ left AesonDeserialize $ Aeson.eitherDecode fileContents
+  d <- tryGetBinaryData base nid
+  pure $ (nodeData .~ d) node
 
 -- | Load a graph from a directory.
 deserializeGraph
