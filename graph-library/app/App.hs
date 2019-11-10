@@ -24,6 +24,7 @@ import Effect.Load
 import Effect.NodeLocated
 import Effect.Filesystem
 import Effect.Util
+import UserError
 
 import Control.Arrow ((>>>))
 
@@ -84,8 +85,8 @@ runWriterAppBaseIORef l = runStateAppBaseIORef l . translate (\(Tell x) -> Put x
 interpretAsAppBase
   ::
   (forall effs. -- ^ this is an extistential type
-    ( Members [Console, Throw, SetLocation, GetLocation, Fresh, Dualizeable] effs
-    , Members [FileSystemTree, Web, Load, Error None, Writer NID, Warn Errors] effs
+    ( Members [Console, ThrowUserError, SetLocation, GetLocation, Fresh, Dualizeable] effs
+    , Members [FileSystemTree, Web, Load, Error None, Writer NID, Warn UserErrors] effs
     , HasGraph String effs
     ) => Eff effs ())
   -> AppBase ()
@@ -105,7 +106,7 @@ interpretAsAppBase v = do
       >>> runFileSystemTreeIO
       >>> runDualizeableAppBase
       >>> interpretConsoleIO
-      >>> printWarnings @Errors
+      >>> printWarnings @UserErrors
       >>> printErrors
       >>> runLocableAppBase
       >>> evalFreshAppBase

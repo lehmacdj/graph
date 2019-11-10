@@ -2,7 +2,7 @@
 
 module Effect.Warn where
 
-import ClassyPrelude
+import MyPrelude
 
 import Control.Monad.Freer
 
@@ -21,4 +21,4 @@ printWarnings
   :: forall e m effs. (LastMember m effs, MonadIO m, Show e)
   => Eff (Warn e : effs) () -> Eff effs ()
 printWarnings = interpretWith $ \case
-  Warn e -> \k -> (liftIO . putStrErr . show $ e) >> k ()
+  Warn e -> \k -> (liftIO . eputStr . show $ e) >> k ()

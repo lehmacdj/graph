@@ -7,7 +7,7 @@ import ClassyPrelude
 
 import Control.Monad.Freer
 import Control.Monad.Freer.TH
-import Effect.Throw
+import UserError
 
 import Network.HTTP.Conduit (simpleHttp)
 
@@ -16,11 +16,11 @@ data Web r where
 makeEffect ''Web
 
 runWebIO
-  :: (LastMember m effs, MonadIO m, Member Throw effs)
+  :: (LastMember m effs, MonadIO m, Member ThrowUserError effs)
   => Eff (Web : effs) ~> Eff effs
 runWebIO = interpret $ \case
   GetHttp s -> do
     r <- liftIO $ try (simpleHttp s)
     case r of
-      Left e -> throwErr (WebError s e)
+      Left e -> throw (WebError s e)
       Right x -> pure x

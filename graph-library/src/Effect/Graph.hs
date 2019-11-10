@@ -20,9 +20,10 @@ import Control.Monad.Freer.Error
 import Control.Monad.Freer.Reader
 import Effect.Util
 import Effect.Warn
-import Effect.Throw
 import qualified Data.Set as Set
 import Text.Read (readMaybe)
+
+import UserError
 
 import System.Directory (doesFileExist, listDirectory, removeFile)
 import System.FilePath (dropExtension)
@@ -106,14 +107,17 @@ runReadGraphIO dir = runReader (IsDual False) . runReadGraphIODualizeable dir
 -- serialization format to access the graph, while allowing for the
 -- possibility of the graph being dualized.
 runReadGraphIODualizeable
-  :: (MonadIO m, LastMember m (Reader IsDual : effs)
+  :: forall t m effs. (MonadIO m, LastMember m (Reader IsDual : effs)
      , FromJSON (Node t), ToJSON (Node t), TransitionValid t)
   => FilePath -> Eff (ReadGraph t ': effs) ~> Eff (Reader IsDual : effs)
 runReadGraphIODualizeable dir = reinterpret $ \case
   GetNode nid -> do
-    n <- liftIO $ deserializeNode dir nid
+    maybeN <- errorToNothing $
+      -- writing type level lists in your code is not fun :(
+      -- kids: be careful when you choose haskell
+      deserializeNodeF @t @m @(ThrowUserError : Reader IsDual : effs) dir nid
     dual <- ask
-    pure $ eToMaybe n <&> ifDualized dual dualizeNode
+    pure $ maybeN <&> ifDualized dual dualizeNode
   NodeManifest -> do
     cs <- liftIO $ listDirectory dir
     let linkFiles = filter (".json" `isSuffixOf`) cs
@@ -162,7 +166,8 @@ runWriteGraphState = interpret $ \case
 -- serialization format to access the graph
 runWriteGraphIO
   :: forall t m effs.
-    ( MonadIO m, LastMember m (Reader IsDual : effs), Members [Throw, Warn Errors] effs
+    ( MonadIO m, LastMember m (Reader IsDual : effs)
+    , Members [ThrowUserError, Warn UserErrors] effs
     , FromJSON (Node t), ToJSON (Node t), TransitionValid t)
   => FilePath -> Eff (WriteGraph t ': effs) ~> Eff effs
 runWriteGraphIO dir = runReader (IsDual False) . runWriteGraphIODualizeable dir
@@ -176,33 +181,31 @@ runWriteGraphIO dir = runReader (IsDual False) . runWriteGraphIODualizeable dir
 runWriteGraphIODualizeable
   :: forall t m effs.
     ( MonadIO m, LastMember m (Reader IsDual : effs)
-    , Member (Error Errors) effs
-    , Member (Warn Errors) effs
-    , FromJSON (Node t), ToJSON (Node t), TransitionValid t)
+    , Member ThrowUserError effs
+    , Member (Warn UserErrors) effs
+    , FromJSON (Node t)
+    , ToJSON (Node t)
+    , TransitionValid t
+    )
   => FilePath -> Eff (WriteGraph t : effs) ~> Eff (Reader IsDual : effs)
 runWriteGraphIODualizeable dir = reinterpret $ \case
   TouchNode nid -> do
     dfe <- liftIO (doesFileExist (linksFile dir nid))
     if not dfe
-       then do
-         r <- liftIO $ serializeNode (G.emptyNode nid :: Node t) dir
-         rethrowE r
+       then trapIOError' $ serializeNodeEx (G.emptyNode nid :: Node t) dir
        else pure ()
   DeleteNode nid -> do
-    r <- liftIO $ deserializeNode dir nid
-    case eToMaybe r of
-      Nothing -> pure ()
-      Just (n :: Node t) -> do
-        let del = Set.filter ((/=nid) . view connectNode) :: Set (Connect t) -> Set (Connect t)
-            delIn = over nodeIncoming del
-            delOut = over nodeOutgoing del
-            neighborsIn = toListOf (nodeIncoming . folded . connectNode) n
-            neighborsOut = toListOf (nodeOutgoing . folded . connectNode) n
-            neighbors = ordNub (neighborsIn ++ neighborsOut)
-        liftIO $ forM_ neighbors $ withSerializedNode (delIn . delOut) dir
-        let rethrow = join . fmap rethrowE . liftIO . ioToE
-        convertError @Errors . rethrow . removeFile $ linksFile dir nid
-        (`handleError` \(_ :: Errors) -> pure ()) . rethrow . removeFile $ nodeDataFile dir nid
+    n <- deserializeNodeF @t dir nid
+    let del = Set.filter ((/=nid) . view connectNode) :: Set (Connect t) -> Set (Connect t)
+        delIn = over nodeIncoming del
+        delOut = over nodeOutgoing del
+        neighborsIn = toListOf (nodeIncoming . folded . connectNode) n
+        neighborsOut = toListOf (nodeOutgoing . folded . connectNode) n
+        neighbors = ordNub (neighborsIn ++ neighborsOut)
+    liftIO $ forM_ neighbors $ withSerializedNode (delIn . delOut) dir
+    convertError @UserErrors . trapIOError' . removeFile $ linksFile dir nid
+    let ignoreErrors = (`handleError` \(_ :: UserErrors) -> pure ())
+    ignoreErrors . trapIOError' . removeFile $ nodeDataFile dir nid
   InsertEdge e -> do
     dual <- ask
     let (Edge i t o) = ifDualized dual G.dualizeEdge e
@@ -224,7 +227,7 @@ runWriteGraphIODualizeable dir = reinterpret $ \case
 runWriteGraphDualizeableIO
   :: forall t m effs.
     ( MonadIO m, LastMember m (Reader IsDual : effs), LastMember m effs
-    , Members [Dualizeable, Throw, Warn Errors] effs
+    , Members [Dualizeable, ThrowUserError, Warn UserErrors] effs
     , FromJSON (Node t), ToJSON (Node t), TransitionValid t)
   => FilePath -> Eff (WriteGraph t : effs) ~> Eff effs
 runWriteGraphDualizeableIO dir =

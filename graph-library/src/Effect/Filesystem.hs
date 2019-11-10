@@ -10,7 +10,7 @@ import Control.Monad.Freer
 
 import Control.Lens
 
-import Effect.Throw
+import UserError
 
 import System.Directory.Tree
 
@@ -31,7 +31,7 @@ makeEffect ''FileSystemTree
 --   ReadFile
 
 runFileSystemTreeIO
-  :: (MonadIO m, LastMember m effs, Member Throw effs)
+  :: (MonadIO m, LastMember m effs, Member ThrowUserError effs)
   => Eff (FileSystemTree : effs) ~> Eff effs
 runFileSystemTreeIO = interpret $ \case
   ReadDirectory fp -> liftIO $

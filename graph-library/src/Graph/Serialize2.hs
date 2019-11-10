@@ -1,3 +1,4 @@
+{-# LANGUAGE NoImplicitPrelude #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-|
    This module introduces a serialization format for graphs that uses a
@@ -10,14 +11,14 @@
  -}
 module Graph.Serialize2 where
 
+import MyPrelude
+
 import Control.Monad.Freer
 import UserError
 
 import Data.Aeson (ToJSON, FromJSON)
 import qualified Data.Aeson as Aeson
 
-import Data.ByteString.Lazy (ByteString)
-import Data.List (isSuffixOf)
 import qualified Data.ByteString.Lazy as B
 import qualified Data.Map as Map
 import Text.Read (readMaybe)
@@ -25,7 +26,6 @@ import Text.Read (readMaybe)
 import Control.Lens
 
 import System.Directory
-import Control.Exception
 import System.FilePath
 
 import Graph.Types
@@ -63,7 +63,7 @@ serializeGraph
   => Graph t -> FilePath -> IO (E ())
 serializeGraph g base = ioToE $ do
   createDirectoryIfMissing True base
-  mapM_ (`serializeNode` base) (Map.elems (nodeMap g))
+  forM_ (Map.elems (nodeMap g)) $ \n -> serializeNode n base >> pure ()
 
 ioHandler :: IOError -> IO (Maybe a)
 ioHandler = pure . const Nothing
@@ -84,12 +84,18 @@ deserializeNode base nid = do
       pure $ _Success # (nodeData .~ d) node
 
 deserializeNodeF
-  :: (MonadIO m, FromJSON (Node t), TransitionValid t, LastMember m effs)
+  :: forall t m effs.
+     ( MonadIO m
+     , FromJSON (Node t)
+     , TransitionValid t
+     , Member ThrowUserError effs
+     , LastMember m effs
+     )
   => FilePath -> NID -> Eff effs(Node t)
 deserializeNodeF base nid = do
   fileContents <- trapIOError' (B.readFile (linksFile base nid))
   node <- throwLeft $ left AesonDeserialize $ Aeson.eitherDecode fileContents
-  d <- tryGetBinaryData base nid
+  d <- liftIO $ tryGetBinaryData base nid
   pure $ (nodeData .~ d) node
 
 -- | Load a graph from a directory.
@@ -121,5 +127,5 @@ withSerializedNode f base nid = do
   -- we intentionally ignore any errors that might have been returned
   pure ()
 
-tryGetBinaryData :: FilePath -> NID -> IO (Maybe ByteString)
+tryGetBinaryData :: FilePath -> NID -> IO (Maybe LByteString)
 tryGetBinaryData = (ioErrorToMaybe .) . (B.readFile .) . nodeDataFile

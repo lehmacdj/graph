@@ -7,6 +7,8 @@ import MyPrelude
 
 import Control.Monad (zipWithM)
 import Control.Monad.Freer
+import UserError
+import Singleton
 
 import Graph (Edge(..), Connect(..), outgoingConnectsOf, dataOf)
 
@@ -50,8 +52,8 @@ data Command
   | Rename (APath String) (APath String) -- ^ rn
   deriving (Eq, Show, Ord)
 
-singleErr :: String -> Set NID -> Err
-singleErr cmd xs = UE $ cmd ++ " needs a path that resolves to a single node\n"
+singleErr :: String -> Set NID -> UserError
+singleErr cmd xs = OtherError $ cmd ++ " needs a path that resolves to a single node\n"
                             ++ "but it resolved to: " ++ show (setToList xs)
 
 printTransitions
@@ -65,7 +67,7 @@ resetFresh :: Member (Writer NID) effs => NID -> Eff effs ()
 resetFresh = tell
 
 interpretCommand
-  :: ( Members [Console, Throw, SetLocation, GetLocation, Fresh, Dualizeable] effs
+  :: ( Members [Console, ThrowUserError, SetLocation, GetLocation, Fresh, Dualizeable] effs
      , Members [FileSystemTree, Web, Load, Writer NID] effs
      , HasGraph String effs
      )
@@ -165,7 +167,7 @@ interpretCommand = \case
   Rename a b -> do
     (nid, p) <- relativizeAPath a
     (nid', q) <- relativizeAPath b
-    let err xs = UE $ "the first argument to rn require the path to only resolve to "
+    let err xs = OtherError $ "the first argument to rn require the path to only resolve to "
                    ++ "one node but they resolved to \n"
                    ++ (show . map endPoint . setToList $ xs)
     c <- the' err =<< subsumeMissing (resolvePathSuccessesDetail nid p)

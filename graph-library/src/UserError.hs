@@ -13,7 +13,6 @@ import MyPrelude
 
 import Data.List.NonEmpty (NonEmpty(..))
 import Control.Lens
-import System.IO
 import Control.Arrow (left)
 
 import Data.Validation
@@ -75,8 +74,16 @@ trapIOError'
   => IO a -> Eff effs a
 trapIOError' = join . trapIOError
 
-displayError
+printErrors
   :: (MonadIO m, LastMember m effs)
-  => Eff (Error UserError ': effs) () -> Eff effs ()
-displayError = (`handleError` printer) where
-  printer err = liftIO $ eprint err
+  => Eff (ThrowUserError ': effs) () -> Eff effs ()
+printErrors = (`handleError` printer) where
+  printer errs = liftIO $ mapM_ eprint errs
+
+errorToLeft
+  :: Show e => Eff (Error e : effs) a -> Eff effs (Either String a)
+errorToLeft = (`handleError` \e -> pure (Left (show e))) . fmap Right
+
+errorToNothing
+  :: Eff (Error e : effs) a -> Eff effs (Maybe a)
+errorToNothing = (`handleError` const (pure Nothing)) . fmap Just

@@ -9,6 +9,8 @@ import ClassyPrelude
 
 import Control.Lens hiding (op)
 
+import System.IO
+
 -- | execute a computation only if it is Just
 withJust :: Monad m => Maybe a -> (a -> m ()) -> m ()
 withJust (Just x) f = f x
@@ -38,3 +40,11 @@ foldlM1 f m = uncurry (foldlM f) (splitFirst m)
 concatMapM :: Monad m => (a -> m [b]) -> [a] -> m [b]
 concatMapM op = foldr f (return [])
     where f x xs = do x' <- op x; if null x' then xs else do xs' <- xs; return $ x'++xs'
+
+-- # IO functions for stderr
+
+eputStr :: String -> IO ()
+eputStr = hPutStrLn stderr
+
+eprint :: Show a => a -> IO ()
+eprint = eputStr . show
