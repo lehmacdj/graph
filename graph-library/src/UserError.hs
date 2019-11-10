@@ -65,12 +65,12 @@ throwLeft (Left err) = throw err
 -- It remains to be seen if this is actually useful, because it requires
 -- it to be possible to unwrap Eff in order to escape the IO monad on the outside
 trapIOError
-  :: (MonadIO m, Member ThrowUserError effs)
+  :: forall m effs a. (MonadIO m, Member ThrowUserError effs)
   => IO a -> m (Eff effs a)
 trapIOError = liftIO . fmap (throwLeft . left IOFail) . tryIOError
 
 trapIOError'
-  :: (MonadIO m, Member ThrowUserError effs, LastMember m effs)
+  :: forall m effs a. (MonadIO m, Member ThrowUserError effs, LastMember m effs)
   => IO a -> Eff effs a
 trapIOError' = join . trapIOError
 

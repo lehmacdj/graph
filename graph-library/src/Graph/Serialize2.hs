@@ -14,24 +14,20 @@ module Graph.Serialize2 where
 import MyPrelude
 
 import Control.Monad.Freer
+import Control.Monad.Freer.Error
 import UserError
 
 import Data.Aeson (ToJSON, FromJSON)
 import qualified Data.Aeson as Aeson
 
 import qualified Data.ByteString.Lazy as B
-import qualified Data.Map as Map
-import Text.Read (readMaybe)
 
 import Control.Lens
 
 import System.Directory
-import System.FilePath
 
 import Graph.Types
 import Graph.Node (nidOf, dataOf)
-
-import Error
 
 linksFile :: FilePath -> NID -> FilePath
 linksFile base nid = base </> (show nid ++ ".json")
@@ -41,11 +37,6 @@ nodeDataFile base nid = base </> (show nid ++ ".data")
 
 -- TODO: rewrite using System.Directory.Tree
 -- yields better error handling that isn't quite as sketchy
-
-serializeNode
-  :: (ToJSON (Node t), TransitionValid t)
-  => Node t -> FilePath -> IO (E ())
-serializeNode = (ioToE .) . serializeNodeEx
 
 serializeNodeEx
   :: (ToJSON (Node t), TransitionValid t)
@@ -57,31 +48,11 @@ serializeNodeEx n base = do
     Just d -> B.writeFile (nodeDataFile base (nidOf n)) d
     Nothing -> pure ()
 
--- | Write the contents of a graph into a directory at the specified location.
-serializeGraph
-  :: (ToJSON (Node t), TransitionValid t)
-  => Graph t -> FilePath -> IO (E ())
-serializeGraph g base = ioToE $ do
-  createDirectoryIfMissing True base
-  forM_ (Map.elems (nodeMap g)) $ \n -> serializeNode n base >> pure ()
-
 ioHandler :: IOError -> IO (Maybe a)
 ioHandler = pure . const Nothing
 
 ioErrorToMaybe :: IO a -> IO (Maybe a)
 ioErrorToMaybe = (`catch` ioHandler) . (Just <$>)
-
-deserializeNode
-  :: (FromJSON (Node t), TransitionValid t)
-  => FilePath -> NID -> IO (E (Node t))
-deserializeNode base nid = do
-  readRes <- ioToE (B.readFile (linksFile base nid))
-  readRes `ioBindE` \fileContents -> do
-    let decode x = maybeToE (UE $ "failed to decode: " ++ show x) $ Aeson.decode x
-        nodeRes = decode fileContents
-    nodeRes `ioBindE` \node -> do
-      d <- tryGetBinaryData base nid
-      pure $ _Success # (nodeData .~ d) node
 
 deserializeNodeF
   :: forall t m effs.
@@ -98,34 +69,22 @@ deserializeNodeF base nid = do
   d <- liftIO $ tryGetBinaryData base nid
   pure $ (nodeData .~ d) node
 
--- | Load a graph from a directory.
-deserializeGraph
-  :: (FromJSON (Node t), TransitionValid t)
-  => FilePath -> IO (E (Graph t))
-deserializeGraph base = do
-  cs <- listDirectory base
-  let linkFilenames = filter (".json" `isSuffixOf`) cs
-      getNID = maybeToE (UE "couldn't read") . readMaybe . dropExtension
-      nidRes = traverse getNID linkFilenames
-  nidRes `ioBindE` \nodeIds -> do
-    fileContents <- mapM (B.readFile . linksFile base) nodeIds
-    let decode x = maybeToE (UE $ "failed to decode: " ++ show x) $ Aeson.decode x
-        nodeRes = traverse decode fileContents
-    nodeRes `ioBindE` \nodes -> do
-      datas <- mapM (tryGetBinaryData base) nodeIds
-      let nodesFinal = zipWith (nodeData .~) datas nodes
-      pure $ _Success # Graph (Map.fromList (nodeIds `zip` nodesFinal))
-
 -- | Execute a function on a node stored in the filesystem at a specified location
 -- ignore nodes that don't exist or if an error occurs
 withSerializedNode
-  :: (FromJSON (Node t), ToJSON (Node t), TransitionValid t)
-  => (Node t -> Node t) -> FilePath -> NID -> IO ()
-withSerializedNode f base nid = do
-  nr <- deserializeNode base nid
-  _ <- nr `ioBindE` \n -> serializeNode (f n) base
-  -- we intentionally ignore any errors that might have been returned
-  pure ()
+  :: forall t m.
+     ( FromJSON (Node t)
+     , ToJSON (Node t)
+     , TransitionValid t
+     , MonadIO m
+     )
+  => (Node t -> Node t) -> FilePath -> NID -> m ()
+withSerializedNode f base nid =
+  let ignoreErrors :: Eff [ThrowUserError, m] () -> Eff '[m] ()
+      ignoreErrors = (`handleError` \(_ :: UserErrors) -> pure ())
+   in runM . ignoreErrors . withEffect @[ThrowUserError, m] $ do
+     n <- deserializeNodeF @t @m @[ThrowUserError, m] base nid
+     trapIOError' @m @[ThrowUserError, m] $ serializeNodeEx (f n) base
 
 tryGetBinaryData :: FilePath -> NID -> IO (Maybe LByteString)
 tryGetBinaryData = (ioErrorToMaybe .) . (B.readFile .) . nodeDataFile

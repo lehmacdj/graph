@@ -3,9 +3,11 @@
 module MyPrelude
   ( module MyPrelude
   , module ClassyPrelude
+  , module Control.Monad.Freer
   ) where
 
 import ClassyPrelude
+import Control.Monad.Freer
 
 import Control.Lens hiding (op)
 
@@ -48,3 +50,9 @@ eputStr = hPutStrLn stderr
 
 eprint :: Show a => a -> IO ()
 eprint = eputStr . show
+
+-- # Effect utilities
+
+-- | The identity funciton
+withEffect :: forall effs a. Eff effs a -> Eff effs a
+withEffect = id
