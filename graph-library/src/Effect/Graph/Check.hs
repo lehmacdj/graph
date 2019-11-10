@@ -8,7 +8,6 @@ module Effect.Graph.Check where
 
 import MyPrelude
 
-import Control.Monad.Freer
 
 import Control.Lens
 

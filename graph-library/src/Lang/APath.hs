@@ -16,7 +16,6 @@ import ClassyPrelude
 import Graph
 import Lang.Path
 
-import Control.Monad.Freer
 import Effect.NodeLocated
 
 data APath t

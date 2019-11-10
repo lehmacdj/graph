@@ -12,7 +12,6 @@ import Env
 
 import Control.Monad.Freer.State
 
-import Control.Monad.Freer
 import Control.Monad.Freer.Fresh
 import Control.Monad.Freer.Writer
 import Effect.Graph

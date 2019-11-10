@@ -4,7 +4,6 @@ module Effect.Warn where
 
 import MyPrelude
 
-import Control.Monad.Freer
 
 import Effect.Throw
 

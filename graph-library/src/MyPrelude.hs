@@ -7,6 +7,7 @@ module MyPrelude
   ) where
 
 import ClassyPrelude
+
 import Control.Monad.Freer
 
 import Control.Lens hiding (op)

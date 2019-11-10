@@ -9,7 +9,6 @@ module Effect.Throw
 
 import ClassyPrelude
 
-import Control.Monad.Freer
 import Control.Monad.Freer.Error
 
 import UserError

@@ -16,7 +16,6 @@ import Control.Lens
 import Control.Arrow (left)
 
 import Data.Validation
-import Control.Monad.Freer
 import Control.Monad.Freer.Error
 
 import Network.HTTP.Conduit (HttpException)

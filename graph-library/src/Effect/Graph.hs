@@ -14,7 +14,6 @@ import ClassyPrelude hiding (Reader, ask)
 
 import Control.Lens
 
-import Control.Monad.Freer
 import Control.Monad.Freer.State
 import Control.Monad.Freer.Error
 import Control.Monad.Freer.Reader

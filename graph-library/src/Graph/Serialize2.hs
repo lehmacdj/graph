@@ -13,7 +13,6 @@ module Graph.Serialize2 where
 
 import MyPrelude
 
-import Control.Monad.Freer
 import Control.Monad.Freer.Error
 import UserError
 

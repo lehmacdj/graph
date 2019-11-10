@@ -6,7 +6,6 @@ module Effect.Filesystem where
 import ClassyPrelude
 
 import Control.Monad.Freer.TH
-import Control.Monad.Freer
 
 import Control.Lens
 

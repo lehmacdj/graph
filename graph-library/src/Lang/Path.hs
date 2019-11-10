@@ -23,7 +23,6 @@ import Control.Lens hiding (pre, unsnoc)
 import Graph hiding (insertEdge)
 import Graph.Connect
 
-import Control.Monad.Freer
 import Control.Monad.Freer.Fresh
 import Effect.Graph
 import Effect.Throw

@@ -6,7 +6,6 @@ module Singleton where
 
 import MyPrelude
 
-import Control.Monad.Freer
 import UserError
 
 the'

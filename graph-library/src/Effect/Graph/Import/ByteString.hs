@@ -8,7 +8,6 @@ import Data.Digest.Pure.SHA
 
 import Graph (Edge(..))
 
-import Control.Monad.Freer
 import Control.Monad.Freer.Fresh
 import Effect.Web
 import Effect.Graph

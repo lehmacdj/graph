@@ -6,7 +6,6 @@ module Effect.Console where
 
 import ClassyPrelude
 
-import Control.Monad.Freer
 import Control.Monad.Freer.TH
 
 import System.IO.Term.Image

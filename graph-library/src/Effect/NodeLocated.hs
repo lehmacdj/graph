@@ -8,7 +8,6 @@ module Effect.NodeLocated
 
 import ClassyPrelude hiding (Reader, ask)
 
-import Control.Monad.Freer
 import Control.Monad.Freer.Reader
 import Control.Monad.Freer.Writer
 import Control.Monad.Freer.Internal

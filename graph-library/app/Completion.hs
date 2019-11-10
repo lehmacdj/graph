@@ -19,7 +19,6 @@ import Lang.Path.Partial
 import Lang.Parsing
 import Graph
 
-import Control.Monad.Freer
 import Effect.Graph
 import Effect.Graph.Advanced
 import Effect.NodeLocated

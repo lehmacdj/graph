@@ -5,7 +5,6 @@ module Effect.Web where
 
 import ClassyPrelude
 
-import Control.Monad.Freer
 import Control.Monad.Freer.TH
 import UserError
 

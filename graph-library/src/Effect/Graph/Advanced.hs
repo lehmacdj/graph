@@ -7,7 +7,6 @@ module Effect.Graph.Advanced where
 
 import MyPrelude
 
-import Control.Monad.Freer
 import Control.Monad.Freer.Fresh
 import Control.Lens
 import Data.Witherable

@@ -6,7 +6,6 @@ module Lang.Command where
 import MyPrelude
 
 import Control.Monad (zipWithM)
-import Control.Monad.Freer
 import UserError
 import Singleton
 

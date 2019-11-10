@@ -3,9 +3,8 @@
 
 module Effect.Util where
 
-import ClassyPrelude hiding (ask, Reader)
+import MyPrelude hiding (ask, Reader)
 
-import Control.Monad.Freer
 import Control.Monad.Freer.Reader
 import Control.Monad.Freer.State
 import Control.Monad.Freer.Error

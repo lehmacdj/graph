@@ -17,7 +17,6 @@ import System.Directory.Tree hiding (readDirectory)
 
 import Graph hiding (insertEdge)
 
-import Control.Monad.Freer
 import Control.Monad.Freer.Fresh
 import Effect.Graph
 import Effect.Graph.Advanced
