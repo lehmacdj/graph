@@ -51,6 +51,7 @@ dependencies:
 - freer-simple
 - classy-prelude
 - witherable
+- time
 
 default-extensions:
 - GADTs
