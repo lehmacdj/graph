@@ -12,6 +12,7 @@ small features:
 - edit text files
 - use MyPrelude everywhere
 - move to base-noprelude
+- organize/trim imports
 
 medium features:
 - label edges with nodes instead of string labels
