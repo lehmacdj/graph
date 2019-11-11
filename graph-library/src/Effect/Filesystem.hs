@@ -3,7 +3,7 @@
 
 module Effect.Filesystem where
 
-import ClassyPrelude
+import MyPrelude
 
 import Control.Monad.Freer.TH
 

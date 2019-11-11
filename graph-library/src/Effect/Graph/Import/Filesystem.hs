@@ -9,7 +9,7 @@
  -}
 module Effect.Graph.Import.Filesystem where
 
-import ClassyPrelude
+import MyPrelude
 
 import Data.Digest.Pure.SHA
 

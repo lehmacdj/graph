@@ -11,7 +11,7 @@ module Lang.APath
   , NID
   ) where
 
-import ClassyPrelude
+import MyPrelude
 
 import Graph
 import Lang.Path

@@ -3,7 +3,7 @@
 
 module Effect.Web where
 
-import ClassyPrelude
+import MyPrelude
 
 import Control.Monad.Freer.TH
 import UserError

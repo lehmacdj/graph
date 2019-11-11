@@ -3,7 +3,7 @@
 -- | Completion stuff for the interface
 module Completion where
 
-import ClassyPrelude
+import MyPrelude
 
 import Control.Lens
 import Control.Arrow

@@ -4,7 +4,7 @@
 
 module Effect.Console where
 
-import ClassyPrelude
+import MyPrelude
 
 import Control.Monad.Freer.TH
 

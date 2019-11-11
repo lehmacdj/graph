@@ -7,7 +7,7 @@ module Effect.Throw
   , module Effect.Throw
   ) where
 
-import ClassyPrelude
+import MyPrelude
 
 import Control.Monad.Freer.Error
 

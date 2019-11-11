@@ -4,7 +4,7 @@
 -- monad.
 module App where
 
-import ClassyPrelude hiding (ask, Reader)
+import MyPrelude hiding (ask, Reader)
 
 import Control.Lens
 import Control.Repl

@@ -10,7 +10,7 @@ module Effect.Graph
   , Node
   ) where
 
-import ClassyPrelude hiding (Reader, ask)
+import MyPrelude hiding (Reader, ask)
 
 import Control.Lens
 

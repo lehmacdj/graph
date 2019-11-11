@@ -2,7 +2,7 @@
 {-# LANGUAGE NoImplicitPrelude #-}
 module Effect.Graph.Import.ByteString where
 
-import ClassyPrelude
+import MyPrelude
 
 import Data.Digest.Pure.SHA
 
