@@ -23,6 +23,7 @@ import Effect.Web
 import Effect.Load
 import Effect.Graph.Check
 import Control.Monad.Freer.Fresh
+import Effect.Time
 
 import Lang.APath
 
@@ -67,7 +68,7 @@ resetFresh = tell
 
 interpretCommand
   :: ( Members [Console, ThrowUserError, SetLocation, GetLocation, Fresh, Dualizeable] effs
-     , Members [FileSystemTree, Web, Load, Writer NID] effs
+     , Members [FileSystemTree, Web, Load, Writer NID, GetTime] effs
      , HasGraph String effs
      )
   => Command -> Eff effs ()

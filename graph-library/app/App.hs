@@ -24,6 +24,7 @@ import Effect.NodeLocated
 import Effect.Filesystem
 import Effect.Util
 import UserError
+import Effect.Time
 
 import Control.Arrow ((>>>))
 
@@ -86,6 +87,7 @@ interpretAsAppBase
   (forall effs. -- ^ this is an extistential type
     ( Members [Console, ThrowUserError, SetLocation, GetLocation, Fresh, Dualizeable] effs
     , Members [FileSystemTree, Web, Load, Error None, Writer NID, Warn UserErrors] effs
+    , Member GetTime effs
     , HasGraph String effs
     ) => Eff effs ())
   -> AppBase ()
@@ -107,6 +109,7 @@ interpretAsAppBase v = do
       >>> interpretConsoleIO
       >>> printWarnings @UserErrors
       >>> printErrors
+      >>> interpretTimeAsIO
       >>> runLocableAppBase
       >>> evalFreshAppBase
       >>> runM

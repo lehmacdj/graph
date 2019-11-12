@@ -23,6 +23,7 @@ import Effect.Graph.Advanced
 import Effect.Filesystem
 import Effect.Console
 import Effect.Throw
+import Effect.Time
 
 import Effect.Graph.Import.ByteString
 
@@ -30,7 +31,7 @@ computeSHA :: LByteString -> String
 computeSHA = showDigest . sha512
 
 importDirectory
-   :: ( Members [Fresh, FileSystemTree, Console, ThrowMissing] effs
+   :: ( Members [GetTime, Fresh, FileSystemTree, Console, ThrowMissing] effs
       , HasGraph String effs
       )
    => FilePath -> NID -> Eff effs ()
@@ -46,14 +47,13 @@ importDirectory base nid = do
    addDirectories fileTree nid
 
 addDirectories
-   :: (Members [Fresh, ThrowMissing] effs, HasGraph String effs)
+   :: (Members [Fresh, ThrowMissing, GetTime] effs, HasGraph String effs)
    => DirTree LByteString -> NID -> Eff effs ()
 addDirectories dt' root = do
-   fileHashes <- root `transitionsVia` "file-hashes"
    let
      go dt nid = case dt of
         File fn cs -> do
-           nid' <- importData fileHashes cs
+           nid' <- importData root cs
            -- TODO: possibly add handling of filename extensions, to categorize
            insertEdge (Edge nid fn nid')
         Dir fn [] -> do

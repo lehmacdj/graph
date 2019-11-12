@@ -88,6 +88,25 @@ transitionsViaManyFresh nid = \case
   [x] -> transitionsFreshVia nid x
   x:xs -> transitionsVia nid x >>= (`transitionsViaManyFresh` xs)
 
+transitionsViaMany
+  :: forall t effs. (Members [Fresh, ThrowMissing] effs, HasGraph t effs)
+  => NID -> [t] -> Eff effs NID
+transitionsViaMany nid = \case
+  [] -> pure nid
+  x:xs -> transitionsVia nid x >>= (`transitionsViaManyFresh` xs)
+
+transitionsViaManyTo
+  :: forall t effs seq.
+     ( Members [Fresh, ThrowMissing] effs
+     , HasGraph t effs
+     , IsSequence seq
+     , Element seq ~ t
+     )
+  => NID -> NonNull seq -> NID -> Eff effs ()
+transitionsViaManyTo s transitions t = do
+  secondToLast <- transitionsViaMany s (toList (init transitions))
+  insertEdge (Edge secondToLast (last transitions) t)
+
 -- | Create one node that has all of the connects of the two nodes combined.
 mergeNode
   :: forall t effs. (Members [Fresh, ThrowMissing] effs, HasGraph t effs)
