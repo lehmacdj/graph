@@ -7,7 +7,6 @@ I will add tutorials/descriptions of basic commands here eventually. :)
 
 # Todo list
 small features:
-- date imports
 - providers for a few things that I import somewhat frequently
 - edit text files
 - use MyPrelude everywhere
@@ -18,6 +17,8 @@ medium features:
 - label edges with nodes instead of string labels
 - migrate from integer NIDs to UUIDs/GUIDs/something similar
 - make it possible to run without a "loaded" graph
+- migrate InputT into the monad transformer stack
+- implement a better completion engine
 
 ## big features:
 
