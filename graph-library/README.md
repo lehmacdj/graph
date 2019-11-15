@@ -8,7 +8,7 @@ I will add tutorials/descriptions of basic commands here eventually. :)
 # Todo list
 small features:
 - providers for a few things that I import somewhat frequently
-- edit text files -> HUGE FOLLOWUP ITEM teach vim to understand graph filesystem
+- edit text files
 - use MyPrelude everywhere
 - move to base-noprelude
 - organize/trim imports
@@ -21,6 +21,10 @@ medium features:
 - implement a better completion engine
 
 ## big features:
+
+#### teach external tools to use the graph like a filesystem
+Requires implementing a filesystem provider that supplies files based on the
+graph.
 
 #### more fully featured programming language
 
