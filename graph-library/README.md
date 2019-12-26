@@ -17,7 +17,7 @@ medium features:
 - label edges with nodes instead of string labels
 - migrate from integer NIDs to UUIDs/GUIDs/something similar
 - make it possible to run without a "loaded" graph
-- migrate InputT into the monad transformer stack
+- migrate InputT into the effect set
 - implement a better completion engine
 
 ## big features:
