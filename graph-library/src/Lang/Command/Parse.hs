@@ -80,6 +80,9 @@ pMove = (command "mv" $> Move) <*> apath <*> apath
 pRename :: Parser Command
 pRename = (command "rn" $> Rename) <*> apath <*> apath
 
+pEdit :: Parser Command
+pEdit = (command "vi" $> Edit) <*> apath
+
 pCommand :: Parser Command
 pCommand =
   try pChangeNode
@@ -104,6 +107,7 @@ pCommand =
   <|> try pFix
   <|> try pMove
   <|> try pRename
+  <|> try pEdit
 
 parseCommand :: String -> Either String Command
 parseCommand = left errorBundlePretty . runParser pCommand "<interactive>"

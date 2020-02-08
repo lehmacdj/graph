@@ -50,6 +50,7 @@ data Command
   | Fix                                  -- ^ fix
   | Move (APath String) (APath String)   -- ^ mv
   | Rename (APath String) (APath String) -- ^ rn
+  | Edit (APath String)                  -- ^ vi
   deriving (Eq, Show, Ord)
 
 singleErr :: String -> Set NID -> UserError
@@ -68,7 +69,7 @@ resetFresh = tell
 
 interpretCommand
   :: ( Members [Console, ThrowUserError, SetLocation, GetLocation, Fresh, Dualizeable] effs
-     , Members [FileSystemTree, Web, Load, Writer NID, GetTime] effs
+     , Members [FileSystemTree, Web, Load, Writer NID, GetTime, Editor] effs
      , HasGraph String effs
      )
   => Command -> Eff effs ()
@@ -172,3 +173,6 @@ interpretCommand = \case
                    ++ (show . map endPoint . setToList $ xs)
     c <- the' err =<< subsumeMissing (resolvePathSuccessesDetail nid p)
     subsumeMissing (renameDPath c nid' q)
+  Edit a -> do
+    (nid, p) <- relativizeAPath a
+    let err xs = OtherError

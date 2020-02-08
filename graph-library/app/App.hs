@@ -84,7 +84,8 @@ runWriterAppBaseIORef l = runStateAppBaseIORef l . translate (\(Tell x) -> Put x
 
 interpretAsAppBase
   ::
-  (forall effs. -- ^ this is an extistential type
+  (forall effs. -- ^ this existential type is necessary to allow an arbitrary
+                -- order to be picked here
     ( Members [Console, ThrowUserError, SetLocation, GetLocation, Fresh, Dualizeable] effs
     , Members [FileSystemTree, Web, Load, Error None, Writer NID, Warn UserErrors] effs
     , Member GetTime effs
