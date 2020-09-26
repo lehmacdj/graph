@@ -10,7 +10,6 @@ small features:
 - providers for a few things that I import somewhat frequently
 - use MyPrelude everywhere
 - move to base-noprelude
-- organize/trim imports
 
 medium features:
 - label edges with nodes instead of string labels
