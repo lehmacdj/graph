@@ -60,7 +60,7 @@ jobs:
   #       cabal test all
 
   stack:
-    name: stack / ghc ${{ matrix.ghc }}
+    name: ${{ matrix.library }} / stack / ghc ${{ matrix.ghc }}
     runs-on: ubuntu-latest
     strategy:
       matrix:
