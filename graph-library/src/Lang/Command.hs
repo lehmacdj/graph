@@ -3,76 +3,102 @@
 
 module Lang.Command where
 
-import MyPrelude
-
 import Control.Monad (zipWithM)
-import UserError
-import Singleton
-
-import Graph (Edge(..), Connect(..), outgoingConnectsOf, dataOf)
-
+import Control.Monad.Freer.Fresh
 import Effect.Console
-import Effect.Throw
-import Effect.NodeLocated
+import Effect.Editor
+import Effect.Filesystem
 import Effect.Graph
 import Effect.Graph.Advanced
-import Effect.Filesystem
-import Effect.Graph.Import.Filesystem
-import Effect.Graph.Import.ByteString
-import Effect.Web
-import Effect.Load
 import Effect.Graph.Check
-import Control.Monad.Freer.Fresh
+import Effect.Graph.Import.ByteString
+import Effect.Graph.Import.Filesystem
+import Effect.Load
+import Effect.NodeLocated
+import Effect.Throw
 import Effect.Time
-
+import Effect.Web
+import Graph (Connect (..), Edge (..), dataOf, outgoingConnectsOf)
 import Lang.APath
+import MyPrelude
+import Singleton
+import UserError
 
 data Command
-  = ChangeNode (APath String)            -- ^ cd
-  | Dualize                              -- ^ d
-  | Make (APath String)                  -- ^ mk
-  | Merge (APath String)                 -- ^ mg
-  | Clone (APath String) String          -- ^ cl
-  | ListOut                              -- ^ ls
-  | Query (APath String) String          -- ^ q
-  | Tag (APath String) (APath String)    -- ^ t
-  | Remove (APath String)                -- ^ rm
-  | RemoveNode (APath String)            -- ^ rmnf
-  | At (APath String) Command            -- ^ at
-  | Dedup String                         -- ^ dd
-  | Load FilePath                        -- ^ :l
-  | NodeId                               -- ^ nid
-  | Debug                                -- ^ :d
-  | ShowImage                            -- ^ si
-  | Import FilePath                      -- ^ :i
-  | ImportUrl String                     -- ^ wget
-  | Check                                -- ^ fsck
-  | Fix                                  -- ^ fix
-  | Move (APath String) (APath String)   -- ^ mv
-  | Rename (APath String) (APath String) -- ^ rn
-  | Edit (APath String)                  -- ^ vi
+  = -- | cd
+    ChangeNode (APath String)
+  | -- | d
+    Dualize
+  | -- | mk
+    Make (APath String)
+  | -- | mg
+    Merge (APath String)
+  | -- | cl
+    Clone (APath String) String
+  | -- | ls
+    ListOut
+  | -- | q
+    Query (APath String) String
+  | -- | t
+    Tag (APath String) (APath String)
+  | -- | rm
+    Remove (APath String)
+  | -- | rmnf
+    RemoveNode (APath String)
+  | -- | at
+    At (APath String) Command
+  | -- | dd
+    Dedup String
+  | -- | :l
+    Load FilePath
+  | -- | nid
+    NodeId
+  | -- | :d
+    Debug
+  | -- | si
+    ShowImage
+  | -- | :i
+    Import FilePath
+  | -- | wget
+    ImportUrl String
+  | -- | fsck
+    Check
+  | -- | fix
+    Fix
+  | -- | mv
+    Move (APath String) (APath String)
+  | -- | rn
+    Rename (APath String) (APath String)
+  | -- | vi
+    Edit
   deriving (Eq, Show, Ord)
 
 singleErr :: String -> Set NID -> UserError
-singleErr cmd xs = OtherError $ cmd ++ " needs a path that resolves to a single node\n"
-                            ++ "but it resolved to: " ++ show (setToList xs)
+singleErr cmd xs =
+  OtherError $
+    cmd ++ " needs a path that resolves to a single node\n"
+      ++ "but it resolved to: "
+      ++ show (setToList xs)
 
-printTransitions
-  :: Member Console effs
-  => Set (Connect String) -> Eff effs ()
-printTransitions = mapM_ (echo . dtransition) where
-  dtransition (Connect t nid) = show t ++ " at " ++ show nid
+printTransitions ::
+  Member Console effs =>
+  Set (Connect String) ->
+  Eff effs ()
+printTransitions = mapM_ (echo . dtransition)
+  where
+    dtransition (Connect t nid) = show t ++ " at " ++ show nid
 
 -- | set the freshness to a certain number
 resetFresh :: Member (Writer NID) effs => NID -> Eff effs ()
 resetFresh = tell
 
-interpretCommand
-  :: ( Members [Console, ThrowUserError, SetLocation, GetLocation, Fresh, Dualizeable] effs
-     , Members [FileSystemTree, Web, Load, Writer NID, GetTime, Editor] effs
-     , HasGraph String effs
-     )
-  => Command -> Eff effs ()
+interpretCommand ::
+  ( Members [Console, ThrowUserError, SetLocation, GetLocation, Fresh, Dualizeable] effs,
+    Members [FileSystemTree, Web, Load, Writer NID, GetTime, Editor] effs,
+    HasGraph String effs
+  ) =>
+  Command ->
+  Eff effs ()
 interpretCommand = \case
   ChangeNode a -> do
     (nid, p) <- relativizeAPath a
@@ -103,7 +129,7 @@ interpretCommand = \case
     nid'' <- subsumeMissing (cloneNode @String nid')
     cnid <- currentLocation
     insertEdge $ Edge cnid t nid''
-  Query a t  -> do
+  Query a t -> do
     (nid, p) <- relativizeAPath a
     nids <- subsumeMissing (resolvePathSuccesses nid p)
     nnid <- subsumeMissing (nid `transitionsFreshVia` t)
@@ -128,15 +154,16 @@ interpretCommand = \case
   Dedup t -> do
     nid <- currentLocation
     ambiguities <- subsumeMissing (resolvePathSuccesses nid (Literal t))
-    let
-      noSuffix = repeat ""
-      suffixes
-        | length ambiguities < 2 = noSuffix
-        | otherwise = show <$> ([1..] :: [Int])
+    let noSuffix = repeat ""
+        suffixes
+          | length ambiguities < 2 = noSuffix
+          | otherwise = show <$> ([1 ..] :: [Int])
     forM_ ambiguities $ \amb -> deleteEdge (Edge nid t amb)
-    _ <- zipWithM (\a s -> insertEdge (Edge nid (t ++ s) a))
-                  (toList ambiguities)
-                  suffixes
+    _ <-
+      zipWithM
+        (\a s -> insertEdge (Edge nid (t ++ s) a))
+        (toList ambiguities)
+        suffixes
     pure ()
   ListOut -> do
     n <- subsumeMissing currentNode
@@ -155,8 +182,8 @@ interpretCommand = \case
   Debug -> do
     echo "current node:"
     currentLocation >>= subsumeMissing . getNode' >>= echo . show @(Node String)
-    -- echo "node-ids in the graph:"
-    -- nodeManifest @String >>= echo . show
+  -- echo "node-ids in the graph:"
+  -- nodeManifest @String >>= echo . show
   Check -> reportToConsole @String (fsck @String)
   Fix -> fixErrors @String (fsck @String)
   Move a b -> do
@@ -168,11 +195,13 @@ interpretCommand = \case
   Rename a b -> do
     (nid, p) <- relativizeAPath a
     (nid', q) <- relativizeAPath b
-    let err xs = OtherError $ "the first argument to rn require the path to only resolve to "
-                   ++ "one node but they resolved to \n"
-                   ++ (show . map endPoint . setToList $ xs)
+    let err xs =
+          OtherError $
+            "the first argument to rn require the path to only resolve to "
+              ++ "one node but they resolved to \n"
+              ++ (show . map endPoint . setToList $ xs)
     c <- the' err =<< subsumeMissing (resolvePathSuccessesDetail nid p)
     subsumeMissing (renameDPath c nid' q)
-  Edit a -> do
-    (nid, p) <- relativizeAPath a
-    let err xs = OtherError
+  Edit -> do
+    n <- subsumeMissing currentLocation
+    invokeEditor [n]

@@ -81,7 +81,7 @@ pRename :: Parser Command
 pRename = (command "rn" $> Rename) <*> apath <*> apath
 
 pEdit :: Parser Command
-pEdit = (command "vi" $> Edit) <*> apath
+pEdit = command "vi" $> Edit
 
 pCommand :: Parser Command
 pCommand =
