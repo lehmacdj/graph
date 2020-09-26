@@ -8,7 +8,6 @@ I will add tutorials/descriptions of basic commands here eventually. :)
 # Todo list
 small features:
 - providers for a few things that I import somewhat frequently
-- edit text files
 - use MyPrelude everywhere
 - move to base-noprelude
 - organize/trim imports
