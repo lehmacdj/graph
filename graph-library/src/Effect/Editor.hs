@@ -11,7 +11,6 @@ import System.Process.Typed
 
 data Editor r where
   InvokeEditor :: [NID] -> Editor ()
-
 makeEffect ''Editor
 
 -- | Makes the assumption that the graph is implemented using the filesystem
@@ -23,6 +22,4 @@ interpretEditorAsIOVimFSGraph ::
   -- | interprets effect
   Eff (Editor : effs) ~> Eff effs
 interpretEditorAsIOVimFSGraph location = interpret $ \case
-  InvokeEditor nids -> do
-    (_, _) <- readProcess_ $ proc "vim" (nodeDataFile location <$> nids)
-    pure ()
+  InvokeEditor nids -> runProcess_ $ proc "vim" (nodeDataFile location <$> nids)
