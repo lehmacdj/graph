@@ -52,6 +52,7 @@ dependencies:
 - classy-prelude
 - witherable
 - time
+- typed-process
 
 default-extensions:
 - GADTs
