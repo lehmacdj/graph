@@ -1,27 +1,24 @@
 {-# LANGUAGE FlexibleContexts #-}
 
 module Graph
-  ( module Graph
-  , module Graph.Types
-  , module Graph.Edge
-  , module Graph.Node
-  ) where
+  ( module Graph,
+    module Graph.Types,
+    module Graph.Edge,
+    module Graph.Node,
+  )
+where
 
 import Control.Lens
-
 import Data.ByteString.Lazy (ByteString)
 import Data.Foldable
 import qualified Data.Map as M
 import qualified Data.Map.Internal.Debug as MD
 import Data.Maybe
 import qualified Data.Set as Set
-
-
 import qualified Debug.Trace as Debug
-
-import Graph.Types
-import Graph.Node
 import Graph.Edge
+import Graph.Node
+import Graph.Types
 
 -- | Utility function for converting lookups into actual node values with error
 -- reporting.
@@ -30,105 +27,135 @@ assertNodeInGraph _ (Just n) = n
 assertNodeInGraph i Nothing =
   error $ "expected " ++ show i ++ " to be in the graph"
 
-lookupNode :: TransitionValid t
-           => Graph t -> NID -> Node t
+lookupNode ::
+  TransitionValid t =>
+  Graph t ->
+  NID ->
+  Node t
 lookupNode = flip nodeLookup
 {-# INLINE lookupNode #-}
 
 -- | Gets the most up to date version of the node from the graph.
 -- This does not imply that graphs have version control, it simply means that
 -- the original node might be out of date otherwise.
-refreshNode :: TransitionValid t
-            => Graph t -> Node t -> Node t
+refreshNode ::
+  TransitionValid t =>
+  Graph t ->
+  Node t ->
+  Node t
 refreshNode g = lookupNode g . nidOf
 
-nodeLookup :: TransitionValid t
-           => NID -> Graph t -> Node t
-nodeLookup i g = fromMaybe err . M.lookup i . nodeMap $ g where
-  err = error $ "expected to find " ++ show i ++ " in the Graph\n"
-             ++ MD.showTree (nodeMap g)
+nodeLookup ::
+  TransitionValid t =>
+  NID ->
+  Graph t ->
+  Node t
+nodeLookup i g = fromMaybe err . M.lookup i . nodeMap $ g
+  where
+    err =
+      error $
+        "expected to find " ++ show i ++ " in the Graph\n"
+          ++ MD.showTree (nodeMap g)
 
 -- | Utility function for constructing a primed version of a function operating on ids instead of
-primed
-  :: TransitionValid t
-  => (Node t -> Graph t -> a)
-  -> (NID -> Graph t -> a)
+primed ::
+  TransitionValid t =>
+  (Node t -> Graph t -> a) ->
+  (NID -> Graph t -> a)
 primed f i ig = f (lookupNode ig i) ig
 
-listify
-  :: (a -> Graph t -> Graph t)
-  -> ([a] -> Graph t -> Graph t)
+listify ::
+  (a -> Graph t -> Graph t) ->
+  ([a] -> Graph t -> Graph t)
 listify f nodes ig = foldl' (flip f) ig nodes
 
-primeds
-  :: TransitionValid t
-  => ([Node t] -> Graph t -> Graph t)
-  -> ([NID] -> Graph t -> Graph t)
+primeds ::
+  TransitionValid t =>
+  ([Node t] -> Graph t -> Graph t) ->
+  ([NID] -> Graph t -> Graph t)
 primeds f i ig = f (pure nodeLookup <*> i <*> pure ig) ig
 
 delEdge :: TransitionValid t => Edge t -> Graph t -> Graph t
-delEdge e g = withNodeMap g $
-  M.adjust (over nodeOutgoing (Set.delete (outConnect e))) (source e)
-  . M.adjust (over nodeIncoming (Set.delete (inConnect e))) (sink e)
+delEdge e g =
+  withNodeMap g $
+    M.adjust (over nodeOutgoing (Set.delete (outConnect e))) (source e)
+      . M.adjust (over nodeIncoming (Set.delete (inConnect e))) (sink e)
 
-delEdges
-  :: TransitionValid t
-  => [Edge t] -> Graph t -> Graph t
+delEdges ::
+  TransitionValid t =>
+  [Edge t] ->
+  Graph t ->
+  Graph t
 delEdges = listify delEdge
 
 -- | Remove a node from the graph; updating the cached data in the neighbors
 -- nodes as well.
 delNode :: Node t -> Graph t -> Graph t
-delNode n g = withNodeMap g $
-  M.map deleteIncoming
-  . M.map deleteOutgoing
-  . M.delete nid where
+delNode n g =
+  withNodeMap g $
+    M.map deleteIncoming
+      . M.map deleteOutgoing
+      . M.delete nid
+  where
     nid = _nodeId n
-    del = Set.filter ((/=nid) . view connectNode)
+    del = Set.filter ((/= nid) . view connectNode)
     deleteIncoming = over nodeIncoming del
     deleteOutgoing = over nodeOutgoing del
 
-delNode'
-  :: TransitionValid t
-  => NID -> Graph t -> Graph t
+delNode' ::
+  TransitionValid t =>
+  NID ->
+  Graph t ->
+  Graph t
 delNode' = primed delNode
 
-delNodes
-  :: [Node t] -> Graph t -> Graph t
+delNodes ::
+  [Node t] -> Graph t -> Graph t
 delNodes = listify delNode
 
-delNodes'
-  :: TransitionValid t
-  => [NID] -> Graph t -> Graph t
+delNodes' ::
+  TransitionValid t =>
+  [NID] ->
+  Graph t ->
+  Graph t
 delNodes' = primeds delNodes
 
-insertEdge
-  :: TransitionValid t
-  => Edge t -> Graph t -> Graph t
-insertEdge e g = withNodeMap g $
-  M.adjust (over nodeOutgoing (Set.insert (outConnect e))) (source e)
-  . M.adjust (over nodeIncoming (Set.insert (inConnect e))) (sink e)
+insertEdge ::
+  TransitionValid t =>
+  Edge t ->
+  Graph t ->
+  Graph t
+insertEdge e g =
+  withNodeMap g $
+    M.adjust (over nodeOutgoing (Set.insert (outConnect e))) (source e)
+      . M.adjust (over nodeIncoming (Set.insert (inConnect e))) (sink e)
 
-insertEdges
-  :: TransitionValid t
-  => [Edge t] -> Graph t -> Graph t
+insertEdges ::
+  TransitionValid t =>
+  [Edge t] ->
+  Graph t ->
+  Graph t
 insertEdges = listify insertEdge
 
-
 -- | Add a node, and all the edges it is associated with to the Graph.
-insertNode
-  :: TransitionValid t
-  => Node t -> Graph t -> Graph t
+insertNode ::
+  TransitionValid t =>
+  Node t ->
+  Graph t ->
+  Graph t
 insertNode n g =
-  insertEdges (incomingEs ++ outgoingEs)
-  $ withNodeMap g (M.insert nid n) where
+  insertEdges (incomingEs ++ outgoingEs) $
+    withNodeMap g (M.insert nid n)
+  where
     nid = _nodeId n
     incomingEs = map (`incomingEdge` nid) (toList (_nodeIncoming n))
     outgoingEs = map (outgoingEdge nid) (toList (_nodeOutgoing n))
 
-insertNodes
-  :: TransitionValid t
-  => [Node t] -> Graph t -> Graph t
+insertNodes ::
+  TransitionValid t =>
+  [Node t] ->
+  Graph t ->
+  Graph t
 insertNodes = listify insertNode
 
 nodesOf :: Graph t -> [Node t]
@@ -142,24 +169,32 @@ isEmptyGraph = M.null . nodeMap
 
 -- | sets the data, setting to nothing is equivalent to deleting the data
 -- this is a terrible function that should probably not be used
-setData
-  :: TransitionValid t
-  => Maybe ByteString -> Node t -> Graph t -> Graph t
+setData ::
+  TransitionValid t =>
+  Maybe ByteString ->
+  Node t ->
+  Graph t ->
+  Graph t
 setData d n g = insertNode (set nodeData d (nodeConsistentWithGraph g n)) g
 {-# DEPRECATED setData "use Effect.Graph and interpreters for Graph t instead" #-}
 
-setData'
-  :: TransitionValid t
-  => Maybe ByteString -> NID -> Graph t -> Graph t
+setData' ::
+  TransitionValid t =>
+  Maybe ByteString ->
+  NID ->
+  Graph t ->
+  Graph t
 setData' d = primed (setData d)
 {-# DEPRECATED setData' "use Effect.Graph and interpreters for Graph t instead" #-}
 
 maybeLookupNode :: Graph t -> NID -> Maybe (Node t)
 maybeLookupNode = flip M.lookup . nodeMap
 
-nodeConsistentWithGraph
-  :: TransitionValid t
-  => Graph t -> Node t -> Node t
+nodeConsistentWithGraph ::
+  TransitionValid t =>
+  Graph t ->
+  Node t ->
+  Node t
 nodeConsistentWithGraph g n
   | lookupNode g (nidOf n) == n = n
   | otherwise = error $ "node " ++ show n ++ " is inconsistent with the state of the graph " ++ show g
@@ -170,19 +205,20 @@ traceGraph g = withNodeMap g $ \nm -> Debug.trace (showDebug (Debug.trace "graph
 showDebug :: TransitionValid t => Graph t -> String
 showDebug = unlines . map show . M.elems . nodeMap
 
-filterGraph
-  :: (Node t -> Bool)
-  -> Graph t
-  -> Graph t
-filterGraph f g = M.foldr maybeDelNode g (nodeMap g) where
-  maybeDelNode x ig'
-    | not $ f x = delNode x ig'
-    | otherwise = ig'
+filterGraph ::
+  (Node t -> Bool) ->
+  Graph t ->
+  Graph t
+filterGraph f g = M.foldr maybeDelNode g (nodeMap g)
+  where
+    maybeDelNode x ig'
+      | not $ f x = delNode x ig'
+      | otherwise = ig'
 
-mapGraph
-  :: (Node t -> Node t)
-  -> Graph t
-  -> Graph t
+mapGraph ::
+  (Node t -> Node t) ->
+  Graph t ->
+  Graph t
 mapGraph f g = withNodeMap g $ \nm -> M.map f nm
 
 dualizeGraph :: Graph t -> Graph t
@@ -192,6 +228,7 @@ dualizeGraph = mapGraph dualizeNode
 -- I'm not sure what the orignal purpose of this function was but it doesn't
 -- seem that useful anymore IMO.
 arbitraryId :: Graph t -> NID
-arbitraryId = nidOf . head' . M.elems . nodeMap where
-  head' [] = error "expected there to be a node in the graph but there were none"
-  head' (x:_) = x
+arbitraryId = nidOf . head' . M.elems . nodeMap
+  where
+    head' [] = error "expected there to be a node in the graph but there were none"
+    head' (x : _) = x

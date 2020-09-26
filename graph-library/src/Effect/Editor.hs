@@ -11,6 +11,7 @@ import System.Process.Typed
 
 data Editor r where
   InvokeEditor :: [NID] -> Editor ()
+
 makeEffect ''Editor
 
 -- | Makes the assumption that the graph is implemented using the filesystem

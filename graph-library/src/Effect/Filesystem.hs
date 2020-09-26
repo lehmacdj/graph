@@ -1,26 +1,24 @@
-{-# LANGUAGE NoImplicitPrelude #-}
 {-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE NoImplicitPrelude #-}
 
 module Effect.Filesystem where
 
-import MyPrelude
-
-import Control.Monad.Freer.TH
-
 import Control.Lens
-
-import UserError
-
+import Control.Monad.Freer.TH
+import MyPrelude
 import System.Directory.Tree
+import UserError
 
 data FileSystem r where
   ReadFileE :: FilePath -> FileSystem ByteString
   WriteFileE :: FilePath -> ByteString -> FileSystem ()
-  -- TODO: add effects for more things, make sure we can implement fileystem import
+
+-- TODO: add effects for more things, make sure we can implement fileystem import
 makeEffect ''FileSystem
 
 data FileSystemTree r where
   ReadDirectory :: FilePath -> FileSystemTree (DirTree LByteString)
+
 makeEffect ''FileSystemTree
 
 -- runFileSystemIO
@@ -29,9 +27,10 @@ makeEffect ''FileSystemTree
 -- runFileSystemIO = interpret $ \case
 --   ReadFile
 
-runFileSystemTreeIO
-  :: (MonadIO m, LastMember m effs, Member ThrowUserError effs)
-  => Eff (FileSystemTree : effs) ~> Eff effs
+runFileSystemTreeIO ::
+  (MonadIO m, LastMember m effs, Member ThrowUserError effs) =>
+  Eff (FileSystemTree : effs) ~> Eff effs
 runFileSystemTreeIO = interpret $ \case
-  ReadDirectory fp -> liftIO $
-    dirTree <$> readDirectoryWithL (fmap (view lazy) . readFile) fp
+  ReadDirectory fp ->
+    liftIO $
+      dirTree <$> readDirectoryWithL (fmap (view lazy) . readFile) fp

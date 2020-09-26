@@ -2,10 +2,8 @@
 
 module Effect.Warn where
 
-import MyPrelude
-
-
 import Effect.Throw
+import MyPrelude
 
 data Warn e r where
   Warn :: e -> Warn e ()
@@ -16,8 +14,10 @@ warn e = send (Warn e)
 convertError :: forall e effs. Member (Warn e) effs => Eff (Error e : effs) () -> Eff effs ()
 convertError = (`handleError` (\e -> warn e))
 
-printWarnings
-  :: forall e m effs. (LastMember m effs, MonadIO m, Show e)
-  => Eff (Warn e : effs) () -> Eff effs ()
+printWarnings ::
+  forall e m effs.
+  (LastMember m effs, MonadIO m, Show e) =>
+  Eff (Warn e : effs) () ->
+  Eff effs ()
 printWarnings = interpretWith $ \case
   Warn e -> \k -> (liftIO . eputStr . show $ e) >> k ()

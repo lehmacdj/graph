@@ -1,15 +1,12 @@
 module Lang.Command.Parse where
 
-import Text.Megaparsec
-
+import Control.Arrow (left)
 import Data.Functor
-
-import Lang.Parsing
 import Lang.APath
 import Lang.APath.Parse
 import Lang.Command
-
-import Control.Arrow (left)
+import Lang.Parsing
+import Text.Megaparsec
 
 apath :: Parser (APath String)
 apath = pAPath transition
@@ -86,28 +83,28 @@ pEdit = command "vi" $> Edit
 pCommand :: Parser Command
 pCommand =
   try pChangeNode
-  <|> try pDualize
-  <|> try pMake
-  <|> try pMerge
-  <|> try pClone
-  <|> try pList
-  <|> try pQuery
-  <|> try pTag
-  <|> try pRemove
-  <|> try pRemoveNode
-  <|> try pAt
-  <|> try pDedup
-  <|> try pLoad
-  <|> try pNodeId
-  <|> try pDebug
-  <|> try pShowImage
-  <|> try pImport
-  <|> try pImportUrl
-  <|> try pCheck
-  <|> try pFix
-  <|> try pMove
-  <|> try pRename
-  <|> try pEdit
+    <|> try pDualize
+    <|> try pMake
+    <|> try pMerge
+    <|> try pClone
+    <|> try pList
+    <|> try pQuery
+    <|> try pTag
+    <|> try pRemove
+    <|> try pRemoveNode
+    <|> try pAt
+    <|> try pDedup
+    <|> try pLoad
+    <|> try pNodeId
+    <|> try pDebug
+    <|> try pShowImage
+    <|> try pImport
+    <|> try pImportUrl
+    <|> try pCheck
+    <|> try pFix
+    <|> try pMove
+    <|> try pRename
+    <|> try pEdit
 
 parseCommand :: String -> Either String Command
 parseCommand = left errorBundlePretty . runParser pCommand "<interactive>"

@@ -1,13 +1,12 @@
 -- | Utilities for dealing with connects and following them.
-
 module Graph.Connect where
 
 import Control.Lens (view)
+import Control.Lens
+import Data.Foldable
 import Data.Set (Set)
 import Data.Set.Lens
-import Control.Lens
 import Graph
-import Data.Foldable
 
 pairOfConnect :: Connect t -> (t, NID)
 pairOfConnect (Connect x nid) = (x, nid)
@@ -26,11 +25,14 @@ pairOfConnect (Connect x nid) = (x, nid)
 matchConnect :: TransitionValid t => t -> Set (Connect t) -> [NID]
 matchConnect x cs =
   map (view connectNode)
-  . filter ((==x) . view connectTransition)
-  $ toList cs
+    . filter ((== x) . view connectTransition)
+    $ toList cs
 
 -- | selfLoopify n1 n2 is a function that makes self loops on n1 self loops on n2
-selfLoopify
-  :: TransitionValid t
-  => NID -> NID -> Set (Connect t) -> Set (Connect t)
-selfLoopify nid nid' = (setmapped . connectNode . filtered (==nid)) .~ nid'
+selfLoopify ::
+  TransitionValid t =>
+  NID ->
+  NID ->
+  Set (Connect t) ->
+  Set (Connect t)
+selfLoopify nid nid' = (setmapped . connectNode . filtered (== nid)) .~ nid'

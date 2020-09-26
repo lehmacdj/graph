@@ -1,13 +1,11 @@
 module Lang.Parsing where
 
-import Data.Void
 import Data.Char
-
+import Data.Void
+import Graph (NID)
 import Text.Megaparsec
 import Text.Megaparsec.Char
 import qualified Text.Megaparsec.Char.Lexer as L
-
-import Graph (NID)
 
 type Parser = Parsec Void String
 
@@ -62,4 +60,4 @@ command i = L.lexeme s (string i <* lookAhead (space1 <|> eof))
 commandFrom :: [String] -> Parser String
 commandFrom [] = empty
 commandFrom [x] = symbol x
-commandFrom (x:xs) = try (command x) <|> commandFrom xs
+commandFrom (x : xs) = try (command x) <|> commandFrom xs

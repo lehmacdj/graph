@@ -3,21 +3,17 @@
 
 module Main where
 
+import App
 import ClassyPrelude
+import Completion
 import Control.Lens hiding (index)
-
 import Control.Repl
-
+import Env
 import Lang.Command hiding (printTransitions)
 import Lang.Command.Parse
-
-import Env
-import App
-import Completion
-
 import System.Directory
-import Text.Read (readMaybe)
 import System.FilePath
+import Text.Read (readMaybe)
 
 -- | Style guide for commands for the future:
 -- All commands and paths are interpreted relative to the current location

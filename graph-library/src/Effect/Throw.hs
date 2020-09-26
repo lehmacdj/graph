@@ -1,21 +1,21 @@
 {-# LANGUAGE LambdaCase #-}
-{-# LANGUAGE NoImplicitPrelude #-}
 {-# LANGUAGE ViewPatterns #-}
+{-# LANGUAGE NoImplicitPrelude #-}
 
 module Effect.Throw
-  ( module Control.Monad.Freer.Error
-  , module Effect.Throw
-  ) where
-
-import MyPrelude
+  ( module Control.Monad.Freer.Error,
+    module Effect.Throw,
+  )
+where
 
 import Control.Monad.Freer.Error
-
-import UserError
 import Graph.Types
+import MyPrelude
+import UserError
 
-newtype Missing = Missing { unMissing :: NID }
+newtype Missing = Missing {unMissing :: NID}
   deriving (Show, Eq, Ord)
+
 type ThrowMissing = Error Missing
 
 throwMissing :: Member ThrowMissing effs => NID -> Eff effs a

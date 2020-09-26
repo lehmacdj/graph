@@ -1,34 +1,35 @@
-{-# LANGUAGE TemplateHaskell #-}
-{-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE TypeSynonymInstances #-}
-{-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE TypeSynonymInstances #-}
 {-# LANGUAGE NoImplicitPrelude #-}
 
 module Env where
 
 import ClassyPrelude
-
-import Control.Monad.Unique
-
-import Control.Repl
-import Text.Printf
 import Control.Lens
-
+import Control.Monad.Unique
+import Control.Repl
+import Effect.Graph (IsDual (..))
 import Graph
-import Effect.Graph (IsDual(..))
+import Text.Printf
 
 data Env = Env
-  { _filePath :: IORef (Maybe FilePath)
-  , _nextId :: IORef NID -- ^ next id that is unique within the current graph
-  , _currentNID :: IORef NID
-  , _isDualized :: IORef IsDual
+  { _filePath :: IORef (Maybe FilePath),
+    -- | next id that is unique within the current graph
+    _nextId :: IORef NID,
+    _currentNID :: IORef NID,
+    _isDualized :: IORef IsDual
   }
+
 makeLenses ''Env
 
-modifyOf
-  :: (MonadReader env m, MonadIO m)
-  => Lens' env (IORef r) -> (r -> r) -> m r
+modifyOf ::
+  (MonadReader env m, MonadIO m) =>
+  Lens' env (IORef r) ->
+  (r -> r) ->
+  m r
 modifyOf l f = do
   ref <- view l
   r <- readIORef ref
@@ -37,7 +38,7 @@ modifyOf l f = do
 
 -- | Create a new unique NID
 freshNID :: (MonadReader Env m, MonadIO m) => m NID
-freshNID = modifyOf nextId (+1)
+freshNID = modifyOf nextId (+ 1)
 
 instance MonadUnique NID (Repl Env) where
   fresh = freshNID
@@ -45,10 +46,10 @@ instance MonadUnique NID (Repl Env) where
 emptyEnv :: IO Env
 emptyEnv =
   Env
-  <$> newIORef Nothing
-  <*> newIORef 0
-  <*> newIORef 0
-  <*> newIORef (IsDual False)
+    <$> newIORef Nothing
+    <*> newIORef 0
+    <*> newIORef 0
+    <*> newIORef (IsDual False)
 
 errorNoEdge :: String -> Repl Env ()
 errorNoEdge = liftIO . printf "edge missing '%s': failed to execute command\n"
