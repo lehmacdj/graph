@@ -83,6 +83,16 @@ executables:
     dependencies:
     - graph
 
+  g-converter:
+    main:                Converter.hs
+    source-dirs:         app
+    ghc-options:
+    - -threaded
+    - -rtsopts
+    - -with-rtsopts=-N
+    dependencies:
+    - graph
+
 tests:
   graph-test:
     main:                Spec.hs
