@@ -37,7 +37,9 @@ packages:
 # Dependency packages to be pulled from upstream that are not in the resolver
 # using the same syntax as the packages field.
 # (e.g., acme-missiles-0.3)
-# extra-deps: []
+extra-deps:
+- base64-0.4.2@sha256:cb54c819bf9e2b8c45dbe43cc30a6941da37e00000d57dc7b728348f1ada5fee,2942
+- ghc-byteorder-4.11.0.0.10@sha256:5ee4a907279bfec27b0f9de7b8fba4cecfd34395a0235a7784494de70ad4e98f,1535
 
 # Override default flag values for local packages and extra-deps
 # flags: {}

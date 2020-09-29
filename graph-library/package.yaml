@@ -53,7 +53,8 @@ dependencies:
 - witherable
 - time
 - typed-process
-- uuid
+- random
+- base64
 
 default-extensions:
 - GADTs
