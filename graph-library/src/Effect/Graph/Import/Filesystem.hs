@@ -9,7 +9,6 @@
 --   from their place in the directory tree.
 module Effect.Graph.Import.Filesystem where
 
-import Control.Monad.Freer.Fresh
 import Data.Digest.Pure.SHA
 import Effect.Console
 import Effect.Filesystem
@@ -21,12 +20,13 @@ import Effect.Time
 import Graph hiding (insertEdge)
 import MyPrelude
 import System.Directory.Tree hiding (readDirectory)
+import Effect.FreshNID
 
 computeSHA :: LByteString -> String
 computeSHA = showDigest . sha512
 
 importDirectory ::
-  ( Members [GetTime, Fresh, FileSystemTree, Console, ThrowMissing] effs,
+  ( Members [GetTime, FreshNID, FileSystemTree, Console, ThrowMissing] effs,
     HasGraph String effs
   ) =>
   FilePath ->
@@ -45,7 +45,7 @@ importDirectory base nid = do
   addDirectories fileTree nid
 
 addDirectories ::
-  (Members [Fresh, ThrowMissing, GetTime] effs, HasGraph String effs) =>
+  (Members [FreshNID, ThrowMissing, GetTime] effs, HasGraph String effs) =>
   DirTree LByteString ->
   NID ->
   Eff effs ()

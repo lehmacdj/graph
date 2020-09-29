@@ -1,5 +1,8 @@
+module Main (main) where
+
 import qualified Data.Set as Set
 import Graph
+import Graph.Types.NID
 import Lang.Path
 import Lang.Path.Partial
 import Test.Tasty
@@ -7,6 +10,9 @@ import Test.Tasty.HUnit
 
 main :: IO ()
 main = defaultMain allTests
+
+instance Num NID where
+  fromInteger = smallNID . fromIntegral
 
 testGraph :: Graph String
 testGraph =
@@ -24,7 +30,8 @@ allTests =
   testGroup
     "graph"
     [ pathTests,
-      completionTests
+      completionTests,
+      nidTests
     ]
 
 pathTests :: TestTree
@@ -62,3 +69,21 @@ takeRelevantFromEndTests =
     ]
   where
     takeRelevantFromEnd' i e = testCase i $ e @=? (takeRelevantFromEnd . reverse $ i)
+
+nidTests :: TestTree
+nidTests = testGroup "NID" [readShowNidTest]
+
+readShowNidTest :: TestTree
+readShowNidTest =
+  testGroup
+    "readShowNid"
+    [ rs "zVjDcoKxrkuqtG1_VE0JF8_3zAIDpbm9",
+      rs "00jD-oKxr-uqtG10VE0JF8_3zAKDkbm9",
+      rs "00000000000000000000000000000000",
+      rs "10000000000000000000000000000000",
+      rs "00000000000000000000000000000001",
+      rs "0000000000000000000000000000000g",
+      rs "g0000000000000000000000000000000"
+    ]
+  where
+    rs x = testCase x $ x @=? show (read x :: NID)

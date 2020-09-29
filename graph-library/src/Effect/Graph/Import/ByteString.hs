@@ -1,28 +1,28 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE NoImplicitPrelude #-}
+
 module Effect.Graph.Import.ByteString where
 
-import MyPrelude
-
 import Data.Digest.Pure.SHA
-
-import Graph (Edge(..))
-
-import Control.Monad.Freer.Fresh
-import Effect.Web
+import Effect.FreshNID
 import Effect.Graph
 import Effect.Graph.Advanced
 import Effect.Throw
 import Effect.Time
+import Effect.Web
+import Graph (Edge (..))
+import MyPrelude
 
 computeSHA :: LByteString -> String
 computeSHA = showDigest . sha512
 
-importUrl
-  :: ( Members [Web, Fresh, ThrowMissing, GetTime] effs
-     , HasGraph String effs
-     )
-  => NID -> String -> Eff effs NID
+importUrl ::
+  ( Members [Web, FreshNID, ThrowMissing, GetTime] effs,
+    HasGraph String effs
+  ) =>
+  NID ->
+  String ->
+  Eff effs NID
 importUrl root url = do
   d <- getHttp url
   importUrls <- root `transitionsVia` "import-urls"
@@ -30,26 +30,28 @@ importUrl root url = do
   insertEdge (Edge importUrls url nnid)
   pure nnid
 
-
 timeToDateStrings :: UTCTime -> NonNull [String]
-timeToDateStrings time = impureNonNull
-  [ formatTime' "%Y" time
-  , formatTime' "%m" time
-  , formatTime' "%d" time
-  , formatTime' "%H" time
-  , formatTime' "%M" time
-  , formatTime' "%S" time
-  , formatTime' "%q" time
-  ]
-    where
+timeToDateStrings time =
+  impureNonNull
+    [ formatTime' "%Y" time,
+      formatTime' "%m" time,
+      formatTime' "%d" time,
+      formatTime' "%H" time,
+      formatTime' "%M" time,
+      formatTime' "%S" time,
+      formatTime' "%q" time
+    ]
+  where
     formatTime' = formatTime defaultTimeLocale
 
 -- | From an id with an edge with a specific label, add an edge to and create
 -- a new file labeled with its hash
 -- Returns the nid of the new node and the updated graph
-importData
-   :: (Members [Fresh, ThrowMissing, GetTime] effs, HasGraph String effs)
-   => NID -> LByteString -> Eff effs NID
+importData ::
+  (Members [FreshNID, ThrowMissing, GetTime] effs, HasGraph String effs) =>
+  NID ->
+  LByteString ->
+  Eff effs NID
 importData root d = do
   fileHashes <- root `transitionsVia` "file-hashes"
   nnid <- fileHashes `transitionsVia` computeSHA d

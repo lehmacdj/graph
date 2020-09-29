@@ -4,10 +4,10 @@
 module Lang.Command where
 
 import Control.Monad (zipWithM)
-import Control.Monad.Freer.Fresh
 import Effect.Console
 import Effect.Editor
 import Effect.Filesystem
+import Effect.FreshNID
 import Effect.Graph
 import Effect.Graph.Advanced
 import Effect.Graph.Check
@@ -23,6 +23,7 @@ import Lang.APath
 import MyPrelude
 import Singleton
 import UserError
+import Graph.Types.NID
 
 data Command
   = -- | cd
@@ -88,13 +89,9 @@ printTransitions = mapM_ (echo . dtransition)
   where
     dtransition (Connect t nid) = show t ++ " at " ++ show nid
 
--- | set the freshness to a certain number
-resetFresh :: Member (Writer NID) effs => NID -> Eff effs ()
-resetFresh = tell
-
 interpretCommand ::
-  ( Members [Console, ThrowUserError, SetLocation, GetLocation, Fresh, Dualizeable] effs,
-    Members [FileSystemTree, Web, Load, Writer NID, GetTime, Editor] effs,
+  ( Members [Console, ThrowUserError, SetLocation, GetLocation, Dualizeable] effs,
+    Members [FileSystemTree, Web, Load, FreshNID, GetTime, Editor] effs,
     HasGraph String effs
   ) =>
   Command ->
@@ -175,7 +172,7 @@ interpretCommand = \case
   -- layers of commands that can be handled at different levels
   Import fp -> currentLocation >>= subsumeMissing . importDirectory fp
   ImportUrl uri -> do
-    nid <- subsumeMissing (importUrl 0 uri)
+    nid <- subsumeMissing (importUrl nilNID uri)
     changeLocation nid
   Load fp -> do
     setLoaded fp

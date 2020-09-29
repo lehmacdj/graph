@@ -11,9 +11,6 @@ import Control.Repl
 import Env
 import Lang.Command hiding (printTransitions)
 import Lang.Command.Parse
-import System.Directory
-import System.FilePath
-import Text.Read (readMaybe)
 
 -- | Style guide for commands for the future:
 -- All commands and paths are interpreted relative to the current location
@@ -41,7 +38,4 @@ main = do
     Nothing -> putStrLn . pack $ "needs one command line argument"
     Just dir -> do
       writeIORef (view filePath env) (Just dir)
-      linkFileNames <- filter (".json" `isSuffixOf`) <$> listDirectory dir
-      let nids = mapMaybe (readMaybe . dropExtension) linkFileNames
-      writeIORef (view nextId env) (maximum (1 `ncons` nids) + 1)
       doRepl' replSettings "g" (withDefaultQuitParser parseCommand) execCommand env

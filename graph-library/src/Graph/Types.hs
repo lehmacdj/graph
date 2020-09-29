@@ -5,7 +5,8 @@
 {-# LANGUAGE TemplateHaskell #-}
 
 module Graph.Types
-  ( module Graph.Types,
+  ( NID(..)
+  , module Graph.Types,
   )
 where
 
@@ -21,10 +22,9 @@ import qualified Data.Map as Map
 import Data.Maybe (fromJust)
 import Data.Set (Set)
 import GHC.Generics
+import Graph.Types.NID
 
 type TransitionValid t = (Show t, Eq t, Ord t)
-
-type NID = Int
 
 -- | A transition from/to a node to/from another node.
 -- The first node isn't represented here, because this is used only in the node

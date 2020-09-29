@@ -6,13 +6,13 @@ module App where
 
 import Control.Arrow ((>>>))
 import Control.Lens
-import Control.Monad.Freer.Fresh
 import Control.Monad.Freer.State
 import Control.Monad.Freer.Writer
 import Control.Repl
 import Effect.Console
 import Effect.Editor
 import Effect.Filesystem
+import Effect.FreshNID
 import Effect.Graph
 import Effect.Load
 import Effect.NodeLocated
@@ -25,6 +25,7 @@ import Env
 import MyPrelude hiding (Reader, ask)
 import System.Directory
 import System.FilePath
+import System.Random
 import Text.Read (readMaybe)
 import UserError
 
@@ -44,9 +45,9 @@ runLocableAppBase = interpret setLocHandler . interpret getLocHandler
 
 evalFreshAppBase ::
   LastMember AppBase effs =>
-  Eff (Fresh : effs) ~> Eff effs
+  Eff (FreshNID : effs) ~> Eff effs
 evalFreshAppBase = interpret $ \case
-  Fresh -> sendM freshNID
+  FreshNID -> sendM (liftIO randomIO)
 
 runStateAppBaseIORef ::
   LastMember AppBase effs =>
@@ -65,11 +66,7 @@ runLoadAppBase ::
   (LastMember AppBase effs, HasGraph String effs, Member (Writer NID) effs) =>
   Eff (Load : effs) ~> Eff effs
 runLoadAppBase = interpret $ \case
-  SetLoaded dir -> do
-    sendM $ modifyOf filePath (const (Just dir)) >> pure ()
-    linkFileNames <- liftIO $ filter (".json" `isSuffixOf`) <$> listDirectory dir
-    let nids = mapMaybe (readMaybe . dropExtension) linkFileNames
-    sendM $ modifyOf nextId (const (maximum (1 `ncons` nids) + 1)) >> pure ()
+  SetLoaded dir -> sendM $ modifyOf filePath (const (Just dir)) >> pure ()
 
 runReaderAppBaseIORef ::
   LastMember AppBase effs =>
@@ -96,8 +93,8 @@ runEditorAppBase eff = do
 -- to be picked here
 interpretAsAppBase ::
   ( forall effs.
-    ( Members [Console, ThrowUserError, SetLocation, GetLocation, Fresh, Dualizeable] effs,
-      Members [FileSystemTree, Web, Load, Error None, Writer NID, Warn UserErrors] effs,
+    ( Members [Console, ThrowUserError, SetLocation, GetLocation, FreshNID, Dualizeable] effs,
+      Members [FileSystemTree, Web, Load, Error None, Warn UserErrors] effs,
       Member Editor effs,
       Member GetTime effs,
       HasGraph String effs
