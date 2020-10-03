@@ -5,6 +5,7 @@ module Lang.Parsing where
 import Data.Char
 import Data.Void
 import Graph (NID)
+import qualified Graph.Types.NID as BigNID
 import MyPrelude hiding (some, try)
 import Text.Megaparsec
 import Text.Megaparsec.Char
@@ -46,8 +47,8 @@ transition = ident <|> stringLiteral
 base64Chars :: String
 base64Chars = ['a' .. 'z'] ++ ['A' .. 'Z'] ++ ['0' .. '9'] ++ "_-"
 
-nodeId :: Parser NID
-nodeId = L.lexeme s p
+bigNID :: Parser BigNID.NID
+bigNID = L.lexeme s p
   where
     p = do
       chars <- (replicateM 32 $ oneOf base64Chars :: Parser String)
@@ -55,6 +56,9 @@ nodeId = L.lexeme s p
         Just nid -> pure nid
         Nothing ->
           fail "couldn't parse NID; expected 32 length base64url encoded string"
+
+nodeId :: Parser NID
+nodeId = L.lexeme s L.decimal
 
 number :: Parser Int
 number = L.lexeme s L.decimal
