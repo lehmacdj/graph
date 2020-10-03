@@ -5,7 +5,8 @@
 {-# LANGUAGE TemplateHaskell #-}
 
 module Graph.Types
-  ( module Graph.Types,
+  ( NID(..)
+  , module Graph.Types,
   )
 where
 
@@ -21,14 +22,7 @@ import qualified Data.Map as Map
 import Data.Maybe (fromJust)
 import Data.Set (Set)
 import GHC.Generics
-
-type NID = Int
-
-nilNID :: NID
-nilNID = 0
-
-smallNID :: Int -> NID
-smallNID = id
+import Graph.Types.NID
 
 type TransitionValid t = (Show t, Eq t, Ord t)
 
