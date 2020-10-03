@@ -4,6 +4,7 @@
 module Lang.Command where
 
 import Control.Monad (zipWithM)
+import Control.Monad.Freer.State
 import Effect.Console
 import Effect.Editor
 import Effect.Filesystem
@@ -18,7 +19,8 @@ import Effect.NodeLocated
 import Effect.Throw
 import Effect.Time
 import Effect.Web
-import Graph (Connect (..), Edge (..), dataOf, outgoingConnectsOf, nilNID)
+import Graph (Connect (..), Edge (..), dataOf, nilNID, outgoingConnectsOf)
+import History
 import Lang.APath
 import MyPrelude
 import Singleton
@@ -71,6 +73,10 @@ data Command
     Rename (APath String) (APath String)
   | -- | vi
     Edit
+  | -- | back: Go back in history by a certain number of steps. Greater number
+    -- than amount of history goes maximum amount backwards. Negative number
+    -- attempts to go forward in history if there is any recorded.
+    Back Int
   deriving (Eq, Show, Ord)
 
 singleErr :: String -> Set NID -> UserError
@@ -90,7 +96,7 @@ printTransitions = mapM_ (echo . dtransition)
 
 interpretCommand ::
   ( Members [Console, ThrowUserError, SetLocation, GetLocation, Dualizeable] effs,
-    Members [FileSystemTree, Web, Load, FreshNID, GetTime, Editor] effs,
+    Members [FileSystemTree, Web, Load, FreshNID, GetTime, Editor, State History] effs,
     HasGraph String effs
   ) =>
   Command ->
@@ -201,3 +207,11 @@ interpretCommand = \case
   Edit -> do
     n <- subsumeMissing currentLocation
     invokeEditor [n]
+  Back n -> do
+    history <- get @History
+    let (nid, history') = backInTime n history
+    -- technically this could lead to being on an invalid node that is already
+    -- deleted. we don't make an effort to change the past when things are
+    -- deleted in the future right now
+    put @History history'
+    changeLocation nid

@@ -22,6 +22,7 @@ import Effect.Util
 import Effect.Warn
 import Effect.Web
 import Env
+import History
 import MyPrelude hiding (Reader, ask)
 import System.Directory
 import System.FilePath
@@ -32,15 +33,19 @@ type App = Repl Env
 
 type AppBase = ReplBase Env
 
+runLocableHistoryState ::
+  Member (State History) effs =>
+  Eff (GetLocation : SetLocation : effs) ~> Eff effs
+runLocableHistoryState = subsumeReaderState _now >>> runSetLocationHistoryState
+
+-- | we have the extra State History parameter here to sidestep issues of
+-- having to introduce another effect, want to move away from using this method
+-- because it is messier than using the separate methods in most cases probably
 runLocableAppBase ::
   LastMember AppBase effs =>
-  Eff (GetLocation : SetLocation : effs) ~> Eff effs
-runLocableAppBase = interpret setLocHandler . interpret getLocHandler
-  where
-    setLocHandler :: LastMember AppBase effs => SetLocation x -> Eff effs x
-    setLocHandler (Tell x) = sendM $ modifyOf currentNID (const x) >> pure ()
-    getLocHandler :: LastMember AppBase effs => GetLocation x -> Eff effs x
-    getLocHandler Ask = sendM $ view currentNID >>= readIORef
+  Eff (GetLocation : SetLocation : State History : effs) ~> Eff effs
+runLocableAppBase = runLocableHistoryState >>> runStateAppBaseIORef history
+{-# DEPRECATED runLocableAppBase "use runLocableHistoryState" #-}
 
 evalFreshAppBase ::
   LastMember AppBase effs =>
@@ -92,12 +97,22 @@ runEditorAppBase eff = do
     Nothing -> throw $ OtherError "doesn't have filepath so can't start editor"
     Just fp' -> interpretEditorAsIOVimFSGraph fp' eff
 
+subsumeReaderState ::
+  forall x i r. Member (State x) r => (x -> i) -> Eff (Reader i : r) ~> Eff r
+subsumeReaderState getter = interpret $ \case
+  Ask -> getter <$> get @x
+
+runSetLocationHistoryState ::
+  Member (State History) r => Eff (SetLocation : r) ~> Eff r
+runSetLocationHistoryState = interpret $ \case
+  Tell nid -> modify @History (addToHistory nid)
+
 -- | The existential in the type here is necessary to allow an arbitrary order
 -- to be picked here
 interpretAsAppBase ::
   ( forall effs.
     ( Members [Console, ThrowUserError, SetLocation, GetLocation, FreshNID, Dualizeable] effs,
-      Members [FileSystemTree, Web, Load, Error None, Warn UserErrors] effs,
+      Members [FileSystemTree, Web, Load, Error None, Warn UserErrors, State History] effs,
       Member Editor effs,
       Member GetTime effs,
       HasGraph String effs
@@ -124,7 +139,8 @@ interpretAsAppBase v = do
           >>> runEditorAppBase
           >>> printErrors
           >>> interpretTimeAsIO
-          >>> runLocableAppBase
+          >>> runLocableHistoryState
+          >>> runStateAppBaseIORef history
           >>> evalFreshAppBase
           >>> runM
   handler v

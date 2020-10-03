@@ -13,13 +13,14 @@ import Control.Monad.Unique
 import Control.Repl
 import Effect.Graph (IsDual (..))
 import Graph
+import History
 import Text.Printf
 
 data Env = Env
   { _filePath :: IORef (Maybe FilePath),
     -- | next id that is unique within the current graph
     _nextId :: IORef NID,
-    _currentNID :: IORef NID,
+    _history :: IORef History,
     _isDualized :: IORef IsDual
   }
 
@@ -47,8 +48,8 @@ emptyEnv :: IO Env
 emptyEnv =
   Env
     <$> newIORef Nothing
-    <*> newIORef 0
-    <*> newIORef 0
+    <*> newIORef nilNID
+    <*> newIORef (History [] nilNID [])
     <*> newIORef (IsDual False)
 
 errorNoEdge :: String -> Repl Env ()
