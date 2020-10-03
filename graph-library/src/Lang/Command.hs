@@ -209,9 +209,11 @@ interpretCommand = \case
     invokeEditor [n]
   Back n -> do
     history <- get @History
-    let (nid, history') = backInTime n history
+    let (_, history') = backInTime n history
     -- technically this could lead to being on an invalid node that is already
     -- deleted. we don't make an effort to change the past when things are
     -- deleted in the future right now
+    -- we don't need to use changeLocation here because setting the history
+    -- already modifies the location and if we set the location we would end up
+    -- adding duplicates to the history
     put @History history'
-    changeLocation nid
