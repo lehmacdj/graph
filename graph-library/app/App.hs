@@ -63,7 +63,11 @@ runLoadAppBase ::
   (LastMember AppBase effs, HasGraph String effs, Member (Writer NID) effs) =>
   Eff (Load : effs) ~> Eff effs
 runLoadAppBase = interpret $ \case
-  SetLoaded dir -> sendM $ modifyOf filePath (const (Just dir)) >> pure ()
+  SetLoaded dir -> do
+    sendM $ modifyOf filePath (const (Just dir)) >> pure ()
+    linkFileNames <- liftIO $ filter (".json" `isSuffixOf`) <$> listDirectory dir
+    let nids = mapMaybe (readMaybe . dropExtension) linkFileNames
+    sendM $ modifyOf nextId (const (maximum (1 `ncons` nids) + 1)) >> pure ()
 
 runReaderAppBaseIORef ::
   LastMember AppBase effs =>
