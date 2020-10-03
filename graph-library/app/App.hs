@@ -23,10 +23,7 @@ import Effect.Warn
 import Effect.Web
 import Env
 import MyPrelude hiding (Reader, ask)
-import System.Directory
-import System.FilePath
 import System.Random
-import Text.Read (readMaybe)
 import UserError
 
 type App = Repl Env

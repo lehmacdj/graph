@@ -2,7 +2,7 @@ module Main (main) where
 
 import qualified Data.Set as Set
 import Graph
-import Graph.Types.NID
+import qualified Graph.Types.NID as BigNID
 import Lang.Path
 import Lang.Path.Partial
 import Test.Tasty
@@ -86,4 +86,4 @@ readShowNidTest =
       rs "g0000000000000000000000000000000"
     ]
   where
-    rs x = testCase x $ x @=? show (read x :: NID)
+    rs x = testCase x $ x @=? show (read x :: BigNID.NID)

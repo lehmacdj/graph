@@ -18,12 +18,11 @@ import Effect.NodeLocated
 import Effect.Throw
 import Effect.Time
 import Effect.Web
-import Graph (Connect (..), Edge (..), dataOf, outgoingConnectsOf)
+import Graph (Connect (..), Edge (..), dataOf, outgoingConnectsOf, nilNID)
 import Lang.APath
 import MyPrelude
 import Singleton
 import UserError
-import Graph.Types.NID
 
 data Command
   = -- | cd

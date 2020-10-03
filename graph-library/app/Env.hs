@@ -13,13 +13,12 @@ import Control.Monad.Unique
 import Control.Repl
 import Effect.Graph (IsDual (..))
 import Graph
-import Graph.Types.NID
-import System.Random
 import Text.Printf
 
 data Env = Env
   { _filePath :: IORef (Maybe FilePath),
     -- | next id that is unique within the current graph
+    _nextId :: IORef NID,
     _currentNID :: IORef NID,
     _isDualized :: IORef IsDual
   }
@@ -37,14 +36,19 @@ modifyOf l f = do
   modifyIORef' ref f
   pure r
 
+-- | Create a new unique NID
+freshNID :: (MonadReader Env m, MonadIO m) => m NID
+freshNID = modifyOf nextId (+ 1)
+
 instance MonadUnique NID (Repl Env) where
-  fresh = liftIO randomIO
+  fresh = freshNID
 
 emptyEnv :: IO Env
 emptyEnv =
   Env
     <$> newIORef Nothing
-    <*> newIORef nilNID
+    <*> newIORef 0
+    <*> newIORef 0
     <*> newIORef (IsDual False)
 
 errorNoEdge :: String -> Repl Env ()
