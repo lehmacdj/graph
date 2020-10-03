@@ -60,8 +60,16 @@ bigNID = L.lexeme s p
 nodeId :: Parser NID
 nodeId = L.lexeme s L.decimal
 
+positiveNumber :: Parser Int
+positiveNumber = L.lexeme s L.decimal
+
 number :: Parser Int
-number = L.lexeme s L.decimal
+number = do
+  minusSign <- optional (symbol "-")
+  n <- positiveNumber
+  case minusSign of
+    Just _ -> pure $ negate n
+    Nothing -> pure n
 
 parens :: Parser a -> Parser a
 parens = between (symbol "(") (symbol ")")

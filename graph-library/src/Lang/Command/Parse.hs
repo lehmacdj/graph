@@ -80,6 +80,9 @@ pRename = (command "rn" $> Rename) <*> apath <*> apath
 pEdit :: Parser Command
 pEdit = command "vi" $> Edit
 
+pBack :: Parser Command
+pBack = (command "back" $> Back) <*> number
+
 pCommand :: Parser Command
 pCommand =
   try pChangeNode
@@ -105,6 +108,7 @@ pCommand =
     <|> try pMove
     <|> try pRename
     <|> try pEdit
+    <|> try pBack
 
 parseCommand :: String -> Either String Command
 parseCommand = left errorBundlePretty . runParser pCommand "<interactive>"
