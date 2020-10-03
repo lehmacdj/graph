@@ -4,13 +4,15 @@
 module Main where
 
 import App
-import ClassyPrelude
 import Completion
 import Control.Lens hiding (index)
 import Control.Repl
 import Env
 import Lang.Command hiding (printTransitions)
 import Lang.Command.Parse
+import MyPrelude
+import System.Directory
+import System.FilePath
 
 -- | Style guide for commands for the future:
 -- All commands and paths are interpreted relative to the current location
@@ -39,6 +41,6 @@ main = do
     Just dir -> do
       writeIORef (view filePath env) (Just dir)
       linkFileNames <- filter (".json" `isSuffixOf`) <$> listDirectory dir
-      let nids = mapMaybe (readMaybe . dropExtension) linkFileNames
+      let nids = mapMaybe (readMay . dropExtension) linkFileNames
       writeIORef (view nextId env) (maximum (1 `ncons` nids) + 1)
       doRepl' replSettings "g" (withDefaultQuitParser parseCommand) execCommand env

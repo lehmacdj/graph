@@ -23,6 +23,8 @@ import Effect.Warn
 import Effect.Web
 import Env
 import MyPrelude hiding (Reader, ask)
+import System.Directory
+import System.FilePath
 import System.Random
 import UserError
 
@@ -66,7 +68,7 @@ runLoadAppBase = interpret $ \case
   SetLoaded dir -> do
     sendM $ modifyOf filePath (const (Just dir)) >> pure ()
     linkFileNames <- liftIO $ filter (".json" `isSuffixOf`) <$> listDirectory dir
-    let nids = mapMaybe (readMaybe . dropExtension) linkFileNames
+    let nids = mapMaybe (readMay . dropExtension) linkFileNames
     sendM $ modifyOf nextId (const (maximum (1 `ncons` nids) + 1)) >> pure ()
 
 runReaderAppBaseIORef ::

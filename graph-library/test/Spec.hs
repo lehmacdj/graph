@@ -11,9 +11,6 @@ import Test.Tasty.HUnit
 main :: IO ()
 main = defaultMain allTests
 
-instance Num NID where
-  fromInteger = smallNID . fromIntegral
-
 testGraph :: Graph String
 testGraph =
   insertEdge (Edge 1 "c" 2)
