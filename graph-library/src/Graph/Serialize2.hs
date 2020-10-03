@@ -23,10 +23,10 @@ import System.Directory
 import UserError
 
 linksFile :: FilePath -> NID -> FilePath
-linksFile base nid = traceShowId (base </> (show nid ++ ".json"))
+linksFile base nid = base </> (show nid ++ ".json")
 
 nodeDataFile :: FilePath -> NID -> FilePath
-nodeDataFile base nid = traceShowId (base </> (show nid ++ ".data"))
+nodeDataFile base nid = base </> (show nid ++ ".data")
 
 -- TODO: rewrite using System.Directory.Tree
 -- yields better error handling that isn't quite as sketchy
