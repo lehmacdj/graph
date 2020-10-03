@@ -3,6 +3,7 @@ module Main (main) where
 import qualified Data.Set as Set
 import Graph
 import qualified Graph.Types.NID as BigNID
+import History
 import Lang.Path
 import Lang.Path.Partial
 import Test.Tasty
@@ -28,7 +29,8 @@ allTests =
     "graph"
     [ pathTests,
       completionTests,
-      nidTests
+      nidTests,
+      historyTests
     ]
 
 pathTests :: TestTree
@@ -84,3 +86,38 @@ readShowNidTest =
     ]
   where
     rs x = testCase x $ x @=? show (read x :: BigNID.NID)
+
+historyTests :: TestTree
+historyTests = testGroup "history" [addToHistoryTest, backInTimeTest]
+
+addToHistoryTest :: TestTree
+addToHistoryTest =
+  testGroup
+    "add 0 to history"
+    [ ath 0 (History [1, 0] 2 []) (History [2, 1, 0] 0 []),
+      ath 0 (History [1, 0] 2 [0]) (History [2, 1, 0] 0 []),
+      ath 0 (History [1, 0] 2 [0, 4]) (History [2, 1, 0] 0 [4]),
+      ath 0 (History [1, 0] 2 [3]) (History [2, 1, 0] 0 [])
+    ]
+  where
+    ath node history expected =
+      testCase name $ addToHistory node history @?= expected
+      where
+        name = show history
+
+backInTimeTest :: TestTree
+backInTimeTest =
+  testGroup
+    "backInTime"
+    [ bt 0 (History [] 0 []) (0, History [] 0 []),
+      bt 2 (History [] 0 []) (0, History [] 0 []),
+      bt (-2) (History [] 0 []) (0, History [] 0 []),
+      bt 2 (History [1, 0] 2 []) (0, History [] 0 [1, 2]),
+      bt 2 (History [2, 1, 0] 3 []) (1, History [0] 1 [2, 3]),
+      bt (-1) (History [] 0 [1, 2]) (1, History [0] 1 [2])
+    ]
+  where
+    bt n history expected =
+      testCase name $ backInTime n history @?= expected
+      where
+        name = show n ++ ", " ++ show history

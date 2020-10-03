@@ -45,6 +45,11 @@ concatMapM op = foldr f (return [])
   where
     f x xs = do x' <- op x; if null x' then xs else do { xs' <- xs; return $ x' ++ xs' }
 
+-- | Apply a function n times to a given value
+-- implementation taken from protolude
+applyN :: forall a. Int -> (a -> a) -> a -> a
+applyN n f = foldr (.) id (replicate n f :: [a -> a])
+
 -- # IO functions for stderr
 
 eputStr :: String -> IO ()
