@@ -3,7 +3,7 @@
 module MyPrelude
   ( module MyPrelude,
     module ClassyPrelude,
-    module Control.Monad.Freer,
+    module Control.Monad.Freer
   )
 where
 
