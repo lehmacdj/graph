@@ -150,9 +150,7 @@ interpretCommand = \case
     locations <- subsumeMissing (resolvePathSuccesses nid p)
     cnid <- currentLocation
     forM_ locations $ \nid' -> do
-      changeLocation nid'
-      interpretCommand c
-    changeLocation cnid
+      local @NID (const nid') $ interpretCommand c
   Dedup t -> do
     nid <- currentLocation
     ambiguities <- subsumeMissing (resolvePathSuccesses nid (Literal t))
