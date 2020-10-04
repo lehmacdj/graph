@@ -184,6 +184,8 @@ interpretCommand = \case
   Debug -> do
     echo "current node:"
     currentLocation >>= subsumeMissing . getNode' >>= echo . show @(Node String)
+    echo "history:"
+    get @History >>= echo . show
   -- echo "node-ids in the graph:"
   -- nodeManifest @String >>= echo . show
   Check -> reportToConsole @String (fsck @String)
