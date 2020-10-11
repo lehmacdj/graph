@@ -26,7 +26,6 @@ import History
 import MyPrelude hiding (Reader, ask)
 import System.Directory
 import System.FilePath
-import System.Random
 import UserError
 
 type App = Repl Env
@@ -51,7 +50,7 @@ evalFreshAppBase ::
   LastMember AppBase effs =>
   Eff (FreshNID : effs) ~> Eff effs
 evalFreshAppBase = interpret $ \case
-  FreshNID -> sendM (liftIO randomIO)
+  FreshNID -> sendM Env.freshNID
 
 runStateAppBaseIORef ::
   LastMember AppBase effs =>
