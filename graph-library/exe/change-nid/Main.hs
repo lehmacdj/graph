@@ -14,11 +14,11 @@ import MyPrelude
 import UserError
 
 nodeRewrites :: [NID] -> [(NID, NID)]
-nodeRewrites nids =
-  (filter outOfRange nids)
-    `zip` ([(maximumEx (filter (not . outOfRange) nids) + 1) ..])
+nodeRewrites nids = []
   where
-    outOfRange x = x >= 4000 || x < 0
+    -- (filter outOfRange nids)
+    --  `zip` ([(maximumEx (filter (not . outOfRange) nids) + 1) ..])
+    outOfRange _ = False
 
 applyRewrite ::
   Members [ReadGraph String, WriteGraph String, ThrowUserError] effs =>
@@ -61,6 +61,7 @@ runReadWriteGraphIO dir =
 main :: IO ()
 main = do
   args :: [String] <- map unpack <$> getArgs
+  error "make sure to read source / change it before running this executable"
   case index args 0 of
     Nothing -> putStrLn . pack $ "needs one command line argument"
     Just dir -> runReadWriteGraphIO dir $ renumberNodes
