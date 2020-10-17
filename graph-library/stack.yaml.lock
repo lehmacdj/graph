@@ -5,22 +5,22 @@
 
 packages:
 - completed:
-    hackage: base64-0.4.2@sha256:cb54c819bf9e2b8c45dbe43cc30a6941da37e00000d57dc7b728348f1ada5fee,2942
+    hackage: witherable-0.3.5@sha256:6590a15735b50ac14dcc138d4265ff1585d5f3e9d3047d5ebc5abf4cd5f50084,1476
     pantry-tree:
-      size: 2114
-      sha256: 09b172d9c21a4c0cf7d3b6ecc1d84c00978e71dbafdfde3e6b0e2010d77a6052
+      size: 271
+      sha256: b99f21dbac28da031eb7c787fbffbe5e77e0aee42b64b5dda082470e907d5ab5
   original:
-    hackage: base64-0.4.2@sha256:cb54c819bf9e2b8c45dbe43cc30a6941da37e00000d57dc7b728348f1ada5fee,2942
+    hackage: witherable-0.3.5@sha256:6590a15735b50ac14dcc138d4265ff1585d5f3e9d3047d5ebc5abf4cd5f50084,1476
 - completed:
-    hackage: ghc-byteorder-4.11.0.0.10@sha256:5ee4a907279bfec27b0f9de7b8fba4cecfd34395a0235a7784494de70ad4e98f,1535
+    hackage: monoidal-containers-0.6.0.1@sha256:7d776942659eb4d70d8b8da5d734396374a6eda8b4622df9e61e26b24e9c8e40,2501
     pantry-tree:
-      size: 169
-      sha256: 54a4636f72c3b9eff7f081714cb1a7b809fc1f3b2e239caaf0d65d79aa9cb56f
+      size: 569
+      sha256: c354e916cb3aa9a0728a60f08440dc589a9e6d8275f047dbe9ab73f168247561
   original:
-    hackage: ghc-byteorder-4.11.0.0.10@sha256:5ee4a907279bfec27b0f9de7b8fba4cecfd34395a0235a7784494de70ad4e98f,1535
+    hackage: monoidal-containers-0.6.0.1@sha256:7d776942659eb4d70d8b8da5d734396374a6eda8b4622df9e61e26b24e9c8e40,2501
 snapshots:
 - completed:
-    size: 499461
-    url: https://raw.githubusercontent.com/commercialhaskell/stackage-snapshots/master/lts/13/25.yaml
-    sha256: aed98969628e20615e96b06083c933c7e3354ae56b08b75e607a26569225d6c0
-  original: lts-13.25
+    size: 532381
+    url: https://raw.githubusercontent.com/commercialhaskell/stackage-snapshots/master/lts/16/11.yaml
+    sha256: 1f43c4ad661a114a4f9dd4580988f30da1208d844c097714f5867c52a02e0aa1
+  original: lts-16.11

@@ -17,7 +17,7 @@
 #
 # resolver: ./custom-snapshot.yaml
 # resolver: https://example.com/snapshots/2018-01-01.yaml
-resolver: lts-13.25
+resolver: lts-16.11
 
 # User packages to be built.
 # Various formats can be used as shown in the example below.
@@ -38,8 +38,10 @@ packages:
 # using the same syntax as the packages field.
 # (e.g., acme-missiles-0.3)
 extra-deps:
-- base64-0.4.2@sha256:cb54c819bf9e2b8c45dbe43cc30a6941da37e00000d57dc7b728348f1ada5fee,2942
-- ghc-byteorder-4.11.0.0.10@sha256:5ee4a907279bfec27b0f9de7b8fba4cecfd34395a0235a7784494de70ad4e98f,1535
+# - base64-0.4.2@sha256:cb54c819bf9e2b8c45dbe43cc30a6941da37e00000d57dc7b728348f1ada5fee,2942
+# - ghc-byteorder-4.11.0.0.10@sha256:5ee4a907279bfec27b0f9de7b8fba4cecfd34395a0235a7784494de70ad4e98f,1535
+- witherable-0.3.5@sha256:6590a15735b50ac14dcc138d4265ff1585d5f3e9d3047d5ebc5abf4cd5f50084,1476
+- monoidal-containers-0.6.0.1@sha256:7d776942659eb4d70d8b8da5d734396374a6eda8b4622df9e61e26b24e9c8e40,2501
 
 # Override default flag values for local packages and extra-deps
 # flags: {}

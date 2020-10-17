@@ -22,6 +22,7 @@ import GHC.Generics
 import MyPrelude
 import System.Random
 import Text.Read
+import Control.Monad.Fail (fail)
 
 -- | NIDs are composed of 3 Word64s. We don't use a standard format like UUID
 -- because I find the chance of collision of those unacceptable for eventual

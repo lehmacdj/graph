@@ -2,6 +2,7 @@
 
 module Lang.Parsing where
 
+import Control.Monad.Fail
 import Data.Char
 import Data.Void
 import Graph (NID)

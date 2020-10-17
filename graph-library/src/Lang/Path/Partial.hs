@@ -10,7 +10,7 @@ import Text.Megaparsec
 import Text.Megaparsec.Char
 
 -- | from Text.Megaparsec
-initialState :: String -> s -> MP.State s
+initialState :: String -> s -> MP.State s e
 initialState name i =
   MP.State
     { stateInput = i,
