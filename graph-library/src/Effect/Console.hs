@@ -9,14 +9,10 @@ import MyPrelude
 import System.IO.Term.Image
 
 data Console a where
-  Echo ::
-    String ->
-    -- | print a string followed by a newline
-    Console ()
-  DisplayImage ::
-    LByteString ->
-    -- | print a LBS as an image
-    Console ()
+  -- | print a string followed by a newline
+  Echo :: String -> Console ()
+  -- | print a LBS as an image
+  DisplayImage :: LByteString -> Console ()
 
 makeEffect ''Console
 
