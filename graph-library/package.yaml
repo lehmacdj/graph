@@ -50,26 +50,33 @@ dependencies:
 - free
 - freer-simple
 - classy-prelude
-- witherable
+- witherable-class
 - time
 - typed-process
 - random
 - base64
+- polysemy
+- polysemy-plugin
 
 default-extensions:
-- GADTs
-- FlexibleContexts
-- TypeOperators
 - DataKinds
-- ScopedTypeVariables
+- FlexibleContexts
+- GADTs
+- LambdaCase
+- PolyKinds
 - RankNTypes
+- ScopedTypeVariables
+- StandaloneDeriving
 - TypeApplications
 - TypeFamilies
-- LambdaCase
-- StandaloneDeriving
+- TypeOperators
 
 ghc-options:
 - -Wall
+- -fplugin=Polysemy.Plugin
+- -O2
+- -flate-specialise
+- -fspecialise-aggressively
 
 library:
   source-dirs: src

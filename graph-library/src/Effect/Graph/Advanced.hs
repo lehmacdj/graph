@@ -6,7 +6,7 @@
 module Effect.Graph.Advanced where
 
 import Control.Lens
-import Data.Witherable
+import Data.Witherable.Class
 import Effect.FreshNID
 import Effect.Graph
 import Effect.NodeLocated
