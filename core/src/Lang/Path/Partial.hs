@@ -22,7 +22,8 @@ initialState name i =
             pstateSourcePos = initialPos name,
             pstateTabWidth = defaultTabWidth,
             pstateLinePrefix = ""
-          }
+          },
+      stateParseErrors = []
     }
 
 -- | Try to parse a path, returning a partial path that is the last one
