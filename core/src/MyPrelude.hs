@@ -3,14 +3,18 @@
 module MyPrelude
   ( module MyPrelude,
     module ClassyPrelude,
-    module Control.Monad.Freer
+    module Polysemy,
   )
 where
 
 import ClassyPrelude
 import Control.Lens hiding (op)
-import Control.Monad.Freer
+import Polysemy
+import Polysemy.Error
 import System.IO
+
+-- | natural transformation
+type (~>) f g = forall x. f x -> g x
 
 -- | execute a computation only if it is Just
 withJust :: Monad m => Maybe a -> (a -> m ()) -> m ()
@@ -61,5 +65,15 @@ eprint = eputStr . show
 -- # Effect utilities
 
 -- | The identity funciton
-withEffect :: forall effs a. Eff effs a -> Eff effs a
+withEffect :: forall effs a. Sem effs a -> Sem effs a
 withEffect = id
+
+-- | Handle error without allowing error to be present in resulting computation.
+-- Added in migration from freer-simple to polysemy, soft deprecated, consider
+-- finding a sufficient replacement in the near future
+handleError :: Sem (Error e : effs) a -> (e -> Sem effs a) -> Sem effs a
+handleError action handler = do
+  result <- runError action
+  case result of
+    Right x -> pure x
+    Left e -> handler e

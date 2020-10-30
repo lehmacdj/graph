@@ -11,7 +11,7 @@ the' ::
   (MonoFoldable mono, Member ThrowUserError effs) =>
   (mono -> UserError) ->
   mono ->
-  Eff effs (Element mono)
+  Sem effs (Element mono)
 the' toErr = \case
   (toList -> [x]) -> pure x
   xs -> throw (toErr xs)
@@ -19,5 +19,5 @@ the' toErr = \case
 the ::
   (MonoFoldable mono, Show mono, Member ThrowUserError effs) =>
   mono ->
-  Eff effs (Element mono)
+  Sem effs (Element mono)
 the = the' (\xs -> NotSingleton (show xs))

@@ -12,12 +12,12 @@ where
 
 import Control.Arrow (left)
 import Control.Lens
-import Control.Monad.Freer.Error
 import Data.List.NonEmpty (NonEmpty (..))
 import Data.Validation
 import Graph (NID)
 import MyPrelude
 import Network.HTTP.Conduit (HttpException)
+import Polysemy.Error
 
 data UserError
   = OtherError String
@@ -43,56 +43,56 @@ instance Show UserError where
 
 type ThrowUserError = Error (NonEmpty UserError)
 
-throwString :: Member ThrowUserError effs => String -> Eff effs a
-throwString = throw . OtherError
+throwString :: Member ThrowUserError effs => String -> Sem effs a
+throwString = UserError.throw . OtherError
 
-throw :: Member ThrowUserError effs => UserError -> Eff effs a
-throw = throwError . (singleton :: UserError -> NonEmpty UserError)
+throw :: Member ThrowUserError effs => UserError -> Sem effs a
+throw = Polysemy.Error.throw . (singleton :: UserError -> NonEmpty UserError)
 
 throwIfNothing ::
   Member ThrowUserError effs =>
   UserError ->
   Maybe a ->
-  Eff effs a
+  Sem effs a
 throwIfNothing _ (Just x) = pure x
-throwIfNothing err Nothing = throw err
+throwIfNothing err Nothing = UserError.throw err
 
 throwLeft ::
   Member ThrowUserError effs =>
   Either UserError a ->
-  Eff effs a
+  Sem effs a
 throwLeft (Right x) = pure x
-throwLeft (Left err) = throw err
+throwLeft (Left err) = UserError.throw err
 
--- | Trap an IO error in the Eff monad
+-- | Trap an IO error in the Sem monad
 -- It remains to be seen if this is actually useful, because it requires
--- it to be possible to unwrap Eff in order to escape the IO monad on the outside
+-- it to be possible to unwrap Sem in order to escape the IO monad on the outside
 trapIOError ::
   forall m effs a.
   (MonadIO m, Member ThrowUserError effs) =>
   IO a ->
-  m (Eff effs a)
+  m (Sem effs a)
 trapIOError = liftIO . fmap (throwLeft . left IOFail) . tryIOError
 
 trapIOError' ::
-  forall m effs a.
-  (MonadIO m, Member ThrowUserError effs, LastMember m effs) =>
+  forall effs a.
+  (Member (Embed IO) effs, Member ThrowUserError effs) =>
   IO a ->
-  Eff effs a
+  Sem effs a
 trapIOError' = join . trapIOError
 
 printErrors ::
-  (MonadIO m, LastMember m effs) =>
-  Eff (ThrowUserError ': effs) () ->
-  Eff effs ()
+  Member (Embed IO) effs =>
+  Sem (ThrowUserError ': effs) () ->
+  Sem effs ()
 printErrors = (`handleError` printer)
   where
     printer errs = liftIO $ mapM_ eprint errs
 
 errorToLeft ::
-  Show e => Eff (Error e : effs) a -> Eff effs (Either String a)
+  Show e => Sem (Error e : effs) a -> Sem effs (Either String a)
 errorToLeft = (`handleError` \e -> pure (Left (show e))) . fmap Right
 
 errorToNothing ::
-  Eff (Error e : effs) a -> Eff effs (Maybe a)
+  Sem (Error e : effs) a -> Sem effs (Maybe a)
 errorToNothing = (`handleError` const (pure Nothing)) . fmap Just

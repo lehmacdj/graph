@@ -10,16 +10,12 @@
 module Lang.Path where
 
 import Control.Lens hiding (pre, unsnoc)
-import Data.Function (on)
-import Data.Functor ((<&>))
 import Data.List (intersectBy)
-import Data.Maybe (mapMaybe)
-import Data.Set (Set)
 import qualified Data.Set as Set
+import Effect.FreshNID
 import Effect.Graph
 import Effect.Graph.Advanced
 import Effect.Throw
-import Effect.FreshNID
 import Graph hiding (insertEdge)
 import Graph.Connect
 import MyPrelude
@@ -80,7 +76,7 @@ resolvePathSuccesses ::
   (Members [ReadGraph t, ThrowMissing] effs, TransitionValid t) =>
   NID ->
   Path t ->
-  Eff effs (Set NID)
+  Sem effs (Set NID)
 resolvePathSuccesses nid = \case
   One -> pure $ singleton nid
   Wild -> do
@@ -100,7 +96,7 @@ resolvePathSuccessesDetail ::
   (Members [ReadGraph t, ThrowMissing] effs, TransitionValid t) =>
   NID ->
   Path t ->
-  Eff effs (Set (DPath t))
+  Sem effs (Set (DPath t))
 resolvePathSuccessesDetail nid = \case
   One -> pure $ Set.singleton (DPath [] nid [])
   Wild ->
@@ -142,7 +138,7 @@ mkPath ::
   ) =>
   NID ->
   Path t ->
-  Eff effs (Set NID)
+  Sem effs (Set NID)
 mkPath nid p = fmap setFromList . forM (toList (listifyNewPath p)) $
   \x -> transitionsViaManyFresh nid x
 
@@ -154,7 +150,7 @@ tracePath ::
   Members [FreshNID, ThrowMissing, ReadGraph t] effs =>
   NID ->
   Path t ->
-  Eff effs (Graph t)
+  Sem effs (Graph t)
 tracePath _ _ = error "unimplemented"
 
 delPath ::
@@ -164,11 +160,11 @@ delPath ::
   ) =>
   NID ->
   Path t ->
-  Eff effs ()
+  Sem effs ()
 delPath nid p = resolvePathSuccessesDetail nid p >>= mapM_ delDPath
   where
     delDPath (DPath xs@(_ : _) nid' []) = case lastEx xs of -- safe because list nonempty
-      FromVia nid2 t -> deleteEdge (Edge nid2 t nid')
+      FromVia nid2 t -> deleteEdge @t (Edge nid2 t nid')
     delDPath _ = pure ()
 
 mvPath ::
@@ -179,7 +175,7 @@ mvPath ::
   NID ->
   Path t ->
   NID ->
-  Eff effs ()
+  Sem effs ()
 mvPath s p target =
   resolvePathSuccessesDetail s p >>= mapM_ (mvDPathTo target)
 
@@ -190,7 +186,7 @@ mvDPathTo ::
   ) =>
   NID ->
   DPath t ->
-  Eff effs ()
+  Sem effs ()
 mvDPathTo target (DPath xs@(_ : _) nid []) = case lastEx xs of
   FromVia nid2 t -> do
     deleteEdge (Edge nid2 t nid)
@@ -209,7 +205,7 @@ renameDPath ::
   -- | this path must either be of the form DPath _ nid [t]
   -- or of the form (splitLast -> Just (DPath _ nid _, t, _))
   Path t ->
-  Eff effs ()
+  Sem effs ()
 renameDPath dpathFrom nidPathStart pathTo =
   withJust (splitLast dpathFrom) $ \(DPath _ oldRoot _, t, nid) -> do
     successes <- resolvePathSuccessesDetail nidPathStart pathTo

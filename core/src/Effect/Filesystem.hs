@@ -4,32 +4,31 @@
 module Effect.Filesystem where
 
 import Control.Lens
-import Control.Monad.Freer.TH
 import MyPrelude
 import System.Directory.Tree
 import UserError
 
-data FileSystem r where
-  ReadFileE :: FilePath -> FileSystem ByteString
-  WriteFileE :: FilePath -> ByteString -> FileSystem ()
+-- | TODO: add effects for more things, make sure we can implement fileystem import
+data FileSystem m r where
+  ReadFileE :: FilePath -> FileSystem m ByteString
+  WriteFileE :: FilePath -> ByteString -> FileSystem m ()
 
--- TODO: add effects for more things, make sure we can implement fileystem import
-makeEffect ''FileSystem
+makeSem ''FileSystem
 
-data FileSystemTree r where
-  ReadDirectory :: FilePath -> FileSystemTree (DirTree LByteString)
+data FileSystemTree m r where
+  ReadDirectory :: FilePath -> FileSystemTree m (DirTree LByteString)
 
-makeEffect ''FileSystemTree
+makeSem ''FileSystemTree
 
 -- runFileSystemIO
---   :: (MonadIO m, LastMember m effs, Member Throw effs)
---   => Eff (FileSystem : effs) ~> Eff effs
+--   :: (Member (Embed IO) effs, Member Throw effs)
+--   => Sem (FileSystem : effs) ~> Sem effs
 -- runFileSystemIO = interpret $ \case
 --   ReadFile
 
 runFileSystemTreeIO ::
-  (MonadIO m, LastMember m effs, Member ThrowUserError effs) =>
-  Eff (FileSystemTree : effs) ~> Eff effs
+  (Member (Embed IO) effs, Member ThrowUserError effs) =>
+  Sem (FileSystemTree : effs) ~> Sem effs
 runFileSystemTreeIO = interpret $ \case
   ReadDirectory fp ->
     liftIO $

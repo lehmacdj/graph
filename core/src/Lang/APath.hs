@@ -28,7 +28,7 @@ mkAPath Nothing p = Relative p
 relativizeAPath ::
   Member GetLocation effs =>
   APath t ->
-  Eff effs (NID, Path t)
+  Sem effs (NID, Path t)
 relativizeAPath = \case
   Relative p -> (,) <$> currentLocation <*> pure p
   Absolute nid p -> pure (nid, p)

@@ -4,7 +4,6 @@
 module Lang.Command where
 
 import Control.Monad (zipWithM)
-import Control.Monad.Freer.State
 import Effect.Console
 import Effect.Editor
 import Effect.Filesystem
@@ -23,6 +22,7 @@ import Graph (Connect (..), Edge (..), dataOf, nilNID, outgoingConnectsOf)
 import History
 import Lang.APath
 import MyPrelude
+import Polysemy.State
 import Singleton
 import UserError
 
@@ -89,7 +89,7 @@ singleErr cmd xs =
 printTransitions ::
   Member Console effs =>
   Set (Connect String) ->
-  Eff effs ()
+  Sem effs ()
 printTransitions = mapM_ (echo . dtransition)
   where
     dtransition (Connect t nid) = show t ++ " at " ++ show nid
@@ -100,7 +100,7 @@ interpretCommand ::
     HasGraph String effs
   ) =>
   Command ->
-  Eff effs ()
+  Sem effs ()
 interpretCommand = \case
   ChangeNode a -> do
     (nid, p) <- relativizeAPath a

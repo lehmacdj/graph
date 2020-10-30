@@ -15,13 +15,13 @@ import Graph hiding (insertEdge, insertNode, setData)
 import Graph.Connect
 import MyPrelude
 
-getNodes :: Member (ReadGraph t) effs => [NID] -> Eff effs [Node t]
+getNodes :: Member (ReadGraph t) effs => [NID] -> Sem effs [Node t]
 getNodes = wither getNode
 
 getNode' ::
   Members [ReadGraph t, ThrowMissing] effs =>
   NID ->
-  Eff effs (Node t)
+  Sem effs (Node t)
 getNode' nid =
   getNode nid >>= \case
     Nothing -> throwMissing nid
@@ -36,7 +36,7 @@ insertNode ::
   forall t effs.
   (Member ThrowMissing effs, HasGraph t effs) =>
   Node t ->
-  Eff effs ()
+  Sem effs ()
 insertNode n = do
   let nid = nidOf n
   touchNode @t nid
@@ -49,7 +49,7 @@ insertNode n = do
 
 currentNode ::
   Members [ReadGraph t, GetLocation, ThrowMissing] effs =>
-  Eff effs (Node t)
+  Sem effs (Node t)
 currentNode = currentLocation >>= getNode'
 
 -- | nid `transitionsVia` t finds a node that can be transitioned to via the
@@ -58,7 +58,7 @@ transitionsVia ::
   (Members [FreshNID, ThrowMissing] effs, HasGraph t effs) =>
   NID ->
   t ->
-  Eff effs NID
+  Sem effs NID
 transitionsVia nid t = do
   n <- getNode' nid
   case matchConnect t (outgoingConnectsOf n) of
@@ -74,7 +74,7 @@ transitionsFreshVia ::
   (Members [FreshNID, ThrowMissing] effs, HasGraph t effs) =>
   NID ->
   t ->
-  Eff effs NID
+  Sem effs NID
 transitionsFreshVia nid t = do
   -- we need to actually try to fetch to throw if it is missing
   _ <- getNode' @t nid
@@ -90,7 +90,7 @@ transitionsViaManyFresh ::
   (Members [FreshNID, ThrowMissing] effs, HasGraph t effs) =>
   NID ->
   [t] ->
-  Eff effs NID
+  Sem effs NID
 transitionsViaManyFresh nid = \case
   [] -> pure nid
   [x] -> transitionsFreshVia nid x
@@ -101,7 +101,7 @@ transitionsViaMany ::
   (Members [FreshNID, ThrowMissing] effs, HasGraph t effs) =>
   NID ->
   [t] ->
-  Eff effs NID
+  Sem effs NID
 transitionsViaMany nid = \case
   [] -> pure nid
   x : xs -> transitionsVia nid x >>= (`transitionsViaManyFresh` xs)
@@ -116,7 +116,7 @@ transitionsViaManyTo ::
   NID ->
   NonNull seq ->
   NID ->
-  Eff effs ()
+  Sem effs ()
 transitionsViaManyTo s transitions t = do
   secondToLast <- transitionsViaMany s (toList (init transitions))
   insertEdge (Edge secondToLast (last transitions) t)
@@ -127,7 +127,7 @@ mergeNode ::
   (Members [FreshNID, ThrowMissing] effs, HasGraph t effs) =>
   NID ->
   NID ->
-  Eff effs NID
+  Sem effs NID
 mergeNode nid1 nid2 = do
   n1 <- getNode' nid1
   n2 <- getNode' nid2
@@ -149,7 +149,7 @@ mergeNodes ::
     Element mono ~ NID
   ) =>
   NonNull mono ->
-  Eff effs NID
+  Sem effs NID
 mergeNodes nids = foldlM1 (mergeNode @t) nids
 
 -- | Create a node with the same transitions as the original node.
@@ -158,7 +158,7 @@ cloneNode ::
   forall t effs.
   (Members [FreshNID, ThrowMissing] effs, HasGraph t effs) =>
   NID ->
-  Eff effs NID
+  Sem effs NID
 cloneNode nid = do
   nid' <- freshNID
   n <- getNode' nid

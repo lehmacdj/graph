@@ -12,7 +12,6 @@
 module Graph.Serialize2 where
 
 import Control.Lens
-import Control.Monad.Freer.Error
 import Data.Aeson (FromJSON, ToJSON)
 import qualified Data.Aeson as Aeson
 import qualified Data.ByteString.Lazy as B
@@ -50,16 +49,15 @@ ioErrorToMaybe :: IO a -> IO (Maybe a)
 ioErrorToMaybe = (`catch` ioHandler) . (Just <$>)
 
 deserializeNodeF ::
-  forall t m effs.
-  ( MonadIO m,
-    FromJSON (Node t),
+  forall t effs.
+  ( FromJSON (Node t),
     TransitionValid t,
     Member ThrowUserError effs,
-    LastMember m effs
+    Member (Embed IO) effs
   ) =>
   FilePath ->
   NID ->
-  Eff effs (Node t)
+  Sem effs (Node t)
 deserializeNodeF base nid = do
   fileContents <- trapIOError' (B.readFile (linksFile base nid))
   node <- throwLeft $ left AesonDeserialize $ Aeson.eitherDecode fileContents
@@ -69,22 +67,21 @@ deserializeNodeF base nid = do
 -- | Execute a function on a node stored in the filesystem at a specified location
 -- ignore nodes that don't exist or if an error occurs
 withSerializedNode ::
-  forall t m.
+  forall t.
   ( FromJSON (Node t),
     ToJSON (Node t),
-    TransitionValid t,
-    MonadIO m
+    TransitionValid t
   ) =>
   (Node t -> Node t) ->
   FilePath ->
   NID ->
-  m ()
+  IO ()
 withSerializedNode f base nid =
-  let ignoreErrors :: Eff [ThrowUserError, m] () -> Eff '[m] ()
+  let ignoreErrors :: Sem [ThrowUserError, Embed IO] () -> Sem '[Embed IO] ()
       ignoreErrors = (`handleError` \(_ :: UserErrors) -> pure ())
-   in runM . ignoreErrors . withEffect @[ThrowUserError, m] $ do
-        n <- deserializeNodeF @t @m @[ThrowUserError, m] base nid
-        trapIOError' @m @[ThrowUserError, m] $ serializeNodeEx (f n) base
+   in runM . ignoreErrors . withEffect @[ThrowUserError, Embed IO] $ do
+        n <- deserializeNodeF @t @[ThrowUserError, Embed IO] base nid
+        trapIOError' @[ThrowUserError, Embed IO] $ serializeNodeEx (f n) base
 
 tryGetBinaryData :: FilePath -> NID -> IO (Maybe LByteString)
 tryGetBinaryData = (ioErrorToMaybe .) . (B.readFile .) . nodeDataFile

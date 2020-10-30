@@ -3,24 +3,38 @@
 
 module Effect.Editor where
 
-import Control.Monad.Freer.TH
 import Graph (NID)
 import Graph.Serialize2
 import MyPrelude
 import System.Process.Typed
 
-data Editor r where
-  InvokeEditor :: [NID] -> Editor ()
+data Editor m r where
+  InvokeEditor :: [NID] -> Editor m ()
 
-makeEffect ''Editor
+makeSem ''Editor
 
 -- | Makes the assumption that the graph is implemented using the filesystem
 -- structure with nid.json/nid.data for each node
 interpretEditorAsIOVimFSGraph ::
-  (MonadIO m, LastMember m effs) =>
+  (Member (Embed IO) effs) =>
   -- | a filepath to find the graph under
   FilePath ->
   -- | interprets effect
-  Eff (Editor : effs) ~> Eff effs
+  Sem (Editor : effs) ~> Sem effs
 interpretEditorAsIOVimFSGraph location = interpret $ \case
   InvokeEditor nids -> runProcess_ $ proc "vim" (nodeDataFile location <$> nids)
+
+-- | Makes the assumption that the graph is implemented using the filesystem
+-- structure with nid.json/nid.data for each node
+interpretEditorAsIOVimFSGraph' ::
+  (MonadIO m, Member (Embed m) effs) =>
+  -- | a filepath to find the graph under
+  FilePath ->
+  -- | interprets effect
+  Sem (Editor : effs) ~> Sem effs
+interpretEditorAsIOVimFSGraph' location = interpret $ \case
+  InvokeEditor nids -> embed . runProcess_ $ proc "vim" (nodeDataFile location <$> nids)
+{-# DEPRECATED
+  interpretEditorAsIOVimFSGraph'
+  "use interpretEditorAsIOVimFSGraph instead, embedding MonadIO is an anti pattern"
+  #-}

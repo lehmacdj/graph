@@ -6,8 +6,6 @@ module App where
 
 import Control.Arrow ((>>>))
 import Control.Lens
-import Control.Monad.Freer.State
-import Control.Monad.Freer.Writer
 import Control.Repl
 import Effect.Console
 import Effect.Editor
@@ -24,6 +22,10 @@ import Effect.Web
 import Env
 import History
 import MyPrelude hiding (Reader, ask)
+import Polysemy.Input
+import Polysemy.Output
+import Polysemy.Reader
+import Polysemy.State
 import System.Directory
 import System.FilePath
 import UserError
@@ -34,77 +36,90 @@ type AppBase = ReplBase Env
 
 runLocableHistoryState ::
   Member (State History) effs =>
-  Eff (GetLocation : SetLocation : effs) ~> Eff effs
+  Sem (GetLocation : SetLocation : effs) ~> Sem effs
 runLocableHistoryState = subsumeReaderState _now >>> runSetLocationHistoryState
 
 -- | we have the extra State History parameter here to sidestep issues of
 -- having to introduce another effect, want to move away from using this method
 -- because it is messier than using the separate methods in most cases probably
 runLocableAppBase ::
-  LastMember AppBase effs =>
-  Eff (GetLocation : SetLocation : State History : effs) ~> Eff effs
+  Member (Embed AppBase) effs =>
+  Sem (GetLocation : SetLocation : State History : effs) ~> Sem effs
 runLocableAppBase = runLocableHistoryState >>> runStateAppBaseIORef history
 {-# DEPRECATED runLocableAppBase "use runLocableHistoryState" #-}
 
 evalFreshAppBase ::
-  LastMember AppBase effs =>
-  Eff (FreshNID : effs) ~> Eff effs
+  Member (Embed AppBase) effs =>
+  Sem (FreshNID : effs) ~> Sem effs
 evalFreshAppBase = interpret $ \case
-  FreshNID -> sendM Env.freshNID
+  FreshNID -> embed Env.freshNID
 
 runStateAppBaseIORef ::
-  LastMember AppBase effs =>
+  Member (Embed AppBase) effs =>
   Lens' Env (IORef s) ->
-  Eff (State s : effs) ~> Eff effs
+  Sem (State s : effs) ~> Sem effs
 runStateAppBaseIORef l = interpret $ \case
-  Get -> sendM $ view l >>= readIORef
-  Put x -> sendM $ modifyOf l (const x) >> pure ()
+  Get -> embed $ view l >>= readIORef
+  Put x -> embed $ modifyOf l (const x) >> pure ()
 
 runDualizeableAppBase ::
-  LastMember AppBase effs =>
-  Eff (Dualizeable : effs) ~> Eff effs
+  Member (Embed AppBase) effs =>
+  Sem (Dualizeable : effs) ~> Sem effs
 runDualizeableAppBase = runStateAppBaseIORef isDualized
 
 runLoadAppBase ::
-  (LastMember AppBase effs, HasGraph String effs, Member (Writer NID) effs) =>
-  Eff (Load : effs) ~> Eff effs
+  (Member (Embed AppBase) effs, HasGraph String effs, Member (Output NID) effs) =>
+  Sem (Load : effs) ~> Sem effs
 runLoadAppBase = interpret $ \case
   SetLoaded dir -> do
-    sendM $ modifyOf filePath (const (Just dir)) >> pure ()
-    linkFileNames <- liftIO $ filter (".json" `isSuffixOf`) <$> listDirectory dir
+    embed $ modifyOf filePath (const (Just dir)) >> pure ()
+    linkFileNames <- embed . liftIO $ filter (".json" `isSuffixOf`) <$> listDirectory dir
     let nids = mapMaybe (readMay . dropExtension) linkFileNames
-    sendM $ modifyOf nextId (const (maximum (1 `ncons` nids) + 1)) >> pure ()
+    embed $ modifyOf nextId (const (maximum (1 `ncons` nids) + 1)) >> pure ()
 
 runReaderAppBaseIORef ::
-  LastMember AppBase effs =>
+  forall r effs.
+  Member (Embed AppBase) effs =>
   Lens' Env (IORef r) ->
-  Eff (Reader r : effs) ~> Eff effs
-runReaderAppBaseIORef l = runStateAppBaseIORef l . translate (\Ask -> Get)
+  Sem (Reader r : effs) ~> Sem effs
+runReaderAppBaseIORef l =
+  runStateAppBaseIORef l
+    . reinterpret (\Input -> get)
+    . readerToInput
+    . raiseUnder @(Input r)
+
+runInputAppBaseIORef ::
+  Member (Embed AppBase) effs =>
+  Lens' Env (IORef r) ->
+  Sem (Input r : effs) ~> Sem effs
+runInputAppBaseIORef l = runStateAppBaseIORef l . reinterpret (\Input -> get)
 
 runWriterAppBaseIORef ::
-  LastMember AppBase effs =>
+  Member (Embed AppBase) effs =>
   Lens' Env (IORef r) ->
-  Eff (Writer r : effs) ~> Eff effs
-runWriterAppBaseIORef l = runStateAppBaseIORef l . translate (\(Tell x) -> Put x)
+  Sem (Output r : effs) ~> Sem effs
+runWriterAppBaseIORef l = runStateAppBaseIORef l . reinterpret (\(Output x) -> put x)
 
 runEditorAppBase ::
-  (LastMember AppBase effs, Member ThrowUserError effs) =>
-  Eff (Editor : effs) ~> Eff effs
+  (Member (Embed AppBase) effs, Member ThrowUserError effs) =>
+  Sem (Editor : effs) ~> Sem effs
 runEditorAppBase eff = do
-  fp <- sendM $ view filePath >>= readIORef
+  fp <- embed $ view filePath >>= readIORef
   case fp of
     Nothing -> throw $ OtherError "doesn't have filepath so can't start editor"
-    Just fp' -> interpretEditorAsIOVimFSGraph fp' eff
+    Just fp' -> interpretEditorAsIOVimFSGraph' fp' eff
 
 subsumeReaderState ::
-  forall x i r. Member (State x) r => (x -> i) -> Eff (Reader i : r) ~> Eff r
-subsumeReaderState getter = interpret $ \case
-  Ask -> getter <$> get @x
+  forall x i r. Member (State x) r => (x -> i) -> Sem (Reader i : r) ~> Sem r
+subsumeReaderState getter =
+  interpret (\Input -> getter <$> get @x)
+    . readerToInput
+    . raiseUnder @(Input i)
 
 runSetLocationHistoryState ::
-  Member (State History) r => Eff (SetLocation : r) ~> Eff r
+  Member (State History) r => Sem (SetLocation : r) ~> Sem r
 runSetLocationHistoryState = interpret $ \case
-  Tell nid -> modify @History (addToHistory nid)
+  Output nid -> modify @History (addToHistory nid)
 
 -- | The existential in the type here is necessary to allow an arbitrary order
 -- to be picked here
@@ -112,24 +127,23 @@ interpretAsAppBase ::
   ( forall effs.
     ( Members [Console, ThrowUserError, SetLocation, GetLocation, FreshNID, Dualizeable] effs,
       Members [FileSystemTree, Web, Load, Error None, Warn UserErrors, State History] effs,
-      Member Editor effs,
-      Member GetTime effs,
+      Members [Editor, GetTime, Embed AppBase, Embed IO] effs,
       HasGraph String effs
     ) =>
-    Eff effs ()
+    Sem effs ()
   ) ->
   AppBase ()
 interpretAsAppBase v = do
   let handler =
         runLoadAppBase
-          >>> paramToReader . (flip (runReadGraphDualizeableIO @String))
+          >>> paramToInput . (flip (runReadGraphDualizeableIO @String))
           >>> readThrowMaybe
           >>> subsume
-          >>> paramToReader . (flip (runWriteGraphDualizeableIO @String))
+          >>> paramToInput . (flip (runWriteGraphDualizeableIO @String))
           >>> readThrowMaybe
           >>> subsume
           >>> (`handleError` (\None -> echo "there is no set filepath so we can't access the graph"))
-          >>> runReaderAppBaseIORef filePath
+          >>> runInputAppBaseIORef filePath
           >>> runWebIO
           >>> runFileSystemTreeIO
           >>> runDualizeableAppBase
@@ -141,5 +155,6 @@ interpretAsAppBase v = do
           >>> runLocableHistoryState
           >>> runStateAppBaseIORef history
           >>> evalFreshAppBase
+          >>> interpret (\(Embed m) -> embed (liftIO m))
           >>> runM
   handler v

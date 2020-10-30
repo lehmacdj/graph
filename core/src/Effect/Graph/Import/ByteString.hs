@@ -22,7 +22,7 @@ importUrl ::
   ) =>
   NID ->
   String ->
-  Eff effs NID
+  Sem effs NID
 importUrl root url = do
   d <- getHttp url
   importUrls <- root `transitionsVia` "import-urls"
@@ -51,7 +51,7 @@ importData ::
   (Members [FreshNID, ThrowMissing, GetTime] effs, HasGraph String effs) =>
   NID ->
   LByteString ->
-  Eff effs NID
+  Sem effs NID
 importData root d = do
   fileHashes <- root `transitionsVia` "file-hashes"
   nnid <- fileHashes `transitionsVia` computeSHA d

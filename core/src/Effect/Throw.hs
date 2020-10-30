@@ -3,14 +3,15 @@
 {-# LANGUAGE NoImplicitPrelude #-}
 
 module Effect.Throw
-  ( module Control.Monad.Freer.Error,
+  (
     module Effect.Throw,
+    Error
   )
 where
 
-import Control.Monad.Freer.Error
 import Graph.Types
 import MyPrelude
+import Polysemy.Error
 import UserError
 
 newtype Missing = Missing {unMissing :: NID}
@@ -18,8 +19,8 @@ newtype Missing = Missing {unMissing :: NID}
 
 type ThrowMissing = Error Missing
 
-throwMissing :: Member ThrowMissing effs => NID -> Eff effs a
-throwMissing = throwError . Missing
+throwMissing :: Member ThrowMissing effs => NID -> Sem effs a
+throwMissing = Polysemy.Error.throw . Missing
 
-subsumeMissing :: Member ThrowUserError effs => Eff (ThrowMissing ': effs) ~> Eff effs
-subsumeMissing = (`handleError` (throw . MissingNode . unMissing))
+subsumeMissing :: Member ThrowUserError effs => Sem (ThrowMissing ': effs) ~> Sem effs
+subsumeMissing = (`handleError` (UserError.throw . MissingNode . unMissing))

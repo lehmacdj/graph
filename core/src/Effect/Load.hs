@@ -3,10 +3,9 @@
 
 module Effect.Load where
 
-import ClassyPrelude
-import Control.Monad.Freer.TH
+import MyPrelude
 
-data Load r where
-  SetLoaded :: String -> Load ()
+data Load m r where
+  SetLoaded :: String -> Load m ()
 
-makeEffect ''Load
+makeSem ''Load

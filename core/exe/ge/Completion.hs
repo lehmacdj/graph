@@ -3,26 +3,20 @@
 -- | Completion stuff for the interface
 module Completion where
 
-import MyPrelude
-
-import Control.Lens
-import Control.Arrow
-
-import System.Console.Haskeline
-
-import Env
 import App
-
-import Lang.Path
-
-import Lang.Path.Partial
-import Lang.Parsing
-import Graph
-
+import Control.Arrow
+import Control.Lens
 import Effect.Graph
 import Effect.Graph.Advanced
 import Effect.NodeLocated
 import Effect.Throw
+import Env
+import Graph
+import Lang.Parsing
+import Lang.Path
+import Lang.Path.Partial
+import MyPrelude
+import System.Console.Haskeline
 
 type Base a = AppBase a
 
@@ -59,14 +53,15 @@ simpleCompletion' x = Completion x x False
 
 mkTransitionCompleter :: [String] -> String -> [Completion]
 mkTransitionCompleter xs x =
-  quotify $ filter check xs where
+  quotify $ filter check xs
+  where
     quotify z
       | any isUnusualTransition z = map (simpleCompletion' . show) z
       | otherwise = map simpleCompletion' z
     check =
       quoteUnusualTransition &&& id
-      >>> over both (x `isPrefixOf`)
-      >>> uncurry (||)
+        >>> over both (x `isPrefixOf`)
+        >>> uncurry (||)
 
 -- this tries to parse as much of a path as possible, and then deduce what
 -- the current word being completed is, it then tries to complete a
@@ -81,24 +76,24 @@ completePath (i, _) = case getPartialPath (takeRelevantFromEnd i) of
     case fp' of
       Nothing -> pure (i, [])
       Just fp -> do
-        let
-          handler =
-            runReadGraphDualizeableIO @String fp
-            >>> runDualizeableAppBase
-            >>> runLocableAppBase
-            >>> (\x -> handleError @Missing x (\_ -> pure (i, [])))
-            >>> runM
+        let handler =
+              runReadGraphDualizeableIO @String fp
+                >>> runDualizeableAppBase
+                >>> runLocableAppBase
+                >>> (\x -> handleError @Missing x (\_ -> pure (i, [])))
+                >>> interpret (\(Embed m) -> embed (liftIO m))
+                >>> runM
         handler $ do
           let p = foldr (:/) One pp
           l <- currentLocation
           ntids <- toList <$> resolvePathSuccesses (fromMaybe l nid) p
           nts <- getNodes @String ntids
-          let
-            octs = -- outgoing connect transitions
-              toListOf (folded . nodeOutgoing . folded . connectTransition) nts
+          let octs =
+                -- outgoing connect transitions
+                toListOf (folded . nodeOutgoing . folded . connectTransition) nts
           pure (fromMaybe i (stripPrefix (reverse end) i), mkCompleter octs end)
 
 completionFunction :: (String, String) -> Base (String, [Completion])
 completionFunction =
   completeCommand
-  `fallbackCompletion` completePath
+    `fallbackCompletion` completePath

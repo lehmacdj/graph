@@ -3,16 +3,15 @@
 
 module Effect.Time where
 
-import Control.Monad.Freer.TH
 import MyPrelude
 
-data GetTime r where
-  CurrentTime :: GetTime UTCTime
+data GetTime m r where
+  CurrentTime :: GetTime m UTCTime
 
-makeEffect ''GetTime
+makeSem ''GetTime
 
 interpretTimeAsIO ::
-  (LastMember m effs, MonadIO m) =>
-  Eff (GetTime : effs) ~> Eff effs
+  (Member (Embed IO) effs) =>
+  Sem (GetTime : effs) ~> Sem effs
 interpretTimeAsIO = interpret $ \case
   CurrentTime -> liftIO getCurrentTime

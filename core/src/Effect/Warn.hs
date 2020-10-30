@@ -1,3 +1,4 @@
+{-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE NoImplicitPrelude #-}
 
 module Effect.Warn where
@@ -5,19 +6,21 @@ module Effect.Warn where
 import Effect.Throw
 import MyPrelude
 
-data Warn e r where
-  Warn :: e -> Warn e ()
+data Warn e m r where
+  Warn :: e -> Warn e m ()
 
-warn :: Member (Warn e) effs => e -> Eff effs ()
-warn e = send (Warn e)
+makeSem ''Warn
 
-convertError :: forall e effs. Member (Warn e) effs => Eff (Error e : effs) () -> Eff effs ()
+-- warn :: Member (Warn e) effs => e -> Sem effs ()
+-- warn e = send (Warn e)
+
+convertError :: forall e effs. Member (Warn e) effs => Sem (Error e : effs) () -> Sem effs ()
 convertError = (`handleError` (\e -> warn e))
 
 printWarnings ::
-  forall e m effs.
-  (LastMember m effs, MonadIO m, Show e) =>
-  Eff (Warn e : effs) () ->
-  Eff effs ()
-printWarnings = interpretWith $ \case
-  Warn e -> \k -> (liftIO . eputStr . show $ e) >> k ()
+  forall e effs.
+  (Member (Embed IO) effs, Show e) =>
+  Sem (Warn e : effs) () ->
+  Sem effs ()
+printWarnings = interpret $ \case
+  Warn e -> liftIO . eputStr . show $ e

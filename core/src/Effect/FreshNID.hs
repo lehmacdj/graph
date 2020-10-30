@@ -6,11 +6,10 @@
 -- generation of UUIDs or sequencial indicies for example.
 module Effect.FreshNID where
 
-import Control.Monad.Freer.TH
 import Graph (NID)
 import MyPrelude
 
-data FreshNID r where
-  FreshNID :: FreshNID NID
+data FreshNID m r where
+  FreshNID :: FreshNID m NID
 
-makeEffect ''FreshNID
+makeSem ''FreshNID

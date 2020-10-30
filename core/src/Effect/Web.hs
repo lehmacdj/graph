@@ -3,19 +3,18 @@
 
 module Effect.Web where
 
-import Control.Monad.Freer.TH
 import MyPrelude
 import Network.HTTP.Conduit (simpleHttp)
 import UserError
 
-data Web r where
-  GetHttp :: String -> Web LByteString
+data Web m r where
+  GetHttp :: String -> Web m LByteString
 
-makeEffect ''Web
+makeSem ''Web
 
 runWebIO ::
-  (LastMember m effs, MonadIO m, Member ThrowUserError effs) =>
-  Eff (Web : effs) ~> Eff effs
+  (Member (Embed IO) effs, Member ThrowUserError effs) =>
+  Sem (Web : effs) ~> Sem effs
 runWebIO = interpret $ \case
   GetHttp s -> do
     r <- liftIO $ try (simpleHttp s)
