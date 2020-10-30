@@ -1,3 +1,5 @@
+{-# LANGUAGE NoImplicitPrelude #-}
+
 module Lang.Path.Partial where
 
 import Graph (NID)
@@ -5,6 +7,7 @@ import Lang.APath.Parse
 import Lang.Parsing
 import Lang.Path
 import Lang.Path.Parse
+import MyPrelude hiding (many, try)
 import qualified Text.Megaparsec as MP
 import Text.Megaparsec
 import Text.Megaparsec.Char
@@ -35,10 +38,6 @@ getPartialPath i = case parse pLastPartialPath "<completion>" i of
 
 pPathSegment :: Parser (Path String)
 pPathSegment = pathTerm transition
-
-unsnoc :: [a] -> Maybe ([a], a)
-unsnoc [] = Nothing
-unsnoc xs@(_ : _) = Just (init xs, last xs)
 
 -- | a list of path segments that are interpreted as being separated by
 -- concatenation, followed by a string that represents the last

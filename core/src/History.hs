@@ -1,11 +1,11 @@
-{-# LANGUAGE NoImplicitPrelude #-}
 {-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE NoImplicitPrelude #-}
 
 module History (History (..), singletonHistory, addToHistory, backInTime) where
 
+import Control.Lens
 import Graph (NID)
 import MyPrelude
-import Control.Lens
 
 -- History [2, 3] 0 [4, 5] represents a chronology 3, 2, 0 (present), 4, 5
 -- The past is stored in inverted order because that way inserting/reverting is
@@ -17,6 +17,7 @@ data History = History
     _future :: [NID]
   }
   deriving (Show, Eq, Ord)
+
 makeLenses ''History
 
 singletonHistory :: NID -> History

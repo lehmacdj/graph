@@ -17,6 +17,7 @@ import Effect.Graph
 import Effect.Graph.Advanced
 import Effect.Throw
 import Graph hiding (insertEdge)
+import qualified Graph
 import Graph.Connect
 import MyPrelude
 
