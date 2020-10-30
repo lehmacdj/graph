@@ -23,7 +23,7 @@ nodeRewrites nids = []
 applyRewrite ::
   Members [ReadGraph String, WriteGraph String, ThrowUserError] effs =>
   (NID, NID) ->
-  Eff effs ()
+  Sem effs ()
 applyRewrite (nid, nid') = subsumeMissing $ do
   n <- getNode' nid
   let i = selfLoopify nid nid' $ incomingConnectsOf n
@@ -32,22 +32,20 @@ applyRewrite (nid, nid') = subsumeMissing $ do
   deleteNode @String nid
 
 renumberNodes ::
-  ( Members [ReadGraph String, WriteGraph String, ThrowUserError] effs,
-    LastMember IO effs
-  ) =>
-  Eff effs ()
+  Members [ReadGraph String, WriteGraph String, ThrowUserError, Embed IO] effs =>
+  Sem effs ()
 renumberNodes = do
   nodes <- nodeManifest @String
   traverse_ applyRewrite $ nodeRewrites nodes
 
 runReadWriteGraphIO ::
   FilePath ->
-  Eff
+  Sem
     [ WriteGraph String,
       ReadGraph String,
       Warn UserErrors,
       ThrowUserError,
-      IO
+      Embed IO
     ]
     () ->
   IO ()
