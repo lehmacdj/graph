@@ -101,13 +101,13 @@ runWriterAppBaseIORef ::
 runWriterAppBaseIORef l = runStateAppBaseIORef l . reinterpret (\(Output x) -> put x)
 
 runEditorAppBase ::
-  (Member (Embed AppBase) effs, Member ThrowUserError effs) =>
+  (Members [Embed AppBase, ThrowUserError, Embed IO] effs) =>
   Sem (Editor : effs) ~> Sem effs
 runEditorAppBase eff = do
-  fp <- embed $ view filePath >>= readIORef
+  fp <- embed @AppBase $ view filePath >>= readIORef
   case fp of
     Nothing -> throw $ OtherError "doesn't have filepath so can't start editor"
-    Just fp' -> interpretEditorAsIOVimFSGraph' fp' eff
+    Just fp' -> interpretEditorAsIOVimFSGraph fp' eff
 
 subsumeReaderState ::
   forall x i r. Member (State x) r => (x -> i) -> Sem (Reader i : r) ~> Sem r
