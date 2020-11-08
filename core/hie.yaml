@@ -1,0 +1,12 @@
+cradle:
+  stack:
+    stackYaml: "stack.yaml"
+    components:
+    - path: "./src"
+      component: "graph:lib"
+    - path: "./exe/ge"
+      component: "graph:exe:ge"
+    - path: "./exe/change-nid"
+      component: "graph:exe:node-rename"
+    - path: "./tests"
+      component: "graph:test:graph-test"
