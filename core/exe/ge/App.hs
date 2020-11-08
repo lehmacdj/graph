@@ -137,10 +137,10 @@ interpretAsAppBase v = do
   let handler =
         runLoadAppBase
           >>> paramToInput . flip (runReadGraphDualizeableIO @String)
-          >>> readThrowMaybe
+          >>> inputFromJust
           >>> subsume
           >>> paramToInput . flip (runWriteGraphDualizeableIO @String)
-          >>> readThrowMaybe
+          >>> inputFromJust
           >>> subsume
           >>> (`handleError` (\None -> echo "there is no set filepath so we can't access the graph"))
           >>> runInputAppBaseIORef filePath
