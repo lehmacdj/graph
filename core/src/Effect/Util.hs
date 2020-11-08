@@ -51,7 +51,13 @@ applyMaybeInputOf ::
   Lens' env i ->
   (i -> Sem r a) ->
   Sem r a
-applyMaybeInputOf _ _ = undefined
+applyMaybeInputOf l f =
+  mapError (\None -> NoInputProvided)
+    . subsume @(Input (Maybe env))
+    . inputFromJust
+    . raiseUnder @(Error None)
+    . applyInputOf l
+    $ raise @(Input env) . f
 
 -- | Utility function to interpret a reader effect as a State effect, via a
 -- the inclusion Reader < State.
