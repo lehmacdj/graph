@@ -3,6 +3,7 @@
 
 module Effect.Util where
 
+import Control.Lens
 import MyPrelude hiding (Reader, ask)
 import Polysemy.Error
 import Polysemy.Input
@@ -16,6 +17,36 @@ paramToInput f = do
   r <- input @r
   raise $ f r
 
+data NoInputProvided = NoInputProvided
+  deriving (Show, Eq, Ord)
+
+applyInput ::
+  forall i r a. Member (Input i) r => (i -> Sem r a) -> Sem r a
+applyInput f = input @i >>= f
+
+applyMaybeInput ::
+  forall i r a.
+  Members [Input (Maybe i), Error NoInputProvided] r =>
+  (i -> Sem r a) ->
+  Sem r a
+applyMaybeInput _ = undefined
+
+applyInputOf ::
+  forall i env r a.
+  Member (Input env) r =>
+  Lens' env i ->
+  (i -> Sem r a) ->
+  Sem r a
+applyInputOf l f = input @env >>= f . view l
+
+applyMaybeInputOf ::
+  forall i env r a.
+  Members [Input (Maybe env), Error NoInputProvided] r =>
+  Lens' env i ->
+  (i -> Sem r a) ->
+  Sem r a
+applyMaybeInputOf _ _ = undefined
+
 -- | Utility function to interpret a reader effect as a State effect, via a
 -- the inclusion Reader < State.
 runReaderAsState ::
@@ -28,19 +59,27 @@ runReaderAsState = interpret $ \Input -> get
 -- | unit for readThrowMaybe
 data None = None
 
--- | Relaxes a reader such that it can work for a reader that only has maybe
--- TODO: add a more descriptive error than None
-readThrowMaybe ::
+-- | Relaxes an input such that it can work for a input that only has maybe
+-- TODO: switch to using a more descriptive name if I can think of a good one
+inputFromJust ::
   forall r effs a.
   Member (Error None) effs =>
   Sem (Input r : effs) a ->
   Sem (Input (Maybe r) : effs) a
-readThrowMaybe = reinterpret $
+inputFromJust = reinterpret $
   \Input -> do
     r <- input @(Maybe r)
     case r of
       Nothing -> throw None
       Just x -> pure x
+
+readThrowMaybe ::
+  forall r effs a.
+  Member (Error None) effs =>
+  Sem (Input r : effs) a ->
+  Sem (Input (Maybe r) : effs) a
+readThrowMaybe = inputFromJust
+{-# DEPRECATED readThrowMaybe "use inputFromJust" #-}
 
 readerToInput ::
   forall x r a.
