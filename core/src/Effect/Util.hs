@@ -29,7 +29,13 @@ applyMaybeInput ::
   Members [Input (Maybe i), Error NoInputProvided] r =>
   (i -> Sem r a) ->
   Sem r a
-applyMaybeInput _ = undefined
+applyMaybeInput f =
+  mapError (\None -> NoInputProvided)
+    . subsume @(Input (Maybe i))
+    . inputFromJust
+    . raiseUnder @(Error None)
+    . applyInput
+    $ raise @(Input i) . f
 
 applyInputOf ::
   forall i env r a.
