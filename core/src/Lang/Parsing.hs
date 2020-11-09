@@ -86,5 +86,5 @@ command i = L.lexeme s (string i <* lookAhead (space1 <|> eof))
 
 commandFrom :: [String] -> Parser String
 commandFrom [] = empty
-commandFrom [x] = symbol x
+commandFrom [x] = command x
 commandFrom (x : xs) = try (command x) <|> commandFrom xs
