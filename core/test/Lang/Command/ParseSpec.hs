@@ -4,9 +4,7 @@ import Data.Either (isLeft)
 import Lang.APath
 import Lang.Command
 import Lang.Command.Parse
-import Lang.Path
 import TestPrelude
-import Text.Megaparsec
 
 test_parseCommand :: TestTree
 test_parseCommand =
@@ -26,4 +24,4 @@ test_parseCommand =
         Right expected @=? parseCommand string
     parseFails string =
       testCase ("doesn't parse: " ++ show string) $
-        assert (isLeft (parseCommand string))
+        isLeft (parseCommand string) @? "parseCommand didn't fail"
