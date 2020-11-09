@@ -122,7 +122,8 @@ runSetLocationHistoryState = interpret $ \case
   Output nid -> modify @History (addToHistory nid)
 
 -- | The existential in the type here is necessary to allow an arbitrary order
--- to be picked here
+-- to be picked here + to allow other effects (such as Error NoInputProvided)
+-- to automatically be raised into the the list of effects but not others
 interpretAsAppBase ::
   ( forall effs.
     ( Members [Console, ThrowUserError, SetLocation, GetLocation, FreshNID, Dualizeable] effs,
