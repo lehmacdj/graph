@@ -8,5 +8,5 @@ cradle:
       component: "graph:exe:ge"
     - path: "./exe/change-nid"
       component: "graph:exe:node-rename"
-    - path: "./tests"
+    - path: "./test"
       component: "graph:test:graph-test"
