@@ -14,7 +14,6 @@ import Effect.FreshNID
 import Effect.Graph
 import Effect.Load
 import Effect.NodeLocated
-import Effect.Throw
 import Effect.Time
 import Effect.Util
 import Effect.Warn
