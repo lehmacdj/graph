@@ -44,7 +44,7 @@ quoteUnusualTransition x
   | otherwise = x
 
 isUnusualTransition :: String -> Bool
-isUnusualTransition = any (not . isIdentChar)
+isUnusualTransition = not . all isIdentChar
 
 -- | simpleCompletion except the completion is not treated as finished,
 -- thus no space is added after
