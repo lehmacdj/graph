@@ -126,7 +126,7 @@ runSetLocationHistoryState = interpret $ \case
 interpretAsAppBase ::
   ( forall effs.
     ( Members [Console, ThrowUserError, SetLocation, GetLocation, FreshNID, Dualizeable] effs,
-      Members [FileSystemTree, Web, Load, Error None, Warn UserErrors, State History] effs,
+      Members [FileSystemTree, Web, Load, Warn UserErrors, State History] effs,
       Members [Editor, GetTime, Embed AppBase, Embed IO] effs,
       HasGraph String effs
     ) =>
@@ -136,8 +136,10 @@ interpretAsAppBase ::
 interpretAsAppBase v = do
   let handler =
         runLoadAppBase
-          >>> applyMaybeInput . flip (runReadGraphDualizeableIO @String)
-          >>> applyMaybeInput . flip (runWriteGraphDualizeableIO @String)
+          >>> raise2Under @(Input (Maybe FilePath))
+          >>> raise2Under @(Error NoInputProvided)
+          >>> applyMaybeInput2 (runWriteGraphDualizeableIO @String)
+          >>> applyMaybeInput2 (runReadGraphDualizeableIO @String)
           >>> (`handleError` (\NoInputProvided -> echo "there is no set filepath so we can't access the graph"))
           >>> runInputAppBaseIORef filePath
           >>> runWebIO
