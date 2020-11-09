@@ -52,7 +52,7 @@ bigNID :: Parser BigNID.NID
 bigNID = L.lexeme s p
   where
     p = do
-      chars <- (replicateM 32 $ oneOf base64Chars :: Parser String)
+      chars <- replicateM 32 $ oneOf base64Chars :: Parser String
       case readMay chars of
         Just nid -> pure nid
         Nothing ->
