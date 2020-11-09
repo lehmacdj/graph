@@ -11,9 +11,7 @@ import Control.Lens
 import Control.Monad.State
 import Data.ByteString.Base64.Lazy
 import Data.ByteString.Builder
-import Data.String (fromString)
 import MyPrelude
-import System.IO (FilePath)
 import System.IO.Term.BinarySerialize
 
 data Dimension

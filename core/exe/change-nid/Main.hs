@@ -13,12 +13,13 @@ import Graph.Types
 import MyPrelude
 import UserError
 
+-- | This function is for determining what nodes to rewrite. Below is some of
+-- the stuff I used one of the times I used this program
+-- (filter outOfRange nids)
+--  `zip` ([(maximumEx (filter (not . outOfRange) nids) + 1) ..])
+-- outOfRange _ = False
 nodeRewrites :: [NID] -> [(NID, NID)]
-nodeRewrites nids = []
-  where
-    -- (filter outOfRange nids)
-    --  `zip` ([(maximumEx (filter (not . outOfRange) nids) + 1) ..])
-    outOfRange _ = False
+nodeRewrites _ = []
 
 applyRewrite ::
   Members [ReadGraph String, WriteGraph String, ThrowUserError] effs =>
@@ -59,7 +60,7 @@ runReadWriteGraphIO dir =
 main :: IO ()
 main = do
   args :: [String] <- map unpack <$> getArgs
-  error "make sure to read source / change it before running this executable"
+  _ <- error "make sure to read source / change it before running this executable"
   case index args 0 of
     Nothing -> putStrLn . pack $ "needs one command line argument"
-    Just dir -> runReadWriteGraphIO dir $ renumberNodes
+    Just dir -> runReadWriteGraphIO dir renumberNodes

@@ -1,9 +1,7 @@
-{-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE NoImplicitPrelude #-}
 
 module History (History (..), singletonHistory, addToHistory, backInTime) where
 
-import Control.Lens
 import Graph (NID)
 import MyPrelude
 
@@ -17,8 +15,6 @@ data History = History
     _future :: [NID]
   }
   deriving (Show, Eq, Ord)
-
-makeLenses ''History
 
 singletonHistory :: NID -> History
 singletonHistory node = History [] node []
