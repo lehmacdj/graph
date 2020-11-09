@@ -51,6 +51,13 @@ data Command
     At (APath String) Command
   | -- | dd
     Dedup String
+  | -- | flatten:
+    -- Takes every node transition/* and creates edges transition to them.
+    -- The purpose of this is to convert from a form where things have explicit
+    -- but unnecessary names to a form where the edge is the only identifiying
+    -- attribute.
+    -- This can be considered to be the inverse of dedup in a sense
+    Flatten String
   | -- | :l
     Load FilePath
   | -- | nid
@@ -161,6 +168,15 @@ interpretCommand = \case
       (\a s -> insertEdge (Edge nid (t ++ s) a))
       (toList ambiguities)
       suffixes
+  Flatten t -> do
+    nid <- currentLocation
+    let err =
+          const . OtherError $
+            "flatten only works if there is only a single node that the literal resolves to"
+    nodeToFlattenFrom <- the' err =<< subsumeMissing (resolvePathSuccesses nid (Literal t))
+    nodesToFlatten <- subsumeMissing $ resolvePathSuccesses nodeToFlattenFrom Wild
+    deleteEdge (Edge nid t nodeToFlattenFrom)
+    for_ [Edge nid t nid' | nid' <- toList nodesToFlatten] insertEdge
   ListOut -> do
     n <- subsumeMissing currentNode
     printTransitions (outgoingConnectsOf n)

@@ -56,6 +56,9 @@ pDebug = commandFrom [":debug", ":d"] $> Debug
 pDedup :: Parser Command
 pDedup = (commandFrom ["dedup", "dd"] $> Dedup) <*> transition
 
+pFlatten :: Parser Command
+pFlatten = (command "flatten" $> Flatten) <*> transition
+
 pShowImage :: Parser Command
 pShowImage = commandFrom ["show-image", "si"] $> ShowImage
 
@@ -97,6 +100,7 @@ pCommand =
     <|> try pRemoveNode
     <|> try pAt
     <|> try pDedup
+    <|> try pFlatten
     <|> try pLoad
     <|> try pNodeId
     <|> try pDebug
