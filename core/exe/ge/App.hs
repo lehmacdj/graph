@@ -136,8 +136,6 @@ interpretAsAppBase ::
 interpretAsAppBase v = do
   let handler =
         runLoadAppBase
-          >>> raise2Under @(Input (Maybe FilePath))
-          >>> raise2Under @(Error NoInputProvided)
           >>> applyMaybeInput2 (runWriteGraphDualizeableIO @String)
           >>> applyMaybeInput2 (runReadGraphDualizeableIO @String)
           >>> (`handleError` (\NoInputProvided -> echo "there is no set filepath so we can't access the graph"))
