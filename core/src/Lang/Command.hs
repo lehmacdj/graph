@@ -3,7 +3,7 @@
 
 module Lang.Command where
 
-import Control.Monad (zipWithM)
+import Control.Monad (zipWithM_)
 import Effect.Console
 import Effect.Editor
 import Effect.Filesystem
@@ -148,9 +148,7 @@ interpretCommand = \case
   At a c -> do
     (nid, p) <- relativizeAPath a
     locations <- subsumeMissing (resolvePathSuccesses nid p)
-    cnid <- currentLocation
-    forM_ locations $ \nid' -> do
-      local @NID (const nid') $ interpretCommand c
+    forM_ locations $ \nid' -> local @NID (const nid') $ interpretCommand c
   Dedup t -> do
     nid <- currentLocation
     ambiguities <- subsumeMissing (resolvePathSuccesses nid (Literal t))
@@ -159,12 +157,10 @@ interpretCommand = \case
           | length ambiguities < 2 = noSuffix
           | otherwise = show <$> ([1 ..] :: [Int])
     forM_ ambiguities $ \amb -> deleteEdge (Edge nid t amb)
-    _ <-
-      zipWithM
-        (\a s -> insertEdge (Edge nid (t ++ s) a))
-        (toList ambiguities)
-        suffixes
-    pure ()
+    zipWithM_
+      (\a s -> insertEdge (Edge nid (t ++ s) a))
+      (toList ambiguities)
+      suffixes
   ListOut -> do
     n <- subsumeMissing currentNode
     printTransitions (outgoingConnectsOf n)
@@ -177,8 +173,7 @@ interpretCommand = \case
   ImportUrl uri -> do
     nid <- subsumeMissing (importUrl nilNID uri)
     changeLocation nid
-  Load fp -> do
-    setLoaded fp
+  Load fp -> setLoaded fp
   Debug -> do
     echo "current node:"
     currentLocation >>= subsumeMissing . getNode' >>= echo . show @(Node String)
