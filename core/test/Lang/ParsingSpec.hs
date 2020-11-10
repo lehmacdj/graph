@@ -26,4 +26,4 @@ unit_command_incomplete :: Assertion
 unit_command_incomplete = testParserFails (command "tf") "t"
 
 unit_command_spaceTerminated :: Assertion
-unit_command_spaceTerminated = testParserParses (command "t blech") "t" "t"
+unit_command_spaceTerminated = testParserParses (command "t") "t blech" "t"
