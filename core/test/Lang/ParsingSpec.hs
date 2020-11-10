@@ -5,15 +5,25 @@ import Lang.Parsing
 import TestPrelude
 import Text.Megaparsec
 
-testParserParses :: (Eq a, Show a) => Parser a -> String -> a -> TestTree
+testParserParses :: (Eq a, Show a) => Parser a -> String -> a -> Assertion
 testParserParses parser string expected =
-  testCase ("parse: " ++ show string) $
-    Right expected @=? parse parser "<test>" string
+  Right expected @=? parse parser "<test>" string
 
-testParserFails :: (Eq a, Show a) => Parser a -> String -> TestTree
+testParserFails :: (Eq a, Show a) => Parser a -> String -> Assertion
 testParserFails parser string =
-  testCase ("doesn't parse: " ++ show string) $
-    isLeft (parse parser "<test>" string) @? "parser didn't fail"
+  isLeft (parse parser "<test>" string) @? "parser didn't fail"
 
--- TODO: add test case for commandFrom/command, see commit
--- 77f5da460bd1d6b28fa29c27049f16dfbdd685b1 for bug that requires fix
+unit_command_emptyStillRequiresSpace :: Assertion
+unit_command_emptyStillRequiresSpace = testParserFails (command "") "1"
+
+unit_command_eofTerminated :: Assertion
+unit_command_eofTerminated = testParserParses (command "t") "t" "t"
+
+unit_command_unterminated :: Assertion
+unit_command_unterminated = testParserFails (command "t") "tf"
+
+unit_command_incomplete :: Assertion
+unit_command_incomplete = testParserFails (command "tf") "t"
+
+unit_command_spaceTerminated :: Assertion
+unit_command_spaceTerminated = testParserParses (command "t blech") "t" "t"
