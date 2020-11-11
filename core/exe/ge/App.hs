@@ -62,6 +62,7 @@ runStateAppBaseIORef ::
 runStateAppBaseIORef l = interpret $ \case
   Get -> embed $ view l >>= readIORef
   Put x -> embed $ modifyOf l (const x) >> pure ()
+{-# DEPRECATED runStateAppBaseIORef "use runStateIORef with Input Env" #-}
 
 runDualizeableAppBase ::
   Member (Embed AppBase) effs =>
