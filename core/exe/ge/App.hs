@@ -89,12 +89,6 @@ runReaderAppBaseIORef l =
     . readerToInput
     . raiseUnder @(Input r)
 
-runInputAppBaseIORef ::
-  Member (Embed AppBase) effs =>
-  Lens' Env (IORef r) ->
-  Sem (Input r : effs) ~> Sem effs
-runInputAppBaseIORef l = runStateAppBaseIORef l . reinterpret (\Input -> get)
-
 runWriterAppBaseIORef ::
   Member (Embed AppBase) effs =>
   Lens' Env (IORef r) ->
@@ -141,7 +135,7 @@ interpretAsAppBase v = do
           >>> applyMaybeInput2 (runWriteGraphDualizeableIO @String)
           >>> applyMaybeInput2 (runReadGraphDualizeableIO @String)
           >>> (`handleError` (\NoInputProvided -> echo "there is no set filepath so we can't access the graph"))
-          >>> runInputAppBaseIORef filePath
+          >>> contramapInputSem @(Maybe FilePath) (embed . readIORef . view filePath)
           >>> runWebIO
           >>> runFileSystemTreeIO
           >>> runDualizeableAppBase
@@ -154,7 +148,7 @@ interpretAsAppBase v = do
           >>> runStateAppBaseIORef history
           >>> evalFreshAppBase
           >>> withEffects @[Input Env, Embed IO, Embed AppBase]
-          >>> runInputMonadReader
+          >>> runInputMonadReader @AppBase
           >>> runEmbedded liftIO
           >>> runM
   handler v
