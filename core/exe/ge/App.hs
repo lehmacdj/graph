@@ -145,7 +145,7 @@ interpretAsAppBase v = do
           >>> printErrors
           >>> interpretTimeAsIO
           >>> runLocableHistoryState
-          >>> runStateAppBaseIORef history
+          >>> applyInput2Of history runStateIORef
           >>> evalFreshAppBase
           >>> withEffects @[Input Env, Embed IO, Embed AppBase]
           >>> runInputMonadReader @AppBase
