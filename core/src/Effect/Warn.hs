@@ -15,7 +15,7 @@ makeSem ''Warn
 -- warn e = send (Warn e)
 
 convertError :: forall e effs. Member (Warn e) effs => Sem (Error e : effs) () -> Sem effs ()
-convertError = (`handleError` (\e -> warn e))
+convertError = (`handleError` warn)
 
 printWarnings ::
   forall e effs.
