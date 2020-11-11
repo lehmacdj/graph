@@ -150,3 +150,14 @@ readerToInput = go id
       Local f m -> do
         m' <- runT m
         raise $ go (f . modifier) m'
+
+-- | Map an `Input` contravariantly.
+-- taken from: polysemy-extra-0.1.1.0
+contramapInput ::
+  forall i i' r a.
+  Members '[Input i'] r =>
+  (i' -> i) ->
+  Sem (Input i ': r) a ->
+  Sem r a
+contramapInput f = interpret $ \case
+  Input -> f <$> input @i'
