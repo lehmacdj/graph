@@ -23,6 +23,7 @@ import History
 import MyPrelude hiding (Reader, ask)
 import Polysemy.Embed
 import Polysemy.Input
+import Polysemy.MTL
 import Polysemy.Output
 import Polysemy.Reader
 import Polysemy.State
@@ -152,7 +153,8 @@ interpretAsAppBase v = do
           >>> runLocableHistoryState
           >>> runStateAppBaseIORef history
           >>> evalFreshAppBase
-          >>> withEffects @[Embed IO, Embed AppBase]
+          >>> withEffects @[Input Env, Embed IO, Embed AppBase]
+          >>> runInputMonadReader
           >>> runEmbedded liftIO
           >>> runM
   handler v
