@@ -65,8 +65,8 @@ eprint = eputStr . show
 -- # Effect utilities
 
 -- | The identity funciton
-withEffect :: forall effs a. Sem effs a -> Sem effs a
-withEffect = id
+withEffects :: forall effs a. Sem effs a -> Sem effs a
+withEffects = id
 
 -- | Handle error without allowing error to be present in resulting computation.
 -- Added in migration from freer-simple to polysemy, soft deprecated, consider

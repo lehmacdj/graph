@@ -21,6 +21,7 @@ import Effect.Web
 import Env
 import History
 import MyPrelude hiding (Reader, ask)
+import Polysemy.Embed
 import Polysemy.Input
 import Polysemy.Output
 import Polysemy.Reader
@@ -151,6 +152,7 @@ interpretAsAppBase v = do
           >>> runLocableHistoryState
           >>> runStateAppBaseIORef history
           >>> evalFreshAppBase
-          >>> interpret (\(Embed m) -> embed (liftIO m))
+          >>> withEffects @[Embed IO, Embed AppBase]
+          >>> runEmbedded liftIO
           >>> runM
   handler v

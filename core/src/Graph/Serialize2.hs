@@ -79,7 +79,7 @@ withSerializedNode ::
 withSerializedNode f base nid =
   let ignoreErrors :: Sem [ThrowUserError, Embed IO] () -> Sem '[Embed IO] ()
       ignoreErrors = (`handleError` \(_ :: UserErrors) -> pure ())
-   in runM . ignoreErrors . withEffect @[ThrowUserError, Embed IO] $ do
+   in runM . ignoreErrors . withEffects @[ThrowUserError, Embed IO] $ do
         n <- deserializeNodeF @t @[ThrowUserError, Embed IO] base nid
         trapIOError' @[ThrowUserError, Embed IO] $ serializeNodeEx (f n) base
 
