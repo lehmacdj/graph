@@ -22,6 +22,7 @@ import Env
 import History
 import MyPrelude hiding (Reader, ask)
 import Polysemy.Embed
+import Polysemy.Error hiding (throw)
 import Polysemy.Input
 import Polysemy.MTL
 import Polysemy.Output
@@ -79,15 +80,6 @@ runLoadAppBase = interpret $ \case
     let nids = mapMaybe (readMay . dropExtension) linkFileNames
     embed $ modifyOf nextId (const (maximum (1 `ncons` nids) + 1)) >> pure ()
 
-runEditorAppBase ::
-  (Members [Embed AppBase, ThrowUserError, Embed IO] effs) =>
-  Sem (Editor : effs) ~> Sem effs
-runEditorAppBase eff = do
-  fp <- embed @AppBase $ view filePath >>= readIORef
-  case fp of
-    Nothing -> throw $ OtherError "doesn't have filepath so can't start editor"
-    Just fp' -> interpretEditorAsIOVimFSGraph fp' eff
-
 subsumeReaderState ::
   forall x i r. Member (State x) r => (x -> i) -> Sem (Reader i : r) ~> Sem r
 subsumeReaderState getter =
@@ -99,6 +91,13 @@ runSetLocationHistoryState ::
   Member (State History) r => Sem (SetLocation : r) ~> Sem r
 runSetLocationHistoryState = interpret $ \case
   Output nid -> modify @History (addToHistory nid)
+
+warnOnNoInput ::
+  Member (Warn UserErrors) r =>
+  String ->
+  Sem (Error NoInputProvided : r) () ->
+  Sem r ()
+warnOnNoInput msg v = v `handleError` \NoInputProvided -> warnString msg
 
 -- | The existential in the type here is necessary to allow an arbitrary order
 -- to be picked here + to allow other effects (such as Error NoInputProvided)
@@ -118,14 +117,15 @@ interpretAsAppBase v = do
         runLoadAppBase
           >>> applyMaybeInput2 (runWriteGraphDualizeableIO @String)
           >>> applyMaybeInput2 (runReadGraphDualizeableIO @String)
-          >>> (`handleError` (\NoInputProvided -> echo "there is no set filepath so we can't access the graph"))
+          >>> warnOnNoInput "there is no set filepath so we can't access the graph"
+          >>> applyMaybeInput2 interpretEditorAsIOVimFSGraph
+          >>> warnOnNoInput "doesn't have a filepath so can't start editor"
           >>> contramapInputSem @(Maybe FilePath) (embed . readIORef . view filePath)
           >>> runWebIO
           >>> runFileSystemTreeIO
           >>> runDualizeableAppBase
           >>> interpretConsoleIO
           >>> printWarnings @UserErrors
-          >>> runEditorAppBase
           >>> printErrors
           >>> interpretTimeAsIO
           >>> runLocableHistoryState
