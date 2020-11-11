@@ -161,3 +161,14 @@ contramapInput ::
   Sem r a
 contramapInput f = interpret $ \case
   Input -> f <$> input @i'
+
+-- | Map an `Input` contravariantly through a monadic function.
+-- taken from: polysemy-extra-0.1.1.0
+contramapInputSem ::
+  forall i i' r a.
+  Members '[Input i'] r =>
+  (i' -> Sem r i) ->
+  Sem (Input i ': r) a ->
+  Sem r a
+contramapInputSem f = interpret $ \case
+  Input -> f =<< input @i'
