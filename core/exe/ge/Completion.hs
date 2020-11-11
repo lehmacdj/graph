@@ -10,12 +10,17 @@ import Effect.Graph
 import Effect.Graph.Advanced
 import Effect.NodeLocated
 import Effect.Throw
+import Effect.Util
 import Env
 import Graph
 import Lang.Parsing
 import Lang.Path
 import Lang.Path.Partial
 import MyPrelude
+import Polysemy.Embed
+import Polysemy.Input
+import Polysemy.MTL
+import Polysemy.State
 import System.Console.Haskeline
 
 type Base a = AppBase a
@@ -78,10 +83,13 @@ completePath (i, _) = case getPartialPath (takeRelevantFromEnd i) of
       Just fp -> do
         let handler =
               runReadGraphDualizeableIO @String fp
-                >>> runDualizeableAppBase
-                >>> runLocableAppBase
+                >>> applyInput2Of isDualized runStateIORef
+                >>> runLocableHistoryState
+                >>> applyInput2Of history runStateIORef
                 >>> (\x -> handleError @Missing x (\_ -> pure (i, [])))
-                >>> interpret (\(Embed m) -> embed (liftIO m))
+                >>> withEffects @[Input Env, Embed IO, Embed AppBase]
+                >>> runInputMonadReader @AppBase
+                >>> runEmbedded liftIO
                 >>> runM
         handler $ do
           let p = foldr (:/) One pp

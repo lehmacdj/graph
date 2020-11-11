@@ -65,11 +65,6 @@ runStateAppBaseIORef l = interpret $ \case
   Put x -> embed $ modifyOf l (const x) >> pure ()
 {-# DEPRECATED runStateAppBaseIORef "use runStateIORef with Input Env" #-}
 
-runDualizeableAppBase ::
-  Member (Embed AppBase) effs =>
-  Sem (Dualizeable : effs) ~> Sem effs
-runDualizeableAppBase = runStateAppBaseIORef isDualized
-
 runLoadAppBase ::
   (Member (Embed AppBase) effs, HasGraph String effs, Member (Output NID) effs) =>
   Sem (Load : effs) ~> Sem effs
@@ -123,7 +118,7 @@ interpretAsAppBase v = do
           >>> contramapInputSem @(Maybe FilePath) (embed . readIORef . view filePath)
           >>> runWebIO
           >>> runFileSystemTreeIO
-          >>> runDualizeableAppBase
+          >>> applyInput2Of isDualized runStateIORef
           >>> interpretConsoleIO
           >>> printWarnings @UserErrors
           >>> printErrors
