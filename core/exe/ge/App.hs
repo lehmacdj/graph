@@ -79,23 +79,6 @@ runLoadAppBase = interpret $ \case
     let nids = mapMaybe (readMay . dropExtension) linkFileNames
     embed $ modifyOf nextId (const (maximum (1 `ncons` nids) + 1)) >> pure ()
 
-runReaderAppBaseIORef ::
-  forall r effs.
-  Member (Embed AppBase) effs =>
-  Lens' Env (IORef r) ->
-  Sem (Reader r : effs) ~> Sem effs
-runReaderAppBaseIORef l =
-  runStateAppBaseIORef l
-    . reinterpret (\Input -> get)
-    . readerToInput
-    . raiseUnder @(Input r)
-
-runWriterAppBaseIORef ::
-  Member (Embed AppBase) effs =>
-  Lens' Env (IORef r) ->
-  Sem (Output r : effs) ~> Sem effs
-runWriterAppBaseIORef l = runStateAppBaseIORef l . reinterpret (\(Output x) -> put x)
-
 runEditorAppBase ::
   (Members [Embed AppBase, ThrowUserError, Embed IO] effs) =>
   Sem (Editor : effs) ~> Sem effs
