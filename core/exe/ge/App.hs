@@ -50,12 +50,6 @@ runLocableAppBase ::
 runLocableAppBase = runLocableHistoryState >>> runStateAppBaseIORef history
 {-# DEPRECATED runLocableAppBase "use runLocableHistoryState" #-}
 
-evalFreshAppBase ::
-  Member (Embed AppBase) effs =>
-  Sem (FreshNID : effs) ~> Sem effs
-evalFreshAppBase = interpret $ \case
-  FreshNID -> embed Env.freshNID
-
 runStateAppBaseIORef ::
   Member (Embed AppBase) effs =>
   Lens' Env (IORef s) ->
@@ -125,7 +119,8 @@ interpretAsAppBase v = do
           >>> interpretTimeAsIO
           >>> runLocableHistoryState
           >>> applyInput2Of history runStateIORef
-          >>> evalFreshAppBase
+          >>> runFreshNIDState
+          >>> applyInput2Of nextId runStateIORef
           >>> withEffects @[Input Env, Embed IO, Embed AppBase]
           >>> runInputMonadReader @AppBase
           >>> runEmbedded liftIO

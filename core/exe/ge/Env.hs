@@ -8,7 +8,6 @@ module Env where
 
 import ClassyPrelude
 import Control.Lens
-import Control.Monad.Unique
 import Control.Repl
 import Effect.Graph (IsDual (..))
 import Graph
@@ -35,13 +34,6 @@ modifyOf l f = do
   r <- readIORef ref
   modifyIORef' ref f
   pure r
-
--- | Create a new unique NID
-freshNID :: (MonadReader Env m, MonadIO m) => m NID
-freshNID = modifyOf nextId (+ 1)
-
-instance MonadUnique NID (Repl Env) where
-  fresh = freshNID
 
 emptyEnv :: IO Env
 emptyEnv =
