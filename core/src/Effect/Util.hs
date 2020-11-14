@@ -172,3 +172,10 @@ contramapInputSem ::
   Sem r a
 contramapInputSem f = interpret $ \case
   Input -> f =<< input @i'
+
+-- | Modify state returning the original value
+modifying :: forall s r. Member (State s) r => (s -> s) -> Sem r s
+modifying f = do
+  v <- get
+  modify f
+  pure v
