@@ -57,10 +57,11 @@ data Path t
     --          at least for algebraic reasons
     --  | Dual -- ^ a transition that dualizes the view of the graph
 
-    -- | a transition matched by anything (top in the algebra)
     --  | Path t :\ Path t -- ^ set minus (useful with wild to restrict)
     --  | Negate (Path t) -- ^ negate a path, if included obsolesces other operators
     --  | Star (Path t) -- ^ kleene iteration: technically top in algebra is top^*
+
+    -- | a transition matched by anything (top in the algebra)
     Wild
   | Literal t
   | -- | sequence
