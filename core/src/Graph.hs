@@ -73,7 +73,7 @@ primeds ::
   TransitionValid t =>
   ([Node t] -> Graph t -> Graph t) ->
   ([NID] -> Graph t -> Graph t)
-primeds f i ig = f (pure nodeLookup <*> i <*> pure ig) ig
+primeds f i ig = f (nodeLookup <$> i <*> pure ig) ig
 
 delEdge :: TransitionValid t => Edge t -> Graph t -> Graph t
 delEdge e g =
