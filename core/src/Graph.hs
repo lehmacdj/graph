@@ -223,12 +223,3 @@ mapGraph f g = withNodeMap g $ \nm -> M.map f nm
 
 dualizeGraph :: Graph t -> Graph t
 dualizeGraph = mapGraph dualizeNode
-
--- | Return the id of an arbitrary node in the graph.
--- I'm not sure what the orignal purpose of this function was but it doesn't
--- seem that useful anymore IMO.
-arbitraryId :: Graph t -> NID
-arbitraryId = nidOf . head' . M.elems . nodeMap
-  where
-    head' [] = error "expected there to be a node in the graph but there were none"
-    head' (x : _) = x
