@@ -72,15 +72,15 @@ interpretAsAppBase v = do
           >>> contramapInputSem @(Maybe FilePath) (embed . readIORef . view filePath)
           >>> runWebIO
           >>> runFileSystemTreeIO
-          >>> applyInput2Of isDualized runStateIORef
+          >>> runStateInputIORefOf isDualized
           >>> interpretConsoleIO
           >>> printWarnings @UserErrors
           >>> printErrors
           >>> interpretTimeAsIO
           >>> runLocableHistoryState
-          >>> applyInput2Of history runStateIORef
+          >>> runStateInputIORefOf history
           >>> runFreshNIDState
-          >>> applyInput2Of nextId runStateIORef
+          >>> runStateInputIORefOf nextId
           >>> withEffects @[Input Env, Embed IO, Embed AppBase]
           >>> runInputMonadReader @AppBase
           >>> runEmbedded liftIO

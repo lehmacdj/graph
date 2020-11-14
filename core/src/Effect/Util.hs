@@ -186,3 +186,16 @@ subsumeReaderState getter =
   interpret (\Input -> getter <$> get @x)
     . readerToInput
     . raiseUnder @(Input i)
+
+runStateInputIORef ::
+  Members [Input (IORef s), Embed IO] r =>
+  Sem (State s : r) a ->
+  Sem r a
+runStateInputIORef = applyInput2 runStateIORef
+
+runStateInputIORefOf ::
+  Members [Input env, Embed IO] r =>
+  Lens' env (IORef s) ->
+  Sem (State s : r) a ->
+  Sem r a
+runStateInputIORefOf l = applyInput2Of l runStateIORef
