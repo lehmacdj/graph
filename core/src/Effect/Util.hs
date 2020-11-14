@@ -10,13 +10,6 @@ import Polysemy.Input
 import Polysemy.Reader
 import Polysemy.State
 
--- | Crazy function for weird utility cases
-paramToInput ::
-  forall r a effs. (r -> Sem effs a) -> Sem (Input r : effs) a
-paramToInput f = do
-  r <- input @r
-  raise $ f r
-
 data NoInputProvided = NoInputProvided
   deriving (Show, Eq, Ord)
 
