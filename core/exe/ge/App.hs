@@ -25,7 +25,6 @@ import Polysemy.Error hiding (throw)
 import Polysemy.Input
 import Polysemy.MTL
 import Polysemy.Output
-import Polysemy.Reader
 import Polysemy.State
 import UserError
 
@@ -37,13 +36,6 @@ runLocableHistoryState ::
   Member (State History) effs =>
   Sem (GetLocation : SetLocation : effs) ~> Sem effs
 runLocableHistoryState = subsumeReaderState _now >>> runSetLocationHistoryState
-
-subsumeReaderState ::
-  forall x i r. Member (State x) r => (x -> i) -> Sem (Reader i : r) ~> Sem r
-subsumeReaderState getter =
-  interpret (\Input -> getter <$> get @x)
-    . readerToInput
-    . raiseUnder @(Input i)
 
 runSetLocationHistoryState ::
   Member (State History) r => Sem (SetLocation : r) ~> Sem r

@@ -179,3 +179,10 @@ modifying f = do
   v <- get
   modify f
   pure v
+
+subsumeReaderState ::
+  forall x i r. Member (State x) r => (x -> i) -> Sem (Reader i : r) ~> Sem r
+subsumeReaderState getter =
+  interpret (\Input -> getter <$> get @x)
+    . readerToInput
+    . raiseUnder @(Input i)
