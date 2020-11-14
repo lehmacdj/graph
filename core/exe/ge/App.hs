@@ -12,7 +12,6 @@ import Effect.Editor
 import Effect.Filesystem
 import Effect.FreshNID
 import Effect.Graph
-import Effect.Load
 import Effect.NodeLocated
 import Effect.Time
 import Effect.Util
@@ -59,16 +58,6 @@ runStateAppBaseIORef l = interpret $ \case
   Put x -> embed $ modifyOf l (const x) >> pure ()
 {-# DEPRECATED runStateAppBaseIORef "use runStateIORef with Input Env" #-}
 
-runLoadAppBase ::
-  (Member (Embed AppBase) effs, HasGraph String effs, Member (Output NID) effs) =>
-  Sem (Load : effs) ~> Sem effs
-runLoadAppBase = interpret $ \case
-  SetLoaded dir -> do
-    embed $ modifyOf filePath (const (Just dir)) >> pure ()
-    linkFileNames <- embed . liftIO $ filter (".json" `isSuffixOf`) <$> listDirectory dir
-    let nids = mapMaybe (readMay . dropExtension) linkFileNames
-    embed $ modifyOf nextId (const (maximum (1 `ncons` nids) + 1)) >> pure ()
-
 subsumeReaderState ::
   forall x i r. Member (State x) r => (x -> i) -> Sem (Reader i : r) ~> Sem r
 subsumeReaderState getter =
@@ -94,7 +83,7 @@ warnOnNoInput msg v = v `handleError` \NoInputProvided -> warnString msg
 interpretAsAppBase ::
   ( forall effs.
     ( Members [Console, ThrowUserError, SetLocation, GetLocation, FreshNID, Dualizeable] effs,
-      Members [FileSystemTree, Web, Load, Warn UserErrors, State History] effs,
+      Members [FileSystemTree, Web, Warn UserErrors, State History] effs,
       Members [Editor, GetTime, Embed AppBase, Embed IO] effs,
       HasGraph String effs
     ) =>
@@ -103,8 +92,7 @@ interpretAsAppBase ::
   AppBase ()
 interpretAsAppBase v = do
   let handler =
-        runLoadAppBase
-          >>> applyMaybeInput2 (runWriteGraphDualizeableIO @String)
+        applyMaybeInput2 (runWriteGraphDualizeableIO @String)
           >>> applyMaybeInput2 (runReadGraphDualizeableIO @String)
           >>> warnOnNoInput "there is no set filepath so we can't access the graph"
           >>> applyMaybeInput2 interpretEditorAsIOVimFSGraph

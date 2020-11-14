@@ -44,9 +44,6 @@ pRemoveNode = (command "rmnf" $> RemoveNode) <*> apath
 pAt :: Parser Command
 pAt = (command "at" $> At) <*> apath <*> pCommand
 
-pLoad :: Parser Command
-pLoad = (commandFrom [":load", ":l"] $> Load) <*> some anySingle
-
 pNodeId :: Parser Command
 pNodeId = command "nid" $> NodeId
 
@@ -101,7 +98,6 @@ pCommand =
     <|> try pAt
     <|> try pDedup
     <|> try pFlatten
-    <|> try pLoad
     <|> try pNodeId
     <|> try pDebug
     <|> try pShowImage

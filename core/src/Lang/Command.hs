@@ -13,7 +13,6 @@ import Effect.Graph.Advanced
 import Effect.Graph.Check
 import Effect.Graph.Import.ByteString
 import Effect.Graph.Import.Filesystem
-import Effect.Load
 import Effect.NodeLocated
 import Effect.Throw
 import Effect.Time
@@ -58,8 +57,6 @@ data Command
     -- attribute.
     -- This can be considered to be the inverse of dedup in a sense
     Flatten String
-  | -- | :l
-    Load FilePath
   | -- | nid
     NodeId
   | -- | :d
@@ -103,7 +100,7 @@ printTransitions = mapM_ (echo . dtransition)
 
 interpretCommand ::
   ( Members [Console, ThrowUserError, SetLocation, GetLocation, Dualizeable] effs,
-    Members [FileSystemTree, Web, Load, FreshNID, GetTime, Editor, State History] effs,
+    Members [FileSystemTree, Web, FreshNID, GetTime, Editor, State History] effs,
     HasGraph String effs
   ) =>
   Command ->
@@ -189,7 +186,6 @@ interpretCommand = \case
   ImportUrl uri -> do
     nid <- subsumeMissing (importUrl nilNID uri)
     changeLocation nid
-  Load fp -> setLoaded fp
   Debug -> do
     echo "current node:"
     currentLocation >>= subsumeMissing . getNode' >>= echo . show @(Node String)
