@@ -45,6 +45,7 @@ dependencies:
 - parser-combinators
 - polysemy
 - polysemy-plugin
+- polysemy-zoo
 - random
 - random-shuffle
 - SHA
