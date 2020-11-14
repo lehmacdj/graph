@@ -23,7 +23,7 @@ withJust Nothing _ = pure ()
 
 -- | Copied from cabal codebase
 toSetOf :: Getting (Set a) s a -> s -> Set a
-toSetOf l s = getConst (l (\x -> Const (singleton x)) s)
+toSetOf l s = getConst (l (Const . singleton) s)
 
 -- | do something when a mono is NonNull
 whenNonNull ::
