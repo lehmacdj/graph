@@ -24,17 +24,6 @@ data Env = Env
 
 makeLenses ''Env
 
-modifyOf ::
-  (MonadReader env m, MonadIO m) =>
-  Lens' env (IORef r) ->
-  (r -> r) ->
-  m r
-modifyOf l f = do
-  ref <- view l
-  r <- readIORef ref
-  modifyIORef' ref f
-  pure r
-
 emptyEnv :: IO Env
 emptyEnv =
   Env

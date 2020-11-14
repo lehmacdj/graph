@@ -27,8 +27,6 @@ import Polysemy.MTL
 import Polysemy.Output
 import Polysemy.Reader
 import Polysemy.State
-import System.Directory
-import System.FilePath
 import UserError
 
 type App = Repl Env
@@ -39,24 +37,6 @@ runLocableHistoryState ::
   Member (State History) effs =>
   Sem (GetLocation : SetLocation : effs) ~> Sem effs
 runLocableHistoryState = subsumeReaderState _now >>> runSetLocationHistoryState
-
--- | we have the extra State History parameter here to sidestep issues of
--- having to introduce another effect, want to move away from using this method
--- because it is messier than using the separate methods in most cases probably
-runLocableAppBase ::
-  Member (Embed AppBase) effs =>
-  Sem (GetLocation : SetLocation : State History : effs) ~> Sem effs
-runLocableAppBase = runLocableHistoryState >>> runStateAppBaseIORef history
-{-# DEPRECATED runLocableAppBase "use runLocableHistoryState" #-}
-
-runStateAppBaseIORef ::
-  Member (Embed AppBase) effs =>
-  Lens' Env (IORef s) ->
-  Sem (State s : effs) ~> Sem effs
-runStateAppBaseIORef l = interpret $ \case
-  Get -> embed $ view l >>= readIORef
-  Put x -> embed $ modifyOf l (const x) >> pure ()
-{-# DEPRECATED runStateAppBaseIORef "use runStateIORef with Input Env" #-}
 
 subsumeReaderState ::
   forall x i r. Member (State x) r => (x -> i) -> Sem (Reader i : r) ~> Sem r
