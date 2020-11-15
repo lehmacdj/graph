@@ -1,11 +1,8 @@
-{-# LANGUAGE LambdaCase #-}
-{-# LANGUAGE ViewPatterns #-}
 {-# LANGUAGE NoImplicitPrelude #-}
 
 module Effect.Throw
-  (
-    module Effect.Throw,
-    Error
+  ( module Effect.Throw,
+    Error,
   )
 where
 

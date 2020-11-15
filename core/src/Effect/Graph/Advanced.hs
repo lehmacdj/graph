@@ -1,6 +1,5 @@
 {-# LANGUAGE AllowAmbiguousTypes #-}
 {-# LANGUAGE LambdaCase #-}
-{-# LANGUAGE ViewPatterns #-}
 {-# LANGUAGE NoImplicitPrelude #-}
 
 module Effect.Graph.Advanced where
@@ -43,9 +42,8 @@ insertNode n = do
   setData @t nid (dataOf n)
   let esOut = toListOf (nodeOutgoing . folded . to (outgoingEdge nid)) n
       esIn = toListOf (nodeIncoming . folded . to (`incomingEdge` nid)) n
-  forM_ esIn $ insertEdge
-  forM_ esOut $ insertEdge
-  pure ()
+  forM_ esIn insertEdge
+  forM_ esOut insertEdge
 
 currentNode ::
   Members [ReadGraph t, GetLocation, ThrowMissing] effs =>
@@ -150,7 +148,7 @@ mergeNodes ::
   ) =>
   NonNull mono ->
   Sem effs NID
-mergeNodes nids = foldlM1 (mergeNode @t) nids
+mergeNodes = foldlM1 (mergeNode @t)
 
 -- | Create a node with the same transitions as the original node.
 -- Self loops are preserved as self loops on the new node.

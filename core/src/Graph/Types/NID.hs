@@ -1,4 +1,3 @@
-{-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE DeriveAnyClass #-}
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE NoImplicitPrelude #-}
@@ -53,7 +52,7 @@ instance Random NID where
 
 -- | Creates an NID with all but lower bits 0, for use in testing
 smallNID :: Word64 -> NID
-smallNID l = NID 0 0 l
+smallNID = NID 0 0
 
 -- | zero NID which represents the origin
 nilNID :: NID

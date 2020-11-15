@@ -20,4 +20,4 @@ the ::
   (MonoFoldable mono, Show mono, Member ThrowUserError effs) =>
   mono ->
   Sem effs (Element mono)
-the = the' (\xs -> NotSingleton (show xs))
+the = the' (NotSingleton . show)

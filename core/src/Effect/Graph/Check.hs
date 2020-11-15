@@ -54,8 +54,8 @@ reportToConsole ::
   (Member Console effs, Show t) =>
   Sem (ReportMissing t : effs) ~> Sem effs
 reportToConsole = interpret $ \case
-  c@(NodeMissing {}) -> echo $ show c
-  c@(ConnectMissing {}) -> echo $ show c
+  c@NodeMissing {} -> echo $ show c
+  c@ConnectMissing {} -> echo $ show c
 
 dirToCombineEdges :: Direction -> NID -> Connect t -> Edge t
 dirToCombineEdges d nid c
@@ -100,7 +100,7 @@ checkConnectExists ::
   Sem effs ()
 checkConnectExists dir nid c = reportMissingNode @t $ do
   n <- getNode' @t nid
-  if has ((dirToLens dir) . folded . only c) n
+  if has (dirToLens dir . folded . only c) n
     then pure ()
     else connectMissing dir nid c
 

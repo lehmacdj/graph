@@ -90,7 +90,7 @@ printErrors = (`handleError` printer)
 
 errorToLeft ::
   Show e => Sem (Error e : effs) a -> Sem effs (Either String a)
-errorToLeft = (`handleError` \e -> pure (Left (show e))) . fmap Right
+errorToLeft = (`handleError` pure . Left . show) . fmap Right
 
 errorToNothing ::
   Sem (Error e : effs) a -> Sem effs (Maybe a)

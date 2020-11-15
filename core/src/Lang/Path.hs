@@ -88,7 +88,7 @@ resolvePathSuccesses nid = \case
     pure . setFromList $ matchConnect x (outgoingConnectsOf @t n)
   p :/ q -> do
     pResolved <- toList <$> resolvePathSuccesses nid p
-    mconcat <$> (traverse (`resolvePathSuccesses` q) pResolved)
+    mconcat <$> traverse (`resolvePathSuccesses` q) pResolved
   p :+ q -> union <$> resolvePathSuccesses nid p <*> resolvePathSuccesses nid q
   p :& q -> intersect <$> resolvePathSuccesses nid p <*> resolvePathSuccesses nid q
 
