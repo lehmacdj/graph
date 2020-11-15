@@ -22,9 +22,12 @@ warnSingle :: Member (Warn UserErrors) r => UserError -> Sem r ()
 warnSingle = warn . singleton
 
 printWarnings ::
-  forall e effs.
-  (Member (Embed IO) effs, Show e) =>
-  Sem (Warn e : effs) () ->
-  Sem effs ()
+  forall e r a.
+  (Member (Embed IO) r, Show e) =>
+  Sem (Warn e : r) a ->
+  Sem r a
 printWarnings = interpret $ \case
   Warn e -> liftIO . eputStr . show $ e
+
+ignoreWarnings :: forall e r a. Sem (Warn e : r) a -> Sem r a
+ignoreWarnings = interpret $ \(Warn _) -> pure ()
