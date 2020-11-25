@@ -187,6 +187,7 @@ runStateInputIORef ::
 runStateInputIORef = applyInput2 runStateIORef
 
 runStateInputIORefOf ::
+  forall s env r a.
   Members [Input env, Embed IO] r =>
   Lens' env (IORef s) ->
   Sem (State s : r) a ->

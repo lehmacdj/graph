@@ -42,12 +42,57 @@ runSetLocationHistoryState ::
 runSetLocationHistoryState = interpret $ \case
   Output nid -> modify @History (addToHistory nid)
 
-warnOnNoInput ::
-  Member (Warn UserErrors) r =>
+errorOnNoInput ::
+  Member (Error UserErrors) r =>
   String ->
-  Sem (Error NoInputProvided : r) () ->
-  Sem r ()
-warnOnNoInput msg v = v `handleError` \NoInputProvided -> warnString msg
+  Sem (Error NoInputProvided : r) a ->
+  Sem r a
+errorOnNoInput msg v =
+  v `handleError` \NoInputProvided -> UserError.throwString msg
+
+-- | general function for interpreting the entire stack of effects in terms
+-- of real world things
+-- it takes a function that handles the errors, because that is necessary for
+-- this to have an arbitrary return type
+runMainEffects ::
+  forall a.
+  ( forall b effs.
+    Members [Input Env, Embed IO] effs =>
+    Sem (Warn UserErrors : Error UserErrors : effs) b ->
+    Sem effs b
+  ) ->
+  ( forall effs.
+    ( Members [Console, ThrowUserError, SetLocation, GetLocation, FreshNID, Dualizeable] effs,
+      Members [FileSystemTree, Web, Warn UserErrors, State History] effs,
+      Members [Editor, GetTime, Embed AppBase, Embed IO] effs,
+      HasGraph String effs
+    ) =>
+    Sem effs a
+  ) ->
+  AppBase a
+runMainEffects errorHandlingBehavior v = do
+  let handler =
+        applyMaybeInput2 (runWriteGraphDualizeableIO @String)
+          >>> applyMaybeInput2 (runReadGraphDualizeableIO @String)
+          >>> errorOnNoInput "there is no set filepath so we can't access the graph"
+          >>> applyMaybeInput2 interpretEditorAsIOVimFSGraph
+          >>> errorOnNoInput "doesn't have a filepath so can't start editor"
+          >>> contramapInputSem @(Maybe FilePath) (embed . readIORef . view filePath)
+          >>> runWebIO
+          >>> runFileSystemTreeIO
+          >>> runStateInputIORefOf @IsDual isDualized
+          >>> interpretConsoleIO
+          >>> interpretTimeAsIO
+          >>> runLocableHistoryState
+          >>> runStateInputIORefOf @History history
+          >>> runFreshNIDState
+          >>> runStateInputIORefOf nextId
+          >>> errorHandlingBehavior
+          >>> withEffects @[Input Env, Embed IO, Embed AppBase]
+          >>> runInputMonadReader @AppBase
+          >>> runEmbedded liftIO
+          >>> runM
+  handler v
 
 -- | The existential in the type here is necessary to allow an arbitrary order
 -- to be picked here + to allow other effects (such as Error NoInputProvided)
@@ -66,9 +111,9 @@ interpretAsAppBase v = do
   let handler =
         applyMaybeInput2 (runWriteGraphDualizeableIO @String)
           >>> applyMaybeInput2 (runReadGraphDualizeableIO @String)
-          >>> warnOnNoInput "there is no set filepath so we can't access the graph"
+          >>> errorOnNoInput "there is no set filepath so we can't access the graph"
           >>> applyMaybeInput2 interpretEditorAsIOVimFSGraph
-          >>> warnOnNoInput "doesn't have a filepath so can't start editor"
+          >>> errorOnNoInput "doesn't have a filepath so can't start editor"
           >>> contramapInputSem @(Maybe FilePath) (embed . readIORef . view filePath)
           >>> runWebIO
           >>> runFileSystemTreeIO
