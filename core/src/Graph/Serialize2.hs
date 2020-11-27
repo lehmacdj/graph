@@ -42,11 +42,11 @@ serializeNodeEx n base = do
     Just d -> B.writeFile (nodeDataFile base (nidOf n)) d
     Nothing -> pure ()
 
-ioHandler :: IOError -> IO (Maybe a)
-ioHandler = pure . const Nothing
-
 ioErrorToMaybe :: IO a -> IO (Maybe a)
 ioErrorToMaybe = (`catch` ioHandler) . (Just <$>)
+  where
+    ioHandler :: IOError -> IO (Maybe a)
+    ioHandler = pure . const Nothing
 
 deserializeNodeF ::
   forall t effs.
