@@ -6,22 +6,17 @@ module Completion where
 import App
 import Control.Arrow
 import Control.Lens
-import Effect.Graph
 import Effect.Graph.Advanced
 import Effect.NodeLocated
 import Effect.Throw
-import Effect.Util
-import Env
+import Effect.Warn
 import Graph
 import Lang.Parsing
 import Lang.Path
 import Lang.Path.Partial
 import MyPrelude
-import Polysemy.Embed
-import Polysemy.Input
-import Polysemy.MTL
-import Polysemy.State
 import System.Console.Haskeline
+import UserError
 
 type Base a = AppBase a
 
@@ -68,6 +63,16 @@ mkTransitionCompleter xs x =
         >>> over both (x `isPrefixOf`)
         >>> uncurry (||)
 
+failCompletionWithOriginalInputOnErrorOrWarning ::
+  Member (Embed IO) effs =>
+  -- | The original input
+  String ->
+  Sem (Warn UserErrors : Error UserErrors : effs) (String, [Completion]) ->
+  Sem effs (String, [Completion])
+failCompletionWithOriginalInputOnErrorOrWarning i =
+  printWarnings
+    >>> (`handleError` const (pure (i, [])))
+
 -- this tries to parse as much of a path as possible, and then deduce what
 -- the current word being completed is, it then tries to complete a
 -- transition currently on as much as possible, then tries to complete from
@@ -76,30 +81,16 @@ completePath :: (String, String) -> Base (String, [Completion])
 completePath (i, _) = case getPartialPath (takeRelevantFromEnd i) of
   Nothing -> pure (i, [])
   Just (MissingSlash _ _) -> pure (i, [simpleCompletion "/"])
-  Just (PartialPath nid pp end) -> do
-    fp' <- view filePath >>= readIORef
-    case fp' of
-      Nothing -> pure (i, [])
-      Just fp -> do
-        let handler =
-              runReadGraphDualizeableIO @String fp
-                >>> applyInput2Of isDualized runStateIORef
-                >>> runLocableHistoryState
-                >>> applyInput2Of history runStateIORef
-                >>> (\x -> handleError @Missing x (\_ -> pure (i, [])))
-                >>> withEffects @[Input Env, Embed IO, Embed AppBase]
-                >>> runInputMonadReader @AppBase
-                >>> runEmbedded liftIO
-                >>> runM
-        handler $ do
-          let p = foldr (:/) One pp
-          l <- currentLocation
-          ntids <- toList <$> resolvePathSuccesses (fromMaybe l nid) p
-          nts <- getNodes @String ntids
-          let octs =
-                -- outgoing connect transitions
-                toListOf (folded . nodeOutgoing . folded . connectTransition) nts
-          pure (fromMaybe i (stripPrefix (reverse end) i), mkCompleter octs end)
+  Just (PartialPath nid pp end) ->
+    runMainEffects (failCompletionWithOriginalInputOnErrorOrWarning i) $ do
+      let p = foldr (:/) One pp
+      l <- currentLocation
+      ntids <- toList <$> subsumeMissing (resolvePathSuccesses (fromMaybe l nid) p)
+      nts <- getNodes @String ntids
+      let octs =
+            -- outgoing connect transitions
+            toListOf (folded . nodeOutgoing . folded . connectTransition) nts
+      pure (fromMaybe i (stripPrefix (reverse end) i), mkCompleter octs end)
 
 completionFunction :: (String, String) -> Base (String, [Completion])
 completionFunction =
