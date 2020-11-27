@@ -50,16 +50,22 @@ errorOnNoInput ::
 errorOnNoInput msg v =
   v `handleError` \NoInputProvided -> UserError.throwString msg
 
+printingErrorsAndWarnings ::
+  Member (Embed IO) effs =>
+  Sem (Warn UserErrors : Error UserErrors : effs) () ->
+  Sem effs ()
+printingErrorsAndWarnings = printWarnings >>> printErrors
+
 -- | general function for interpreting the entire stack of effects in terms
 -- of real world things
 -- it takes a function that handles the errors, because that is necessary for
 -- this to have an arbitrary return type
 runMainEffects ::
   forall a.
-  ( forall b effs.
+  ( forall effs.
     Members [Input Env, Embed IO] effs =>
-    Sem (Warn UserErrors : Error UserErrors : effs) b ->
-    Sem effs b
+    Sem (Warn UserErrors : Error UserErrors : effs) a ->
+    Sem effs a
   ) ->
   ( forall effs.
     ( Members [Console, ThrowUserError, SetLocation, GetLocation, FreshNID, Dualizeable] effs,
@@ -107,27 +113,4 @@ interpretAsAppBase ::
     Sem effs ()
   ) ->
   AppBase ()
-interpretAsAppBase v = do
-  let handler =
-        applyMaybeInput2 (runWriteGraphDualizeableIO @String)
-          >>> applyMaybeInput2 (runReadGraphDualizeableIO @String)
-          >>> errorOnNoInput "there is no set filepath so we can't access the graph"
-          >>> applyMaybeInput2 interpretEditorAsIOVimFSGraph
-          >>> errorOnNoInput "doesn't have a filepath so can't start editor"
-          >>> contramapInputSem @(Maybe FilePath) (embed . readIORef . view filePath)
-          >>> runWebIO
-          >>> runFileSystemTreeIO
-          >>> runStateInputIORefOf isDualized
-          >>> interpretConsoleIO
-          >>> printWarnings @UserErrors
-          >>> printErrors
-          >>> interpretTimeAsIO
-          >>> runLocableHistoryState
-          >>> runStateInputIORefOf history
-          >>> runFreshNIDState
-          >>> runStateInputIORefOf nextId
-          >>> withEffects @[Input Env, Embed IO, Embed AppBase]
-          >>> runInputMonadReader @AppBase
-          >>> runEmbedded liftIO
-          >>> runM
-  handler v
+interpretAsAppBase = runMainEffects printingErrorsAndWarnings
