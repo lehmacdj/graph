@@ -176,7 +176,6 @@ setData ::
   Graph t ->
   Graph t
 setData d n g = insertNode (set nodeData d (nodeConsistentWithGraph g n)) g
-{-# DEPRECATED setData "use Effect.Graph and interpreters for Graph t instead" #-}
 
 setData' ::
   TransitionValid t =>
@@ -185,7 +184,6 @@ setData' ::
   Graph t ->
   Graph t
 setData' d = primed (setData d)
-{-# DEPRECATED setData' "use Effect.Graph and interpreters for Graph t instead" #-}
 
 maybeLookupNode :: Graph t -> NID -> Maybe (Node t)
 maybeLookupNode = flip M.lookup . nodeMap
