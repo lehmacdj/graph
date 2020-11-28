@@ -16,6 +16,7 @@ import qualified Data.Map.Internal.Debug as MD
 import Data.Maybe
 import qualified Data.Set as Set
 import qualified Debug.Trace as Debug
+import GHC.Stack
 import Graph.Edge
 import Graph.Node
 import Graph.Types
@@ -189,7 +190,7 @@ maybeLookupNode :: Graph t -> NID -> Maybe (Node t)
 maybeLookupNode = flip M.lookup . nodeMap
 
 nodeConsistentWithGraph ::
-  TransitionValid t =>
+  (HasCallStack, TransitionValid t) =>
   Graph t ->
   Node t ->
   Node t
