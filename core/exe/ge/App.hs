@@ -1,3 +1,5 @@
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE NoImplicitPrelude #-}
 
 -- | Instantiates things with a lot of effects, evaluating them in the AppBase
@@ -6,6 +8,8 @@ module App where
 
 import Control.Arrow ((>>>))
 import Control.Lens
+import Control.Monad.Catch
+import Control.Monad.Reader.Class
 import Control.Repl
 import Effect.Console
 import Effect.Editor
@@ -17,7 +21,7 @@ import Effect.Time
 import Effect.Util
 import Effect.Warn
 import Effect.Web
-import Env
+import Graph
 import History
 import MyPrelude hiding (Reader, ask)
 import Polysemy.Embed
@@ -25,12 +29,46 @@ import Polysemy.Error hiding (throw)
 import Polysemy.Input
 import Polysemy.MTL
 import Polysemy.Output
+import Polysemy.Readline
 import Polysemy.State
 import UserError
 
-type App = Repl Env
+newtype AppM env a = AppM {unAppM :: ReaderT env IO a}
+  deriving
+    ( Functor,
+      Monad,
+      MonadReader env,
+      MonadIO,
+      Applicative,
+      MonadThrow,
+      MonadCatch,
+      MonadMask
+    )
 
-type AppBase = ReplBase Env
+runAppM :: env -> AppM env a -> IO a
+runAppM env = (`runReaderT` env) . unAppM
+
+type App = AppM Env
+
+data Env = Env
+  { _filePath :: IORef (Maybe FilePath),
+    -- | next id that is unique within the current graph
+    _nextId :: IORef NID,
+    _history :: IORef History,
+    _isDualized :: IORef IsDual,
+    _replSettings :: Settings App
+  }
+
+makeLenses ''Env
+
+emptyEnv :: Settings App -> IO Env
+emptyEnv settings =
+  Env
+    <$> newIORef Nothing
+    <*> newIORef nilNID
+    <*> newIORef (History [] nilNID [])
+    <*> newIORef (IsDual False)
+    <*> pure settings
 
 runLocableHistoryState ::
   Member (State History) effs =>
@@ -70,12 +108,12 @@ runMainEffects ::
   ( forall effs.
     ( Members [Console, ThrowUserError, SetLocation, GetLocation, FreshNID, Dualizeable] effs,
       Members [FileSystemTree, Web, Warn UserErrors, State History] effs,
-      Members [Editor, GetTime, Embed AppBase, Embed IO] effs,
+      Members [Editor, GetTime, Embed App, Embed IO, Readline] effs,
       HasGraph String effs
     ) =>
     Sem effs a
   ) ->
-  AppBase a
+  App a
 runMainEffects errorHandlingBehavior v = do
   let handler =
         applyMaybeInput2 (runWriteGraphDualizeableIO @String)
@@ -94,8 +132,9 @@ runMainEffects errorHandlingBehavior v = do
           >>> runFreshNIDState
           >>> runStateInputIORefOf nextId
           >>> errorHandlingBehavior
-          >>> withEffects @[Input Env, Embed IO, Embed AppBase]
-          >>> runInputMonadReader @AppBase
+          >>> applyInput2Of replSettings (runReadline @App)
+          >>> withEffects @[Input Env, Embed IO, Embed App]
+          >>> runInputMonadReader @App
           >>> runEmbedded liftIO
           >>> runM
   handler v
@@ -103,14 +142,14 @@ runMainEffects errorHandlingBehavior v = do
 -- | The existential in the type here is necessary to allow an arbitrary order
 -- to be picked here + to allow other effects (such as Error NoInputProvided)
 -- to automatically be raised into the the list of effects but not others
-interpretAsAppBase ::
+interpretAsApp ::
   ( forall effs.
     ( Members [Console, ThrowUserError, SetLocation, GetLocation, FreshNID, Dualizeable] effs,
       Members [FileSystemTree, Web, Warn UserErrors, State History] effs,
-      Members [Editor, GetTime, Embed AppBase, Embed IO] effs,
+      Members [Editor, GetTime, Embed App, Embed IO, Readline] effs,
       HasGraph String effs
     ) =>
     Sem effs ()
   ) ->
-  AppBase ()
-interpretAsAppBase = runMainEffects printingErrorsAndWarnings
+  App ()
+interpretAsApp = runMainEffects printingErrorsAndWarnings

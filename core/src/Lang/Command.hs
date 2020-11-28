@@ -1,6 +1,17 @@
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE NoImplicitPrelude #-}
 
+-- | This module implements commands.
+--
+-- Style guide for commands for the future:
+-- All commands and paths are interpreted relative to the current location
+-- We can reintroduce the ability to execute commands relative to a different
+-- location later via an `at` command that changes the location and then
+-- changes it back.
+-- This means that new nodes created and edges created etc start/end at the
+-- current node
+-- Commands that act on nodes should also act on at least deterministic
+-- paths and if possible nondeterministic paths too
 module Lang.Command where
 
 import Control.Monad (zipWithM_)

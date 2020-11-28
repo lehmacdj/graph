@@ -54,6 +54,10 @@ concatMapM op = foldr f (return [])
 applyN :: forall a. Int -> (a -> a) -> a -> a
 applyN n f = foldr (.) id (replicate n f :: [a -> a])
 
+describe :: String -> Maybe a -> Either String a
+describe s Nothing = Left s
+describe _ (Just x) = Right x
+
 -- # IO functions for stderr
 
 eputStr :: String -> IO ()

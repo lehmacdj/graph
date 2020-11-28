@@ -33,6 +33,7 @@ dependencies:
 - deepseq
 - directory
 - directory-tree
+- exceptions
 - filepath
 - foreign-store
 - free

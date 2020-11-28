@@ -18,8 +18,6 @@ import MyPrelude
 import System.Console.Haskeline
 import UserError
 
-type Base a = AppBase a
-
 commands :: [String]
 commands = []
 
@@ -28,14 +26,14 @@ commands = []
 mkCompleter :: [String] -> String -> [Completion]
 mkCompleter xs x = map simpleCompletion' $ filter (x `isPrefixOf`) xs
 
-getCommandCompletions :: String -> String -> Base [Completion]
+getCommandCompletions :: String -> String -> App [Completion]
 getCommandCompletions x y
   -- unless the previous text is "" then we want to fail to provide any
   -- completions so that we fall back to another completion provider
   | y == "" = pure . mkCompleter commands . reverse $ x
   | otherwise = pure []
 
-completeCommand :: (String, String) -> Base (String, [Completion])
+completeCommand :: (String, String) -> App (String, [Completion])
 completeCommand = completeWordWithPrev Nothing " " getCommandCompletions
 
 quoteUnusualTransition :: String -> String
@@ -77,7 +75,7 @@ failCompletionWithOriginalInputOnErrorOrWarning i =
 -- the current word being completed is, it then tries to complete a
 -- transition currently on as much as possible, then tries to complete from
 -- that location
-completePath :: (String, String) -> Base (String, [Completion])
+completePath :: (String, String) -> App (String, [Completion])
 completePath (i, _) = case getPartialPath (takeRelevantFromEnd i) of
   Nothing -> pure (i, [])
   Just (MissingSlash _ _) -> pure (i, [simpleCompletion "/"])
@@ -92,7 +90,7 @@ completePath (i, _) = case getPartialPath (takeRelevantFromEnd i) of
             toListOf (folded . nodeOutgoing . folded . connectTransition) nts
       pure (fromMaybe i (stripPrefix (reverse end) i), mkCompleter octs end)
 
-completionFunction :: (String, String) -> Base (String, [Completion])
+completionFunction :: (String, String) -> App (String, [Completion])
 completionFunction =
   completeCommand
     `fallbackCompletion` completePath

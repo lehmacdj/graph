@@ -7,6 +7,7 @@ module Effect.Console where
 import MyPrelude
 import System.IO.Term.Image
 
+-- | TODO: make this use Console.Readline for thread safe writing with prompt
 data Console m a where
   -- | print a string followed by a newline
   Echo :: String -> Console m ()

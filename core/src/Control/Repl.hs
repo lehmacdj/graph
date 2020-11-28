@@ -1,16 +1,11 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE NoImplicitPrelude #-}
 
 module Control.Repl
   ( makeRepl,
-    runRepl,
-    doRepl,
-    doRepl',
-    runRepl',
     liftIO,
-    Repl (..),
-    ReplBase (..),
     withDefaultQuitParser,
     C (..),
     Settings,
@@ -20,31 +15,14 @@ module Control.Repl
 where
 
 import Control.Monad.IO.Class
-import Control.Monad.Reader.Class
-import Control.Monad.Trans (lift)
-import Control.Monad.Trans.Reader (ReaderT (..), runReaderT)
 import Data.Functor
+import MyPrelude
+import Polysemy.Readline
 import System.Console.Haskeline
-  ( InputT,
-    MonadException (..),
-    RunIO (..),
-    Settings,
+  ( Settings,
     defaultSettings,
-    getInputLine,
-    mapInputT,
-    runInputT,
     setComplete,
   )
-
-newtype ReplBase r a = ReplBase {unReplBase :: ReaderT r IO a}
-  deriving (Functor, Monad, MonadReader r, MonadIO, Applicative, MonadException)
-
-newtype Repl r a = Repl {unRepl :: InputT (ReplBase r) a}
-  deriving (Functor, Monad, MonadIO, Applicative)
-
-instance MonadReader r (Repl r) where
-  ask = Repl . lift $ ask
-  local f m = Repl $ mapInputT (local f) (unRepl m)
 
 data C c
   = Quit
@@ -56,30 +34,20 @@ data C c
 -- * a parser for commands or quit
 -- * an executor for commands
 makeRepl ::
+  Member Readline effs =>
   String ->
   (String -> Either String (C c)) ->
-  (c -> Repl r ()) ->
-  Repl r ()
+  (c -> Sem effs ()) ->
+  Sem effs ()
 makeRepl title parser execute = repl
   where
     repl = do
-      command <- Repl $ getInputLine (title ++ "> ")
+      command <- getInputLine (title ++ "> ")
       case parser <$> command of
-        Nothing -> liftIO (putStrLn "Goodbye!") $> ()
-        Just (Right Quit) -> liftIO (putStrLn "Goodbye!") $> ()
+        Nothing -> outputStrLn "Goodbye!"
+        Just (Right Quit) -> outputStrLn "Goodbye!"
         Just (Right (C command')) -> execute command' >> repl
-        Just (Left err) -> liftIO (putStrLn err) >> repl
-
-runRepl' :: Settings (ReplBase r) -> Repl r a -> r -> IO a
-runRepl' settings repl r =
-  (`runReaderT` r)
-    . unReplBase
-    . runInputT settings
-    . unRepl
-    $ repl
-
-runRepl :: Repl r a -> r -> IO a
-runRepl = runRepl' defaultSettings
+        Just (Left err) -> outputStrLn err >> repl
 
 -- | Takes :q and :quit as quit and otherwise defers to the main parser
 withDefaultQuitParser ::
@@ -87,20 +55,3 @@ withDefaultQuitParser ::
 withDefaultQuitParser p s
   | s == ":q" || s == ":quit" = Right Quit
   | otherwise = C <$> p s
-
-doRepl ::
-  String ->
-  (String -> Either String (C c)) ->
-  (c -> Repl r ()) ->
-  r ->
-  IO ()
-doRepl = doRepl' defaultSettings
-
-doRepl' ::
-  Settings (ReplBase r) ->
-  String ->
-  (String -> Either String (C c)) ->
-  (c -> Repl r ()) ->
-  r ->
-  IO ()
-doRepl' settings = ((runRepl' settings .) .) . makeRepl
