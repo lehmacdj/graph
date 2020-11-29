@@ -44,6 +44,7 @@ dependencies:
 - megaparsec
 - mtl
 - parser-combinators
+- optparse-applicative
 - polysemy
 - polysemy-plugin
 - polysemy-zoo

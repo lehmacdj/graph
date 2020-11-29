@@ -1,3 +1,4 @@
+{-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE NoImplicitPrelude #-}
 
@@ -28,6 +29,7 @@ import Effect.NodeLocated
 import Effect.Throw
 import Effect.Time
 import Effect.Web
+import GHC.Generics
 import Graph (Connect (..), Edge (..), dataOf, nilNID, outgoingConnectsOf)
 import History
 import Lang.APath
@@ -92,7 +94,7 @@ data Command
     -- than amount of history goes maximum amount backwards. Negative number
     -- attempts to go forward in history if there is any recorded.
     Back Int
-  deriving (Eq, Show, Ord)
+  deriving (Eq, Show, Ord, Generic)
 
 singleErr :: String -> Set NID -> UserError
 singleErr cmd xs =
