@@ -1,4 +1,5 @@
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE NoImplicitPrelude #-}
 
 module Graph
   ( module Graph,
@@ -9,17 +10,13 @@ module Graph
 where
 
 import Control.Lens
-import Data.ByteString.Lazy (ByteString)
-import Data.Foldable
-import qualified Data.Map as M
 import qualified Data.Map.Internal.Debug as MD
-import Data.Maybe
-import qualified Data.Set as Set
 import qualified Debug.Trace as Debug
 import GHC.Stack
 import Graph.Edge
 import Graph.Node
 import Graph.Types
+import MyPrelude
 
 -- | Utility function for converting lookups into actual node values with error
 -- reporting.
@@ -51,7 +48,7 @@ nodeLookup ::
   NID ->
   Graph t ->
   Node t
-nodeLookup i g = fromMaybe err . M.lookup i . nodeMap $ g
+nodeLookup i g = fromMaybe err . lookup i . nodeMap $ g
   where
     err =
       error $
@@ -79,8 +76,8 @@ primeds f i ig = f (nodeLookup <$> i <*> pure ig) ig
 delEdge :: TransitionValid t => Edge t -> Graph t -> Graph t
 delEdge e g =
   withNodeMap g $
-    M.adjust (over nodeOutgoing (Set.delete (outConnect e))) (source e)
-      . M.adjust (over nodeIncoming (Set.delete (inConnect e))) (sink e)
+    adjustMap (over nodeOutgoing (deleteSet (outConnect e))) (source e)
+      . adjustMap (over nodeIncoming (deleteSet (inConnect e))) (sink e)
 
 delEdges ::
   TransitionValid t =>
@@ -91,15 +88,15 @@ delEdges = listify delEdge
 
 -- | Remove a node from the graph; updating the cached data in the neighbors
 -- nodes as well.
-delNode :: Node t -> Graph t -> Graph t
+delNode :: Ord t => Node t -> Graph t -> Graph t
 delNode n g =
   withNodeMap g $
-    M.map deleteIncoming
-      . M.map deleteOutgoing
-      . M.delete nid
+    omap deleteIncoming
+      . omap deleteOutgoing
+      . deleteMap nid
   where
     nid = _nodeId n
-    del = Set.filter ((/= nid) . view connectNode)
+    del = filterSet ((/= nid) . view connectNode)
     deleteIncoming = over nodeIncoming del
     deleteOutgoing = over nodeOutgoing del
 
@@ -111,7 +108,7 @@ delNode' ::
 delNode' = primed delNode
 
 delNodes ::
-  [Node t] -> Graph t -> Graph t
+  Ord t => [Node t] -> Graph t -> Graph t
 delNodes = listify delNode
 
 delNodes' ::
@@ -128,8 +125,8 @@ insertEdge ::
   Graph t
 insertEdge e g =
   withNodeMap g $
-    M.adjust (over nodeOutgoing (Set.insert (outConnect e))) (source e)
-      . M.adjust (over nodeIncoming (Set.insert (inConnect e))) (sink e)
+    adjustMap (over nodeOutgoing (insertSet (outConnect e))) (source e)
+      . adjustMap (over nodeIncoming (insertSet (inConnect e))) (sink e)
 
 insertEdges ::
   TransitionValid t =>
@@ -146,7 +143,7 @@ insertNode ::
   Graph t
 insertNode n g =
   insertEdges (incomingEs ++ outgoingEs) $
-    withNodeMap g (M.insert nid n)
+    withNodeMap g (insertMap nid n)
   where
     nid = _nodeId n
     incomingEs = map (`incomingEdge` nid) (toList (_nodeIncoming n))
@@ -160,19 +157,24 @@ insertNodes ::
 insertNodes = listify insertNode
 
 nodesOf :: Graph t -> [Node t]
-nodesOf = M.elems . nodeMap
+nodesOf = toList . nodeMap
+
+nextFreeNodeId :: TransitionValid t => Graph t -> NID
+nextFreeNodeId g = case maximum (Nothing `ncons` fmap Just (nodesOf g)) of
+  Nothing -> 0
+  Just nid -> nidOf nid + 1
 
 emptyGraph :: Graph t
-emptyGraph = Graph M.empty
+emptyGraph = Graph mempty
 
 isEmptyGraph :: Graph t -> Bool
-isEmptyGraph = M.null . nodeMap
+isEmptyGraph = null . nodeMap
 
 -- | sets the data, setting to nothing is equivalent to deleting the data
 -- this is a terrible function that should probably not be used
 setData ::
   TransitionValid t =>
-  Maybe ByteString ->
+  Maybe LByteString ->
   Node t ->
   Graph t ->
   Graph t
@@ -180,14 +182,14 @@ setData d n g = insertNode (set nodeData d (nodeConsistentWithGraph g n)) g
 
 setData' ::
   TransitionValid t =>
-  Maybe ByteString ->
+  Maybe LByteString ->
   NID ->
   Graph t ->
   Graph t
 setData' d = primed (setData d)
 
 maybeLookupNode :: Graph t -> NID -> Maybe (Node t)
-maybeLookupNode = flip M.lookup . nodeMap
+maybeLookupNode = flip lookup . nodeMap
 
 nodeConsistentWithGraph ::
   (HasCallStack, TransitionValid t) =>
@@ -202,13 +204,14 @@ traceGraph :: TransitionValid t => Graph t -> Graph t
 traceGraph g = withNodeMap g $ \nm -> Debug.trace (showDebug (Debug.trace "graph is:" g)) nm
 
 showDebug :: TransitionValid t => Graph t -> String
-showDebug = unlines . map show . M.elems . nodeMap
+showDebug = unlines . map show . toList . nodeMap
 
 filterGraph ::
+  Ord t =>
   (Node t -> Bool) ->
   Graph t ->
   Graph t
-filterGraph f g = M.foldr maybeDelNode g (nodeMap g)
+filterGraph f g = ofoldr maybeDelNode g (nodeMap g)
   where
     maybeDelNode x ig'
       | not $ f x = delNode x ig'
@@ -218,7 +221,7 @@ mapGraph ::
   (Node t -> Node t) ->
   Graph t ->
   Graph t
-mapGraph f g = withNodeMap g $ \nm -> M.map f nm
+mapGraph f g = withNodeMap g $ \nm -> omap f nm
 
 dualizeGraph :: Graph t -> Graph t
 dualizeGraph = mapGraph dualizeNode
