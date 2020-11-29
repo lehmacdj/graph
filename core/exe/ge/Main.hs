@@ -26,4 +26,8 @@ main = withOptions $ \options -> do
   env <- initEnv graphDir nextNid defReplSettings
   runAppM env $
     interpretAsApp $
-      makeRepl "g" (withDefaultQuitParser parseCommand) interpretCommand
+      case view executeExpression options of
+        Nothing ->
+          makeRepl "g" (withDefaultQuitParser parseCommand) interpretCommand
+        Just command ->
+          interpretCommand command
