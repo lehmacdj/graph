@@ -9,7 +9,22 @@
 --   nid.data where nid is the nid of the associated node.
 --   The auxilliary data is available from the console, and should be thought of
 --   as an unique edge to a file.
-module Graph.Serialize2 where
+module Graph.Serialize2
+  ( -- * accessing metadata about the graph
+    getAllNodeIds,
+    nextNodeId,
+
+    -- * accessing nodes
+    serializeNodeEx,
+    deserializeNodeF,
+    withSerializedNode,
+    doesNodeExist,
+    removeNode,
+
+    -- * low level access to format information (to be used with caution)
+    nodeDataFile,
+  )
+where
 
 import Control.Lens
 import Data.Aeson (FromJSON, ToJSON)
@@ -19,7 +34,24 @@ import Graph.Node (dataOf, nidOf)
 import Graph.Types
 import MyPrelude
 import System.Directory
+import System.FilePath (dropExtension)
 import UserError
+
+-- | all of the nodes accessible under a given path
+getAllNodeIds :: MonadIO m => FilePath -> m [NID]
+getAllNodeIds base = do
+  files <- liftIO $ listDirectory base
+  let linkFiles = filter (".json" `isSuffixOf`) files
+      nodes = mapMaybe (readMay . dropExtension) linkFiles
+  pure nodes
+
+-- | the next unused node id in the graph
+nextNodeId :: MonadIO m => FilePath -> m Int
+nextNodeId base = do
+  nids <- getAllNodeIds base
+  case maximum (Nothing `ncons` map Just nids) of
+    Nothing -> pure 0
+    Just x -> pure $ x + 1
 
 linksFile :: FilePath -> NID -> FilePath
 linksFile base nid = base </> (show nid ++ ".json")
@@ -63,6 +95,14 @@ deserializeNodeF base nid = do
   node <- throwLeft $ left AesonDeserialize $ Aeson.eitherDecode fileContents
   d <- liftIO $ tryGetBinaryData base nid
   pure $ (nodeData .~ d) node
+
+doesNodeExist :: MonadIO m => FilePath -> NID -> m Bool
+doesNodeExist base nid = liftIO $ doesFileExist (linksFile base nid)
+
+removeNode :: MonadIO m => FilePath -> NID -> m ()
+removeNode base nid = do
+  liftIO . removeFile $ linksFile base nid
+  liftIO . removeFile $ nodeDataFile base nid
 
 -- | Execute a function on a node stored in the filesystem at a specified location
 -- ignore nodes that don't exist or if an error occurs

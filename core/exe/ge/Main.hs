@@ -7,12 +7,11 @@ import App
 import Completion
 import Control.Lens hiding (index)
 import Control.Repl
+import Graph.Serialize2 (nextNodeId)
 import Lang.Command hiding (printTransitions)
 import Lang.Command.Parse
 import MyPrelude
 import Options
-import System.Directory
-import System.FilePath
 
 ioExceptionHandler :: IOError -> IO (Maybe a)
 ioExceptionHandler _ = pure Nothing
@@ -25,9 +24,8 @@ main = withOptions $ \options -> do
   env <- emptyEnv defReplSettings
   let dir = view graphLocation options
   writeIORef (view filePath env) (Just dir)
-  linkFileNames <- filter (".json" `isSuffixOf`) <$> listDirectory dir
-  let nids = mapMaybe (readMay . dropExtension) linkFileNames
-  writeIORef (view nextId env) (maximum (1 `ncons` nids) + 1)
+  nextNid <- nextNodeId dir
+  writeIORef (view nextId env) nextNid
   runAppM env $
     interpretAsApp $
       makeRepl "g" (withDefaultQuitParser parseCommand) interpretCommand

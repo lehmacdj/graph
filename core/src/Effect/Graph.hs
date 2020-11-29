@@ -23,9 +23,6 @@ import Graph.Types
 import MyPrelude
 import Polysemy.Input
 import Polysemy.State
-import System.Directory (doesFileExist, listDirectory, removeFile)
-import System.FilePath (dropExtension)
-import Text.Read (readMaybe)
 import UserError
 
 data ReadGraph t m a where
@@ -119,11 +116,7 @@ runReadGraphIODualizeable dir = reinterpret $ \case
         deserializeNodeF @t @(ThrowUserError : Input IsDual : effs) dir nid
     dual <- input
     pure $ maybeN <&> ifDualized dual dualizeNode
-  NodeManifest -> do
-    cs <- liftIO $ listDirectory dir
-    let linkFiles = filter (".json" `isSuffixOf`) cs
-        nodes = mapMaybe (readMaybe . dropExtension) linkFiles
-    pure nodes
+  NodeManifest -> getAllNodeIds dir
 
 -- | Run a graph in IO with the ambient ability for the graph to be
 -- dualizeable.
@@ -203,11 +196,9 @@ runWriteGraphIODualizeable ::
   FilePath ->
   Sem (WriteGraph t : effs) ~> Sem (Input IsDual : effs)
 runWriteGraphIODualizeable dir = reinterpret $ \case
-  TouchNode nid -> do
-    dfe <- liftIO (doesFileExist (linksFile dir nid))
-    if not dfe
-      then trapIOError' $ serializeNodeEx (G.emptyNode nid :: Node t) dir
-      else pure ()
+  TouchNode nid ->
+    whenM (not <$> doesNodeExist dir nid) $
+      trapIOError' $ serializeNodeEx (G.emptyNode nid :: Node t) dir
   DeleteNode nid -> do
     n <- deserializeNodeF @t dir nid
     let del = Set.filter ((/= nid) . view connectNode) :: Set (Connect t) -> Set (Connect t)
@@ -217,9 +208,7 @@ runWriteGraphIODualizeable dir = reinterpret $ \case
         neighborsOut = toListOf (nodeOutgoing . folded . connectNode) n
         neighbors = ordNub (neighborsIn ++ neighborsOut)
     liftIO $ forM_ neighbors $ withSerializedNode (delIn . delOut) dir
-    convertError @UserErrors . trapIOError' . removeFile $ linksFile dir nid
-    let ignoreErrors = (`handleError` \(_ :: UserErrors) -> pure ())
-    ignoreErrors . trapIOError' . removeFile $ nodeDataFile dir nid
+    convertError @UserErrors . trapIOError' $ removeNode dir nid
   InsertEdge e -> do
     dual <- input @IsDual
     let (Edge i t o) = ifDualized dual G.dualizeEdge e
