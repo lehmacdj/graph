@@ -17,9 +17,11 @@ module Graph.Serialize2
     -- * accessing nodes
     serializeNodeEx,
     deserializeNodeF,
+    deserializeNode,
     withSerializedNode,
     doesNodeExist,
     removeNode,
+    readGraph,
 
     -- * low level access to format information (to be used with caution)
     nodeDataFile,
@@ -30,6 +32,7 @@ import Control.Lens
 import Data.Aeson (FromJSON, ToJSON)
 import qualified Data.Aeson as Aeson
 import qualified Data.ByteString.Lazy as B
+import qualified Graph
 import Graph.Node (dataOf, nidOf)
 import Graph.Types
 import MyPrelude
@@ -96,6 +99,21 @@ deserializeNodeF base nid = do
   d <- liftIO $ tryGetBinaryData base nid
   pure $ (nodeData .~ d) node
 
+deserializeNode ::
+  forall t m.
+  ( FromJSON (Node t),
+    TransitionValid t,
+    MonadIO m
+  ) =>
+  FilePath ->
+  NID ->
+  m (Either String (Node t))
+deserializeNode base nid = do
+  fileContents <- liftIO $ B.readFile (linksFile base nid)
+  let node = Aeson.eitherDecode fileContents
+  d <- liftIO $ tryGetBinaryData base nid
+  pure $ fmap (nodeData .~ d) node
+
 doesNodeExist :: MonadIO m => FilePath -> NID -> m Bool
 doesNodeExist base nid = liftIO $ doesFileExist (linksFile base nid)
 
@@ -122,6 +140,12 @@ withSerializedNode f base nid =
    in runM . ignoreErrors . withEffects @[ThrowUserError, Embed IO] $ do
         n <- deserializeNodeF @t @[ThrowUserError, Embed IO] base nid
         trapIOError' @[ThrowUserError, Embed IO] $ serializeNodeEx (f n) base
+
+readGraph :: MonadIO m => FilePath -> m (Either String (Graph String))
+readGraph base = do
+  nids <- getAllNodeIds base
+  nodes <- traverse (deserializeNode base) nids
+  pure $ Graph.insertNodes <$> sequence nodes <*> pure Graph.emptyGraph
 
 tryGetBinaryData :: FilePath -> NID -> IO (Maybe LByteString)
 tryGetBinaryData = (ioErrorToMaybe .) . (B.readFile .) . nodeDataFile
