@@ -51,7 +51,7 @@ runAppM env = (`runReaderT` env) . unAppM
 type App = AppM Env
 
 data Env = Env
-  { _filePath :: IORef (Maybe FilePath),
+  { _filePath :: IORef FilePath,
     -- | next id that is unique within the current graph
     _nextId :: IORef NID,
     _history :: IORef History,
@@ -61,11 +61,16 @@ data Env = Env
 
 makeLenses ''Env
 
-emptyEnv :: Settings App -> IO Env
-emptyEnv settings =
+initEnv ::
+  FilePath ->
+  -- | the next node id to use for generating fresh nodes
+  NID ->
+  Settings App ->
+  IO Env
+initEnv graphDir nid settings =
   Env
-    <$> newIORef Nothing
-    <*> newIORef nilNID
+    <$> newIORef graphDir
+    <*> newIORef nid
     <*> newIORef (History [] nilNID [])
     <*> newIORef (IsDual False)
     <*> pure settings
@@ -116,12 +121,10 @@ runMainEffects ::
   App a
 runMainEffects errorHandlingBehavior v = do
   let handler =
-        applyMaybeInput2 (runWriteGraphDualizeableIO @String)
-          >>> applyMaybeInput2 (runReadGraphDualizeableIO @String)
-          >>> errorOnNoInput "there is no set filepath so we can't access the graph"
-          >>> applyMaybeInput2 interpretEditorAsIOVimFSGraph
-          >>> errorOnNoInput "doesn't have a filepath so can't start editor"
-          >>> contramapInputSem @(Maybe FilePath) (embed . readIORef . view filePath)
+        applyInput2 (runWriteGraphDualizeableIO @String)
+          >>> applyInput2 (runReadGraphDualizeableIO @String)
+          >>> applyInput2 interpretEditorAsIOVimFSGraph
+          >>> contramapInputSem @FilePath (embed . readIORef . view filePath)
           >>> runWebIO
           >>> runFileSystemTreeIO
           >>> runStateInputIORefOf @IsDual isDualized

@@ -21,11 +21,9 @@ defReplSettings = setComplete completionFunction defaultSettings
 
 main :: IO ()
 main = withOptions $ \options -> do
-  env <- emptyEnv defReplSettings
-  let dir = view graphLocation options
-  writeIORef (view filePath env) (Just dir)
-  nextNid <- nextNodeId dir
-  writeIORef (view nextId env) nextNid
+  let graphDir = view graphLocation options
+  nextNid <- nextNodeId graphDir
+  env <- initEnv graphDir nextNid defReplSettings
   runAppM env $
     interpretAsApp $
       makeRepl "g" (withDefaultQuitParser parseCommand) interpretCommand
