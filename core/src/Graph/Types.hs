@@ -3,6 +3,7 @@
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE NoImplicitPrelude #-}
 
 module Graph.Types
   ( module Graph.Types,
@@ -12,15 +13,11 @@ where
 import Control.DeepSeq
 import Control.Lens
 import Data.Aeson
-import Data.ByteString.Lazy (ByteString)
-import Data.Char (toLower)
-import Data.Foldable (toList)
-import Data.List (intercalate, stripPrefix)
-import Data.Map (Map)
+import qualified Data.Char as Char
 import qualified Data.Map as Map
 import Data.Maybe (fromJust)
-import Data.Set (Set)
 import GHC.Generics
+import MyPrelude
 
 type NID = Int
 
@@ -56,13 +53,13 @@ data Node t = Node
     _nodeId :: NID,
     _nodeIncoming :: Set (Connect t),
     _nodeOutgoing :: Set (Connect t),
-    _nodeData :: Maybe ByteString
+    _nodeData :: Maybe LByteString
   }
   deriving (Eq, Ord, Generic, NFData)
 
 makeLenses ''Node
 
-instance Show t => Show (Node t) where
+instance (Show t, Ord t) => Show (Node t) where
   show n =
     show (_nodeId n) ++ "{"
       ++ "in="
@@ -82,14 +79,20 @@ data Prenode t = Prenode
 
 makeLenses ''Prenode
 
+instance (FromJSON t, TransitionValid t) => FromJSON (Prenode t) where
+  parseJSON = genericParseJSON (strippedPrefixOptions "_prenode")
+
+instance (ToJSON t, TransitionValid t) => ToJSON (Prenode t) where
+  toEncoding = genericToEncoding (strippedPrefixOptions "_prenode")
+
 lowercaseFirst :: String -> String
 lowercaseFirst [] = []
-lowercaseFirst (x : xs) = toLower x : xs
+lowercaseFirst (x : xs) = Char.toLower x : xs
 
-prenodeOptions :: Options
-prenodeOptions =
+strippedPrefixOptions :: String -> Options
+strippedPrefixOptions prefix =
   defaultOptions
-    { fieldLabelModifier = lowercaseFirst . fromJust . stripPrefix "_prenode"
+    { fieldLabelModifier = lowercaseFirst . fromJust . stripPrefix prefix
     }
 
 prenodeToNode :: Prenode t -> Node t
@@ -97,12 +100,6 @@ prenodeToNode (Prenode nid i o) = Node nid i o Nothing
 
 nodeToPrenode :: Node t -> Prenode t
 nodeToPrenode (Node nid i o _) = Prenode nid i o
-
-instance (FromJSON t, TransitionValid t) => FromJSON (Prenode t) where
-  parseJSON = genericParseJSON prenodeOptions
-
-instance (ToJSON t, TransitionValid t) => ToJSON (Prenode t) where
-  toEncoding = genericToEncoding prenodeOptions
 
 instance (FromJSON t, TransitionValid t) => FromJSON (Node t) where
   parseJSON = fmap prenodeToNode . parseJSON
@@ -118,7 +115,7 @@ newtype Graph t = Graph
 
 makeLenses ''Graph
 
-instance Show t => Show (Graph t) where
+instance (Show t, Ord t) => Show (Graph t) where
   show = unlines' . map show . Map.elems . _graphNodeMap
     where
       unlines' = intercalate "\n"
