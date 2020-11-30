@@ -77,12 +77,6 @@ serializeNodeEx n base = do
     Just d -> B.writeFile (nodeDataFile base (nidOf n)) d
     Nothing -> pure ()
 
-ioErrorToMaybe :: IO a -> IO (Maybe a)
-ioErrorToMaybe = (`catch` ioHandler) . (Just <$>)
-  where
-    ioHandler :: IOError -> IO (Maybe a)
-    ioHandler = pure . const Nothing
-
 deserializeNodeF ::
   forall t effs.
   ( FromJSON (Node t),
@@ -120,7 +114,8 @@ doesNodeExist base nid = liftIO $ doesFileExist (linksFile base nid)
 removeNode :: MonadIO m => FilePath -> NID -> m ()
 removeNode base nid = do
   liftIO . removeFile $ linksFile base nid
-  liftIO . removeFile $ nodeDataFile base nid
+  -- this file doesn't exist frequently so we want to ignore this error
+  liftIO . ignoreIOError . removeFile $ nodeDataFile base nid
 
 -- | Execute a function on a node stored in the filesystem at a specified location
 -- ignore nodes that don't exist or if an error occurs
