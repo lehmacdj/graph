@@ -10,7 +10,6 @@ import Control.Arrow ((>>>))
 import Control.Lens
 import Control.Monad.Catch
 import Control.Monad.Reader.Class
-import Control.Repl
 import Effect.Console
 import Effect.Editor
 import Effect.Filesystem

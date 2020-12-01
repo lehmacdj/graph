@@ -1,6 +1,24 @@
 {-# LANGUAGE TemplateHaskell #-}
 
-module Polysemy.Readline where
+module Polysemy.Readline
+  ( -- * effect + actions
+    Readline (..),
+    getInputLine,
+    getInputLineWithInitial,
+    getInputChar,
+    getPassword,
+    waitForAnyKey,
+    outputStr,
+    outputStrLn,
+
+    -- * interpreters
+    runReadline,
+
+    -- * re-exports
+    H.Settings,
+    H.defaultSettings,
+  )
+where
 
 import Control.Monad.Catch
 import Control.Monad.IO.Class
