@@ -62,3 +62,6 @@ dataOf = view nodeData
 -- unique within the graph
 emptyNode :: Ord t => NID -> Node t
 emptyNode i = Node i mempty mempty Nothing
+
+dualizeNode :: Node t -> Node t
+dualizeNode (Node nid i o x) = Node nid o i x

@@ -6,14 +6,11 @@
 module Graph.Types.New where
 
 import Control.DeepSeq
-import Control.Lens (makeLenses)
+import Control.Lens (makeLenses, over, view)
 import Data.Aeson
-import Effect.FreshNID
 import GHC.Generics
-import qualified Graph
 import Graph.Types
 import MyPrelude
-import Polysemy.State
 
 data UnlabledEdge = UnlabledEdge
   { _unlabledEdgeSource :: NID,
@@ -26,6 +23,8 @@ instance FromJSON UnlabledEdge
 instance ToJSON UnlabledEdge where
   toEncoding = genericToEncoding defaultOptions
 
+makeLenses ''UnlabledEdge
+
 -- | New type of graph node that is inherently labled with NIDs. In this view
 -- we also want to be able to access referents of edges efficiently so we
 -- also include those in the node's representation
@@ -35,7 +34,7 @@ data Node' = Node'
     _nodeIncoming' :: Set (Connect NID),
     _nodeOutgoing' :: Set (Connect NID),
     _nodeReferents :: Set UnlabledEdge,
-    _nodeData' :: Maybe ByteString
+    _nodeData' :: Maybe LByteString
   }
   deriving (Eq, Ord, Generic, NFData)
 
@@ -51,6 +50,12 @@ instance Show Node' where
       ++ "}"
 
 makeLenses ''Node'
+
+referentEdge :: Edge NID -> UnlabledEdge
+referentEdge (Edge i _ o) = UnlabledEdge i o
+
+labledWith :: NID -> UnlabledEdge -> Edge NID
+labledWith l (UnlabledEdge i o) = Edge i l o
 
 -- | For the purpose of implementing from and ToJSON we use Prenode'.
 data Prenode' = Prenode'
@@ -93,30 +98,14 @@ instance Show Graph' where
     where
       unlines' = intercalate "\n"
 
-internString ::
-  Members [State (Map String NID), FreshNID] r =>
-  String ->
-  Sem r NID
-internString str = do
-  m <- get
-  case lookup str m of
-    Nothing -> do
-      nid <- freshNID
-      modify (insertMap str nid)
-      pure nid
-    Just nid -> pure nid
+nodeMap' :: Graph' -> Map NID Node'
+nodeMap' = view graphNodeMap'
 
-convertGraph :: Graph String -> Graph'
-convertGraph g =
-  let runEffs =
-        run
-          . evalState (Graph.nextFreeNodeId g)
-          . runFreshNIDState
-          . evalState @(Map String NID) mempty
-   in runEffs $ do
-        -- TODO: build a map of strings, then assign each of them a new node in the
-        -- new graph, linking everything together using a folder of node labels called
-        -- string
-        -- TODO: will need to keep track of references of strings too while
-        -- processing the conversion
-        undefined
+withNodeMap' :: Graph' -> (Map NID Node' -> Map NID Node') -> Graph'
+withNodeMap' = flip (over graphNodeMap')
+
+dualizeUnlabledEdge :: UnlabledEdge -> UnlabledEdge
+dualizeUnlabledEdge (UnlabledEdge i o) = UnlabledEdge o i
+
+dualizeNode' :: Node' -> Node'
+dualizeNode' (Node' nid i o r x) = Node' nid o i (mapSet dualizeUnlabledEdge r) x

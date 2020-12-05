@@ -9,6 +9,7 @@ where
 
 import ClassyPrelude
 import Control.Lens hiding (op)
+import qualified Data.Set as Set
 import Polysemy
 import Polysemy.Error
 import System.IO
@@ -24,6 +25,9 @@ withJust Nothing _ = pure ()
 -- | Copied from cabal codebase
 toSetOf :: Getting (Set a) s a -> s -> Set a
 toSetOf l s = getConst (l (Const . singleton) s)
+
+mapSet :: Ord b => (a -> b) -> Set a -> Set b
+mapSet = Set.map
 
 -- | do something when a mono is NonNull
 whenNonNull ::

@@ -18,6 +18,7 @@ import qualified Data.Set as Set
 import Effect.Util
 import Effect.Warn
 import qualified Graph as G
+import Graph.Node (dualizeNode)
 import Graph.Serialize2
 import Graph.Types
 import MyPrelude
