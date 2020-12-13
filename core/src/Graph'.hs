@@ -123,6 +123,12 @@ insertNode n g =
 insertNodes :: [Node'] -> Graph' -> Graph'
 insertNodes = listify insertNode
 
+insertEmptyNode :: NID -> Graph' -> Graph'
+insertEmptyNode = insertNode . emptyNode
+
+insertEmptyNodes :: [NID] -> Graph' -> Graph'
+insertEmptyNodes = listify insertEmptyNode
+
 nodesOf :: Graph' -> [Node']
 nodesOf = toList . nodeMap'
 
