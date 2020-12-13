@@ -193,3 +193,11 @@ runStateInputIORefOf ::
   Sem (State s : r) a ->
   Sem r a
 runStateInputIORefOf l = applyInput2Of l runStateIORef
+
+-- | Run an 'Input' effect by always returning the value returned by a monadic
+-- action once. This is useful for initializing an input in terms of a State
+-- effect for example:
+-- prop> runState 0 . runInputConstSem (get @Int) = runState 0 . runInputConst 0
+runInputConstSem :: Sem r x -> Sem (Input x : r) a -> Sem r a
+runInputConstSem initializationAction action =
+  initializationAction >>= \val -> runInputConst val action
