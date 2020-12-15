@@ -34,7 +34,10 @@ module Graph.Serialize3
     withSerializedNode,
     doesNodeExist,
     removeNode,
+
+    -- * bulk operations
     readGraph,
+    writeGraph,
 
     -- * low level access to format information (to be used with caution)
     nodeDataFile,
@@ -115,6 +118,11 @@ readGraph base = do
   nids <- getAllNodeIds base
   nodes <- traverse (deserializeNode base) nids
   pure $ Graph'.insertNodes <$> sequence nodes <*> pure Graph'.emptyGraph
+
+writeGraph :: MonadIO m => FilePath -> Graph' -> m ()
+writeGraph base g = liftIO $ do
+  createDirectoryIfMissing True base
+  traverse_ (serializeNodeEx base) (Graph'.nodesOf g)
 
 tryGetBinaryData :: FilePath -> NID -> IO (Maybe LByteString)
 tryGetBinaryData base nid = ioErrorToMaybe $ B.readFile $ nodeDataFile base nid
