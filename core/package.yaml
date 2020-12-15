@@ -57,6 +57,7 @@ dependencies:
 - transformers
 - typed-process
 - unix
+- unliftio
 - validation
 - witherable-class
 - xml-conduit
