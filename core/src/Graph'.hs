@@ -1,9 +1,68 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE NoImplicitPrelude #-}
 
+-- | manipulate graphs where edges are themselves nodes in the graph.
+--
+-- = Naming conventions
+-- For functions that refer to nodes in the graph there are usually 4 variants.
+-- For example:
+-- * 'delNode'
+-- * 'delNode''
+-- * 'delNodes'
+-- * 'delNodes''
+-- When this occurs the unprimed versions operate on Nodes and are probably the
+-- most performant. Care should be taken however with these functions to avoid
+-- using an old version of a node that has been updated since it was fetched
+-- from the graph. Primed versions are also available that will automatically
+-- query the necessary nodes from the graph. There are also plural versions that
+-- operate on a bunch of Nodes/NIDs at the same time.
 module Graph'
-  ( module Graph',
-    module Graph.Types.New,
+  ( -- * re-exported types necessary for talking about graphs
+    Graph' (..),
+    Node' (..),
+    Edge (..),
+    UnlabledEdge (..),
+
+    -- * querying
+    lookupNode,
+    lookupNodeEx,
+    isEmptyGraph,
+    nodesOf,
+
+    -- * updating
+    emptyGraph,
+
+    -- ** insert
+    insertNode,
+    insertNodes,
+    insertEmptyNode,
+    insertEmptyNodes,
+    insertEdge,
+    insertEdges,
+
+    -- ** delete
+    delNode,
+    delNode',
+    delNodes,
+    delNodes',
+    delEdge,
+    delEdges,
+
+    -- ** data
+    setData,
+    setData',
+
+    -- ** bulk manipulation
+    filterGraph,
+    mapGraph,
+    dualizeGraph,
+
+    -- * debug
+    traceGraph,
+    assertNodeInGraph,
+
+    -- * misc
+    nextFreeNodeId,
   )
 where
 
@@ -24,18 +83,9 @@ assertNodeInGraph _ (Just n) = n
 assertNodeInGraph i Nothing =
   error $ "expected " ++ show i ++ " to be in the graph"
 
-lookupNode ::
-  Graph' ->
-  NID ->
-  Node'
-lookupNode = flip nodeLookup
-{-# INLINE lookupNode #-}
-
--- | Gets the most up to date version of the node from the graph.
--- This does not imply that graphs have version control, it simply means that
--- the original node might be out of date otherwise.
-refreshNode :: Graph' -> Node' -> Node'
-refreshNode g = lookupNode g . nidOf
+lookupNodeEx :: HasCallStack => Graph' -> NID -> Node'
+lookupNodeEx = flip nodeLookup
+{-# INLINE lookupNodeEx #-}
 
 nodeLookup :: NID -> Graph' -> Node'
 nodeLookup i g = fromMaybe err . lookup i . nodeMap' $ g
@@ -49,7 +99,7 @@ nodeLookup i g = fromMaybe err . lookup i . nodeMap' $ g
 primed ::
   (Node' -> Graph' -> a) ->
   (NID -> Graph' -> a)
-primed f i ig = f (lookupNode ig i) ig
+primed f i ig = f (lookupNodeEx ig i) ig
 
 listify ::
   (a -> Graph' -> Graph') ->
@@ -151,12 +201,12 @@ setData d n g = insertNode (set nodeData' d (nodeConsistentWithGraph g n)) g
 setData' :: Maybe LByteString -> NID -> Graph' -> Graph'
 setData' d = primed (setData d)
 
-maybeLookupNode :: Graph' -> NID -> Maybe Node'
-maybeLookupNode = flip lookup . nodeMap'
+lookupNode :: Graph' -> NID -> Maybe Node'
+lookupNode = flip lookup . nodeMap'
 
 nodeConsistentWithGraph :: HasCallStack => Graph' -> Node' -> Node'
 nodeConsistentWithGraph g n
-  | lookupNode g (nidOf n) == n = n
+  | lookupNodeEx g (nidOf n) == n = n
   | otherwise = error $ "node " ++ show n ++ " is inconsistent with the state of the graph " ++ show g
 
 traceGraph :: Graph' -> Graph'
