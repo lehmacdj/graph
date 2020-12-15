@@ -13,7 +13,8 @@
 --   = Differences from Graph.Serialize2
 --   For the most part this format is the same as Graph.Serialize2. The only
 --   differnces of note are:
---   * A version.json file which specifies the version of the graph format
+--   * Operates on Graph', the replacement for Graph that uses NID as edges
+--   exclusively
 --   * Interface is more streamlined and lives fully within IO. That is it
 --   doesn't interop with effects at all.
 module Graph.Serialize3
@@ -23,7 +24,6 @@ module Graph.Serialize3
 
     -- * accessing nodes
     serializeNodeEx,
-    deserializeNodeF,
     deserializeNode,
     withSerializedNode,
     doesNodeExist,
@@ -36,16 +36,15 @@ module Graph.Serialize3
 where
 
 import Control.Lens
-import Data.Aeson (FromJSON, ToJSON)
 import qualified Data.Aeson as Aeson
 import qualified Data.ByteString.Lazy as B
-import qualified Graph
-import Graph.Node (dataOf, nidOf)
+import qualified Graph'
+import Graph.Node' (dataOf, nidOf)
 import Graph.Types
+import Graph.Types.New
 import MyPrelude
 import System.Directory
 import System.FilePath (dropExtension)
-import UserError
 
 -- | all of the nodes accessible under a given path
 getAllNodeIds :: MonadIO m => FilePath -> m [NID]
@@ -72,48 +71,20 @@ nodeDataFile base nid = base </> (show nid ++ ".data")
 -- TODO: rewrite using System.Directory.Tree
 -- yields better error handling that isn't quite as sketchy
 
-serializeNodeEx ::
-  (ToJSON (Node t), TransitionValid t) =>
-  Node t ->
-  FilePath ->
-  IO ()
-serializeNodeEx n base = do
+serializeNodeEx :: MonadIO m => Node' -> FilePath -> m ()
+serializeNodeEx n base = liftIO $ do
   createDirectoryIfMissing True base
   B.writeFile (linksFile base (nidOf n)) (Aeson.encode n)
   case dataOf n of
     Just d -> B.writeFile (nodeDataFile base (nidOf n)) d
     Nothing -> pure ()
 
-deserializeNodeF ::
-  forall t effs.
-  ( FromJSON (Node t),
-    TransitionValid t,
-    Member ThrowUserError effs,
-    Member (Embed IO) effs
-  ) =>
-  FilePath ->
-  NID ->
-  Sem effs (Node t)
-deserializeNodeF base nid = do
-  fileContents <- trapIOError' (B.readFile (linksFile base nid))
-  node <- throwLeft $ left AesonDeserialize $ Aeson.eitherDecode fileContents
-  d <- liftIO $ tryGetBinaryData base nid
-  pure $ (nodeData .~ d) node
-
-deserializeNode ::
-  forall t m.
-  ( FromJSON (Node t),
-    TransitionValid t,
-    MonadIO m
-  ) =>
-  FilePath ->
-  NID ->
-  m (Either String (Node t))
+deserializeNode :: MonadIO m => FilePath -> NID -> m (Either String Node')
 deserializeNode base nid = do
   fileContents <- liftIO $ B.readFile (linksFile base nid)
   let node = Aeson.eitherDecode fileContents
   d <- liftIO $ tryGetBinaryData base nid
-  pure $ fmap (nodeData .~ d) node
+  pure $ fmap (nodeData' .~ d) node
 
 doesNodeExist :: MonadIO m => FilePath -> NID -> m Bool
 doesNodeExist base nid = liftIO $ doesFileExist (linksFile base nid)
@@ -126,28 +97,18 @@ removeNode base nid = do
 
 -- | Execute a function on a node stored in the filesystem at a specified location
 -- ignore nodes that don't exist or if an error occurs
-withSerializedNode ::
-  forall t.
-  ( FromJSON (Node t),
-    ToJSON (Node t),
-    TransitionValid t
-  ) =>
-  (Node t -> Node t) ->
-  FilePath ->
-  NID ->
-  IO ()
-withSerializedNode f base nid =
-  let ignoreErrors :: Sem [ThrowUserError, Embed IO] () -> Sem '[Embed IO] ()
-      ignoreErrors = (`handleError` \(_ :: UserErrors) -> pure ())
-   in runM . ignoreErrors . withEffects @[ThrowUserError, Embed IO] $ do
-        n <- deserializeNodeF @t @[ThrowUserError, Embed IO] base nid
-        trapIOError' @[ThrowUserError, Embed IO] $ serializeNodeEx (f n) base
+withSerializedNode :: MonadIO m => (Node' -> Node') -> FilePath -> NID -> m ()
+withSerializedNode f base nid = liftIO $ do
+  maybeNode <- deserializeNode base nid
+  case maybeNode of
+    Left _ -> pure ()
+    Right n -> ignoreIOError $ serializeNodeEx (f n) base
 
-readGraph :: MonadIO m => FilePath -> m (Either String (Graph String))
+readGraph :: MonadIO m => FilePath -> m (Either String Graph')
 readGraph base = do
   nids <- getAllNodeIds base
   nodes <- traverse (deserializeNode base) nids
-  pure $ Graph.insertNodes <$> sequence nodes <*> pure Graph.emptyGraph
+  pure $ Graph'.insertNodes <$> sequence nodes <*> pure Graph'.emptyGraph
 
 tryGetBinaryData :: FilePath -> NID -> IO (Maybe LByteString)
-tryGetBinaryData = (ioErrorToMaybe .) . (B.readFile .) . nodeDataFile
+tryGetBinaryData base nid = ioErrorToMaybe $ B.readFile $ nodeDataFile base nid
