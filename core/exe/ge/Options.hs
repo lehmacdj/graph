@@ -11,6 +11,7 @@ where
 import Control.Lens (makeLenses)
 import Lang.Command
 import Lang.Command.Parse
+import MyPrelude
 import Options.Applicative
 
 data Options = Options

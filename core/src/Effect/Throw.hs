@@ -1,4 +1,3 @@
-{-# LANGUAGE NoImplicitPrelude #-}
 
 module Effect.Throw
   ( module Effect.Throw,

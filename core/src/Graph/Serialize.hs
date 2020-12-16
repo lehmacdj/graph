@@ -8,16 +8,12 @@
 --   as an unique edge to a file.
 module Graph.Serialize where
 
-import Control.Exception (catch)
 import Data.Aeson (FromJSON, ToJSON)
 import qualified Data.Aeson as Aeson
-import Data.ByteString.Lazy (ByteString)
 import qualified Data.ByteString.Lazy as B
 import Graph.Types
+import MyPrelude
 import System.Directory
-
-(</>) :: FilePath -> FilePath -> FilePath
-dir </> next = dir ++ "/" ++ next
 
 linksFile :: FilePath -> FilePath
 linksFile = (</> "links.json")
@@ -46,5 +42,5 @@ deserializeGraph ::
 deserializeGraph base =
   (Aeson.decode <$> B.readFile (linksFile base)) `catch` ioHandler
 
-getBinaryData :: FilePath -> NID -> IO ByteString
+getBinaryData :: FilePath -> NID -> IO LByteString
 getBinaryData = (B.readFile .) . nodeDataFile

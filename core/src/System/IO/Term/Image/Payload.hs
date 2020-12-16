@@ -1,6 +1,5 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TemplateHaskell #-}
-{-# LANGUAGE NoImplicitPrelude #-}
 
 -- | Data structure representing the information needed for the serialization
 --    of images for the iTerm2 terminal emulator.

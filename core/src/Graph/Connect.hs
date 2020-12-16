@@ -2,10 +2,9 @@
 module Graph.Connect where
 
 import Control.Lens (filtered, view, (.~))
-import Data.Foldable
-import Data.Set (Set)
 import Data.Set.Lens
 import Graph
+import MyPrelude
 
 pairOfConnect :: Connect t -> (t, NID)
 pairOfConnect (Connect x nid) = (x, nid)

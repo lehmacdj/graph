@@ -4,7 +4,7 @@ module Polysemy.MTL where
 
 import qualified Control.Monad.Reader as MTL
 import qualified Control.Monad.State as MTL
-import Polysemy
+import MyPrelude
 import Polysemy.Input
 import Polysemy.State
 

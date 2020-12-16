@@ -1,5 +1,4 @@
 {-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE NoImplicitPrelude #-}
 
 -- | manipulate graphs where edges are themselves nodes in the graph.
 --

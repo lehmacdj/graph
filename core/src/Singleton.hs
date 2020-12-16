@@ -1,5 +1,4 @@
 {-# LANGUAGE ViewPatterns #-}
-{-# LANGUAGE NoImplicitPrelude #-}
 
 -- | Functions for dealing with stuff that should be singletons
 module Singleton where

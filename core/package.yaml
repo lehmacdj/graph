@@ -67,6 +67,7 @@ default-extensions:
 - FlexibleContexts
 - GADTs
 - LambdaCase
+- NoImplicitPrelude
 - PolyKinds
 - RankNTypes
 - ScopedTypeVariables
@@ -110,8 +111,6 @@ tests:
   graph-test:
     main:                Spec.hs
     source-dirs:         test
-    default-extensions:
-    - NoImplicitPrelude
     ghc-options:
     - -threaded
     - -rtsopts

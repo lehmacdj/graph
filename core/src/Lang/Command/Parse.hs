@@ -6,6 +6,7 @@ import Lang.APath
 import Lang.APath.Parse
 import Lang.Command
 import Lang.Parsing
+import MyPrelude hiding (some, try)
 import Text.Megaparsec
 
 apath :: Parser (APath String)

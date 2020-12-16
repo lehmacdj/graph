@@ -1,5 +1,4 @@
 {-# LANGUAGE LambdaCase #-}
-{-# LANGUAGE NoImplicitPrelude #-}
 
 -- |
 --   Absolute paths, paths that may be augmented with an nid:path or may be

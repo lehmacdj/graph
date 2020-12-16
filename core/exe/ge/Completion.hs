@@ -1,4 +1,3 @@
-{-# LANGUAGE NoImplicitPrelude #-}
 
 -- | Completion stuff for the interface
 module Completion where

@@ -2,12 +2,12 @@
 module System.IO.Term.Image where
 
 import Data.ByteString.Builder
-import Data.ByteString.Lazy (ByteString)
+import MyPrelude hiding (putStrLn)
 import System.IO
 import System.IO.Term.BinarySerialize
 import System.IO.Term.Image.Payload
 
-printImage :: ByteString -> IO ()
+printImage :: LByteString -> IO ()
 printImage d = do
   hPutBuilder stdout . intoBuilder $ payload
   putStrLn ""

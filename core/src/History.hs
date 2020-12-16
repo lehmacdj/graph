@@ -1,4 +1,3 @@
-{-# LANGUAGE NoImplicitPrelude #-}
 
 module History (History (..), singletonHistory, addToHistory, backInTime) where
 

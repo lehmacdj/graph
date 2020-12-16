@@ -3,6 +3,7 @@ module Lang.APath.Parse where
 import Lang.APath
 import Lang.Parsing
 import Lang.Path.Parse
+import MyPrelude hiding (try)
 import Text.Megaparsec
 
 pAPath :: Parser t -> Parser (APath t)

@@ -25,6 +25,8 @@ import Control.Monad.IO.Class
 import Polysemy
 import Polysemy.Embed
 import qualified System.Console.Haskeline as H
+-- sticking with Prelude here, because we might want to turn this into a package
+import Prelude
 
 data Readline m a where
   GetInputLine :: String -> Readline m (Maybe String)

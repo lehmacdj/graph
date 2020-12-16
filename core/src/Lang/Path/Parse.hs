@@ -6,7 +6,7 @@ import Control.Monad.Combinators.Expr
 import Data.Functor
 import Lang.Parsing
 import Lang.Path
-import Text.Megaparsec
+import MyPrelude
 
 pathTerm :: Parser t -> Parser (Path t)
 pathTerm pTransition =

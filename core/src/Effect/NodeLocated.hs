@@ -1,4 +1,3 @@
-{-# LANGUAGE NoImplicitPrelude #-}
 
 module Effect.NodeLocated
   ( module Effect.NodeLocated,
