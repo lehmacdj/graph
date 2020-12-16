@@ -41,7 +41,7 @@ data Connect t = Connect
 makeLenses ''Connect
 
 instance Show t => Show (Connect t) where
-  show (Connect t nid) = show t ++ " at " ++ show nid
+  show (Connect t nid) = show nid ++ " via " ++ show t
 
 instance (FromJSON t, TransitionValid t) => FromJSON (Connect t)
 
