@@ -164,6 +164,10 @@ insertEdges :: [Edge NID] -> Graph' -> Graph'
 insertEdges = listify insertEdge
 
 -- | Add a node, and all the edges it is associated with to the Graph'.
+-- If the graph already has the node it replaces the previous node, but no
+-- effort is made to remove any edges, edges may only be added. Note that this
+-- can yield an inconsistent graph, so duplicate nodes should be inserted with
+-- care.
 insertNode :: Node' -> Graph' -> Graph'
 insertNode n g =
   insertEdges (incomingEs ++ outgoingEs ++ referentEs) $
