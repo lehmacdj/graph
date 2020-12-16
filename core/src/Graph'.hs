@@ -18,6 +18,7 @@
 -- operate on a bunch of Nodes/NIDs at the same time.
 module Graph'
   ( -- * re-exported types necessary for talking about graphs
+    NID,
     Graph' (..),
     Node' (..),
     Edge (..),
