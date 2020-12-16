@@ -16,7 +16,10 @@ data UnlabledEdge = UnlabledEdge
   { _unlabledEdgeSource :: NID,
     _unlabledEdgeSink :: NID
   }
-  deriving (Show, Eq, Ord, Generic, NFData)
+  deriving (Eq, Ord, Generic, NFData)
+
+instance Show UnlabledEdge where
+  show (UnlabledEdge i o) = show i ++ "->" ++ show o
 
 instance FromJSON UnlabledEdge
 
