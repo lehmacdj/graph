@@ -12,9 +12,11 @@
 -- When this occurs the unprimed versions operate on Nodes and are probably the
 -- most performant. Care should be taken however with these functions to avoid
 -- using an old version of a node that has been updated since it was fetched
--- from the graph. Primed versions are also available that will automatically
--- query the necessary nodes from the graph. There are also plural versions that
--- operate on a bunch of Nodes/NIDs at the same time.
+-- from the graph. If this occurs behavior is undefined. Primed versions are
+-- also available that will automatically query the necessary nodes from the
+-- graph. These are safe by default, because the node will definitely be up to
+-- date. There are also plural versions that operate on a bunch of Nodes/NIDs
+-- at the same time.
 module Graph'
   ( -- * re-exported types necessary for talking about graphs
     NID,
@@ -132,7 +134,9 @@ delNode n g =
       . deleteMap nid
   where
     nid = _nodeId' n
-    del = filterSet ((/= nid) . view connectNode)
+    del =
+      filterSet ((/= nid) . view connectNode)
+        . filterSet ((/= nid) . view connectTransition)
     delByLabel =
       filterSet ((/= nid) . view unlabledEdgeSource)
         . filterSet ((/= nid) . view unlabledEdgeSink)
