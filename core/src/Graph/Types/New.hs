@@ -49,6 +49,8 @@ instance Show Node' where
       ++ show (toList . _nodeOutgoing' $ n)
       ++ ", refs="
       ++ show (toList . _nodeReferents $ n)
+      ++ ", data="
+      ++ show (_nodeData' n)
       ++ "}"
 
 makeLenses ''Node'
