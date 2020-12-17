@@ -200,3 +200,8 @@ runStateInputIORefOf l = applyInput2Of l runStateIORef
 runInputConstSem :: Sem r x -> Sem (Input x : r) a -> Sem r a
 runInputConstSem initializationAction action =
   initializationAction >>= \val -> runInputConst val action
+
+-- | Run an error ignoring any result that fails and returning Nothing,
+-- returning Just only if the result is successful.
+runErrorMaybe :: Sem (Error e : r) a -> Sem r (Maybe a)
+runErrorMaybe = fmap forgetLeft . runError

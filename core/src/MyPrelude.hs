@@ -1,4 +1,3 @@
-
 module MyPrelude
   ( module MyPrelude,
     module ClassyPrelude,
@@ -60,6 +59,10 @@ applyN n f = foldr (.) id (replicate n f :: [a -> a])
 describe :: String -> Maybe a -> Either String a
 describe s Nothing = Left s
 describe _ (Just x) = Right x
+
+forgetLeft :: Either e a -> Maybe a
+forgetLeft (Right x) = Just x
+forgetLeft (Left _) = Nothing
 
 -- # IO functions for stderr
 
