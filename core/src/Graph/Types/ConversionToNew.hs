@@ -1,4 +1,3 @@
-
 module Graph.Types.ConversionToNew where
 
 import qualified Data.ByteString.Lazy.Char8 as BS
@@ -112,9 +111,13 @@ insertSpecialNodes specialNodes = do
   modify $ Graph'.insertEmptyNodes (map snd (listSpecialNodes specialNodes))
   let insertSpecialNodeEdges :: (LByteString, NID) -> Sem r ()
       insertSpecialNodeEdges (name, nid) = runInputConst specialNodes $ do
+        edgeNameNID <- internString (BS.unpack name)
+        modify $ Graph'.insertNode $ Node' edgeNameNID mempty mempty mempty (Just name)
         systemNodeNID <- getSystemNodeNID
-        edge <- convertEdge $ Edge systemNodeNID (BS.unpack name) nid
-        modify $ Graph'.insertEdge edge
+        dependsOnNID <- getDependsOnNID
+        nameNID <- getNameNID
+        modify . Graph'.insertEdges $
+          [Edge systemNodeNID dependsOnNID nid, Edge nid nameNID edgeNameNID]
   traverse_ insertSpecialNodeEdges (listSpecialNodes specialNodes)
 
 -- TODO: write test for this because it is pretty involved
