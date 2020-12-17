@@ -1,22 +1,6 @@
 {-# LANGUAGE FlexibleContexts #-}
 
 -- | manipulate graphs where edges are themselves nodes in the graph.
---
--- = Naming conventions
--- For functions that refer to nodes in the graph there are usually 4 variants.
--- For example:
--- * 'delNode'
--- * 'delNode''
--- * 'delNodes'
--- * 'delNodes''
--- When this occurs the unprimed versions operate on Nodes and are probably the
--- most performant. Care should be taken however with these functions to avoid
--- using an old version of a node that has been updated since it was fetched
--- from the graph. If this occurs behavior is undefined. Primed versions are
--- also available that will automatically query the necessary nodes from the
--- graph. These are safe by default, because the node will definitely be up to
--- date. There are also plural versions that operate on a bunch of Nodes/NIDs
--- at the same time.
 module Graph'
   ( -- * re-exported types necessary for talking about graphs
     NID,
@@ -44,15 +28,12 @@ module Graph'
 
     -- ** delete
     delNode,
-    delNode',
     delNodes,
-    delNodes',
     delEdge,
     delEdges,
 
     -- ** data
     setData,
-    setData',
 
     -- ** bulk manipulation
     filterGraph,
@@ -70,6 +51,7 @@ where
 
 import Control.Lens
 import qualified Data.Map.Internal.Debug as MD
+import Data.Monoid (First (..))
 import qualified Debug.Trace as Debug
 import GHC.Stack
 import Graph.Edge
@@ -125,8 +107,10 @@ delEdges = listify delEdge
 
 -- | Remove a node from the graph; updating the cached data in the neighbors
 -- nodes as well.
-delNode :: Node' -> Graph' -> Graph'
-delNode n g =
+-- This relies upon the fact that the node is up to date with respect to the
+-- graph and thus must be used with caution.
+internalDelNode :: Node' -> Graph' -> Graph'
+internalDelNode n g =
   withNodeMap' g $
     omap deleteIncoming
       . omap deleteOutgoing
@@ -144,14 +128,14 @@ delNode n g =
     deleteOutgoing = over nodeOutgoing' del
     deleteLabling = over nodeReferents delByLabel
 
-delNode' :: NID -> Graph' -> Graph'
-delNode' = primed delNode
+delNode :: NID -> Graph' -> Graph'
+delNode = primed internalDelNode
 
-delNodes :: [Node'] -> Graph' -> Graph'
-delNodes = listify delNode
+internalDelNodes :: [Node'] -> Graph' -> Graph'
+internalDelNodes = listify internalDelNode
 
-delNodes' :: [NID] -> Graph' -> Graph'
-delNodes' = primeds delNodes
+delNodes :: [NID] -> Graph' -> Graph'
+delNodes = primeds internalDelNodes
 
 insertEdge :: Edge NID -> Graph' -> Graph'
 insertEdge e g =
@@ -163,20 +147,43 @@ insertEdge e g =
 insertEdges :: [Edge NID] -> Graph' -> Graph'
 insertEdges = listify insertEdge
 
+-- | merge two nodes with the same NID. If the NID of the nodes doesn't match
+-- an exception is thrown.
+-- Behavior of merging is as follows:
+-- * edges are the union of the edges in the two nodes
+-- * data is merged via the behavior of 'First'. i.e. the data of the second node
+-- is kept or if it is none, then the data of the first node is retained
+mergeNodesEx :: HasCallStack => Node' -> Node' -> Node'
+mergeNodesEx (Node' nid1 in1 out1 refs1 data1) (Node' nid2 in2 out2 refs2 data2)
+  | nid1 /= nid2 = error "node ids don't match!"
+  | otherwise =
+    Node'
+      nid1
+      (in1 <> in2)
+      (out1 <> out2)
+      (refs1 <> refs2)
+      (getFirst (First data1 <> First data2))
+
+-- | lookup an existing node in a graph and merge it with the presented node
+mergeWithExisting :: Node' -> Graph' -> Node'
+mergeWithExisting n g = maybe n (mergeNodesEx n) $ lookupNode g (nidOf n)
+
 -- | Add a node, and all the edges it is associated with to the Graph'.
--- If the graph already has the node it replaces the previous node, but no
--- effort is made to remove any edges, edges may only be added. Note that this
--- can yield an inconsistent graph, so duplicate nodes should be inserted with
--- care.
+-- Inserting a node that is already in the graph merges the node with the
+-- node that already is in the graph in an intelligent fashion. The resulting
+-- edges are always a superset of the previous edges in the graph though,
+-- it isn't possible to remove edges by inserting a node. See 'mergeNodesEx'
+-- for details on how the merging is done. To remove edges use 'delEdge'.
 insertNode :: Node' -> Graph' -> Graph'
 insertNode n g =
   insertEdges (incomingEs ++ outgoingEs ++ referentEs) $
-    withNodeMap' g (insertMap nid n)
+    withNodeMap' g (insertMap nid n')
   where
-    nid = _nodeId' n
-    incomingEs = map (`incomingEdge` nid) (toList (_nodeIncoming' n))
-    outgoingEs = map (outgoingEdge nid) (toList (_nodeOutgoing' n))
-    referentEs = map (labledWith nid) (toList (_nodeReferents n))
+    n' = mergeWithExisting n g
+    nid = _nodeId' n'
+    incomingEs = map (`incomingEdge` nid) (toList (_nodeIncoming' n'))
+    outgoingEs = map (outgoingEdge nid) (toList (_nodeOutgoing' n'))
+    referentEs = map (labledWith nid) (toList (_nodeReferents n'))
 
 insertNodes :: [Node'] -> Graph' -> Graph'
 insertNodes = listify insertNode
@@ -201,21 +208,12 @@ emptyGraph = Graph' mempty
 isEmptyGraph :: Graph' -> Bool
 isEmptyGraph = null . nodeMap'
 
--- | sets the data, setting to nothing is equivalent to deleting the data
--- this is a terrible function that should probably not be used
-setData :: Maybe LByteString -> Node' -> Graph' -> Graph'
-setData d n g = insertNode (set nodeData' d (nodeConsistentWithGraph g n)) g
-
-setData' :: Maybe LByteString -> NID -> Graph' -> Graph'
-setData' d = primed (setData d)
+-- | sets the data of a node in the graph
+setData :: Maybe LByteString -> NID -> Graph' -> Graph'
+setData d nid = set (graphNodeMap' . ix nid . nodeData') d
 
 lookupNode :: Graph' -> NID -> Maybe Node'
 lookupNode = flip lookup . nodeMap'
-
-nodeConsistentWithGraph :: HasCallStack => Graph' -> Node' -> Node'
-nodeConsistentWithGraph g n
-  | lookupNodeEx g (nidOf n) == n = n
-  | otherwise = error $ "node " ++ show n ++ " is inconsistent with the state of the graph " ++ show g
 
 traceGraph :: Graph' -> Graph'
 traceGraph g = withNodeMap' g $ \nm -> Debug.trace (showDebug (Debug.trace "graph is:" g)) nm
@@ -227,7 +225,7 @@ filterGraph :: (Node' -> Bool) -> Graph' -> Graph'
 filterGraph f g = ofoldr maybeDelNode g (nodeMap' g)
   where
     maybeDelNode x ig'
-      | not $ f x = delNode x ig'
+      | not $ f x = internalDelNode x ig'
       | otherwise = ig'
 
 mapGraph :: (Node' -> Node') -> Graph' -> Graph'

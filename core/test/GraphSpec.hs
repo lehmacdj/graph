@@ -1,5 +1,6 @@
 module GraphSpec where
 
+import Control.Lens (filtered, set)
 import qualified Data.ByteString.Lazy.Char8 as BS
 import Graph'
 import Graph.Node'
@@ -7,8 +8,11 @@ import Graph.Types
 import Graph.Types.New
 import TestPrelude
 
+graphOfNodes :: [Node'] -> Graph'
+graphOfNodes ns = Graph' $ mapFromList [(nidOf n, n) | n <- ns]
+
 graphIsNodes :: Graph' -> [Node'] -> Assertion
-graphIsNodes g ns = nodeMap' g @?= mapFromList [(nidOf n, n) | n <- ns]
+graphIsNodes g ns = g @?= graphOfNodes ns
 
 -- | short function for emptyNode
 ne :: NID -> Node'
@@ -31,6 +35,36 @@ twoNodesNoEdges :: (String, Graph')
 twoNodesNoEdges = ("twoNodesNoEdges", graph)
   where
     graph = Graph' . mapFromList $ (\x -> (x, ne x)) <$> [0 .. 1]
+
+-- | graph where everything is connected to everything else via every thing
+-- else including self edges of every kind
+kn :: Int -> (String, Graph')
+kn n = ("K" ++ show n, graph)
+  where
+    allConnects = [Connect y z | y <- [0 .. n - 1], z <- [0 .. n - 1]]
+    graph =
+      Graph' . mapFromList $
+        [ ( x,
+            nnd
+              x
+              allConnects
+              allConnects
+              [UnlabledEdge y z | y <- [0 .. n - 1], z <- [0 .. n - 1]]
+          )
+          | x <- [0 .. n - 1]
+        ]
+
+helloWorldGraph :: (String, Graph')
+helloWorldGraph = ("helloWorldGraph", graph)
+  where
+    graph =
+      graphOfNodes
+        [ nnd 0 [] [Connect 1 2] [],
+          nd 1 [] [] [UnlabledEdge 0 2] (BS.pack "Hello"),
+          nnd 2 [Connect 1 0] [Connect 3 4] [],
+          nd 3 [] [] [UnlabledEdge 2 4] (BS.pack "world!"),
+          nnd 4 [Connect 3 2] [] []
+        ]
 
 test_insertNode :: TestTree
 test_insertNode =
@@ -61,6 +95,68 @@ test_insertNode =
         [ nnd 2 [] [] [UnlabledEdge 0 1],
           nnd 1 [Connect 2 0] [] [],
           nnd 0 [] [Connect 2 1] []
+        ],
+      -- inserting a existing node with no edges into a graph with edges should
+      -- do nothing
+      test
+        (ne 0)
+        (kn 4)
+        (nodesOf (snd (kn 4))),
+      -- not having data can't override existing data
+      test
+        (ne 1)
+        helloWorldGraph
+        (nodesOf (snd helloWorldGraph)),
+      -- having data overrides lack of data
+      test
+        (nd 0 [] [] [] (BS.pack "foobar"))
+        helloWorldGraph
+        ( set
+            (traverse . filtered ((== 0) . nidOf) . nodeData')
+            (Just (BS.pack "foobar"))
+            $ nodesOf (snd helloWorldGraph)
+        ),
+      -- inserting a node with updated data is the same as just updating that
+      -- data
+      test
+        (nd 1 [] [] [] (BS.pack "HELLO"))
+        helloWorldGraph
+        ( set
+            (traverse . filtered ((== 1) . nidOf) . nodeData')
+            (Just (BS.pack "HELLO"))
+            $ nodesOf (snd helloWorldGraph)
+        ),
+      -- not updating data does nothing
+      test
+        (ne 1)
+        helloWorldGraph
+        (nodesOf (snd helloWorldGraph)),
+      -- an new incoming edge updates other nodes properly
+      test
+        (nnd 0 [Connect 1 2] [] [])
+        fourNodesNoEdges
+        [ nnd 0 [Connect 1 2] [] [],
+          nnd 1 [] [] [UnlabledEdge 2 0],
+          nnd 2 [] [Connect 1 0] [],
+          ne 3
+        ],
+      -- an new outgoing edge updates other nodes properly
+      test
+        (nnd 0 [] [Connect 1 2] [])
+        fourNodesNoEdges
+        [ nnd 0 [] [Connect 1 2] [],
+          nnd 1 [] [] [UnlabledEdge 0 2],
+          nnd 2 [Connect 1 0] [] [],
+          ne 3
+        ],
+      -- an new referent edge updates other nodes properly
+      test
+        (nnd 0 [] [] [UnlabledEdge 1 2])
+        fourNodesNoEdges
+        [ nnd 0 [] [] [UnlabledEdge 1 2],
+          nnd 1 [] [Connect 0 2] [],
+          nnd 2 [Connect 0 1] [] [],
+          ne 3
         ]
     ]
   where
@@ -79,35 +175,17 @@ unit_insertEdge_simple_into_fourNodesNoEdges =
                      nnd 3 [] [] []
                    ]
 
--- | graph where everything is connected to everything else via every thing
--- else including self edges of every kind
-kn :: Int -> (String, Graph')
-kn n = ("K" ++ show n, graph)
-  where
-    allConnects = [Connect y z | y <- [0 .. n - 1], z <- [0 .. n - 1]]
-    graph =
-      Graph' . mapFromList $
-        [ ( x,
-            nnd
-              x
-              allConnects
-              allConnects
-              [UnlabledEdge y z | y <- [0 .. n - 1], z <- [0 .. n - 1]]
-          )
-          | x <- [0 .. n - 1]
-        ]
-
-test_delNode' :: TestTree
-test_delNode' =
+test_delNode :: TestTree
+test_delNode =
   testGroup
-    "delNode'"
+    "delNode"
     [ test 2 (kn 3) (nodesOf (snd (kn 2))),
       test 1 (kn 2) [nnd 0 [Connect 0 0] [Connect 0 0] [UnlabledEdge 0 0]]
     ]
   where
     test nidToDelete (graphName, graph) result =
       testCase name $
-        delNode' nidToDelete graph `graphIsNodes` result
+        delNode nidToDelete graph `graphIsNodes` result
       where
         name = show nidToDelete ++ " from " ++ graphName
 
@@ -116,10 +194,15 @@ unit_delEdge_onlyEdge_from_K1 =
   delEdge (Edge 0 0 0) (snd (kn 1))
     `graphIsNodes` [ne 0]
 
-unit_setData'_toJust :: Assertion
-unit_setData'_toJust =
-  setData' (Just (BS.pack "asdf")) 0 (snd twoNodesNoEdges)
+unit_setData_toJust :: Assertion
+unit_setData_toJust =
+  setData (Just (BS.pack "asdf")) 0 (snd twoNodesNoEdges)
     `graphIsNodes` [nd 0 [] [] [] (BS.pack "asdf"), ne 1]
+
+unit_setData_notInGraph :: Assertion
+unit_setData_notInGraph =
+  setData Nothing 2 (snd twoNodesNoEdges)
+    `graphIsNodes` nodesOf (snd twoNodesNoEdges)
 
 -- TODO: write these tests as well:
 --
