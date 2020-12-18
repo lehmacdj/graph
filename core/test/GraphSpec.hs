@@ -175,6 +175,14 @@ unit_insertEdge_simple_into_fourNodesNoEdges =
                      nnd 3 [] [] []
                    ]
 
+unit_insertEdge_dangling :: Assertion
+unit_insertEdge_dangling =
+  insertEdge (Edge 0 1 2) emptyGraph
+    `graphIsNodes` [ nnd 0 [] [Connect 1 2] [],
+                     nnd 1 [] [] [UnlabledEdge 0 2],
+                     nnd 2 [Connect 1 0] [] []
+                   ]
+
 test_delNode :: TestTree
 test_delNode =
   testGroup
@@ -203,6 +211,12 @@ unit_setData_notInGraph :: Assertion
 unit_setData_notInGraph =
   setData Nothing 2 (snd twoNodesNoEdges)
     `graphIsNodes` nodesOf (snd twoNodesNoEdges)
+
+-- Tasty IO [TestTree]
+test_generateTrees :: IO [TestTree]
+test_generateTrees = do
+  inputs <- pure ["First input", "Second input"]
+  pure $ map (\s -> testCase s $ pure ()) inputs
 
 -- TODO: write these tests as well:
 --
