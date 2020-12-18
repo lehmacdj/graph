@@ -2,5 +2,6 @@
 graph.cabal
 *~
 **/tmp/
+**/.tmp/
 # graph files used in testing
 *.g
