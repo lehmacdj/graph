@@ -137,12 +137,20 @@ internalDelNodes = listify internalDelNode
 delNodes :: [NID] -> Graph' -> Graph'
 delNodes = primeds internalDelNodes
 
-insertEdge :: Edge NID -> Graph' -> Graph'
-insertEdge e g =
+internalInsertEdge :: Edge NID -> Graph' -> Graph'
+internalInsertEdge e g =
   withNodeMap' g $
     adjustMap (over nodeOutgoing' (insertSet (outConnect e))) (source e)
       . adjustMap (over nodeIncoming' (insertSet (inConnect e))) (sink e)
       . adjustMap (over nodeReferents (insertSet (referentEdge e))) (label e)
+
+internalInsertEdges :: [Edge NID] -> Graph' -> Graph'
+internalInsertEdges = listify internalInsertEdge
+
+-- | Safe operation for inserting an edge. Inserts all of the nodes itself to
+-- ensure that there can't be any dangling edges
+insertEdge :: Edge NID -> Graph' -> Graph'
+insertEdge e@(Edge i l o) = internalInsertEdge e . insertEmptyNodes [i, l, o]
 
 insertEdges :: [Edge NID] -> Graph' -> Graph'
 insertEdges = listify insertEdge
@@ -176,7 +184,7 @@ mergeWithExisting n g = maybe n (mergeNodesEx n) $ lookupNode g (nidOf n)
 -- for details on how the merging is done. To remove edges use 'delEdge'.
 insertNode :: Node' -> Graph' -> Graph'
 insertNode n g =
-  insertEdges (incomingEs ++ outgoingEs ++ referentEs) $
+  internalInsertEdges (incomingEs ++ outgoingEs ++ referentEs) $
     withNodeMap' g (insertMap nid n')
   where
     n' = mergeWithExisting n g
