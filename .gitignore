@@ -1,6 +1,6 @@
 .stack-work/
 graph.cabal
 *~
+**/tmp/
 # graph files used in testing
 *.g
-*.gs

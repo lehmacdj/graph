@@ -118,6 +118,8 @@ tests:
     - -Wall
     dependencies:
     - graph
+    - Glob
     - tasty
     - tasty-hunit
     - tasty-discover
+    - tasty-golden
