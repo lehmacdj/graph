@@ -21,6 +21,7 @@ module Graph.Serialize2
     doesNodeExist,
     removeNode,
     readGraph,
+    initializeGraph,
 
     -- * low level access to format information (to be used with caution)
     nodeDataFile,
@@ -109,6 +110,13 @@ deserializeNode base nid = do
 
 doesNodeExist :: MonadIO m => FilePath -> NID -> m Bool
 doesNodeExist base nid = liftIO $ doesFileExist (linksFile base nid)
+
+-- | initializes graph with a single node with id 0 with no edges, if the
+-- directory doesn't exist, this creates one
+initializeGraph :: MonadIO m => FilePath -> m ()
+initializeGraph base = liftIO $ do
+  createDirectoryIfMissing True base
+  serializeNodeEx (Graph.emptyNode @String 0) base
 
 removeNode :: MonadIO m => FilePath -> NID -> m ()
 removeNode base nid = do

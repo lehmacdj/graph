@@ -37,6 +37,7 @@ module Graph.Serialize3
     -- * bulk operations
     readGraph,
     writeGraph,
+    initializeGraph,
 
     -- * low level access to format information (to be used with caution)
     nodeDataFile,
@@ -47,7 +48,7 @@ import Control.Lens
 import qualified Data.Aeson as Aeson
 import qualified Data.ByteString.Lazy as B
 import qualified Graph'
-import Graph.Node' (dataOf, nidOf)
+import Graph.Node' (dataOf, emptyNode, nidOf)
 import Graph.Types
 import Graph.Types.New
 import MyPrelude
@@ -122,6 +123,13 @@ writeGraph :: MonadIO m => FilePath -> Graph' -> m ()
 writeGraph base g = liftIO $ do
   createDirectoryIfMissing True base
   traverse_ (serializeNodeEx base) (Graph'.nodesOf g)
+
+-- | initializes graph with a single node with id 0 with no edges, if the
+-- directory doesn't exist, this creates one
+initializeGraph :: MonadIO m => FilePath -> m ()
+initializeGraph base = liftIO $ do
+  createDirectoryIfMissing True base
+  serializeNodeEx base (emptyNode 0)
 
 tryGetBinaryData :: FilePath -> NID -> IO (Maybe LByteString)
 tryGetBinaryData base nid = ioErrorToMaybe $ B.readFile $ nodeDataFile base nid
