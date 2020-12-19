@@ -96,7 +96,10 @@ deserializeNode base nid = do
   pure $ fmap (nodeData' .~ d) node
 
 doesNodeExist :: MonadIO m => FilePath -> NID -> m Bool
-doesNodeExist base nid = liftIO $ doesFileExist (linksFile base nid)
+doesNodeExist base nid = liftIO $ do
+  whenM (not <$> doesDirectoryExist base) $
+    error "doesNodeExist: graph directory doesn't exist"
+  doesFileExist (linksFile base nid)
 
 removeNode :: MonadIO m => FilePath -> NID -> m ()
 removeNode base nid = do

@@ -109,7 +109,10 @@ deserializeNode base nid = do
   pure $ fmap (nodeData .~ d) node
 
 doesNodeExist :: MonadIO m => FilePath -> NID -> m Bool
-doesNodeExist base nid = liftIO $ doesFileExist (linksFile base nid)
+doesNodeExist base nid = liftIO $ do
+  whenM (not <$> doesDirectoryExist base) $
+    error "doesNodeExist: graph directory doesn't exist"
+  doesFileExist (linksFile base nid)
 
 -- | initializes graph with a single node with id 0 with no edges, if the
 -- directory doesn't exist, this creates one
