@@ -1,3 +1,9 @@
+==========stdout==========
 g> g> g> g> g> g> "hello" at 1
 g> Goodbye!
-<<<<<<<<<out========err>>>>>>>>
+==========stderr==========
+==========graph-dump==========
+0{in=[], out=[1 via "hello"]}
+1{in=[0 via "hello"], out=[2 via "world"]}
+2{in=[1 via "world"], out=[3 via "!"]}
+3{in=[2 via "!"], out=[]}
