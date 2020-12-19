@@ -1,4 +1,3 @@
-
 module Graph.Node where
 
 import Control.Lens

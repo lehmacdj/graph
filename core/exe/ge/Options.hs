@@ -5,6 +5,7 @@ module Options
     graphLocation,
     executeExpression,
     withOptions,
+    createNew,
   )
 where
 
@@ -16,7 +17,8 @@ import Options.Applicative
 
 data Options = Options
   { _graphLocation :: FilePath,
-    _executeExpression :: Maybe Command
+    _executeExpression :: Maybe Command,
+    _createNew :: Bool
   }
   deriving (Show)
 
@@ -38,6 +40,7 @@ optionsP =
               <> metavar "<command>"
           )
       )
+    <*> switch (long "new" <> help "create a new graph if one isn't found")
 
 optionsPI :: ParserInfo Options
 optionsPI =

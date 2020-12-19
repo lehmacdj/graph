@@ -6,6 +6,7 @@ module TestPrelude
   )
 where
 
+import Graph.Serialize2 (initializeGraph)
 import MyPrelude hiding (assert)
 import System.Directory (createDirectoryIfMissing)
 import Test.Tasty
@@ -17,6 +18,5 @@ withTempGraph :: (FilePath -> IO a) -> IO a
 withTempGraph action = do
   createDirectoryIfMissing False ".tmp"
   withTempDirectory ".tmp" "test.g" $ \tmpDir -> do
-    let contents = fromString "{\"id\":0,\"incoming\":[],\"outgoing\":[]}\n"
-    writeFile (tmpDir </> "0.json") contents
+    initializeGraph tmpDir
     action tmpDir
