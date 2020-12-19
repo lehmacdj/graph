@@ -23,5 +23,8 @@ main = do
   when (length args /= 1) $
     error "must pass exactly one argument, a valid graphDir"
   let graphDir = unpack $ headEx args
-  allNodes <- getAllNodeIds graphDir
+  -- to guarantee that different ordering on different systems don't affect
+  -- test results we sort the node ids so that we always dump the graph
+  -- in a consistent order
+  allNodes <- sort <$> getAllNodeIds graphDir
   traverse_ (print <=< deserializeNodeWithErrorReporting graphDir) allNodes
