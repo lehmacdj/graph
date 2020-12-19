@@ -107,6 +107,16 @@ executables:
     dependencies:
     - graph
 
+  dump-graph:
+    main:                Main.hs
+    source-dirs:         exe/dump-graph
+    ghc-options:
+    - -threaded
+    - -rtsopts
+    - -with-rtsopts=-N
+    dependencies:
+    - graph
+
 tests:
   graph-test:
     main:                Spec.hs
