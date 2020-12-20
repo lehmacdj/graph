@@ -1,4 +1,3 @@
-
 -- | Completion stuff for the interface
 module Completion where
 
@@ -64,7 +63,7 @@ failCompletionWithOriginalInputOnErrorOrWarning ::
   Member (Embed IO) effs =>
   -- | The original input
   String ->
-  Sem (Warn UserErrors : Error UserErrors : effs) (String, [Completion]) ->
+  Sem (Warn UserError : Error UserError : effs) (String, [Completion]) ->
   Sem effs (String, [Completion])
 failCompletionWithOriginalInputOnErrorOrWarning i =
   printWarnings

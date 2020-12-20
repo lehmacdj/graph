@@ -11,14 +11,12 @@ data Warn e m r where
 
 makeSem ''Warn
 
-convertError :: forall e effs. Member (Warn e) effs => Sem (Error e : effs) () -> Sem effs ()
+convertError ::
+  forall e effs. Member (Warn e) effs => Sem (Error e : effs) () -> Sem effs ()
 convertError = (`handleError` warn)
 
-warnString :: Member (Warn UserErrors) r => String -> Sem r ()
-warnString = warnSingle . OtherError
-
-warnSingle :: Member (Warn UserErrors) r => UserError -> Sem r ()
-warnSingle = warn . singleton
+warnString :: Member (Warn UserError) r => String -> Sem r ()
+warnString = warn . OtherError
 
 printWarnings ::
   forall e r a.

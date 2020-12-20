@@ -81,7 +81,7 @@ deserializeNodeF ::
   forall t effs.
   ( FromJSON (Node t),
     TransitionValid t,
-    Member ThrowUserError effs,
+    Member (Error UserError) effs,
     Member (Embed IO) effs
   ) =>
   FilePath ->
@@ -140,11 +140,11 @@ withSerializedNode ::
   NID ->
   IO ()
 withSerializedNode f base nid =
-  let ignoreErrors :: Sem [ThrowUserError, Embed IO] () -> Sem '[Embed IO] ()
-      ignoreErrors = (`handleError` \(_ :: UserErrors) -> pure ())
-   in runM . ignoreErrors . withEffects @[ThrowUserError, Embed IO] $ do
-        n <- deserializeNodeF @t @[ThrowUserError, Embed IO] base nid
-        trapIOError' @[ThrowUserError, Embed IO] $ serializeNodeEx (f n) base
+  let ignoreErrors :: Sem [Error UserError, Embed IO] () -> Sem '[Embed IO] ()
+      ignoreErrors = (`handleError` \(_ :: UserError) -> pure ())
+   in runM . ignoreErrors . withEffects @[Error UserError, Embed IO] $ do
+        n <- deserializeNodeF @t @[Error UserError, Embed IO] base nid
+        trapIOError' @[Error UserError, Embed IO] $ serializeNodeEx (f n) base
 
 readGraph :: MonadIO m => FilePath -> m (Either String (Graph String))
 readGraph base = do

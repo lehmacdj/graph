@@ -83,7 +83,7 @@ fsck = do
 reportMissingNode ::
   forall t effs.
   Member (ReportMissing t) effs =>
-  Sem (ThrowMissing : effs) () ->
+  Sem (Error Missing : effs) () ->
   Sem effs ()
 reportMissingNode e = handleError e $ \case
   Missing nid -> nodeMissing @t nid

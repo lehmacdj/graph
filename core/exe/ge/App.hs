@@ -84,7 +84,7 @@ runSetLocationHistoryState = interpret $ \case
   Output nid -> modify @History (addToHistory nid)
 
 errorOnNoInput ::
-  Member (Error UserErrors) r =>
+  Member (Error UserError) r =>
   String ->
   Sem (Error NoInputProvided : r) a ->
   Sem r a
@@ -93,7 +93,7 @@ errorOnNoInput msg v =
 
 printingErrorsAndWarnings ::
   Member (Embed IO) effs =>
-  Sem (Warn UserErrors : Error UserErrors : effs) () ->
+  Sem (Warn UserError : Error UserError : effs) () ->
   Sem effs ()
 printingErrorsAndWarnings = printWarnings >>> printErrors
 
@@ -105,12 +105,12 @@ runMainEffects ::
   forall a.
   ( forall effs.
     Members [Input Env, Embed IO] effs =>
-    Sem (Warn UserErrors : Error UserErrors : effs) a ->
+    Sem (Warn UserError : Error UserError : effs) a ->
     Sem effs a
   ) ->
   ( forall effs.
-    ( Members [Console, ThrowUserError, SetLocation, GetLocation, FreshNID, Dualizeable] effs,
-      Members [FileSystemTree, Web, Warn UserErrors, State History] effs,
+    ( Members [Console, Error UserError, SetLocation, GetLocation, FreshNID, Dualizeable] effs,
+      Members [FileSystemTree, Web, Warn UserError, State History] effs,
       Members [Editor, GetTime, Embed App, Embed IO, Readline] effs,
       HasGraph String effs
     ) =>
@@ -145,8 +145,8 @@ runMainEffects errorHandlingBehavior v = do
 -- to automatically be raised into the the list of effects but not others
 interpretAsApp ::
   ( forall effs.
-    ( Members [Console, ThrowUserError, SetLocation, GetLocation, FreshNID, Dualizeable] effs,
-      Members [FileSystemTree, Web, Warn UserErrors, State History] effs,
+    ( Members [Console, Error UserError, SetLocation, GetLocation, FreshNID, Dualizeable] effs,
+      Members [FileSystemTree, Web, Warn UserError, State History] effs,
       Members [Editor, GetTime, Embed App, Embed IO, Readline] effs,
       HasGraph String effs
     ) =>

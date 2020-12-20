@@ -113,7 +113,7 @@ runReadGraphIODualizeable dir = reinterpret $ \case
       errorToNothing $
         -- writing type level lists in your code is not fun :(
         -- kids: be careful when you choose haskell
-        deserializeNodeF @t @(ThrowUserError : Input IsDual : effs) dir nid
+        deserializeNodeF @t @(Error UserError : Input IsDual : effs) dir nid
     dual <- input
     pure $ maybeN <&> ifDualized dual dualizeNode
   NodeManifest -> getAllNodeIds dir
@@ -169,7 +169,7 @@ runWriteGraphState = interpret $ \case
 runWriteGraphIO ::
   forall t effs.
   ( Member (Embed IO) effs,
-    Members [ThrowUserError, Warn UserErrors] effs,
+    Members [Error UserError, Warn UserError] effs,
     FromJSON (Node t),
     ToJSON (Node t),
     TransitionValid t
@@ -187,8 +187,8 @@ runWriteGraphIO dir = runInputConst (IsDual False) . runWriteGraphIODualizeable 
 runWriteGraphIODualizeable ::
   forall t effs.
   ( Member (Embed IO) effs,
-    Member ThrowUserError effs,
-    Member (Warn UserErrors) effs,
+    Member (Error UserError) effs,
+    Member (Warn UserError) effs,
     FromJSON (Node t),
     ToJSON (Node t),
     TransitionValid t
@@ -208,7 +208,7 @@ runWriteGraphIODualizeable dir = reinterpret $ \case
         neighborsOut = toListOf (nodeOutgoing . folded . connectNode) n
         neighbors = ordNub (neighborsIn ++ neighborsOut)
     liftIO $ forM_ neighbors $ withSerializedNode (delIn . delOut) dir
-    convertError @UserErrors . trapIOError' $ removeNode dir nid
+    convertError @UserError . trapIOError' $ removeNode dir nid
   InsertEdge e -> do
     dual <- input @IsDual
     let (Edge i t o) = ifDualized dual G.dualizeEdge e
@@ -230,7 +230,7 @@ runWriteGraphIODualizeable dir = reinterpret $ \case
 runWriteGraphDualizeableIO ::
   forall t effs.
   ( Member (Embed IO) effs,
-    Members [Dualizeable, ThrowUserError, Warn UserErrors] effs,
+    Members [Dualizeable, Error UserError, Warn UserError] effs,
     FromJSON (Node t),
     ToJSON (Node t),
     TransitionValid t

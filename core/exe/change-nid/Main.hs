@@ -20,7 +20,7 @@ nodeRewrites :: [NID] -> [(NID, NID)]
 nodeRewrites _ = []
 
 applyRewrite ::
-  Members [ReadGraph String, WriteGraph String, ThrowUserError] effs =>
+  Members [ReadGraph String, WriteGraph String, Error UserError] effs =>
   (NID, NID) ->
   Sem effs ()
 applyRewrite (nid, nid') = subsumeMissing $ do
@@ -31,7 +31,7 @@ applyRewrite (nid, nid') = subsumeMissing $ do
   deleteNode @String nid
 
 renumberNodes ::
-  Members [ReadGraph String, WriteGraph String, ThrowUserError, Embed IO] effs =>
+  Members [ReadGraph String, WriteGraph String, Error UserError, Embed IO] effs =>
   Sem effs ()
 renumberNodes = do
   nodes <- nodeManifest @String
@@ -42,8 +42,8 @@ runReadWriteGraphIO ::
   Sem
     [ WriteGraph String,
       ReadGraph String,
-      Warn UserErrors,
-      ThrowUserError,
+      Warn UserError,
+      Error UserError,
       Embed IO
     ]
     () ->
@@ -51,7 +51,7 @@ runReadWriteGraphIO ::
 runReadWriteGraphIO dir =
   runWriteGraphIO dir
     >>> runReadGraphIO dir
-    >>> printWarnings @UserErrors
+    >>> printWarnings @UserError
     >>> printErrors
     >>> runM
 

@@ -73,7 +73,7 @@ data Path t
 
 resolvePathSuccesses ::
   forall t effs.
-  (Members [ReadGraph t, ThrowMissing] effs, TransitionValid t) =>
+  (Members [ReadGraph t, Error Missing] effs, TransitionValid t) =>
   NID ->
   Path t ->
   Sem effs (Set NID)
@@ -93,7 +93,7 @@ resolvePathSuccesses nid = \case
 
 resolvePathSuccessesDetail ::
   forall t effs.
-  (Members [ReadGraph t, ThrowMissing] effs, TransitionValid t) =>
+  (Members [ReadGraph t, Error Missing] effs, TransitionValid t) =>
   NID ->
   Path t ->
   Sem effs (Set (DPath t))
@@ -133,7 +133,7 @@ resolvePathSuccessesDetail nid = \case
 -- where both paths should be created. This is perhaps a bad implementation...
 mkPath ::
   forall t effs.
-  ( Members [FreshNID, ThrowMissing] effs,
+  ( Members [FreshNID, Error Missing] effs,
     HasGraph t effs
   ) =>
   NID ->
@@ -147,7 +147,7 @@ mkPath nid p = fmap setFromList . forM (toList (listifyNewPath p)) $
 -- nids are the same as in the original graph
 tracePath ::
   forall t effs.
-  Members [FreshNID, ThrowMissing, ReadGraph t] effs =>
+  Members [FreshNID, Error Missing, ReadGraph t] effs =>
   NID ->
   Path t ->
   Sem effs (Graph t)
@@ -155,7 +155,7 @@ tracePath _ _ = error "unimplemented"
 
 delPath ::
   forall t effs.
-  ( Members [FreshNID, ThrowMissing] effs,
+  ( Members [FreshNID, Error Missing] effs,
     HasGraph t effs
   ) =>
   NID ->
@@ -169,7 +169,7 @@ delPath nid p = resolvePathSuccessesDetail nid p >>= mapM_ delDPath
 
 mvPath ::
   forall t effs.
-  ( Members [FreshNID, ThrowMissing] effs,
+  ( Members [FreshNID, Error Missing] effs,
     HasGraph t effs
   ) =>
   NID ->
@@ -181,7 +181,7 @@ mvPath s p target =
 
 mvDPathTo ::
   forall t effs.
-  ( Members [FreshNID, ThrowMissing] effs,
+  ( Members [FreshNID, Error Missing] effs,
     HasGraph t effs
   ) =>
   NID ->
@@ -197,7 +197,7 @@ mvDPathTo _ _ = pure ()
 -- the renaming only operates on the last / separated path segment
 renameDPath ::
   forall t effs.
-  ( Members [FreshNID, ThrowMissing] effs,
+  ( Members [FreshNID, Error Missing] effs,
     HasGraph t effs
   ) =>
   DPath t ->

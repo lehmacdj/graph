@@ -26,7 +26,7 @@ makeSem ''FileSystemTree
 --   ReadFile
 
 runFileSystemTreeIO ::
-  (Member (Embed IO) effs, Member ThrowUserError effs) =>
+  (Member (Embed IO) effs, Member (Error UserError) effs) =>
   Sem (FileSystemTree : effs) ~> Sem effs
 runFileSystemTreeIO = interpret $ \case
   ReadDirectory fp ->

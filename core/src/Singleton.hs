@@ -7,7 +7,7 @@ import MyPrelude
 import UserError
 
 the' ::
-  (MonoFoldable mono, Member ThrowUserError effs) =>
+  (MonoFoldable mono, Member (Error UserError) effs) =>
   (mono -> UserError) ->
   mono ->
   Sem effs (Element mono)
@@ -16,7 +16,7 @@ the' toErr = \case
   xs -> throw (toErr xs)
 
 the ::
-  (MonoFoldable mono, Show mono, Member ThrowUserError effs) =>
+  (MonoFoldable mono, Show mono, Member (Error UserError) effs) =>
   mono ->
   Sem effs (Element mono)
 the = the' (NotSingleton . show)

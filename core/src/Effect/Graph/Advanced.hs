@@ -17,7 +17,7 @@ getNodes :: Member (ReadGraph t) effs => [NID] -> Sem effs [Node t]
 getNodes = wither getNode
 
 getNode' ::
-  Members [ReadGraph t, ThrowMissing] effs =>
+  Members [ReadGraph t, Error Missing] effs =>
   NID ->
   Sem effs (Node t)
 getNode' nid =
@@ -32,7 +32,7 @@ getNode' nid =
 -- mapping over every other node, which might be too expensive.
 insertNode ::
   forall t effs.
-  (Member ThrowMissing effs, HasGraph t effs) =>
+  (Member (Error Missing) effs, HasGraph t effs) =>
   Node t ->
   Sem effs ()
 insertNode n = do
@@ -45,14 +45,14 @@ insertNode n = do
   forM_ esOut insertEdge
 
 currentNode ::
-  Members [ReadGraph t, GetLocation, ThrowMissing] effs =>
+  Members [ReadGraph t, GetLocation, Error Missing] effs =>
   Sem effs (Node t)
 currentNode = currentLocation >>= getNode'
 
 -- | nid `transitionsVia` t finds a node that can be transitioned to via the
 -- transition t from the node at nid. ThrowMissing if nid not in graph
 transitionsVia ::
-  (Members [FreshNID, ThrowMissing] effs, HasGraph t effs) =>
+  (Members [FreshNID, Error Missing] effs, HasGraph t effs) =>
   NID ->
   t ->
   Sem effs NID
@@ -68,7 +68,7 @@ transitionsVia nid t = do
 -- and returns the error, or throws if something went wrong
 transitionsFreshVia ::
   forall t effs.
-  (Members [FreshNID, ThrowMissing] effs, HasGraph t effs) =>
+  (Members [FreshNID, Error Missing] effs, HasGraph t effs) =>
   NID ->
   t ->
   Sem effs NID
@@ -84,7 +84,7 @@ transitionsFreshVia nid t = do
 -- except for the last edge which is always unique
 transitionsViaManyFresh ::
   forall t effs.
-  (Members [FreshNID, ThrowMissing] effs, HasGraph t effs) =>
+  (Members [FreshNID, Error Missing] effs, HasGraph t effs) =>
   NID ->
   [t] ->
   Sem effs NID
@@ -95,7 +95,7 @@ transitionsViaManyFresh nid = \case
 
 transitionsViaMany ::
   forall t effs.
-  (Members [FreshNID, ThrowMissing] effs, HasGraph t effs) =>
+  (Members [FreshNID, Error Missing] effs, HasGraph t effs) =>
   NID ->
   [t] ->
   Sem effs NID
@@ -105,7 +105,7 @@ transitionsViaMany nid = \case
 
 transitionsViaManyTo ::
   forall t effs seq.
-  ( Members [FreshNID, ThrowMissing] effs,
+  ( Members [FreshNID, Error Missing] effs,
     HasGraph t effs,
     IsSequence seq,
     Element seq ~ t
@@ -121,7 +121,7 @@ transitionsViaManyTo s transitions t = do
 -- | Create one node that has all of the connects of the two nodes combined.
 mergeNode ::
   forall t effs.
-  (Members [FreshNID, ThrowMissing] effs, HasGraph t effs) =>
+  (Members [FreshNID, Error Missing] effs, HasGraph t effs) =>
   NID ->
   NID ->
   Sem effs NID
@@ -140,7 +140,7 @@ mergeNode nid1 nid2 = do
 -- other nodes
 mergeNodes ::
   forall t effs mono.
-  ( Members [FreshNID, ThrowMissing] effs,
+  ( Members [FreshNID, Error Missing] effs,
     HasGraph t effs,
     IsSequence mono,
     Element mono ~ NID
@@ -153,7 +153,7 @@ mergeNodes = foldlM1 (mergeNode @t)
 -- Self loops are preserved as self loops on the new node.
 cloneNode ::
   forall t effs.
-  (Members [FreshNID, ThrowMissing] effs, HasGraph t effs) =>
+  (Members [FreshNID, Error Missing] effs, HasGraph t effs) =>
   NID ->
   Sem effs NID
 cloneNode nid = do

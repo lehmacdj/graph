@@ -12,10 +12,9 @@ import UserError
 newtype Missing = Missing {unMissing :: NID}
   deriving (Show, Eq, Ord)
 
-type ThrowMissing = Error Missing
+throwMissing :: Member (Error Missing) effs => NID -> Sem effs a
+throwMissing = throw . Missing
 
-throwMissing :: Member ThrowMissing effs => NID -> Sem effs a
-throwMissing = Polysemy.Error.throw . Missing
-
-subsumeMissing :: Member ThrowUserError effs => Sem (ThrowMissing ': effs) ~> Sem effs
-subsumeMissing = (`handleError` (UserError.throw . MissingNode . unMissing))
+subsumeMissing ::
+  Member (Error UserError) effs => Sem (Error Missing ': effs) ~> Sem effs
+subsumeMissing = (`handleError` (throw . MissingNode . unMissing))

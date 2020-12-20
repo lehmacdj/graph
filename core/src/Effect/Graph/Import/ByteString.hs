@@ -16,7 +16,7 @@ computeSHA :: LByteString -> String
 computeSHA = showDigest . sha512
 
 importUrl ::
-  ( Members [Web, FreshNID, ThrowMissing, GetTime] effs,
+  ( Members [Web, FreshNID, Error Missing, GetTime] effs,
     HasGraph String effs
   ) =>
   NID ->
@@ -47,7 +47,7 @@ timeToDateStrings time =
 -- a new file labeled with its hash
 -- Returns the nid of the new node and the updated graph
 importData ::
-  (Members [FreshNID, ThrowMissing, GetTime] effs, HasGraph String effs) =>
+  (Members [FreshNID, Error Missing, GetTime] effs, HasGraph String effs) =>
   NID ->
   LByteString ->
   Sem effs NID

@@ -111,7 +111,7 @@ printTransitions = mapM_ (echo . dtransition)
     dtransition (Connect t nid) = show t ++ " at " ++ show nid
 
 interpretCommand ::
-  ( Members [Console, ThrowUserError, SetLocation, GetLocation, Dualizeable] effs,
+  ( Members [Console, Error UserError, SetLocation, GetLocation, Dualizeable] effs,
     Members [FileSystemTree, Web, FreshNID, GetTime, Editor, State History] effs,
     HasGraph String effs
   ) =>

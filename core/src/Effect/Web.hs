@@ -12,7 +12,7 @@ data Web m r where
 makeSem ''Web
 
 runWebIO ::
-  (Member (Embed IO) effs, Member ThrowUserError effs) =>
+  (Member (Embed IO) effs, Member (Error UserError) effs) =>
   Sem (Web : effs) ~> Sem effs
 runWebIO = interpret $ \case
   GetHttp s -> do
