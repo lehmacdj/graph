@@ -1,4 +1,3 @@
-
 module Lang.Path.Partial where
 
 import Graph (NID)

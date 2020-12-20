@@ -1,4 +1,3 @@
-
 module Lang.Parsing where
 
 import Control.Monad.Fail

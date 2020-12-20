@@ -1,4 +1,3 @@
-
 module History (History (..), singletonHistory, addToHistory, backInTime) where
 
 import Graph (NID)

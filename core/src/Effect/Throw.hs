@@ -1,4 +1,3 @@
-
 module Effect.Throw
   ( module Effect.Throw,
     Error,

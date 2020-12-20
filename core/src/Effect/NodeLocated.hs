@@ -1,4 +1,3 @@
-
 module Effect.NodeLocated
   ( module Effect.NodeLocated,
     -- | for use in overriding location temporarily

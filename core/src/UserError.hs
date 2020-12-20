@@ -1,4 +1,3 @@
-
 module UserError
   ( module UserError,
     module Data.Validation,
