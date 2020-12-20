@@ -27,6 +27,7 @@ data UserError
   | -- | deserialization fails
     AesonDeserialize String
   | Multiple (NonEmpty UserError)
+  deriving (Generic)
 
 instance Show UserError where
   show (OtherError s) = s
@@ -36,6 +37,14 @@ instance Show UserError where
   show (WebError uri e) = "couldn't fetch " ++ uri ++ "\n" ++ show e
   show (AesonDeserialize e) = "failed to deserialize JSON: " ++ e
   show (Multiple errs) = unlines $ map show errs
+
+-- | order preserving union of the errors in the different error types
+-- for use with Validation
+instance Semigroup UserError where
+  Multiple e1s <> Multiple e2s = Multiple (e1s <> e2s)
+  e1 <> Multiple e2s = Multiple (singleton e1 <> e2s)
+  Multiple e1s <> e2 = Multiple (e1s <> singleton e2)
+  e1 <> e2 = Multiple (singleton e1 <> singleton e2)
 
 throwString :: Member (Error UserError) effs => String -> Sem effs a
 throwString = throw . OtherError

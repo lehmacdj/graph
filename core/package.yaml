@@ -75,6 +75,7 @@ default-extensions:
 - TypeApplications
 - TypeFamilies
 - TypeOperators
+- DeriveGeneric
 
 ghc-options:
 - -Wall

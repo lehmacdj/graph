@@ -2,12 +2,16 @@ module MyPrelude
   ( module MyPrelude,
     module ClassyPrelude,
     module Polysemy,
+    module Control.DeepSeq,
+    module GHC.Generics,
   )
 where
 
 import ClassyPrelude
+import Control.DeepSeq
 import Control.Lens hiding (op)
 import qualified Data.Set as Set
+import GHC.Generics
 import Polysemy
 import Polysemy.Error
 import System.IO
