@@ -88,6 +88,8 @@ serializeNodeEx base n = liftIO $ do
     Just d -> B.writeFile (nodeDataFile base (nidOf n)) d
     Nothing -> pure ()
 
+-- | returns Left AesonParseError or a successfully parsed node. IOException
+-- may be thrown by this for filesystem errors as well
 deserializeNode :: MonadIO m => FilePath -> NID -> m (Either String Node')
 deserializeNode base nid = do
   fileContents <- liftIO $ B.readFile (linksFile base nid)

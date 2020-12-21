@@ -18,8 +18,11 @@ import Effect.Util
 import Effect.Warn
 import qualified Graph as G
 import Graph.Node (dualizeNode)
-import Graph.Serialize2
+import qualified Graph.Node' as Graph'
+import qualified Graph.Serialize2 as S2
+import qualified Graph.Serialize3 as S3
 import Graph.Types
+import Graph.Types.New
 import MyPrelude
 import Polysemy.Input
 import Polysemy.State
@@ -29,7 +32,12 @@ data ReadGraph t m a where
   GetNode :: NID -> ReadGraph t m (Maybe (Node t))
   NodeManifest :: ReadGraph t m [NID]
 
+data ReadGraph' m a where
+  GetNode' :: NID -> ReadGraph' m (Maybe Node')
+  NodeManifest' :: ReadGraph' m [NID]
+
 makeSem ''ReadGraph
+makeSem ''ReadGraph'
 
 newtype IsDual = IsDual {isDual :: Bool}
   deriving (Show, Eq, Ord)
@@ -113,10 +121,24 @@ runReadGraphIODualizeable dir = reinterpret $ \case
       errorToNothing $
         -- writing type level lists in your code is not fun :(
         -- kids: be careful when you choose haskell
-        deserializeNodeF @t @(Error UserError : Input IsDual : effs) dir nid
+        S2.deserializeNodeF @t @(Error UserError : Input IsDual : effs) dir nid
     dual <- input
     pure $ maybeN <&> ifDualized dual dualizeNode
-  NodeManifest -> getAllNodeIds dir
+  NodeManifest -> S2.getAllNodeIds dir
+
+runReadGraphIO' ::
+  Members [Embed IO, Error UserError, Input IsDual] r =>
+  FilePath ->
+  Sem (ReadGraph' ': r) a ->
+  Sem r a
+runReadGraphIO' graphDir = interpret $ \case
+  GetNode' nid -> do
+    maybeN <-
+      runErrorMaybe . fromEitherSemVia AesonDeserialize . fromExceptionToUserError $
+        S3.deserializeNode graphDir nid
+    dual <- input
+    pure $ maybeN <&> ifDualized dual Graph'.dualizeNode
+  NodeManifest' -> S3.getAllNodeIds graphDir
 
 -- | Run a graph in IO with the ambient ability for the graph to be
 -- dualizeable.
@@ -197,31 +219,31 @@ runWriteGraphIODualizeable ::
   Sem (WriteGraph t : effs) ~> Sem (Input IsDual : effs)
 runWriteGraphIODualizeable dir = reinterpret $ \case
   TouchNode nid ->
-    whenM (not <$> doesNodeExist dir nid) $
-      trapIOError' $ serializeNodeEx (G.emptyNode nid :: Node t) dir
+    whenM (not <$> S2.doesNodeExist dir nid) $
+      fromExceptionToUserError $ S2.serializeNodeEx (G.emptyNode nid :: Node t) dir
   DeleteNode nid -> do
-    n <- deserializeNodeF @t dir nid
+    n <- S2.deserializeNodeF @t dir nid
     let del = Set.filter ((/= nid) . view connectNode) :: Set (Connect t) -> Set (Connect t)
         delIn = over nodeIncoming del
         delOut = over nodeOutgoing del
         neighborsIn = toListOf (nodeIncoming . folded . connectNode) n
         neighborsOut = toListOf (nodeOutgoing . folded . connectNode) n
         neighbors = ordNub (neighborsIn ++ neighborsOut)
-    liftIO $ forM_ neighbors $ withSerializedNode (delIn . delOut) dir
-    convertError @UserError . trapIOError' $ removeNode dir nid
+    liftIO $ forM_ neighbors $ S2.withSerializedNode (delIn . delOut) dir
+    convertError @UserError . fromExceptionToUserError $ S2.removeNode dir nid
   InsertEdge e -> do
     dual <- input @IsDual
     let (Edge i t o) = ifDualized dual G.dualizeEdge e
     runWriteGraphIODualizeable @t dir (touchNode @t i)
     runWriteGraphIODualizeable @t dir (touchNode @t o)
-    liftIO $ withSerializedNode (nodeOutgoing %~ insertSet (Connect t o)) dir i
-    liftIO $ withSerializedNode (nodeIncoming %~ insertSet (Connect t i)) dir o
+    liftIO $ S2.withSerializedNode (nodeOutgoing %~ insertSet (Connect t o)) dir i
+    liftIO $ S2.withSerializedNode (nodeIncoming %~ insertSet (Connect t i)) dir o
   DeleteEdge e -> do
     dual <- input @IsDual
     let (Edge i t o) = ifDualized dual G.dualizeEdge e
-    liftIO $ withSerializedNode (nodeOutgoing %~ deleteSet (Connect t o)) dir i
-    liftIO $ withSerializedNode (nodeIncoming %~ deleteSet (Connect t i)) dir o
-  SetData nid d -> liftIO $ withSerializedNode (nodeData .~ d :: Node t -> Node t) dir nid
+    liftIO $ S2.withSerializedNode (nodeOutgoing %~ deleteSet (Connect t o)) dir i
+    liftIO $ S2.withSerializedNode (nodeIncoming %~ deleteSet (Connect t i)) dir o
+  SetData nid d -> liftIO $ S2.withSerializedNode (nodeData .~ d :: Node t -> Node t) dir nid
 
 -- | Run both the Dualizeable effect and the WriteGraph in IO
 -- The default state of all graphs stored on disk is that they are not dual

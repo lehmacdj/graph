@@ -88,7 +88,7 @@ deserializeNodeF ::
   NID ->
   Sem effs (Node t)
 deserializeNodeF base nid = do
-  fileContents <- trapIOError' (B.readFile (linksFile base nid))
+  fileContents <- fromExceptionToUserError (B.readFile (linksFile base nid))
   node <- throwLeft $ left AesonDeserialize $ Aeson.eitherDecode fileContents
   d <- liftIO $ tryGetBinaryData base nid
   pure $ (nodeData .~ d) node
@@ -144,7 +144,7 @@ withSerializedNode f base nid =
       ignoreErrors = (`handleError` \(_ :: UserError) -> pure ())
    in runM . ignoreErrors . withEffects @[Error UserError, Embed IO] $ do
         n <- deserializeNodeF @t @[Error UserError, Embed IO] base nid
-        trapIOError' @[Error UserError, Embed IO] $ serializeNodeEx (f n) base
+        fromExceptionToUserError $ serializeNodeEx (f n) base
 
 readGraph :: MonadIO m => FilePath -> m (Either String (Graph String))
 readGraph base = do

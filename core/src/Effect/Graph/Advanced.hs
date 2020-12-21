@@ -16,11 +16,11 @@ import MyPrelude
 getNodes :: Member (ReadGraph t) effs => [NID] -> Sem effs [Node t]
 getNodes = wither getNode
 
-getNode' ::
+getNodeSem ::
   Members [ReadGraph t, Error Missing] effs =>
   NID ->
   Sem effs (Node t)
-getNode' nid =
+getNodeSem nid =
   getNode nid >>= \case
     Nothing -> throwMissing nid
     Just n -> pure n
@@ -47,7 +47,7 @@ insertNode n = do
 currentNode ::
   Members [ReadGraph t, GetLocation, Error Missing] effs =>
   Sem effs (Node t)
-currentNode = currentLocation >>= getNode'
+currentNode = currentLocation >>= getNodeSem
 
 -- | nid `transitionsVia` t finds a node that can be transitioned to via the
 -- transition t from the node at nid. ThrowMissing if nid not in graph
@@ -57,7 +57,7 @@ transitionsVia ::
   t ->
   Sem effs NID
 transitionsVia nid t = do
-  n <- getNode' nid
+  n <- getNodeSem nid
   case matchConnect t (outgoingConnectsOf n) of
     [] -> nid `transitionsFreshVia` t
     -- generalize the choice of node here to an effect?
@@ -74,7 +74,7 @@ transitionsFreshVia ::
   Sem effs NID
 transitionsFreshVia nid t = do
   -- we need to actually try to fetch to throw if it is missing
-  _ <- getNode' @t nid
+  _ <- getNodeSem @t nid
   nid' <- freshNID
   touchNode @t nid'
   insertEdge (Edge nid t nid')
@@ -126,8 +126,8 @@ mergeNode ::
   NID ->
   Sem effs NID
 mergeNode nid1 nid2 = do
-  n1 <- getNode' nid1
-  n2 <- getNode' nid2
+  n1 <- getNodeSem nid1
+  n2 <- getNodeSem nid2
   let cin = nodeIncoming %~ selfLoopify nid2 nid1 . (`union` incomingConnectsOf n2)
       cout = nodeOutgoing %~ selfLoopify nid2 nid1 . (`union` outgoingConnectsOf n2)
       nNew = cin . cout $ n1
@@ -158,7 +158,7 @@ cloneNode ::
   Sem effs NID
 cloneNode nid = do
   nid' <- freshNID
-  n <- getNode' nid
+  n <- getNodeSem nid
   let i = selfLoopify nid nid' $ incomingConnectsOf n
       o = selfLoopify nid nid' $ outgoingConnectsOf n
   insertNode @t (Node nid' i o (dataOf n))

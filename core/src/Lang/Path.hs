@@ -80,10 +80,10 @@ resolvePathSuccesses ::
 resolvePathSuccesses nid = \case
   One -> pure $ singleton nid
   Wild -> do
-    n <- getNode' nid
+    n <- getNodeSem nid
     pure $ toSetOf (folded . connectNode) (outgoingConnectsOf @t n)
   Literal x -> do
-    n <- getNode' nid
+    n <- getNodeSem nid
     pure . setFromList $ matchConnect x (outgoingConnectsOf @t n)
   p :/ q -> do
     pResolved <- toList <$> resolvePathSuccesses nid p
@@ -100,11 +100,11 @@ resolvePathSuccessesDetail ::
 resolvePathSuccessesDetail nid = \case
   One -> pure $ Set.singleton (DPath [] nid [])
   Wild ->
-    getNode' nid <&> \n -> Set.fromList $ do
+    getNodeSem nid <&> \n -> Set.fromList $ do
       Connect t nid' <- toList $ outgoingConnectsOf n
       pure $ DPath [nidOf n `FromVia` t] nid' []
   Literal t ->
-    getNode' nid <&> \n ->
+    getNodeSem nid <&> \n ->
       case matchConnect t (outgoingConnectsOf n) of
         [] -> Set.singleton (DPath [] (nidOf n) [t])
         ms -> Set.fromList (DPath [nidOf n `FromVia` t] <$> ms <*> pure [])

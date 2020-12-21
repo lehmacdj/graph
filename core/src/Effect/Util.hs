@@ -3,7 +3,7 @@
 module Effect.Util where
 
 import Control.Lens
-import MyPrelude hiding (Reader, ask)
+import MyPrelude hiding (Reader, ask, fromEither)
 import Polysemy.Error
 import Polysemy.Input
 import Polysemy.Reader
@@ -205,3 +205,11 @@ runInputConstSem initializationAction action =
 -- returning Just only if the result is successful.
 runErrorMaybe :: Sem (Error e : r) a -> Sem r (Maybe a)
 runErrorMaybe = fmap forgetLeft . runError
+
+fromEitherSem ::
+  Member (Error e) r => Sem r (Either e a) -> Sem r a
+fromEitherSem = (>>= fromEither)
+
+fromEitherSemVia ::
+  Member (Error err) r => (e -> err) -> Sem r (Either e a) -> Sem r a
+fromEitherSemVia mapper = fromEitherSem . fmap (first mapper)

@@ -1,3 +1,6 @@
+{-# LANGUAGE PatternSynonyms #-}
+{-# LANGUAGE ViewPatterns #-}
+
 module UserError
   ( module UserError,
     NonEmpty (..),
@@ -13,17 +16,17 @@ import Data.List.NonEmpty (NonEmpty (..))
 import Graph (NID)
 import MyPrelude
 import Network.HTTP.Conduit (HttpException)
-import Polysemy.Error hiding (try)
+import Polysemy.Error hiding (fromException, try)
 
 data UserError
   = OtherError String
+  | OtherException SomeException
   | IOFail IOError
   | MissingNode NID
   | -- | report that the thing that has a given
     -- representation wasn't a singleton
     NotSingleton String
-  | -- | url and the error that occured
-    WebError String HttpException
+  | WebError HttpException
   | -- | deserialization fails
     AesonDeserialize String
   | Multiple (NonEmpty UserError)
@@ -31,10 +34,11 @@ data UserError
 
 instance Show UserError where
   show (OtherError s) = s
+  show (OtherException e) = show e
   show (IOFail e) = show e
   show (MissingNode nid) = "node " ++ show nid ++ " is missing"
   show (NotSingleton xs) = xs ++ " was expected to be a singleton but wasn't"
-  show (WebError uri e) = "couldn't fetch " ++ uri ++ "\n" ++ show e
+  show (WebError e) = show e
   show (AesonDeserialize e) = "failed to deserialize JSON: " ++ e
   show (Multiple errs) = unlines $ map show errs
 
@@ -65,22 +69,15 @@ throwLeft ::
 throwLeft (Right x) = pure x
 throwLeft (Left err) = throw err
 
--- | Trap an IO error in the Sem monad
--- It remains to be seen if this is actually useful, because it requires
--- it to be possible to unwrap Sem in order to escape the IO monad on the outside
-trapIOError ::
-  forall m effs a.
-  (MonadIO m, Member (Error UserError) effs) =>
-  IO a ->
-  m (Sem effs a)
-trapIOError = liftIO . fmap (throwLeft . left IOFail) . tryIOError
-
-trapIOError' ::
-  forall effs a.
-  (Member (Embed IO) effs, Member (Error UserError) effs) =>
-  IO a ->
-  Sem effs a
-trapIOError' = join . trapIOError
+-- | capture errors and convert them to an error
+fromExceptionToUserError ::
+  Members [Error UserError, Embed IO] r => IO a -> Sem r a
+fromExceptionToUserError = fromExceptionVia mapExceptionToUserError
+  where
+    mapExceptionToUserError = \case
+      (fromException @IOError -> Just e) -> IOFail e
+      (fromException @HttpException -> Just e) -> WebError e
+      e -> OtherException e
 
 printErrors ::
   Member (Embed IO) effs =>

@@ -24,7 +24,7 @@ applyRewrite ::
   (NID, NID) ->
   Sem effs ()
 applyRewrite (nid, nid') = subsumeMissing $ do
-  n <- getNode' nid
+  n <- getNodeSem nid
   let i = selfLoopify nid nid' $ incomingConnectsOf n
       o = selfLoopify nid nid' $ outgoingConnectsOf n
   insertNode @String (Node nid' i o (dataOf n))
