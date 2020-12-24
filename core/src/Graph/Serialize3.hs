@@ -28,7 +28,7 @@ module Graph.Serialize3
     nextNodeId,
 
     -- * accessing nodes
-    serializeNodeEx,
+    serializeNode,
     deserializeNode,
     withSerializedNode,
     doesNodeExist,
@@ -80,8 +80,8 @@ nodeDataFile base nid = base </> (show nid ++ ".data")
 -- TODO: rewrite using System.Directory.Tree
 -- yields better error handling that isn't quite as sketchy
 
-serializeNodeEx :: MonadIO m => FilePath -> Node' -> m ()
-serializeNodeEx base n = liftIO $ do
+serializeNode :: MonadIO m => FilePath -> Node' -> m ()
+serializeNode base n = liftIO $ do
   createDirectoryIfMissing True base
   B.writeFile (linksFile base (nidOf n)) (Aeson.encode n)
   case dataOf n of
@@ -116,7 +116,7 @@ withSerializedNode base f nid = liftIO $ do
   maybeNode <- deserializeNode base nid
   case maybeNode of
     Left _ -> pure ()
-    Right n -> ignoreIOError $ serializeNodeEx base (f n)
+    Right n -> ignoreIOError $ serializeNode base (f n)
 
 readGraph :: MonadIO m => FilePath -> m (Either String Graph')
 readGraph base = do
@@ -127,14 +127,14 @@ readGraph base = do
 writeGraph :: MonadIO m => FilePath -> Graph' -> m ()
 writeGraph base g = liftIO $ do
   createDirectoryIfMissing True base
-  traverse_ (serializeNodeEx base) (Graph'.nodesOf g)
+  traverse_ (serializeNode base) (Graph'.nodesOf g)
 
 -- | initializes graph with a single node with id 0 with no edges, if the
 -- directory doesn't exist, this creates one
 initializeGraph :: MonadIO m => FilePath -> m ()
 initializeGraph base = liftIO $ do
   createDirectoryIfMissing True base
-  serializeNodeEx base (emptyNode 0)
+  serializeNode base (emptyNode 0)
 
 tryGetBinaryData :: FilePath -> NID -> IO (Maybe LByteString)
 tryGetBinaryData base nid = ioErrorToMaybe $ B.readFile $ nodeDataFile base nid
