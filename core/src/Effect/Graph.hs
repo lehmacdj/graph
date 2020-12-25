@@ -200,6 +200,51 @@ runWriteGraphIO ::
   Sem (WriteGraph t ': effs) ~> Sem effs
 runWriteGraphIO dir = runInputConst (IsDual False) . runWriteGraphIODualizeable dir
 
+runWriteGraphIO' ::
+  forall r a.
+  Members [Embed IO, Error UserError, Warn UserError, Input IsDual] r =>
+  FilePath ->
+  Sem (WriteGraph NID : r) a ->
+  Sem r a
+runWriteGraphIO' dir = interpret $ \case
+  TouchNode nid ->
+    whenM (not <$> S3.doesNodeExist dir nid) $
+      fromExceptionToUserError . S3.serializeNode dir $ Graph'.emptyNode nid
+  DeleteNode nid -> do
+    n <-
+      fromEitherSemVia AesonDeserialize . fromExceptionToUserError $
+        S3.deserializeNode dir nid
+    let del =
+          filterSet ((/= nid) . view connectNode)
+            . filterSet ((/= nid) . view connectTransition)
+        delByLabel =
+          filterSet ((/= nid) . view unlabledEdgeSource)
+            . filterSet ((/= nid) . view unlabledEdgeSink)
+        delIn = over nodeIncoming' del
+        delOut = over nodeOutgoing' del
+        delRef = over nodeReferents delByLabel
+        neighborsIn = nodeIncoming' . folded . (connectNode <> connectTransition)
+        neighborsOut = nodeOutgoing' . folded . (connectNode <> connectTransition)
+        neighborsRef = nodeReferents . folded . (unlabledEdgeSink <> unlabledEdgeSource)
+        neighbors = toSetOf (neighborsIn <> neighborsOut <> neighborsRef) n
+    liftIO $ for_ neighbors $ S3.withSerializedNode dir (delIn . delOut . delRef)
+    convertError @UserError . fromExceptionToUserError $ S2.removeNode dir nid
+  InsertEdge e -> do
+    dual <- input @IsDual
+    let (Edge i l o) = ifDualized dual G.dualizeEdge e
+    runWriteGraphIO' dir (touchNode i)
+    runWriteGraphIO' dir (touchNode o)
+    liftIO $ S3.withSerializedNode dir (nodeOutgoing' %~ insertSet (Connect l o)) i
+    liftIO $ S3.withSerializedNode dir (nodeIncoming' %~ insertSet (Connect l i)) o
+    liftIO $ S3.withSerializedNode dir (nodeReferents %~ insertSet (UnlabledEdge i o)) l
+  DeleteEdge e -> do
+    dual <- input @IsDual
+    let (Edge i l o) = ifDualized dual G.dualizeEdge e
+    liftIO $ S3.withSerializedNode dir (nodeOutgoing' %~ deleteSet (Connect l o)) i
+    liftIO $ S3.withSerializedNode dir (nodeIncoming' %~ deleteSet (Connect l i)) o
+    liftIO $ S3.withSerializedNode dir (nodeReferents %~ deleteSet (UnlabledEdge i o)) l
+  SetData nid d -> liftIO $ S3.withSerializedNode dir (nodeData' .~ d) nid
+
 -- | General handler for WriteGraph parameterized so that it is possible
 -- to specify if the computation is dualized or not
 -- If the computation is dualized, all operations on edges will be inverted.
