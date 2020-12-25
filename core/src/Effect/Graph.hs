@@ -61,26 +61,25 @@ dualize :: Member Dualizeable effs => Sem effs ()
 dualize = modify @IsDual (omap not)
 
 data WriteGraph t m a where
+  -- | make the node with that id exist
   TouchNode ::
     NID ->
-    -- | make the node with that id exist
     WriteGraph t m ()
+  -- | delete a node and all edges to/from it
   DeleteNode ::
     NID ->
-    -- | delete a node and all edges to/from it
     WriteGraph t m ()
+  -- | insert edge adding empty nodes to graph if non-existent
   InsertEdge ::
     Edge t ->
-    -- | insert edge if both nodes in graph
     WriteGraph t m ()
   DeleteEdge ::
     Edge t ->
-    -- | delete edge
     WriteGraph t m ()
   SetData ::
     NID ->
-    Maybe LByteString ->
     -- | delete if Nothing
+    Maybe LByteString ->
     WriteGraph t m ()
 
 makeSem ''WriteGraph
