@@ -3,7 +3,6 @@ module Graph.Types.ConversionToNew where
 import qualified Data.ByteString.Lazy.Char8 as BS
 import qualified Data.Map as Map
 import Effect.FreshNID
-import Effect.Util
 import qualified Graph
 import qualified Graph'
 import Graph.Edge
@@ -12,6 +11,7 @@ import Graph.Types.New
 import MyPrelude
 import Polysemy.Input
 import Polysemy.State
+import SpecialNodes
 
 internString ::
   Members [State (Map String NID), FreshNID] r =>
@@ -25,41 +25,6 @@ internString str = do
       modify (insertMap str nid)
       pure nid
     Just nid -> pure nid
-
-data SpecialNodes = SpecialNodes
-  { _origin :: NID,
-    _strings :: NID,
-    _systemNode :: NID,
-    _name :: NID,
-    _dependsOn :: NID
-  }
-
-getStringsNID,
-  getNameNID,
-  getSystemNodeNID,
-  getDependsOnNID ::
-    Member (Input SpecialNodes) r => Sem r NID
-getStringsNID = _strings <$> input
-getNameNID = _name <$> input
-getSystemNodeNID = _systemNode <$> input
-getDependsOnNID = _dependsOn <$> input
-
-initSpecialNodes :: Member FreshNID r => Sem r SpecialNodes
-initSpecialNodes =
-  SpecialNodes 0
-    <$> freshNID
-    <*> freshNID
-    <*> freshNID
-    <*> freshNID
-
-listSpecialNodes :: SpecialNodes -> [(LByteString, NID)]
-listSpecialNodes (SpecialNodes origin strings systemNode name dependsOn) =
-  [ (BS.pack "origin", origin),
-    (BS.pack "strings", strings),
-    (BS.pack "system-node", systemNode),
-    (BS.pack "name", name),
-    (BS.pack "depends-on", dependsOn)
-  ]
 
 insertConvertedNode ::
   Members [State (Map String NID), FreshNID, State Graph', Input SpecialNodes] r =>
@@ -102,19 +67,19 @@ insertInternedStringsNodes internedStrings = do
 
 insertSpecialNodes ::
   forall r.
-  Members [State Graph', FreshNID, State (Map String NID)] r =>
-  SpecialNodes ->
+  Members [State Graph', FreshNID, State (Map String NID), Input SpecialNodes] r =>
   Sem r ()
-insertSpecialNodes specialNodes = do
-  let insertSpecialNodeEdges :: (LByteString, NID) -> Sem r ()
-      insertSpecialNodeEdges (name, nid) = runInputConst specialNodes $ do
+insertSpecialNodes = do
+  let insertSpecialNodeEdges :: SnInfo -> Sem r ()
+      insertSpecialNodeEdges (SnInfo nid name) = do
         edgeNameNID <- internString (BS.unpack name)
         systemNodeNID <- getSystemNodeNID
         dependsOnNID <- getDependsOnNID
         nameNID <- getNameNID
         modify . Graph'.insertEdges $
           [Edge systemNodeNID dependsOnNID nid, Edge nid nameNID edgeNameNID]
-  traverse_ insertSpecialNodeEdges (listSpecialNodes specialNodes)
+  specialNodeList <- listSpecialNodes
+  traverse_ insertSpecialNodeEdges specialNodeList
 
 -- returns Nothing if the input graph doesn't have a node with NID 0
 convertGraph :: Graph String -> Graph'
@@ -125,8 +90,8 @@ convertGraph g =
           . evalState (Graph.nextFreeNodeId g)
           . runFreshNIDState
           . evalState @(Map String NID) mempty
-          . runInputConstSem initSpecialNodes
+          . runInputSpecialNodes
    in runEffs $ do
         traverse_ insertConvertedNode (Graph.nodesOf g)
-        input @SpecialNodes >>= insertSpecialNodes
+        insertSpecialNodes
         get @(Map String NID) >>= insertInternedStringsNodes
