@@ -1,4 +1,3 @@
-{-# LANGUAGE PatternSynonyms #-}
 {-# LANGUAGE ViewPatterns #-}
 
 module UserError
@@ -92,3 +91,28 @@ errorToLeft = (`handleError` pure . Left . show) . fmap Right
 errorToNothing ::
   Sem (Error e : effs) a -> Sem effs (Maybe a)
 errorToNothing = (`handleError` const (pure Nothing)) . fmap Just
+
+-- * More granular errors for refining kinds of exceptions that stuff can throw
+
+class ToUserError e where
+  toUserError :: e -> UserError
+
+subsumeUserError ::
+  (Member (Error UserError) r, ToUserError e) =>
+  Sem (Error e : r) a ->
+  Sem r a
+subsumeUserError = (`handleError` (throw . toUserError))
+
+newtype Missing = Missing {unMissing :: NID}
+  deriving (Show, Eq, Ord)
+
+instance ToUserError Missing where
+  toUserError (Missing nid) = MissingNode nid
+
+throwMissing :: Member (Error Missing) effs => NID -> Sem effs a
+throwMissing = throw . Missing
+
+subsumeMissing ::
+  Member (Error UserError) effs => Sem (Error Missing ': effs) ~> Sem effs
+subsumeMissing = (`handleError` (throw . MissingNode . unMissing))
+{-# DEPRECATED subsumeMissing "use subsumeUserError as its strictly more general" #-}

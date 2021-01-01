@@ -15,11 +15,11 @@ import Effect.FreshNID
 import Effect.Graph
 import Effect.Graph.Advanced
 import Effect.Graph.Import.ByteString
-import Effect.Throw
 import Effect.Time
 import Graph hiding (insertEdge)
 import MyPrelude
 import System.Directory.Tree hiding (readDirectory)
+import UserError
 
 computeSHA :: LByteString -> String
 computeSHA = showDigest . sha512

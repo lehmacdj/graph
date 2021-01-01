@@ -25,7 +25,6 @@ import Effect.Graph.Check
 import Effect.Graph.Import.ByteString
 import Effect.Graph.Import.Filesystem
 import Effect.NodeLocated
-import Effect.Throw
 import Effect.Time
 import Effect.Web
 import GHC.Generics

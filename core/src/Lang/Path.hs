@@ -14,10 +14,10 @@ import qualified Data.Set as Set
 import Effect.FreshNID
 import Effect.Graph
 import Effect.Graph.Advanced
-import Effect.Throw
 import Graph hiding (insertEdge)
 import Graph.Connect
 import MyPrelude
+import UserError
 
 -- breadcrumb in a trail in the graph
 -- each piece denotes an edge from the specified via the transition

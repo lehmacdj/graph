@@ -6,7 +6,6 @@ import Control.Arrow
 import Control.Lens
 import Effect.Graph.Advanced
 import Effect.NodeLocated
-import Effect.Throw
 import Effect.Warn
 import Graph
 import Lang.Parsing

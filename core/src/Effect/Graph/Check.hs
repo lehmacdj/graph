@@ -9,9 +9,9 @@ import Control.Lens
 import Effect.Console
 import Effect.Graph
 import Effect.Graph.Advanced
-import Effect.Throw
 import Graph hiding (insertEdge, insertNode, setData)
 import MyPrelude
+import UserError
 
 data Direction = In | Out
   deriving (Eq, Ord)

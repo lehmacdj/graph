@@ -2,7 +2,6 @@
 
 module Effect.Warn where
 
-import Effect.Throw
 import MyPrelude
 import UserError
 

@@ -6,11 +6,11 @@ import Data.Digest.Pure.SHA
 import Effect.FreshNID
 import Effect.Graph
 import Effect.Graph.Advanced
-import Effect.Throw
 import Effect.Time
 import Effect.Web
 import Graph (Edge (..))
 import MyPrelude
+import UserError
 
 computeSHA :: LByteString -> String
 computeSHA = showDigest . sha512

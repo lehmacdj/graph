@@ -1,7 +1,7 @@
 module HistorySpec where
 
-import TestPrelude
 import History
+import TestPrelude
 
 test_addToHistory :: TestTree
 test_addToHistory =

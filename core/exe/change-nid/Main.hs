@@ -3,7 +3,6 @@ module Main (main) where
 import Control.Arrow ((>>>))
 import Effect.Graph
 import Effect.Graph.Advanced
-import Effect.Throw
 import Effect.Warn
 import Graph.Connect
 import Graph.Node
