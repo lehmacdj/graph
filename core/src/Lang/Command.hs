@@ -120,53 +120,53 @@ interpretCommand = \case
   ChangeNode a -> do
     (nid, p) <- relativizeAPath a
     let err = singleErr "cd"
-    nid' <- the' err =<< subsumeMissing (resolvePathSuccesses nid p)
+    nid' <- the' err =<< subsumeUserError @Missing (resolvePathSuccesses nid p)
     changeLocation nid'
   NodeId -> currentLocation >>= echo . show
   Dualize -> dualize
   Make a -> do
     (nid, p) <- relativizeAPath a
-    subsumeMissing $ mkPath nid p >> pure ()
+    subsumeUserError $ mkPath nid p >> pure ()
   Merge a -> do
     (nid, p) <- relativizeAPath a
-    nids <- subsumeMissing (resolvePathSuccesses nid p)
+    nids <- subsumeUserError (resolvePathSuccesses nid p)
     whenNonNull (setToList nids) $
-      \xs -> subsumeMissing (mergeNodes @String xs) >> pure ()
+      \xs -> subsumeUserError (mergeNodes @String xs) >> pure ()
   Remove a -> do
     (nid, p) <- relativizeAPath a
-    subsumeMissing $ delPath nid p
+    subsumeUserError $ delPath nid p
   RemoveNode a -> do
     (nid, p) <- relativizeAPath a
-    nids <- subsumeMissing (resolvePathSuccesses nid p)
+    nids <- subsumeUserError (resolvePathSuccesses nid p)
     forM_ nids $ deleteNode @String
   Clone a t -> do
     (nid, p) <- relativizeAPath a
     let err = singleErr "clone"
-    nid' <- the' err =<< subsumeMissing (resolvePathSuccesses nid p)
-    nid'' <- subsumeMissing (cloneNode @String nid')
+    nid' <- the' err =<< subsumeUserError (resolvePathSuccesses nid p)
+    nid'' <- subsumeUserError (cloneNode @String nid')
     cnid <- currentLocation
     insertEdge $ Edge cnid t nid''
   Query a t -> do
     (nid, p) <- relativizeAPath a
-    nids <- subsumeMissing (resolvePathSuccesses nid p)
-    nnid <- subsumeMissing (nid `transitionsFreshVia` t)
-    _ <- subsumeMissing (mergeNodes @String (nnid `ncons` toList nids))
+    nids <- subsumeUserError (resolvePathSuccesses nid p)
+    nnid <- subsumeUserError (nid `transitionsFreshVia` t)
+    _ <- subsumeUserError (mergeNodes @String (nnid `ncons` toList nids))
     pure ()
   Tag a b -> do
     (nid, p) <- relativizeAPath a
     (nid', q) <- relativizeAPath b
-    nnids <- subsumeMissing (mkPath nid p)
+    nnids <- subsumeUserError (mkPath nid p)
     let err = singleErr "the last argument of tag"
-    target <- the' err =<< subsumeMissing (resolvePathSuccesses nid' q)
-    _ <- subsumeMissing (mergeNodes @String (target `ncons` toList nnids))
+    target <- the' err =<< subsumeUserError (resolvePathSuccesses nid' q)
+    _ <- subsumeUserError (mergeNodes @String (target `ncons` toList nnids))
     pure ()
   At a c -> do
     (nid, p) <- relativizeAPath a
-    locations <- subsumeMissing (resolvePathSuccesses nid p)
+    locations <- subsumeUserError (resolvePathSuccesses nid p)
     forM_ locations $ \nid' -> local @NID (const nid') $ interpretCommand c
   Dedup t -> do
     nid <- currentLocation
-    ambiguities <- subsumeMissing (resolvePathSuccesses nid (Literal t))
+    ambiguities <- subsumeUserError (resolvePathSuccesses nid (Literal t))
     let noSuffix = repeat ""
         suffixes
           | length ambiguities < 2 = noSuffix
@@ -181,25 +181,25 @@ interpretCommand = \case
     let err =
           const . OtherError $
             "flatten only works if there is only a single node that the literal resolves to"
-    nodeToFlattenFrom <- the' err =<< subsumeMissing (resolvePathSuccesses nid (Literal t))
-    nodesToFlatten <- subsumeMissing $ resolvePathSuccesses nodeToFlattenFrom Wild
+    nodeToFlattenFrom <- the' err =<< subsumeUserError (resolvePathSuccesses nid (Literal t))
+    nodesToFlatten <- subsumeUserError $ resolvePathSuccesses nodeToFlattenFrom Wild
     deleteEdge (Edge nid t nodeToFlattenFrom)
     for_ [Edge nid t nid' | nid' <- toList nodesToFlatten] insertEdge
   ListOut -> do
-    n <- subsumeMissing currentNode
+    n <- subsumeUserError currentNode
     printTransitions (outgoingConnectsOf n)
   ShowImage -> do
-    n <- subsumeMissing (currentNode @String)
-    forM_ (dataOf n) $ subsumeMissing . displayImage
+    n <- subsumeUserError (currentNode @String)
+    forM_ (dataOf n) $ subsumeUserError @Missing . displayImage
   -- it probably would make sense to factor these commands out into separate
   -- layers of commands that can be handled at different levels
-  Import fp -> currentLocation >>= subsumeMissing . importDirectory fp
+  Import fp -> currentLocation >>= subsumeUserError . importDirectory fp
   ImportUrl uri -> do
-    nid <- subsumeMissing (importUrl nilNID uri)
+    nid <- subsumeUserError (importUrl nilNID uri)
     changeLocation nid
   Debug -> do
     echo "current node:"
-    currentLocation >>= subsumeMissing . getNodeSem >>= echo . show @(Node String)
+    currentLocation >>= subsumeUserError . getNodeSem >>= echo . show @(Node String)
     echo "history:"
     get @History >>= echo . show
   -- echo "node-ids in the graph:"
@@ -210,8 +210,8 @@ interpretCommand = \case
     (nid, p) <- relativizeAPath a
     (nid', q) <- relativizeAPath b
     let err = singleErr "the last argument of mv"
-    target <- the' err =<< subsumeMissing (resolvePathSuccesses nid' q)
-    subsumeMissing (mvPath nid p target)
+    target <- the' err =<< subsumeUserError (resolvePathSuccesses nid' q)
+    subsumeUserError (mvPath nid p target)
   Rename a b -> do
     (nid, p) <- relativizeAPath a
     (nid', q) <- relativizeAPath b
@@ -220,10 +220,10 @@ interpretCommand = \case
             "the first argument to rn require the path to only resolve to "
               ++ "one node but they resolved to \n"
               ++ (show . map endPoint . setToList $ xs)
-    c <- the' err =<< subsumeMissing (resolvePathSuccessesDetail nid p)
-    subsumeMissing (renameDPath c nid' q)
+    c <- the' err =<< subsumeUserError (resolvePathSuccessesDetail nid p)
+    subsumeUserError (renameDPath c nid' q)
   Edit -> do
-    n <- subsumeMissing currentLocation
+    n <- subsumeUserError @Missing currentLocation
     invokeEditor [n]
   Back n -> do
     history <- get @History

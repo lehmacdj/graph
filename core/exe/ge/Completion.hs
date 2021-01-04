@@ -80,7 +80,7 @@ completePath (i, _) = case getPartialPath (takeRelevantFromEnd i) of
     runMainEffects (failCompletionWithOriginalInputOnErrorOrWarning i) $ do
       let p = foldr (:/) One pp
       l <- currentLocation
-      ntids <- toList <$> subsumeMissing (resolvePathSuccesses (fromMaybe l nid) p)
+      ntids <- toList <$> subsumeUserError (resolvePathSuccesses (fromMaybe l nid) p)
       nts <- getNodes @String ntids
       let octs =
             -- outgoing connect transitions

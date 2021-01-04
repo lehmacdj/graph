@@ -22,7 +22,7 @@ applyRewrite ::
   Members [ReadGraph String, WriteGraph String, Error UserError] effs =>
   (NID, NID) ->
   Sem effs ()
-applyRewrite (nid, nid') = subsumeMissing $ do
+applyRewrite (nid, nid') = subsumeUserError $ do
   n <- getNodeSem nid
   let i = selfLoopify nid nid' $ incomingConnectsOf n
       o = selfLoopify nid nid' $ outgoingConnectsOf n

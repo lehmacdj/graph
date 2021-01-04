@@ -98,6 +98,7 @@ class ToUserError e where
   toUserError :: e -> UserError
 
 subsumeUserError ::
+  forall e r a.
   (Member (Error UserError) r, ToUserError e) =>
   Sem (Error e : r) a ->
   Sem r a
@@ -111,8 +112,3 @@ instance ToUserError Missing where
 
 throwMissing :: Member (Error Missing) effs => NID -> Sem effs a
 throwMissing = throw . Missing
-
-subsumeMissing ::
-  Member (Error UserError) effs => Sem (Error Missing ': effs) ~> Sem effs
-subsumeMissing = (`handleError` (throw . MissingNode . unMissing))
-{-# DEPRECATED subsumeMissing "use subsumeUserError as its strictly more general" #-}
