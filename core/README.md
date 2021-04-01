@@ -1,3 +1,5 @@
+[![CI](https://github.com/lehmacdj/graph/actions/workflows/ci.yml/badge.svg)](https://github.com/lehmacdj/graph/actions/workflows/ci.yml)
+
 # graph
 This is a library/command line application that manipulates graphs.
 It implements a variety of unix-like commands in order to provide the
