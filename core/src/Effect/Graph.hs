@@ -26,6 +26,7 @@ import Graph.Types.New
 import MyPrelude
 import Polysemy.Input
 import Polysemy.State
+import SpecialNodes
 import UserError
 
 data ReadGraph t m a where
@@ -243,6 +244,42 @@ runWriteGraphIO' dir = interpret $ \case
     liftIO $ S3.withSerializedNode dir (nodeIncoming' %~ deleteSet (Connect l i)) o
     liftIO $ S3.withSerializedNode dir (nodeReferents %~ deleteSet (UnlabledEdge i o)) l
   SetData nid d -> liftIO $ S3.withSerializedNode dir (nodeData' .~ d) nid
+
+-- -- | fetch a string node representing the provided string, returning an
+-- -- existing one if it already exists, and creating a new one otherwise
+-- internString ::
+--   Members [ReadGraph' NID, WriteGraph NID, Input SpecialNodes] r =>
+--   String ->
+--   Sem r NID
+-- internString str = do
+--   stringsNID <- getStringsNID
+--   <- getNode'
+
+-- | Implements a graph where edges are labeled by strings via system
+-- extra strings that are generated are not cleaned up automatically by this,
+-- the strings stick around until they are gc-ed
+runWriteStringGraph ::
+  forall r a.
+  Members
+    [ WriteGraph NID,
+      Error UserError,
+      Warn UserError,
+      Input IsDual,
+      Input SpecialNodes
+    ]
+    r =>
+  Sem (WriteGraph String : r) a ->
+  Sem r a
+runWriteStringGraph = interpret $ \case
+  TouchNode nid -> touchNode nid
+  DeleteNode nid -> deleteNode nid
+  InsertEdge (Edge i label o) -> do
+    -- find an already existing string node if it exists
+    undefined
+    -- insert that edge
+    undefined
+  DeleteEdge e -> undefined
+  SetData nid d -> setData nid d
 
 -- | General handler for WriteGraph parameterized so that it is possible
 -- to specify if the computation is dualized or not
