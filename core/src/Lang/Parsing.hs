@@ -30,14 +30,14 @@ isIdentChar = (||) <$> isAlphaNum <*> (`elem` extraIdentChars)
 identChar :: Parser Char
 identChar = alphaNumChar <|> oneOf extraIdentChars
 
+symbol :: String -> Parser String
+symbol = L.symbol s
+
 ident :: Parser String
 ident = L.lexeme s $ some identChar
 
 stringLiteral :: Parser String
 stringLiteral = L.lexeme s $ char '"' >> manyTill L.charLiteral (char '"')
-
-symbol :: String -> Parser String
-symbol = L.symbol s
 
 transition :: Parser String
 transition = ident <|> stringLiteral
