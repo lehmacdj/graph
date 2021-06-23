@@ -80,7 +80,6 @@ default-extensions:
 ghc-options:
 - -Wall
 - -fplugin=Polysemy.Plugin
-- -O2
 - -flate-specialise
 - -fspecialise-aggressively
 

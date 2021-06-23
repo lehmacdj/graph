@@ -1,5 +1,7 @@
 {-# LANGUAGE TemplateHaskell #-}
 
+-- | This libraries provides a polysemy effect that provides interactive command
+-- line usage.
 module Polysemy.Readline
   ( -- * effect + actions
     Readline (..),
@@ -13,6 +15,7 @@ module Polysemy.Readline
 
     -- * interpreters
     runReadline,
+    interpretReadlineAsInputT,
 
     -- * re-exports
     H.Settings,
@@ -28,6 +31,8 @@ import qualified System.Console.Haskeline as H
 -- sticking with Prelude here, because we might want to turn this into a package
 import Prelude
 
+-- | See documentation in haskeline package for the corresponding functions with
+-- the same name.
 data Readline m a where
   GetInputLine :: String -> Readline m (Maybe String)
   GetInputLineWithInitial :: String -> (String, String) -> Readline m (Maybe String)
@@ -36,11 +41,18 @@ data Readline m a where
   WaitForAnyKey :: String -> Readline m Bool
   OutputStr :: String -> Readline m ()
 
+-- TODO(Devin): add these two values as well
+-- WithInterrupt :: m a -> Readline m a
+-- HandleInterrupt :: m a -> m a -> Readline m a
+
 makeSem ''Readline
 
 outputStrLn :: Member Readline r => String -> Sem r ()
 outputStrLn str = outputStr (str <> "\n")
 
+-- | The standard way to run a Readline effect. Should be sufficient for
+-- most use cases. If you want to modify the Behavior or Prefs of InputT use
+-- interpretReadlineAsInputT instead.
 runReadline ::
   forall m r a.
   (MonadIO m, MonadMask m, Member (Embed m) r) =>
@@ -49,17 +61,20 @@ runReadline ::
   Sem r a
 runReadline settings =
   runEmbedded (H.runInputT settings)
-    . interpretReadline
+    . interpretReadlineAsInputT
     . raiseUnder @(Embed (H.InputT m))
-  where
-    interpretReadline ::
-      Sem (Readline : Embed (H.InputT m) : r) a ->
-      Sem (Embed (H.InputT m) : r) a
-    interpretReadline = interpret $ \case
-      GetInputLine prompt -> embed $ H.getInputLine prompt
-      GetInputLineWithInitial prompt initial ->
-        embed $ H.getInputLineWithInitial prompt initial
-      GetInputChar prompt -> embed $ H.getInputChar prompt
-      GetPassword maskChar prompt -> embed $ H.getPassword maskChar prompt
-      WaitForAnyKey prompt -> embed $ H.waitForAnyKey prompt
-      OutputStr str -> embed $ H.outputStr str
+
+-- | Interpt
+interpretReadlineAsInputT ::
+  forall m r a.
+  (MonadIO m, MonadMask m, Member (Embed (H.InputT m)) r) =>
+  Sem (Readline : r) a ->
+  Sem r a
+interpretReadlineAsInputT = interpret $ \case
+  GetInputLine prompt -> embed $ H.getInputLine prompt
+  GetInputLineWithInitial prompt initial ->
+    embed $ H.getInputLineWithInitial prompt initial
+  GetInputChar prompt -> embed $ H.getInputChar prompt
+  GetPassword maskChar prompt -> embed $ H.getPassword maskChar prompt
+  WaitForAnyKey prompt -> embed $ H.waitForAnyKey prompt
+  OutputStr str -> embed $ H.outputStr str
