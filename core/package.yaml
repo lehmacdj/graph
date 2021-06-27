@@ -48,6 +48,7 @@ dependencies:
 - optparse-applicative
 - polysemy
 - polysemy-plugin
+- polysemy-readline
 - polysemy-zoo
 - random
 - random-shuffle
