@@ -22,13 +22,22 @@ import Options
 import Polysemy.Readline
 import Polysemy.State
 import qualified System.Console.Haskeline as H
-import System.Directory (doesDirectoryExist)
+import System.Directory (createDirectoryIfMissing, doesDirectoryExist)
+import System.Environment.XDG.BaseDir (getUserDataDir)
 
 ioExceptionHandler :: IOError -> IO (Maybe a)
 ioExceptionHandler _ = pure Nothing
 
-defReplSettings :: Settings App
-defReplSettings = H.setComplete completionFunction H.defaultSettings
+defReplSettings :: IO (Settings App)
+defReplSettings = do
+  dataDir <- getUserDataDir "ge"
+  createDirectoryIfMissing True dataDir
+  pure $
+    H.Settings
+      { H.complete = completionFunction,
+        H.historyFile = Just $ dataDir </> "history.txt",
+        H.autoAddHistory = True
+      }
 
 data C c
   = Quit
@@ -83,7 +92,7 @@ main = withOptions $ \options -> do
   let graphDir = view graphLocation options
   graphDirInitialization graphDir options
   nextNid <- nextNodeId graphDir
-  env <- initEnv graphDir nextNid defReplSettings
+  env <- initEnv graphDir nextNid =<< defReplSettings
   runAppM env $
     interpretAsApp $
       maybe repl interpretCommand $ view executeExpression options

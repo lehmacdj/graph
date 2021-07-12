@@ -61,6 +61,7 @@ dependencies:
 - unliftio
 - validation
 - witherable-class
+- xdg-basedir
 - xml-conduit
 
 default-extensions:
