@@ -37,6 +37,7 @@ dependencies:
 - filepath
 - foreign-store
 - free
+- generic-lens
 - haskeline
 - html-conduit
 - http-conduit
@@ -44,8 +45,8 @@ dependencies:
 - megaparsec
 - mono-traversable
 - mtl
-- parser-combinators
 - optparse-applicative
+- parser-combinators
 - polysemy
 - polysemy-plugin
 - polysemy-readline
@@ -66,10 +67,13 @@ dependencies:
 
 default-extensions:
 - DataKinds
+- DeriveGeneric
 - FlexibleContexts
 - GADTs
 - LambdaCase
 - NoImplicitPrelude
+- OverloadedLabels
+- OverloadedStrings
 - PolyKinds
 - RankNTypes
 - ScopedTypeVariables
@@ -77,7 +81,6 @@ default-extensions:
 - TypeApplications
 - TypeFamilies
 - TypeOperators
-- DeriveGeneric
 
 ghc-options:
 - -Wall
