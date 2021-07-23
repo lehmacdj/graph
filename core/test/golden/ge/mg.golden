@@ -1,0 +1,8 @@
+==========stdout==========
+g> g> g> g> g> "a" at 0
+"b" at 0
+g> Goodbye!
+==========stderr==========
+==========graph-dump==========
+0{in=[], out=[1 via "a",1 via "b"]}
+1{in=[0 via "a",0 via "b"], out=[]}

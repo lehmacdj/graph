@@ -18,7 +18,7 @@ import MyPrelude
 data APath t
   = Relative (Path t)
   | Absolute NID (Path t)
-  deriving (Show, Eq, Ord)
+  deriving (Show, Eq, Ord, Generic)
 
 mkAPath :: Maybe NID -> Path t -> APath t
 mkAPath (Just nid) p = Absolute nid p

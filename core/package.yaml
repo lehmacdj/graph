@@ -66,6 +66,7 @@ dependencies:
 - xml-conduit
 
 default-extensions:
+- BlockArguments
 - DataKinds
 - DeriveGeneric
 - FlexibleContexts

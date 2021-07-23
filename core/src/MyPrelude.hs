@@ -3,12 +3,14 @@ module MyPrelude
     module ClassyPrelude,
     module Polysemy,
     module Control.DeepSeq,
+    module Data.Generics.Labels,
   )
 where
 
 import ClassyPrelude
 import Control.DeepSeq
 import Control.Lens hiding (op)
+import Data.Generics.Labels
 import qualified Data.Set as Set
 import Polysemy
 import Polysemy.Error

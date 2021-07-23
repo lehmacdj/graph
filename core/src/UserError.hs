@@ -19,6 +19,8 @@ import Polysemy.Error hiding (fromException, try)
 
 data UserError
   = OtherError String
+  | -- | Thrown when aborting an action (e.g. via a y/n prompt)
+    OperationCancelled
   | OtherException SomeException
   | IOFail IOError
   | MissingNode NID
@@ -34,6 +36,7 @@ data UserError
 instance Show UserError where
   show (OtherError s) = s
   show (OtherException e) = show e
+  show OperationCancelled = "cancelled!"
   show (IOFail e) = show e
   show (MissingNode nid) = "node " ++ show nid ++ " is missing"
   show (NotSingleton xs) = xs ++ " was expected to be a singleton but wasn't"

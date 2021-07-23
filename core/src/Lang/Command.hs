@@ -14,6 +14,7 @@
 -- paths and if possible nondeterministic paths too
 module Lang.Command where
 
+import Control.Lens (has)
 import Control.Monad (zipWithM_)
 import Effect.Console
 import Effect.Editor
@@ -32,6 +33,7 @@ import Graph (Connect (..), Edge (..), dataOf, nilNID, outgoingConnectsOf)
 import History
 import Lang.APath
 import MyPrelude
+import Polysemy.Readline
 import Polysemy.State
 import Singleton
 import UserError
@@ -109,9 +111,34 @@ printTransitions = mapM_ (echo . dtransition)
   where
     dtransition (Connect t nid) = show t ++ " at " ++ show nid
 
+promptYesNo ::
+  Member Readline r =>
+  String ->
+  Sem r Bool
+promptYesNo prompt = do
+  line <- getInputLine prompt
+  let result
+        | line `elem` map Just ["yes", "y", "Y"] = pure True
+        | line `elem` map Just ["n", "no", "N"] = pure False
+        | otherwise = promptYesNo "please enter (y/n): "
+  result
+
+-- | Operations with absolute paths that look like @0:asdf + jkl@ can be
+-- confusing because they might confuse the user into thinking that
+guardDangerousAbsoluteOperation ::
+  Members [Readline, Error UserError] effs =>
+  APath String ->
+  Set NID ->
+  Sem effs ()
+guardDangerousAbsoluteOperation a nids =
+  when (has #_Absolute a && length nids > 1) do
+    outputStrLn "the operation you are attempting will affect nodes:"
+    outputStrLn . show . toList $ nids
+    promptYesNo "proceed (y/n): " >>= bool (throw OperationCancelled) (pure ())
+
 interpretCommand ::
   ( Members [Console, Error UserError, SetLocation, GetLocation, Dualizeable] effs,
-    Members [FileSystemTree, Web, FreshNID, GetTime, Editor, State History] effs,
+    Members [FileSystemTree, Web, FreshNID, GetTime, Editor, State History, Readline] effs,
     HasGraph String effs
   ) =>
   Command ->
@@ -130,6 +157,7 @@ interpretCommand = \case
   Merge a -> do
     (nid, p) <- relativizeAPath a
     nids <- subsumeUserError (resolvePathSuccesses nid p)
+    guardDangerousAbsoluteOperation a nids
     whenNonNull (setToList nids) $
       \xs -> subsumeUserError (mergeNodes @String xs) >> pure ()
   Remove a -> do
@@ -138,6 +166,7 @@ interpretCommand = \case
   RemoveNode a -> do
     (nid, p) <- relativizeAPath a
     nids <- subsumeUserError (resolvePathSuccesses nid p)
+    guardDangerousAbsoluteOperation a nids
     forM_ nids $ deleteNode @String
   Clone a t -> do
     (nid, p) <- relativizeAPath a

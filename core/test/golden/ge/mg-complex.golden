@@ -1,0 +1,15 @@
+==========stdout==========
+g> g> g> g> g> the operation you are attempting will affect nodes:
+[0,1]
+proceed (y/n): g> g> g> g> current node:
+1{in=[0 via "a",3 via "d"], out=[]}
+history:
+History {_past = [0,4,2,0], _now = 1, _future = []}
+g> Goodbye!
+==========stderr==========
+cancelled!
+==========graph-dump==========
+0{in=[], out=[1 via "a",2 via "b"]}
+1{in=[0 via "a",3 via "d"], out=[]}
+2{in=[0 via "b"], out=[3 via "c"]}
+3{in=[2 via "c"], out=[1 via "d"]}
