@@ -2,7 +2,7 @@
 
 module Executable.GraphEditor where
 
-import App
+import AppM
 import Completion
 import Control.Lens hiding (index)
 import Effect.Console
@@ -28,7 +28,7 @@ import System.Environment.XDG.BaseDir (getUserDataDir)
 ioExceptionHandler :: IOError -> IO (Maybe a)
 ioExceptionHandler _ = pure Nothing
 
-defReplSettings :: IO (Settings App)
+defReplSettings :: IO (Settings AppM)
 defReplSettings = do
   dataDir <- getUserDataDir "ge"
   createDirectoryIfMissing True dataDir
@@ -92,7 +92,9 @@ main = withOptions $ \options -> do
   let graphDir = view graphLocation options
   graphDirInitialization graphDir options
   nextNid <- nextNodeId graphDir
-  env <- initEnv graphDir nextNid =<< defReplSettings
+  env <- initEnv graphDir nextNid
+  replSettings <- defReplSettings
   runAppM env $
-    interpretAsApp $
-      maybe repl interpretCommand $ view executeExpression options
+    runInputT replSettings $
+      interpretAsApp $
+        maybe repl interpretCommand (view executeExpression options)

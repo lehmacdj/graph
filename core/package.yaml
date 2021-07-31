@@ -67,6 +67,7 @@ dependencies:
 
 default-extensions:
 - BlockArguments
+- ConstraintKinds
 - DataKinds
 - DeriveGeneric
 - FlexibleContexts

@@ -3,7 +3,7 @@
 
 -- | Instantiates things with a lot of effects, evaluating them in the AppBase
 -- monad.
-module App where
+module AppM where
 
 import Control.Arrow ((>>>))
 import Control.Lens
@@ -29,33 +29,34 @@ import Polysemy.MTL
 import Polysemy.Output
 import Polysemy.Readline
 import Polysemy.State
+import System.Console.Haskeline (InputT)
 import UserError
-
-newtype AppM env a = AppM {unAppM :: ReaderT env IO a}
-  deriving
-    ( Functor,
-      Monad,
-      MonadReader env,
-      MonadIO,
-      Applicative,
-      MonadThrow,
-      MonadCatch,
-      MonadMask
-    )
-
-runAppM :: env -> AppM env a -> IO a
-runAppM env = (`runReaderT` env) . unAppM
-
-type App = AppM Env
 
 data Env = Env
   { _filePath :: IORef FilePath,
     -- | next id that is unique within the current graph
     _nextId :: IORef NID,
     _history :: IORef History,
-    _isDualized :: IORef IsDual,
-    _replSettings :: Settings App
+    _isDualized :: IORef IsDual
   }
+
+newtype AppM a = AppM {unAppM :: ReaderT Env IO a}
+  deriving
+    ( Functor,
+      Monad,
+      MonadIO,
+      Applicative,
+      MonadReader Env,
+      MonadThrow,
+      MonadCatch,
+      MonadMask
+    )
+
+runAppM :: Env -> AppM a -> IO a
+runAppM env stack =
+  stack
+    & unAppM
+    & flip runReaderT env
 
 makeLenses ''Env
 
@@ -63,15 +64,13 @@ initEnv ::
   FilePath ->
   -- | the next node id to use for generating fresh nodes
   NID ->
-  Settings App ->
   IO Env
-initEnv graphDir nid settings =
+initEnv graphDir nid =
   Env
     <$> newIORef graphDir
     <*> newIORef nid
     <*> newIORef (History [] nilNID [])
     <*> newIORef (IsDual False)
-    <*> pure settings
 
 runLocableHistoryState ::
   Member (State History) effs =>
@@ -97,6 +96,28 @@ printingErrorsAndWarnings ::
   Sem effs ()
 printingErrorsAndWarnings = printWarnings >>> printErrors
 
+type HasMainEffects effs =
+  ( Members
+      [ Console,
+        Error UserError,
+        SetLocation,
+        GetLocation,
+        FreshNID,
+        Dualizeable,
+        FileSystemTree,
+        Web,
+        Warn UserError,
+        State History,
+        Editor,
+        GetTime,
+        Embed AppM,
+        Embed IO,
+        Readline
+      ]
+      effs,
+    HasGraph String effs
+  )
+
 -- | general function for interpreting the entire stack of effects in terms
 -- of real world things
 -- it takes a function that handles the errors, because that is necessary for
@@ -108,15 +129,8 @@ runMainEffects ::
     Sem (Warn UserError : Error UserError : effs) a ->
     Sem effs a
   ) ->
-  ( forall effs.
-    ( Members [Console, Error UserError, SetLocation, GetLocation, FreshNID, Dualizeable] effs,
-      Members [FileSystemTree, Web, Warn UserError, State History] effs,
-      Members [Editor, GetTime, Embed App, Embed IO, Readline] effs,
-      HasGraph String effs
-    ) =>
-    Sem effs a
-  ) ->
-  App a
+  (forall effs. HasMainEffects effs => Sem effs a) ->
+  InputT AppM a
 runMainEffects errorHandlingBehavior v = do
   let handler =
         applyInput2 (runWriteGraphDualizeableIO @String)
@@ -133,24 +147,21 @@ runMainEffects errorHandlingBehavior v = do
           >>> runFreshNIDState
           >>> runStateInputIORefOf nextId
           >>> errorHandlingBehavior
-          >>> applyInput2Of replSettings (runReadline @App)
-          >>> withEffects @[Input Env, Embed IO, Embed App]
-          >>> runInputMonadReader @App
+          >>> runReadlineFinal
+          >>> withEffects @[Input Env, Embed IO, Embed AppM, Embed (InputT AppM), Final (InputT AppM)]
+          >>> runInputMonadReader @AppM
           >>> runEmbedded liftIO
-          >>> runM
+          >>> withEffects @[Embed AppM, Embed (InputT AppM), Final (InputT AppM)]
+          >>> runEmbedded lift
+          >>> withEffects @'[Embed (InputT AppM), Final (InputT AppM)]
+          >>> embedToFinal @(InputT AppM)
+          >>> runFinal
   handler v
 
 -- | The existential in the type here is necessary to allow an arbitrary order
 -- to be picked here + to allow other effects (such as Error NoInputProvided)
 -- to automatically be raised into the the list of effects but not others
 interpretAsApp ::
-  ( forall effs.
-    ( Members [Console, Error UserError, SetLocation, GetLocation, FreshNID, Dualizeable] effs,
-      Members [FileSystemTree, Web, Warn UserError, State History] effs,
-      Members [Editor, GetTime, Embed App, Embed IO, Readline] effs,
-      HasGraph String effs
-    ) =>
-    Sem effs ()
-  ) ->
-  App ()
+  (forall effs. HasMainEffects effs => Sem effs ()) ->
+  InputT AppM ()
 interpretAsApp = runMainEffects printingErrorsAndWarnings
