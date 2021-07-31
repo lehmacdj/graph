@@ -1,4 +1,4 @@
-module Main (main) where
+module Executable.NodeRename (main) where
 
 import Control.Arrow ((>>>))
 import Effect.Graph

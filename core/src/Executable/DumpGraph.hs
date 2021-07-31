@@ -1,6 +1,6 @@
 -- | Tiny script that is designed for dumping a graph to the console. Used in
 -- GoldenTests for validation of the final graph.
-module Main (main) where
+module Executable.DumpGraph (main) where
 
 import Graph.Serialize2
 import Graph.Types

@@ -1,6 +1,6 @@
 {-# LANGUAGE OverloadedStrings #-}
 
-module Main where
+module Executable.GraphEditor where
 
 import App
 import Completion

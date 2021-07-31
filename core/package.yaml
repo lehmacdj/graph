@@ -95,7 +95,7 @@ library:
 executables:
   ge:
     main:                Main.hs
-    source-dirs:         exe/ge
+    source-dirs:         app/ge
     ghc-options:
     - -threaded
     - -rtsopts
@@ -105,7 +105,7 @@ executables:
 
   node-rename:
     main:                Main.hs
-    source-dirs:         exe/change-nid
+    source-dirs:         app/node-rename
     ghc-options:
     - -threaded
     - -rtsopts
@@ -115,7 +115,7 @@ executables:
 
   dump-graph:
     main:                Main.hs
-    source-dirs:         exe/dump-graph
+    source-dirs:         app/dump-graph
     ghc-options:
     - -threaded
     - -rtsopts
