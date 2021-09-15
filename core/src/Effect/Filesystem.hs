@@ -15,6 +15,7 @@ makeSem ''FileSystem
 
 data FileSystemTree m r where
   ReadDirectory :: FilePath -> FileSystemTree m (DirTree ByteString)
+  WriteDirectory :: FilePath -> DirTree ByteString -> FileSystemTree m (DirTree ())
 
 makeSem ''FileSystemTree
 
@@ -29,5 +30,6 @@ runFileSystemTreeIO ::
   Sem (FileSystemTree : effs) ~> Sem effs
 runFileSystemTreeIO = interpret $ \case
   ReadDirectory fp ->
-    liftIO $
-      dirTree <$> readDirectoryWithL readFile fp
+    liftIO $ dirTree <$> readDirectoryWithL readFile fp
+  WriteDirectory fp dt ->
+    liftIO $ dirTree <$> writeDirectoryWith writeFile (fp :/ dt)
