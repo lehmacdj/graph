@@ -212,12 +212,6 @@ unit_setData_notInGraph =
   setData Nothing 2 (snd twoNodesNoEdges)
     `graphIsNodes` nodesOf (snd twoNodesNoEdges)
 
--- Tasty IO [TestTree]
-test_generateTrees :: IO [TestTree]
-test_generateTrees = do
-  inputs <- pure ["First input", "Second input"]
-  pure $ map (\s -> testCase s $ pure ()) inputs
-
 -- TODO: write these tests as well:
 --
 -- unit_filterGraph :: Assertion
