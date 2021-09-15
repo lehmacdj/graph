@@ -33,7 +33,7 @@ outgoingNeighborsOf = Set.map _connectNode . incomingConnectsOf
 outgoingTransitionsOf :: Node' -> Set NID
 outgoingTransitionsOf = Set.map _connectTransition . outgoingConnectsOf
 
-dataOf :: Node' -> Maybe LByteString
+dataOf :: Node' -> Maybe ByteString
 dataOf = view nodeData'
 
 -- | Warning! It is up to the user of the graph to ensure that node ids are

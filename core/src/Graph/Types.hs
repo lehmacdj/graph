@@ -52,7 +52,7 @@ data Node t = Node
     _nodeId :: NID,
     _nodeIncoming :: Set (Connect t),
     _nodeOutgoing :: Set (Connect t),
-    _nodeData :: Maybe LByteString
+    _nodeData :: Maybe ByteString
   }
   deriving (Eq, Ord, Generic, NFData)
 

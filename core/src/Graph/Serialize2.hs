@@ -31,7 +31,8 @@ where
 import Control.Lens
 import Data.Aeson (FromJSON, ToJSON)
 import qualified Data.Aeson as Aeson
-import qualified Data.ByteString.Lazy as B
+import qualified Data.ByteString as B
+import qualified Data.ByteString.Lazy as BL
 import qualified Graph
 import Graph.Node (dataOf, nidOf)
 import Graph.Types
@@ -72,10 +73,8 @@ serializeNodeEx ::
   IO ()
 serializeNodeEx n base = do
   createDirectoryIfMissing True base
-  B.writeFile (linksFile base (nidOf n)) (Aeson.encode n)
-  case dataOf n of
-    Just d -> B.writeFile (nodeDataFile base (nidOf n)) d
-    Nothing -> pure ()
+  BL.writeFile (linksFile base (nidOf n)) (Aeson.encode n)
+  for_ (dataOf n) $ B.writeFile (nodeDataFile base (nidOf n))
 
 deserializeNodeF ::
   forall t effs.
@@ -89,7 +88,12 @@ deserializeNodeF ::
   Sem effs (Node t)
 deserializeNodeF base nid = do
   fileContents <- fromExceptionToUserError (B.readFile (linksFile base nid))
-  node <- throwLeft $ left AesonDeserialize $ Aeson.eitherDecode fileContents
+  node <-
+    throwLeft
+      . left AesonDeserialize
+      . Aeson.eitherDecode
+      . fromStrict
+      $ fileContents
   d <- liftIO $ tryGetBinaryData base nid
   pure $ (nodeData .~ d) node
 
@@ -104,7 +108,7 @@ deserializeNode ::
   m (Either String (Node t))
 deserializeNode base nid = do
   fileContents <- liftIO $ B.readFile (linksFile base nid)
-  let node = Aeson.eitherDecode fileContents
+  let node = Aeson.eitherDecode $ fromStrict fileContents
   d <- liftIO $ tryGetBinaryData base nid
   pure $ fmap (nodeData .~ d) node
 
@@ -152,5 +156,5 @@ readGraph base = do
   nodes <- traverse (deserializeNode base) nids
   pure $ Graph.insertNodes <$> sequence nodes <*> pure Graph.emptyGraph
 
-tryGetBinaryData :: FilePath -> NID -> IO (Maybe LByteString)
+tryGetBinaryData :: FilePath -> NID -> IO (Maybe ByteString)
 tryGetBinaryData = (ioErrorToMaybe .) . (B.readFile .) . nodeDataFile

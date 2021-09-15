@@ -36,7 +36,7 @@ data Node' = Node'
     _nodeIncoming' :: Set (Connect NID),
     _nodeOutgoing' :: Set (Connect NID),
     _nodeReferents :: Set UnlabledEdge,
-    _nodeData' :: Maybe LByteString
+    _nodeData' :: Maybe ByteString
   }
   deriving (Eq, Ord, Generic, NFData)
 

@@ -21,8 +21,8 @@ import MyPrelude
 import System.Directory.Tree hiding (readDirectory)
 import UserError
 
-computeSHA :: LByteString -> String
-computeSHA = showDigest . sha512
+computeSHA :: ByteString -> String
+computeSHA = showDigest . sha512 . fromStrict
 
 importDirectory ::
   ( Members [GetTime, FreshNID, FileSystemTree, Console, Error Missing] effs,
@@ -43,7 +43,7 @@ importDirectory base nid = do
 
 addDirectories ::
   (Members [FreshNID, Error Missing, GetTime] effs, HasGraph String effs) =>
-  DirTree LByteString ->
+  DirTree ByteString ->
   NID ->
   Sem effs ()
 addDirectories dt' root = do

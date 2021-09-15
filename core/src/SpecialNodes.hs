@@ -35,7 +35,7 @@ data SpecialNodes = SpecialNodes
 
 data SnInfo = SnInfo
   { specialNodeNID :: NID,
-    specialNodeName :: LByteString
+    specialNodeName :: ByteString
   }
 
 -- | this is only exposed internally to encourage acurately tracking

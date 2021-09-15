@@ -53,7 +53,7 @@ outgoingTransitionsOf = Set.map _connectTransition . outgoingConnectsOf
 dataOf ::
   TransitionValid t =>
   Node t ->
-  Maybe LByteString
+  Maybe ByteString
 dataOf = view nodeData
 
 -- | Warning! It is up to the user of the graph to ensure that node ids are

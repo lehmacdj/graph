@@ -1,7 +1,6 @@
 module GraphSpec where
 
 import Control.Lens (filtered, set)
-import qualified Data.ByteString.Lazy.Char8 as BS
 import Graph'
 import Graph.Node'
 import Graph.Types
@@ -23,7 +22,7 @@ nnd :: NID -> [Connect NID] -> [Connect NID] -> [UnlabledEdge] -> Node'
 nnd nid i o r = Node' nid (setFromList i) (setFromList o) (setFromList r) Nothing
 
 -- | short function for node with data
-nd :: NID -> [Connect NID] -> [Connect NID] -> [UnlabledEdge] -> LByteString -> Node'
+nd :: NID -> [Connect NID] -> [Connect NID] -> [UnlabledEdge] -> ByteString -> Node'
 nd nid i o r d = Node' nid (setFromList i) (setFromList o) (setFromList r) (Just d)
 
 fourNodesNoEdges :: (String, Graph')
@@ -60,9 +59,9 @@ helloWorldGraph = ("helloWorldGraph", graph)
     graph =
       graphOfNodes
         [ nnd 0 [] [Connect 1 2] [],
-          nd 1 [] [] [UnlabledEdge 0 2] (BS.pack "Hello"),
+          nd 1 [] [] [UnlabledEdge 0 2] "Hello",
           nnd 2 [Connect 1 0] [Connect 3 4] [],
-          nd 3 [] [] [UnlabledEdge 2 4] (BS.pack "world!"),
+          nd 3 [] [] [UnlabledEdge 2 4] "world!",
           nnd 4 [Connect 3 2] [] []
         ]
 
@@ -109,21 +108,21 @@ test_insertNode =
         (nodesOf (snd helloWorldGraph)),
       -- having data overrides lack of data
       test
-        (nd 0 [] [] [] (BS.pack "foobar"))
+        (nd 0 [] [] [] "foobar")
         helloWorldGraph
         ( set
             (traverse . filtered ((== 0) . nidOf) . nodeData')
-            (Just (BS.pack "foobar"))
+            (Just "foobar")
             $ nodesOf (snd helloWorldGraph)
         ),
       -- inserting a node with updated data is the same as just updating that
       -- data
       test
-        (nd 1 [] [] [] (BS.pack "HELLO"))
+        (nd 1 [] [] [] "HELLO")
         helloWorldGraph
         ( set
             (traverse . filtered ((== 1) . nidOf) . nodeData')
-            (Just (BS.pack "HELLO"))
+            (Just "HELLO")
             $ nodesOf (snd helloWorldGraph)
         ),
       -- not updating data does nothing
@@ -204,8 +203,8 @@ unit_delEdge_onlyEdge_from_K1 =
 
 unit_setData_toJust :: Assertion
 unit_setData_toJust =
-  setData (Just (BS.pack "asdf")) 0 (snd twoNodesNoEdges)
-    `graphIsNodes` [nd 0 [] [] [] (BS.pack "asdf"), ne 1]
+  setData (Just "asdf") 0 (snd twoNodesNoEdges)
+    `graphIsNodes` [nd 0 [] [] [] "asdf", ne 1]
 
 unit_setData_notInGraph :: Assertion
 unit_setData_notInGraph =

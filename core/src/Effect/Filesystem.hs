@@ -2,7 +2,6 @@
 
 module Effect.Filesystem where
 
-import Control.Lens
 import MyPrelude
 import System.Directory.Tree
 import UserError
@@ -15,7 +14,7 @@ data FileSystem m r where
 makeSem ''FileSystem
 
 data FileSystemTree m r where
-  ReadDirectory :: FilePath -> FileSystemTree m (DirTree LByteString)
+  ReadDirectory :: FilePath -> FileSystemTree m (DirTree ByteString)
 
 makeSem ''FileSystemTree
 
@@ -31,4 +30,4 @@ runFileSystemTreeIO ::
 runFileSystemTreeIO = interpret $ \case
   ReadDirectory fp ->
     liftIO $
-      dirTree <$> readDirectoryWithL (fmap (view lazy) . readFile) fp
+      dirTree <$> readDirectoryWithL readFile fp

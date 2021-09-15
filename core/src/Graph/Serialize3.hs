@@ -46,7 +46,8 @@ where
 
 import Control.Lens
 import qualified Data.Aeson as Aeson
-import qualified Data.ByteString.Lazy as B
+import qualified Data.ByteString as B
+import qualified Data.ByteString.Lazy as BL
 import qualified Graph'
 import Graph.Node' (dataOf, emptyNode, nidOf)
 import Graph.Types
@@ -83,17 +84,15 @@ nodeDataFile base nid = base </> (show nid ++ ".data")
 serializeNode :: MonadIO m => FilePath -> Node' -> m ()
 serializeNode base n = liftIO $ do
   createDirectoryIfMissing True base
-  B.writeFile (linksFile base (nidOf n)) (Aeson.encode n)
-  case dataOf n of
-    Just d -> B.writeFile (nodeDataFile base (nidOf n)) d
-    Nothing -> pure ()
+  BL.writeFile (linksFile base (nidOf n)) (Aeson.encode n)
+  for_ (dataOf n) $ B.writeFile (nodeDataFile base (nidOf n))
 
 -- | returns Left AesonParseError or a successfully parsed node. IOException
 -- may be thrown by this for filesystem errors as well
 deserializeNode :: MonadIO m => FilePath -> NID -> m (Either String Node')
 deserializeNode base nid = do
   fileContents <- liftIO $ B.readFile (linksFile base nid)
-  let node = Aeson.eitherDecode fileContents
+  let node = Aeson.eitherDecode (fromStrict fileContents)
   d <- liftIO $ tryGetBinaryData base nid
   pure $ fmap (nodeData' .~ d) node
 
@@ -136,5 +135,5 @@ initializeGraph base = liftIO $ do
   createDirectoryIfMissing True base
   serializeNode base (emptyNode 0)
 
-tryGetBinaryData :: FilePath -> NID -> IO (Maybe LByteString)
+tryGetBinaryData :: FilePath -> NID -> IO (Maybe ByteString)
 tryGetBinaryData base nid = ioErrorToMaybe $ B.readFile $ nodeDataFile base nid

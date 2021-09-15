@@ -173,7 +173,7 @@ isEmptyGraph = null . nodeMap
 -- this is a terrible function that should probably not be used
 setData ::
   TransitionValid t =>
-  Maybe LByteString ->
+  Maybe ByteString ->
   Node t ->
   Graph t ->
   Graph t
@@ -181,7 +181,7 @@ setData d n g = insertNode (set nodeData d (nodeConsistentWithGraph g n)) g
 
 setData' ::
   TransitionValid t =>
-  Maybe LByteString ->
+  Maybe ByteString ->
   NID ->
   Graph t ->
   Graph t

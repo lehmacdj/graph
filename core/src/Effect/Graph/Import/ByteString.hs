@@ -12,8 +12,8 @@ import Graph (Edge (..))
 import MyPrelude
 import UserError
 
-computeSHA :: LByteString -> String
-computeSHA = showDigest . sha512
+computeSHA :: ByteString -> String
+computeSHA = showDigest . sha512 . fromStrict
 
 importUrl ::
   ( Members [Web, FreshNID, Error Missing, GetTime] effs,
@@ -49,7 +49,7 @@ timeToDateStrings time =
 importData ::
   (Members [FreshNID, Error Missing, GetTime] effs, HasGraph String effs) =>
   NID ->
-  LByteString ->
+  ByteString ->
   Sem effs NID
 importData root d = do
   fileHashes <- root `transitionsVia` "file-hashes"

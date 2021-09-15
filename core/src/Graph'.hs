@@ -217,7 +217,7 @@ isEmptyGraph :: Graph' -> Bool
 isEmptyGraph = null . nodeMap'
 
 -- | sets the data of a node in the graph
-setData :: Maybe LByteString -> NID -> Graph' -> Graph'
+setData :: Maybe ByteString -> NID -> Graph' -> Graph'
 setData d nid = set (graphNodeMap' . ix nid . nodeData') d
 
 lookupNode :: Graph' -> NID -> Maybe Node'

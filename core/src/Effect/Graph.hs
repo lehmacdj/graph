@@ -80,7 +80,7 @@ data WriteGraph t m a where
   SetData ::
     NID ->
     -- | delete if Nothing
-    Maybe LByteString ->
+    Maybe ByteString ->
     WriteGraph t m ()
 
 makeSem ''WriteGraph

@@ -1,6 +1,5 @@
 module Graph.Types.ConversionToNew where
 
-import qualified Data.ByteString.Lazy.Char8 as BS
 import qualified Data.Map as Map
 import Effect.FreshNID
 import qualified Graph
@@ -59,7 +58,7 @@ insertInternedStringsNodes internedStrings = do
         stringsNID <- getStringsNID
         nameNID <- getNameNID
         edgeNID <- freshNID
-        modify $ Graph'.insertNode $ Node' nid mempty mempty mempty (Just (BS.pack s))
+        modify $ Graph'.insertNode $ Node' nid mempty mempty mempty (Just (encodeUtf8 (pack s)))
         -- we need two edges to the strings node, one from the strings node and
         -- one to mark the name of the edge to the strings node
         modify $ Graph'.insertEdges [Edge edgeNID nameNID nid, Edge stringsNID edgeNID nid]
@@ -72,7 +71,7 @@ insertSpecialNodes ::
 insertSpecialNodes = do
   let insertSpecialNodeEdges :: SnInfo -> Sem r ()
       insertSpecialNodeEdges (SnInfo nid name) = do
-        edgeNameNID <- internString (BS.unpack name)
+        edgeNameNID <- internString . unpack . decodeUtf8 $ name
         systemNodeNID <- getSystemNodeNID
         dependsOnNID <- getDependsOnNID
         nameNID <- getNameNID

@@ -219,7 +219,7 @@ interpretCommand = \case
     printTransitions (outgoingConnectsOf n)
   ShowImage -> do
     n <- subsumeUserError (currentNode @String)
-    forM_ (dataOf n) $ subsumeUserError @Missing . displayImage
+    forM_ (dataOf n) $ subsumeUserError @Missing . displayImage . fromStrict
   -- it probably would make sense to factor these commands out into separate
   -- layers of commands that can be handled at different levels
   Import fp -> currentLocation >>= subsumeUserError . importDirectory fp
