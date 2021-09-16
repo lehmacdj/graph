@@ -1,9 +1,27 @@
 module MyPrelude
-  ( module MyPrelude,
+  ( -- * Fundamentally MyPrelude is ClassyPrelude with some extra stuff
     module ClassyPrelude,
+
+    -- * All functions in this module
+    -- Although probably I should change this to an explicit export list
+    -- eventually.
+    module MyPrelude,
+
+    -- * We use Polysemy extensively
+    -- Individual effects are still imported separately because it is kind of
+    -- useful for tracking which effects are used in which modules.
     module Polysemy,
+
+    -- * Full module re-exports
+    -- Most of these should probably be converted to partial imports of just a
+    -- few things
+    -- TODO: convert these to individual imports using @module X@ or move them
+    -- to their own section
     module Control.DeepSeq,
     module Data.Generics.Labels,
+
+    -- * Miscellaneous additional exports
+    module X,
   )
 where
 
@@ -12,6 +30,7 @@ import Control.DeepSeq
 import Control.Lens hiding (op)
 import Data.Generics.Labels
 import qualified Data.Set as Set
+import GHC.Stack as X (HasCallStack)
 import Polysemy
 import Polysemy.Error
 import System.IO
