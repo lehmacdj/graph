@@ -136,6 +136,7 @@ runMainEffects errorHandlingBehavior v = do
         applyInput2 (runWriteGraphDualizeableIO @String)
           >>> applyInput2 (runReadGraphDualizeableIO @String)
           >>> applyInput2 interpretEditorAsIOVimFSGraph
+          >>> runRawGraphAsInput
           >>> contramapInputSem @FilePath (embed . readIORef . view filePath)
           >>> runWebIO
           >>> runFileSystemTreeIO
