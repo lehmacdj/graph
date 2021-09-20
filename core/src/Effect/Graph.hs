@@ -11,7 +11,7 @@ module Effect.Graph
   )
 where
 
-import Control.Lens
+import Control.Lens hiding (transform)
 import Data.Aeson (FromJSON (..), ToJSON (..))
 import qualified Data.Set as Set
 import Effect.Util
@@ -29,6 +29,11 @@ import Polysemy.State
 import SpecialNodes
 import UserError
 
+-- | Effect for getting the filepath of the graph; useful for doing low level
+-- operations together with Graph.Serialize* modules.
+data RawGraph m a where
+  GetGraphFilePath :: RawGraph m FilePath
+
 data ReadGraph t m a where
   GetNode :: NID -> ReadGraph t m (Maybe (Node t))
   NodeManifest :: ReadGraph t m [NID]
@@ -37,6 +42,7 @@ data ReadGraph' m a where
   GetNode' :: NID -> ReadGraph' m (Maybe Node')
   NodeManifest' :: ReadGraph' m [NID]
 
+makeSem ''RawGraph
 makeSem ''ReadGraph
 makeSem ''ReadGraph'
 
@@ -90,6 +96,13 @@ type HasGraph t effs =
     Member (WriteGraph t) effs,
     TransitionValid t
   )
+
+runRawGraphAsInput ::
+  Member (Input FilePath) r => Sem (RawGraph : r) a -> Sem r a
+runRawGraphAsInput = transform @_ @(Input FilePath) (\GetGraphFilePath -> Input)
+
+runRawGraphWithPath :: FilePath -> Sem (RawGraph : r) a -> Sem r a
+runRawGraphWithPath p = runInputConst p . runRawGraphAsInput . raiseUnder
 
 -- | Run a graph computation in the io monad, using a directory in the
 -- serialization format to access the graph
