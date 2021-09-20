@@ -16,6 +16,7 @@ module Graph.Serialize2
     -- * accessing nodes
     serializeNodeEx,
     deserializeNodeF,
+    deserializeNodeWithoutDataF,
     deserializeNode,
     withSerializedNode,
     doesNodeExist,
@@ -87,15 +88,29 @@ deserializeNodeF ::
   NID ->
   Sem effs (Node t)
 deserializeNodeF base nid = do
-  fileContents <- fromExceptionToUserError (B.readFile (linksFile base nid))
-  node <-
-    throwLeft
-      . left AesonDeserialize
-      . Aeson.eitherDecode
-      . fromStrict
-      $ fileContents
+  node <- deserializeNodeWithoutDataF base nid
   d <- liftIO $ tryGetBinaryData base nid
   pure $ (nodeData .~ d) node
+
+-- | Like deserializeNodeF but the data associated with the node is always
+-- Nothing. No attempt is made to read the data from the disk.
+deserializeNodeWithoutDataF ::
+  forall t effs.
+  ( FromJSON (Node t),
+    TransitionValid t,
+    Member (Error UserError) effs,
+    Member (Embed IO) effs
+  ) =>
+  FilePath ->
+  NID ->
+  Sem effs (Node t)
+deserializeNodeWithoutDataF base nid = do
+  fileContents <- fromExceptionToUserError (B.readFile (linksFile base nid))
+  throwLeft
+    . left AesonDeserialize
+    . Aeson.eitherDecode
+    . fromStrict
+    $ fileContents
 
 deserializeNode ::
   forall t m.
