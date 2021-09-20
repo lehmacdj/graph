@@ -17,8 +17,9 @@ View its documentation for additional functionality using `stack exec ge -- --he
 # Roadmap
 These are the next things I am planning on working on in mostly precedence
 order:
-- label edges with nodes instead of string labels
 - include filetypes in graph
+- switch to `Data.Labels.Generic` for lenses for field accessors
+- label edges with nodes instead of string labels
 - refactor error handling
 - make ergonomic changes I need to allow me to take notes more easily using this
   tool. Likely canidates are:
