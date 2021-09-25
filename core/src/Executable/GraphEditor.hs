@@ -7,6 +7,7 @@ import Completion
 import Control.Lens hiding (index)
 import Effect.Console
 import Effect.Editor
+import Effect.FileTypeOracle
 import Effect.Filesystem
 import Effect.FreshNID
 import Effect.Graph
@@ -54,7 +55,12 @@ withDefaultQuitParser p s
 repl ::
   ( Members [Console, SetLocation, GetLocation, Dualizeable, Readline, Embed IO] effs,
     Members [FileSystemTree, Web, FreshNID, GetTime, Editor, State History] effs,
-    HasGraph String effs
+    Members '[FileTypeOracle] effs,
+    HasGraph String effs,
+    -- TODO: these effects are bad and shouldn't be exposed; need to rewrite
+    -- commands using them as plugins once plugins are available. See also
+    -- lengthier comment at interpretCommand
+    Members [Embed IO, RawGraph] effs
   ) =>
   Sem effs ()
 repl = do

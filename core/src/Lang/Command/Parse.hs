@@ -84,6 +84,9 @@ pEdit = command "vi" $> Edit
 pBack :: Parser Command
 pBack = (command "back" $> Back) <*> number
 
+pMaterialize :: Parser Command
+pMaterialize = (command "materialize" $> Materialize) <*> some anySingle
+
 pCommand :: Parser Command
 pCommand =
   try pChangeNode
@@ -110,6 +113,7 @@ pCommand =
     <|> try pRename
     <|> try pEdit
     <|> try pBack
+    <|> try pMaterialize
 
 parseCommand :: String -> Either String Command
 parseCommand = left errorBundlePretty . runParser pCommand "<interactive>"

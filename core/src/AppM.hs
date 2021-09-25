@@ -11,6 +11,7 @@ import Control.Monad.Catch
 import Control.Monad.Reader.Class
 import Effect.Console
 import Effect.Editor
+import Effect.FileTypeOracle
 import Effect.Filesystem
 import Effect.FreshNID
 import Effect.Graph
@@ -112,7 +113,9 @@ type HasMainEffects effs =
         GetTime,
         Embed AppM,
         Embed IO,
-        Readline
+        Readline,
+        FileTypeOracle,
+        RawGraph
       ]
       effs,
     HasGraph String effs
@@ -149,6 +152,7 @@ runMainEffects errorHandlingBehavior v = do
           >>> runStateInputIORefOf nextId
           >>> errorHandlingBehavior
           >>> runReadlineFinal
+          >>> runFileTypeOracle
           >>> withEffects @[Input Env, Embed IO, Embed AppM, Embed (InputT AppM), Final (InputT AppM)]
           >>> runInputMonadReader @AppM
           >>> runEmbedded liftIO

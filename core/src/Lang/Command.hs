@@ -18,15 +18,18 @@ import Control.Lens (has)
 import Control.Monad (zipWithM_)
 import Effect.Console
 import Effect.Editor
+import Effect.FileTypeOracle
 import Effect.Filesystem
 import Effect.FreshNID
 import Effect.Graph
 import Effect.Graph.Advanced
 import Effect.Graph.Check
+import Effect.Graph.Export.Filesystem (exportToDirectory)
 import Effect.Graph.Import.ByteString
 import Effect.Graph.Import.Filesystem
 import Effect.NodeLocated
 import Effect.Time
+import Effect.Warn
 import Effect.Web
 import GHC.Generics
 import Graph (Connect (..), Edge (..), dataOf, nilNID, outgoingConnectsOf)
@@ -94,6 +97,11 @@ data Command
     -- than amount of history goes maximum amount backwards. Negative number
     -- attempts to go forward in history if there is any recorded.
     Back Int
+  | -- | Turn the largest non-cyclic graph from the current location into a
+    -- file system structure representing the tree. Uses cloning when possible
+    -- to minimize disk footprint; takes a filepath to write the tree to as an
+    -- argument.
+    Materialize FilePath
   deriving (Eq, Show, Ord, Generic)
 
 singleErr :: String -> Set NID -> UserError
@@ -138,7 +146,13 @@ guardDangerousAbsoluteOperation a nids =
 
 interpretCommand ::
   ( Members [Console, Error UserError, SetLocation, GetLocation, Dualizeable] effs,
-    Members [FileSystemTree, Web, FreshNID, GetTime, Editor, State History, Readline] effs,
+    Members [FileSystemTree, Web, FreshNID, GetTime, Editor, State History] effs,
+    Members [FileTypeOracle, Readline, Warn UserError] effs,
+    -- TODO: remove this inclusion of RawGraph + Embed IO here; probably the
+    -- best way to do this is to allow commands to be defined as @stack@
+    -- scripts, and then rewrite materialize and any other commands that
+    -- require this outside of
+    Members [RawGraph, Embed IO] effs,
     HasGraph String effs
   ) =>
   Command ->
@@ -264,3 +278,6 @@ interpretCommand = \case
     -- already modifies the location and if we set the location we would end up
     -- adding duplicates to the history
     put @History history'
+  Materialize fp -> do
+    nid <- subsumeUserError @Missing currentLocation
+    exportToDirectory nid fp
