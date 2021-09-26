@@ -54,9 +54,9 @@ heterarchyToDirTree = DT.Dir "." . T.foldTree toNodes
   where
     toNodes ::
       (Maybe (FilePath, String), String) ->
-      -- | A inner list consisting of a max of 2 elements either a file and a
-      -- directory or a just directory representing a node and its data file
-      -- and an outer list representing one result for each child node
+      -- | A inner list consisting of a max of 2 elements consisting of:
+      -- * a file if the data for that node is non null
+      -- * a directory if that node has children
       [[DT.DirTree FilePath]] ->
       [DT.DirTree FilePath]
     toNodes (dfAndE, n) children =
@@ -64,7 +64,10 @@ heterarchyToDirTree = DT.Dir "." . T.foldTree toNodes
           file = case dfAndE of
             Just (df, ext) -> [DT.File (fn <.> ext) df]
             Nothing -> []
-       in DT.Dir fn (concat children) : file
+          dir = case concat children of
+            [] -> []
+            children' -> [DT.Dir fn children']
+       in dir <> file
 
 -- | Writes a directory structure resembling the decendents of a given node.
 -- The output path is either taken to be a name for the origin node, or a place
