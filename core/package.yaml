@@ -66,6 +66,7 @@ dependencies:
 - xml-conduit
 
 default-extensions:
+- BangPatterns
 - BlockArguments
 - ConstraintKinds
 - DataKinds
@@ -80,9 +81,11 @@ default-extensions:
 - RankNTypes
 - ScopedTypeVariables
 - StandaloneDeriving
+- TupleSections
 - TypeApplications
 - TypeFamilies
 - TypeOperators
+- ViewPatterns
 
 ghc-options:
 - -Wall

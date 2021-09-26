@@ -22,45 +22,49 @@ import UserError
 -- a cycle. Term Heterarchy comes from neuron zettelkasten
 graphHeterarchy ::
   forall r.
-  Members [Embed IO, RawGraph, Error UserError] r =>
+  Members [Embed IO, RawGraph, Error UserError, FileTypeOracle] r =>
   (String, NID) ->
-  Sem r (Tree (FilePath, String))
+  Sem r (Tree (Maybe (FilePath, String), String))
 graphHeterarchy (startName, start) = do
   fp <- getGraphFilePath
-  let go :: Set NID -> NID -> Sem r [Tree (FilePath, String)]
+  let dataFileAndExtensionIfExists :: NID -> Sem r (Maybe (FilePath, String))
+      dataFileAndExtensionIfExists nid = do
+        let ndf = S2.nodeDataFile fp nid
+        fileExists <- embed $ doesFileExist ndf
+        if fileExists
+          then Just <$> ((ndf,) . unpack <$> getExtension ndf)
+          else pure Nothing
+      go :: Set NID -> NID -> Sem r [Tree (Maybe (FilePath, String), String)]
       go visited nid
         | nid `member` visited = pure []
         | otherwise = do
           n :: Node String <- S2.deserializeNodeWithoutDataF fp nid
           let visited' = singleton nid <> visited
-              toTree (Connect t nid') =
-                T.Node (S2.nodeDataFile fp nid', t) <$> go visited' nid'
+              toTree (Connect t nid') = do
+                dfAndE <- dataFileAndExtensionIfExists nid'
+                T.Node (dfAndE, t) <$> go visited' nid'
           traverse toTree (toList (outgoingConnectsOf n))
-  T.Node (S2.nodeDataFile fp start, startName) <$> go mempty start
+  dfAndE <- dataFileAndExtensionIfExists start
+  T.Node (dfAndE, startName) <$> go mempty start
 
 heterarchyToDirTree ::
-  forall r.
-  Members [FileTypeOracle, Embed IO] r =>
-  Tree (FilePath, String) ->
-  Sem r (DT.DirTree FilePath)
-heterarchyToDirTree = fmap (DT.Dir ".") . T.foldTree toNodes
+  Tree (Maybe (FilePath, String), String) ->
+  DT.DirTree FilePath
+heterarchyToDirTree = DT.Dir "." . T.foldTree toNodes
   where
     toNodes ::
-      (FilePath, String) ->
-      [Sem r [DT.DirTree FilePath]] ->
-      Sem r [DT.DirTree FilePath]
-    toNodes (fp, n) children = do
+      (Maybe (FilePath, String), String) ->
+      -- | A inner list consisting of a max of 2 elements either a file and a
+      -- directory or a just directory representing a node and its data file
+      -- and an outer list representing one result for each child node
+      [[DT.DirTree FilePath]] ->
+      [DT.DirTree FilePath]
+    toNodes (dfAndE, n) children =
       let fn = makeValid n
-      fileExists <- embed $ doesFileExist fp
-      file <-
-        if fileExists
-          then do
-            ext <- getExtension fn
-            let name = if ext == "???" then name <.> "data" else name <.> unpack ext
-            pure [DT.File name fp]
-          else pure []
-      children' <- concat <$> sequence children
-      pure $ DT.Dir fn children' : file
+          file = case dfAndE of
+            Just (df, ext) -> [DT.File (fn <.> ext) df]
+            Nothing -> []
+       in DT.Dir fn (concat children) : file
 
 -- | Writes a directory structure resembling the decendents of a given node.
 -- The output path is either taken to be a name for the origin node, or a place
@@ -95,8 +99,8 @@ exportToDirectory nid outputFp = do
         | splitName == "" = "origin"
         | otherwise = splitName
   heterarchy <- graphHeterarchy (originName, nid)
-  dt <- heterarchyToDirTree heterarchy
-  _ DT.:/ results <- embed $ DT.writeDirectoryWith cloneFile (dir DT.:/ dt)
+  let dt = heterarchyToDirTree heterarchy
+  _ DT.:/ results <- embed $ DT.writeDirectoryWith (flip cloneFile) (dir DT.:/ dt)
   when (DT.anyFailed results) do
     let overallDescription =
           OtherError "some error occurred while exporting a directory tree:"

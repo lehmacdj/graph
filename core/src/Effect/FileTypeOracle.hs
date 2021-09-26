@@ -10,6 +10,7 @@ module Effect.FileTypeOracle
   )
 where
 
+import qualified Data.Text as T
 import MyPrelude
 import System.Process.Typed
 
@@ -27,6 +28,12 @@ makeSem ''FileTypeOracle
 runFileTypeOracle :: Member (Embed IO) r => Sem (FileTypeOracle : r) a -> Sem r a
 runFileTypeOracle = interpret \case
   GetExtension fp ->
-    fmap (decodeUtf8 . toStrict . fst)
+    fmap
+      ( (\x -> if x == "???" then "data" else x)
+          . T.strip
+          . decodeUtf8
+          . toStrict
+          . fst
+      )
       . readProcess_
       $ proc "file" ["--extension", "-b", fp]
