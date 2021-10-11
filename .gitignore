@@ -3,3 +3,7 @@ graph.cabal
 *~
 **/tmp/
 **/.tmp/
+
+# files for xcode
+**/*.xcodeproj/xcuserdata/
+**/*.xcodeproj/project.xcworkspace/
