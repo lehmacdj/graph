@@ -17,6 +17,7 @@
 		031368102713FCFF00E69F83 /* GraphModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0313680F2713FCFF00E69F83 /* GraphModels.swift */; };
 		0313681227140A0900E69F83 /* Utils.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0313681127140A0900E69F83 /* Utils.swift */; };
 		03136814271415FA00E69F83 /* Extensions.swift in Sources */ = {isa = PBXBuildFile; fileRef = 03136813271415FA00E69F83 /* Extensions.swift */; };
+		0313681627149ECE00E69F83 /* ZoomableScrollView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0313681527149ECE00E69F83 /* ZoomableScrollView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -53,6 +54,7 @@
 		0313680F2713FCFF00E69F83 /* GraphModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GraphModels.swift; sourceTree = "<group>"; };
 		0313681127140A0900E69F83 /* Utils.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Utils.swift; sourceTree = "<group>"; };
 		03136813271415FA00E69F83 /* Extensions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Extensions.swift; sourceTree = "<group>"; };
+		0313681527149ECE00E69F83 /* ZoomableScrollView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ZoomableScrollView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -112,6 +114,7 @@
 				0313680F2713FCFF00E69F83 /* GraphModels.swift */,
 				0313681127140A0900E69F83 /* Utils.swift */,
 				03136813271415FA00E69F83 /* Extensions.swift */,
+				0313681527149ECE00E69F83 /* ZoomableScrollView.swift */,
 			);
 			path = view;
 			sourceTree = "<group>";
@@ -273,6 +276,7 @@
 			files = (
 				0313681227140A0900E69F83 /* Utils.swift in Sources */,
 				03136814271415FA00E69F83 /* Extensions.swift in Sources */,
+				0313681627149ECE00E69F83 /* ZoomableScrollView.swift in Sources */,
 				031367E32713FCF200E69F83 /* viewApp.swift in Sources */,
 				031367E52713FCF200E69F83 /* GraphDocument.swift in Sources */,
 				031368102713FCFF00E69F83 /* GraphModels.swift in Sources */,

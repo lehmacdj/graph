@@ -43,7 +43,7 @@ struct Node {
     fileprivate let root: Root
     let meta: NodeMeta
     let data: FileWrapper?
-    var transitions: [String] {
+    var outgoing: [String] {
         return Array(meta.outgoing.keys)
     }
     subscript(transition: String) -> Node? {
