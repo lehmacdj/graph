@@ -15,7 +15,7 @@ struct Root {
     
     init(dir: URL) {
         self.dir = dir
-        basePath = dir.appendingPathComponent("graph").appendingPathComponent("indirection")
+        basePath = dir
     }
     
     func metaPath(for nid: NID) -> URL {
