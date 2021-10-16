@@ -8,7 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		031367E32713FCF200E69F83 /* viewApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 031367E22713FCF200E69F83 /* viewApp.swift */; };
-		031367E52713FCF200E69F83 /* GraphDocument.swift in Sources */ = {isa = PBXBuildFile; fileRef = 031367E42713FCF200E69F83 /* GraphDocument.swift */; };
+		031367E52713FCF200E69F83 /* UTI.swift in Sources */ = {isa = PBXBuildFile; fileRef = 031367E42713FCF200E69F83 /* UTI.swift */; };
 		031367E72713FCF200E69F83 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 031367E62713FCF200E69F83 /* ContentView.swift */; };
 		031367E92713FCF400E69F83 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 031367E82713FCF400E69F83 /* Assets.xcassets */; };
 		031367EC2713FCF400E69F83 /* Preview Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 031367EB2713FCF400E69F83 /* Preview Assets.xcassets */; };
@@ -40,7 +40,7 @@
 /* Begin PBXFileReference section */
 		031367DF2713FCF200E69F83 /* view.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = view.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		031367E22713FCF200E69F83 /* viewApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = viewApp.swift; sourceTree = "<group>"; };
-		031367E42713FCF200E69F83 /* GraphDocument.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GraphDocument.swift; sourceTree = "<group>"; };
+		031367E42713FCF200E69F83 /* UTI.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UTI.swift; sourceTree = "<group>"; };
 		031367E62713FCF200E69F83 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 		031367E82713FCF400E69F83 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		031367EB2713FCF400E69F83 /* Preview Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = "Preview Assets.xcassets"; sourceTree = "<group>"; };
@@ -106,7 +106,7 @@
 			isa = PBXGroup;
 			children = (
 				031367E22713FCF200E69F83 /* viewApp.swift */,
-				031367E42713FCF200E69F83 /* GraphDocument.swift */,
+				031367E42713FCF200E69F83 /* UTI.swift */,
 				031367E62713FCF200E69F83 /* ContentView.swift */,
 				031367E82713FCF400E69F83 /* Assets.xcassets */,
 				031367ED2713FCF400E69F83 /* Info.plist */,
@@ -278,7 +278,7 @@
 				03136814271415FA00E69F83 /* Extensions.swift in Sources */,
 				0313681627149ECE00E69F83 /* ZoomableScrollView.swift in Sources */,
 				031367E32713FCF200E69F83 /* viewApp.swift in Sources */,
-				031367E52713FCF200E69F83 /* GraphDocument.swift in Sources */,
+				031367E52713FCF200E69F83 /* UTI.swift in Sources */,
 				031368102713FCFF00E69F83 /* GraphModels.swift in Sources */,
 				031367E72713FCF200E69F83 /* ContentView.swift in Sources */,
 			);
@@ -437,6 +437,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				DEVELOPMENT_ASSET_PATHS = "\"view/Preview Content\"";
 				DEVELOPMENT_TEAM = YJTZ9H869C;
@@ -449,6 +450,7 @@
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = io.github.lehmacdj.view;
 				PRODUCT_NAME = "$(TARGET_NAME)";
+				PROVISIONING_PROFILE_SPECIFIER = "";
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
 			};
@@ -459,6 +461,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				DEVELOPMENT_ASSET_PATHS = "\"view/Preview Content\"";
 				DEVELOPMENT_TEAM = YJTZ9H869C;
@@ -471,6 +474,7 @@
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = io.github.lehmacdj.view;
 				PRODUCT_NAME = "$(TARGET_NAME)";
+				PROVISIONING_PROFILE_SPECIFIER = "";
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
 			};

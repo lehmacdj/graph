@@ -10,15 +10,24 @@ import Foundation
 typealias NID = Int
 
 struct Root {
-    let dir: FileWrapper
-    var fileWrappers: [String:FileWrapper] { return dir.fileWrappers! }
+    let dir: URL
+    let basePath: URL
+    
+    init(dir: URL) {
+        self.dir = dir
+        basePath = dir.appendingPathComponent("graph").appendingPathComponent("indirection")
+    }
+    
+    func metaPath(for nid: NID) -> URL {
+        basePath.appendingPathComponent(nid.metaPath)
+    }
+    
+    func dataPath(for nid: NID) -> URL {
+        basePath.appendingPathComponent(nid.dataPath)
+    }
     
     subscript(id: NID) -> Node? {
-        guard let metaFileWrapper = fileWrappers[id.metaPath] else {
-            warn("couldn't access nid: \(id)")
-            return nil
-        }
-        guard let metaContents: Data = metaFileWrapper.regularFileContents else {
+        guard let metaContents = try? Data(contentsOf: metaPath(for: id)) else {
             warn("couldn't access file contents for nid: \(id)")
             return nil
         }
@@ -26,14 +35,15 @@ struct Root {
             warn("couldn't decode json data")
             return nil
         }
-        let data = fileWrappers[id.dataPath]
-        return Node(root: self, meta: meta, data: data)
+        let dataUrl = dataPath(for: id)
+        let mDataUrl = FileManager().fileExists(atPath: dataUrl.path) ? dataUrl : nil
+        return Node(root: self, meta: meta, dataUrl: mDataUrl)
     }
     
     var origin: Node {
         guard let origin = self[0] else {
             error("origin node doesn't exist")
-            fatalError()
+            fatalError("origin node doesn't exist")
         }
         return origin
     }
@@ -42,7 +52,8 @@ struct Root {
 struct Node {
     fileprivate let root: Root
     let meta: NodeMeta
-    let data: FileWrapper?
+    let dataUrl: URL?
+    var data: Data? { dataUrl.flatMap({ try? Data(contentsOf: $0)}) }
     var outgoing: [String] {
         return Array(meta.outgoing.keys)
     }

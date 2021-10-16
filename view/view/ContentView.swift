@@ -10,10 +10,13 @@ import QuickLook
 import QuickLookThumbnailing
 
 struct ContentView: View {
-    @Binding var document: GraphDocument
+    let fileUrl: URL
 
     var body: some View {
-        NodeView(of: document.root.origin)
+        NavigationView {
+            NodeView(of: Root(dir: fileUrl).origin)
+        }
+        .navigationViewStyle(StackNavigationViewStyle())
     }
 }
 
@@ -37,7 +40,7 @@ struct NodePreviewView: View {
     let node: Node
     
     var body: some View {
-        if let data = node.data?.regularFileContents,
+        if let data = node.data,
            let uiImage = UIImage(data: data) {
             HStack {
                 Image(uiImage: uiImage)
@@ -61,7 +64,7 @@ struct NodeView: View {
     
     var itemsToDisplay: [ListItem] {
         var toDisplay = [ListItem]()
-        if let data = node.data?.regularFileContents {
+        if let data = node.data {
             toDisplay.append(.nodeDataPreview(data))
         }
         toDisplay.append(contentsOf: node.outgoing.sorted().map({.transition($0)}))
@@ -70,7 +73,7 @@ struct NodeView: View {
     
     var body: some View {
         if node.outgoing.isEmpty,
-           let data = node.data?.regularFileContents,
+           let data = node.data,
            let uiImage = UIImage(data: data) {
             ImageView(uiImage: uiImage)
         } else {
