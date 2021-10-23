@@ -41,6 +41,7 @@ dependencies:
 - haskeline
 - html-conduit
 - http-conduit
+- http-types
 - lens
 - megaparsec
 - mono-traversable
@@ -62,6 +63,7 @@ dependencies:
 - unliftio
 - validation
 - witherable-class
+- wreq
 - xdg-basedir
 - xml-conduit
 

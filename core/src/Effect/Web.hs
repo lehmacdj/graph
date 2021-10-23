@@ -3,8 +3,9 @@
 module Effect.Web where
 
 import MyPrelude
-import Network.HTTP.Conduit (simpleHttp)
 import UserError
+import Network.Wreq (getWith, defaults, responseBody)
+import Control.Lens
 
 data Web m r where
   GetHttp :: String -> Web m ByteString
@@ -12,6 +13,9 @@ data Web m r where
 makeSem ''Web
 
 runWebIO ::
-  (Member (Embed IO) effs, Member (Error UserError) effs) =>
+  (Members [Embed IO, Error UserError] effs) =>
   Sem (Web : effs) ~> Sem effs
-runWebIO = interpret $ \(GetHttp s) -> fromExceptionToUserError (toStrict <$> simpleHttp s)
+runWebIO = interpret $ \(GetHttp s) -> fromExceptionToUserError do
+  let opts = defaults
+  response <- getWith opts s
+  pure . toStrict $ response ^. responseBody
