@@ -47,6 +47,14 @@ struct Root {
         }
         return origin
     }
+    
+    var tags: Node? {
+        guard let tags = self[1], tags.meta.incoming["tags"] == 0 else {
+            warn("no tags node found")
+            return nil
+        }
+        return tags
+    }
 }
 
 struct Node {
