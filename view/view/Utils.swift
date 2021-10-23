@@ -17,6 +17,10 @@ func log(_ message: String, level: LogLevel = .info, callingFunction: String = #
     }
 }
 
+func debug(_ message: String, callingFunction: String = #function) {
+    log(message, level: .debug, callingFunction: callingFunction)
+}
+
 func warn(_ message: String, callingFunction: String = #function) {
     log(message, level: .warning, callingFunction: callingFunction)
 }
@@ -29,7 +33,8 @@ enum LogLevel: Int, Equatable {
     case error = 1
     case warning = 2
     case info = 3
-    case verbose = 4
+    case debug = 4
+    case verbose = 5
 }
 
 extension LogLevel: Comparable {

@@ -8,6 +8,10 @@
 import Foundation
 
 typealias NID = Int
+extension NID {
+    static let origin: NID = 0
+    static let tags: NID = 1
+}
 
 struct Root {
     let dir: URL
@@ -41,24 +45,32 @@ struct Root {
     }
     
     var origin: Node {
-        guard let origin = self[0] else {
+        guard let origin = self[NID.origin] else {
             error("origin node doesn't exist")
             fatalError("origin node doesn't exist")
         }
         return origin
     }
     
-    var tags: Node? {
-        guard let tags = self[1], tags.meta.incoming["tags"] == 0 else {
+    var tags: Tags? {
+        guard let tags = self[NID.tags], tags.meta.incoming["tags"] == 0 else {
             warn("no tags node found")
             return nil
         }
-        return tags
+        return Tags(tagNode: tags)
+    }
+}
+
+struct Tags {
+    let tagNode: Node
+    
+    var tagOptions: [String] {
+        return tagNode.outgoing
     }
 }
 
 struct Node {
-    fileprivate let root: Root
+    let root: Root
     let meta: NodeMeta
     let dataUrl: URL?
     var data: Data? { dataUrl.flatMap({ try? Data(contentsOf: $0)}) }
@@ -71,6 +83,12 @@ struct Node {
             return nil
         }
         return root[id]
+    }
+    var tags: Set<String> {
+        return Set(
+            meta.incoming
+                .filter { $0.value == NID.tags }
+                .keys)
     }
 }
 

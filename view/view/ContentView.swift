@@ -58,6 +58,8 @@ struct NodePreviewView: View {
 struct NodeView: View {
     let node: Node
     
+    @State var showingTags: Bool = false
+    
     init(of node: Node) {
         self.node = node
     }
@@ -71,7 +73,8 @@ struct NodeView: View {
         return toDisplay
     }
     
-    var body: some View {
+    @ViewBuilder
+    var content: some View {
         if node.outgoing.isEmpty,
            let data = node.data,
            let uiImage = UIImage(data: data) {
@@ -90,8 +93,28 @@ struct NodeView: View {
             List(itemsToDisplay) { item in
                 ListItemView(node: node, item: item)
             }
-            .navigationTitle(Text("\(node.meta.id)"))
         }
+    }
+    
+    var body: some View {
+        content
+            .navigationTitle(Text("\(node.meta.id)"))
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button(action: { showingTags.toggle() }) {
+                        Text("Tags")
+                    }
+                }
+            }
+            .sheet(isPresented: $showingTags) {
+                if let tags = node.tags,
+                   let tagOptions = node.root.tags?.tagOptions {
+                    let _ = debug("\(tags) \(tagOptions)")
+                    TagEditor(tags: .constant(tags), tagOptions: tagOptions)
+                } else {
+                    Text("Error couldn't find tags to present")
+                }
+            }
     }
     
     enum ListItem: Identifiable {
@@ -136,6 +159,18 @@ struct NodeView: View {
                 }
             }
         }
+    }
+}
+
+struct TagEditor: View {
+    @Binding var tags: Set<String>
+    let tagOptions: [String]
+    
+    var body: some View {
+        List(tagOptions, selection: $tags) { tag in
+            Text(tag)
+        }
+        .environment(\.editMode, .constant(.active))
     }
 }
 
