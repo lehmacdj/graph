@@ -91,7 +91,7 @@ struct NodeView: View {
             //    }
             // }
             List(itemsToDisplay) { item in
-                ListItemView(node: node, item: item)
+                listItemView(for: item)
             }
         }
     }
@@ -131,32 +131,28 @@ struct NodeView: View {
         }
     }
     
-    struct ListItemView: View {
-        let node: Node
-        let item: ListItem
-        
-        var body: some View {
-            switch item {
-            case .nodeDataPreview(let data):
-                if let uiImage = UIImage(data: data) {
-                    NavigationLink(destination: ImageView(uiImage: uiImage)) {
-                        NodePreviewView(label: "This node has data!", node: node)
-                    }
-                } else {
-                    // TODO: support more data kinds
-                    Text("Unknown data kind")
+    @ViewBuilder
+    func listItemView(for item: ListItem) -> some View {
+        switch item {
+        case .nodeDataPreview(let data):
+            if let uiImage = UIImage(data: data) {
+                NavigationLink(destination: ImageView(uiImage: uiImage)) {
+                    NodePreviewView(label: "This node has data!", node: node)
                 }
-            case .transition(let l):
-                if let referencedNode = node[l] {
-                    NavigationLink(destination: NodeView(of: referencedNode)) {
-                        NodePreviewView(label: l, node: referencedNode)
-                    }
-                } else {
-                    Text(
-                        "Error, couldn't resolve node \(node.meta.outgoing[l].map(\.description) ?? "???")"
-                        + " while trying to resolve transition \(l)"
-                    )
+            } else {
+                // TODO: support more data kinds
+                Text("Unknown data kind")
+            }
+        case .transition(let l):
+            if let referencedNode = node[l] {
+                NavigationLink(destination: NodeView(of: referencedNode)) {
+                    NodePreviewView(label: l, node: referencedNode)
                 }
+            } else {
+                Text(
+                    "Error, couldn't resolve node \(node.meta.outgoing[l].map(\.description) ?? "???")"
+                    + " while trying to resolve transition \(l)"
+                )
             }
         }
     }
