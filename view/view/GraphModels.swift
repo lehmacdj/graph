@@ -16,20 +16,20 @@ extension NID {
 struct Root {
     let dir: URL
     let basePath: URL
-    
+
     init(dir: URL) {
         self.dir = dir
         basePath = dir
     }
-    
+
     func metaPath(for nid: NID) -> URL {
         basePath.appendingPathComponent(nid.metaPath)
     }
-    
+
     func dataPath(for nid: NID) -> URL {
         basePath.appendingPathComponent(nid.dataPath)
     }
-    
+
     subscript(id: NID) -> Node? {
         guard let metaContents = try? Data(contentsOf: metaPath(for: id)) else {
             warn("couldn't access file contents for nid: \(id)")
@@ -43,7 +43,7 @@ struct Root {
         let mDataUrl = FileManager().fileExists(atPath: dataUrl.path) ? dataUrl : nil
         return Node(root: self, meta: meta, dataUrl: mDataUrl)
     }
-    
+
     var origin: Node {
         guard let origin = self[NID.origin] else {
             error("origin node doesn't exist")
@@ -51,7 +51,7 @@ struct Root {
         }
         return origin
     }
-    
+
     var tags: Tags? {
         guard let tags = self[NID.tags], tags.meta.incoming["tags"] == 0 else {
             warn("no tags node found")
@@ -103,7 +103,7 @@ struct NodeMeta {
     let outgoing: [String:NID]
 }
 
-struct ConnectDTO: Decodable {
+struct ConnectDTO: Decodable, Encodable {
     let transition: String
     let id: NID
     enum CodingKeys: String, CodingKey {
@@ -112,7 +112,7 @@ struct ConnectDTO: Decodable {
     }
 }
 
-struct NodeDTO: Decodable {
+struct NodeDTO: Decodable, Encodable {
     let id: NID
     let incoming: [ConnectDTO]
     let outgoing: [ConnectDTO]
@@ -126,7 +126,7 @@ private extension DecodingError {
     }
 }
 
-extension NodeMeta: Decodable {
+extension NodeMeta: Decodable, Encodable {
     enum NodeKeys: String, CodingKey {
         case id
         case incoming
@@ -146,5 +146,11 @@ extension NodeMeta: Decodable {
             outgoingDict[c.transition] = c.id
         }
         outgoing = outgoingDict
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        let incoming = self.incoming.map { ConnectDTO(transition: $0.key, id: $0.value) }
+        let outgoing = self.outgoing.map { ConnectDTO(transition: $0.key, id: $0.value) }
+        try NodeDTO(id: id, incoming: incoming, outgoing: outgoing).encode(to: encoder)
     }
 }

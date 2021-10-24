@@ -93,7 +93,7 @@ struct NodeView: View {
             List(itemsToDisplay) { item in
                 listItemView(for: item)
             }
-        }d
+        }
     }
 
     var body: some View {
