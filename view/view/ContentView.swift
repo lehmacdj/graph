@@ -23,7 +23,7 @@ struct ContentView: View {
 struct ImageView: View {
     let uiImage: UIImage
     @State var navigationVisible: Bool = false
-    
+
     var body: some View {
         ZoomableScrollView {
             Image(uiImage: uiImage)
@@ -38,7 +38,7 @@ struct ImageView: View {
 struct NodePreviewView: View {
     let label: String
     let node: Node
-    
+
     var body: some View {
         if let data = node.data,
            let uiImage = UIImage(data: data) {
@@ -56,14 +56,14 @@ struct NodePreviewView: View {
 }
 
 struct NodeView: View {
-    let node: Node
-    
-    @State var showingTags: Bool = false
-    
+    @State var node: Node
+
     init(of node: Node) {
-        self.node = node
+        _node = State(initialValue: node)
     }
-    
+
+    @State var showingTags: Bool = false
+
     var itemsToDisplay: [ListItem] {
         var toDisplay = [ListItem]()
         if let data = node.data {
@@ -72,7 +72,7 @@ struct NodeView: View {
         toDisplay.append(contentsOf: node.outgoing.sorted().map({.transition($0)}))
         return toDisplay
     }
-    
+
     @ViewBuilder
     var content: some View {
         if node.outgoing.isEmpty,
@@ -93,9 +93,9 @@ struct NodeView: View {
             List(itemsToDisplay) { item in
                 listItemView(for: item)
             }
-        }
+        }d
     }
-    
+
     var body: some View {
         content
             .navigationTitle(Text("\(node.meta.id)"))
@@ -109,18 +109,23 @@ struct NodeView: View {
             .sheet(isPresented: $showingTags) {
                 if let tags = node.tags,
                    let tagOptions = node.root.tags?.tagOptions {
-                    let _ = debug("\(tags) \(tagOptions)")
-                    TagEditor(tags: .constant(tags), tagOptions: tagOptions)
+                    TagEditor(
+                        initial: tags,
+                        options: tagOptions,
+                        commit: { newTags in
+                            showingTags = false
+                        },
+                        cancel: { showingTags = false })
                 } else {
                     Text("Error couldn't find tags to present")
                 }
             }
     }
-    
+
     enum ListItem: Identifiable {
         case nodeDataPreview(_ data: Data)
         case transition(_ label: String)
-        
+
         var id: String {
             switch self {
             case .nodeDataPreview(_):
@@ -130,7 +135,7 @@ struct NodeView: View {
             }
         }
     }
-    
+
     @ViewBuilder
     func listItemView(for item: ListItem) -> some View {
         switch item {
@@ -151,7 +156,7 @@ struct NodeView: View {
             } else {
                 Text(
                     "Error, couldn't resolve node \(node.meta.outgoing[l].map(\.description) ?? "???")"
-                    + " while trying to resolve transition \(l)"
+                    + " while trying to resolve trddansition \(l)"
                 )
             }
         }
@@ -159,14 +164,38 @@ struct NodeView: View {
 }
 
 struct TagEditor: View {
-    @Binding var tags: Set<String>
-    let tagOptions: [String]
-    
+    init(initial: Set<String>, options: [String], commit: @escaping (Set<String>) -> (), cancel: @escaping () -> ()) {
+        self.actual = initial
+        self.options = options
+        self.commitAction = commit
+        self.cancelAction = cancel
+    }
+
+    @State var actual: Set<String>
+    let options: [String]
+    let commitAction: (Set<String>) -> ()
+    let cancelAction: () -> ()
+
+    @State var searchString: String = ""
+
     var body: some View {
-        List(tagOptions, selection: $tags) { tag in
-            Text(tag)
+        VStack {
+            List(options, selection: $actual) { tag in
+                Text(tag)
+            }
+            .environment(\.editMode, .constant(.active))
+            .searchable(text: $searchString, placement: .automatic, prompt: "Tag search ...")
+            HStack {
+                Button(action: cancelAction) {
+                    Text("Cancel")
+                }
+                Button(action: { commitAction(actual)}) {
+                    Text("Commit")
+                }
+            }
+            .buttonStyle(.bordered)
+            .padding()
         }
-        .environment(\.editMode, .constant(.active))
     }
 }
 
