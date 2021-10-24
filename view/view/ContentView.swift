@@ -113,6 +113,8 @@ struct NodeView: View {
                         initial: tags,
                         options: tagOptions,
                         commit: { newTags in
+                            warn("committing is disabled because its broken")
+                            // self.node = node.settingTagsTo(newTags)
                             showingTags = false
                         },
                         cancel: { showingTags = false })

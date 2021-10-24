@@ -31,17 +31,38 @@ struct Root {
     }
 
     subscript(id: NID) -> Node? {
-        guard let metaContents = try? Data(contentsOf: metaPath(for: id)) else {
-            warn("couldn't access file contents for nid: \(id)")
-            return nil
+        get {
+            guard let metaContents = try? Data(contentsOf: metaPath(for: id)) else {
+                warn("couldn't access file contents for nid: \(id)")
+                return nil
+            }
+            guard let meta = try? JSONDecoder().decode(NodeMeta.self, from: metaContents) else {
+                warn("couldn't decode json data")
+                return nil
+            }
+            let dataUrl = dataPath(for: id)
+            let mDataUrl = FileManager().fileExists(atPath: dataUrl.path) ? dataUrl : nil
+            return Node(root: self, meta: meta, dataUrl: mDataUrl)
         }
-        guard let meta = try? JSONDecoder().decode(NodeMeta.self, from: metaContents) else {
-            warn("couldn't decode json data")
-            return nil
+        nonmutating set {
+            // 
+            guard let node = newValue else {
+                error("must specify node when writing; but was nil for nid: \(id)")
+                return
+            }
+            guard node.meta.id == id else {
+                error("mismatch in id of node being written \(node.meta.id) and place being written to \(id)")
+                return
+            }
+            guard let metaContents = try? JSONEncoder().encode(node.meta) else {
+                error("failed to encode node: \(id)")
+                return
+            }
+            guard let _ = try? metaContents.write(to: metaPath(for: node.meta.id)) else {
+                error("failed to write node metadata for \(id)")
+                return
+            }
         }
-        let dataUrl = dataPath(for: id)
-        let mDataUrl = FileManager().fileExists(atPath: dataUrl.path) ? dataUrl : nil
-        return Node(root: self, meta: meta, dataUrl: mDataUrl)
     }
 
     var origin: Node {
@@ -73,10 +94,13 @@ struct Node {
     let root: Root
     let meta: NodeMeta
     let dataUrl: URL?
+
     var data: Data? { dataUrl.flatMap({ try? Data(contentsOf: $0)}) }
+
     var outgoing: [String] {
         return Array(meta.outgoing.keys)
     }
+
     subscript(transition: String) -> Node? {
         guard let id = meta.outgoing[transition] else {
             warn("didn't find node for transition \(transition) from node \(meta.id)")
@@ -90,6 +114,48 @@ struct Node {
                 .filter { $0.value == NID.tags }
                 .keys)
     }
+
+    func withNewTags(_ newTags: Set<String>) -> Node {
+        var meta = self.meta
+        var newIncoming = meta.incoming.filter {
+            $1 != NID.tags
+        }
+        for tag in newTags {
+            newIncoming[tag] = NID.tags
+        }
+        meta.incoming = newIncoming
+        return Node(root: root, meta: meta, dataUrl: dataUrl)
+    }
+
+    // Behavior of this function is broken because swift ui caches stuff too
+    // long (rightfully, but I was hoping I could be cheeky and get away with it).
+    // Fix below is probably necessary
+    //
+    // Extremely dirty function to perform side effects on FS representation
+    // then return new node with modified stuff modified as change occurred
+    // TODO: instead of this dirty hack, rewrite Node using Combine to
+    // watch their file and update automatically when changed. Will need
+    // to also watch for this change in the views somehow. Perhaps, this logic
+    // should be in a Node wrapper type instead of node itself, although TBH
+    // Node kind of is that for NodeMeta already.
+    func settingTagsTo(_ newTags: Set<String>) -> Node {
+        guard let tags = root.tags else {
+            warn("mutating is impossible because there is no tags node")
+            return self
+        }
+        var tagMeta = tags.tagNode.meta
+        var tagNewOutgoing = tagMeta.outgoing.filter {
+            $1 != self.meta.id
+        }
+        for tag in newTags {
+            tagNewOutgoing[tag] = self.meta.id
+        }
+        tagMeta.outgoing = tagNewOutgoing
+        root[NID.tags] = Node(root: root, meta: tagMeta, dataUrl: dataUrl)
+        let newNode = self.withNewTags(newTags)
+        root[self.meta.id] = newNode
+        return newNode
+    }
 }
 
 extension NID {
@@ -98,9 +164,13 @@ extension NID {
 }
 
 struct NodeMeta {
-    let id: NID
-    let incoming: [String:NID]
-    let outgoing: [String:NID]
+    var id: NID
+    // TODO: this data structure is broken for cases when there
+    // is more than one link from a given node
+    // Maybe just represent as pairs with lookup function? Or could
+    // do a [String:[NID]] possibly
+    var incoming: [String:NID]
+    var outgoing: [String:NID]
 }
 
 struct ConnectDTO: Decodable, Encodable {
