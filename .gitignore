@@ -1,8 +1,11 @@
+# haskell files
 .stack-work/
 graph.cabal
 *~
 **/tmp/
 **/.tmp/
+**/dist/
+**/dist-newstyle/
 
 # files for xcode
 **/*.xcodeproj/xcuserdata/
