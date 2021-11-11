@@ -69,7 +69,12 @@ struct NodeView: View {
         if let data = node.data {
             toDisplay.append(.nodeDataPreview(data))
         }
-        toDisplay.append(contentsOf: node.outgoing.sorted().map({.transition($0)}))
+        toDisplay.append(
+            contentsOf: node.meta.outgoing
+                .sorted(on: \.key)
+                .flatMap { kv in
+                    kv.value.map { .transitionTo(kv.key, $0) }
+                })
         return toDisplay
     }
 
@@ -126,14 +131,14 @@ struct NodeView: View {
 
     enum ListItem: Identifiable {
         case nodeDataPreview(_ data: Data)
-        case transition(_ label: String)
+        case transitionTo(_ label: String, _ nid: NID)
 
         var id: String {
             switch self {
             case .nodeDataPreview(_):
                 return "nodeDataPreview"
-            case .transition(let l):
-                return "transition=\(l)"
+            case .transitionTo(let l, let nid):
+                return "\(l)->\(nid)"
             }
         }
     }
@@ -150,16 +155,13 @@ struct NodeView: View {
                 // TODO: support more data kinds
                 Text("Unknown data kind")
             }
-        case .transition(let l):
-            if let referencedNode = node[l] {
-                NavigationLink(destination: NodeView(of: referencedNode)) {
-                    NodePreviewView(label: l, node: referencedNode)
+        case .transitionTo(let l, let nid):
+            if let node = self.node.root[nid] {
+                NavigationLink(destination: NodeView(of: node)) {
+                    NodePreviewView(label: l, node: node)
                 }
             } else {
-                Text(
-                    "Error, couldn't resolve node \(node.meta.outgoing[l].map(\.description) ?? "???")"
-                    + " while trying to resolve trddansition \(l)"
-                )
+                Text("Transition \(l) to nonexistent node \(nid)")
             }
         }
     }

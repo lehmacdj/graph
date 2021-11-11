@@ -74,7 +74,9 @@ struct Root {
     }
 
     var tags: Tags? {
-        guard let tags = self[NID.tags], tags.meta.incoming["tags"] == 0 else {
+        guard let tags = self[NID.tags],
+              let tagIncoming = tags.meta.incoming["tags"],
+              tagIncoming.contains(NID.origin) else {
             warn("no tags node found")
             return nil
         }
@@ -101,27 +103,27 @@ struct Node {
         return Array(meta.outgoing.keys)
     }
 
-    subscript(transition: String) -> Node? {
-        guard let id = meta.outgoing[transition] else {
-            warn("didn't find node for transition \(transition) from node \(meta.id)")
-            return nil
+    subscript(transition: String) -> [Node] {
+        guard let ids = meta.outgoing[transition] else {
+            warn("didn't find transition \(transition) from node \(meta.id)")
+            return []
         }
-        return root[id]
+        return ids.compactMap { root[$0] }
     }
     var tags: Set<String> {
         return Set(
             meta.incoming
-                .filter { $0.value == NID.tags }
+                .filter { $0.value.contains(NID.tags) }
                 .keys)
     }
 
     func withNewTags(_ newTags: Set<String>) -> Node {
         var meta = self.meta
         var newIncoming = meta.incoming.filter {
-            $1 != NID.tags
+            !$1.contains(NID.tags)
         }
         for tag in newTags {
-            newIncoming[tag] = NID.tags
+            newIncoming.appendSeq([NID.tags], toKey: tag)
         }
         meta.incoming = newIncoming
         return Node(root: root, meta: meta, dataUrl: dataUrl)
@@ -145,10 +147,10 @@ struct Node {
         }
         var tagMeta = tags.tagNode.meta
         var tagNewOutgoing = tagMeta.outgoing.filter {
-            $1 != self.meta.id
+            !$1.contains(self.meta.id)
         }
         for tag in newTags {
-            tagNewOutgoing[tag] = self.meta.id
+            tagNewOutgoing.appendSeq([self.meta.id], toKey: tag)
         }
         tagMeta.outgoing = tagNewOutgoing
         root[NID.tags] = Node(root: root, meta: tagMeta, dataUrl: dataUrl)
@@ -169,8 +171,8 @@ struct NodeMeta {
     // is more than one link from a given node
     // Maybe just represent as pairs with lookup function? Or could
     // do a [String:[NID]] possibly
-    var incoming: [String:NID]
-    var outgoing: [String:NID]
+    var incoming: [String:[NID]]
+    var outgoing: [String:[NID]]
 }
 
 struct ConnectDTO: Decodable, Encodable {
@@ -206,21 +208,21 @@ extension NodeMeta: Decodable, Encodable {
     public init(from decoder: Decoder) throws {
         let dto = try NodeDTO(from: decoder)
         id = dto.id
-        var incomingDict = [String:NID](minimumCapacity: dto.incoming.count)
+        var incomingDict = [String:[NID]](minimumCapacity: dto.incoming.count)
         for c in dto.incoming {
-            incomingDict[c.transition] = c.id
+            incomingDict.appendSeq([c.id], toKey: c.transition)
         }
         incoming = incomingDict
-        var outgoingDict = [String:NID](minimumCapacity: dto.outgoing.count)
+        var outgoingDict = [String:[NID]](minimumCapacity: dto.outgoing.count)
         for c in dto.outgoing {
-            outgoingDict[c.transition] = c.id
+            outgoingDict.appendSeq([c.id], toKey: c.transition)
         }
         outgoing = outgoingDict
     }
 
     public func encode(to encoder: Encoder) throws {
-        let incoming = self.incoming.map { ConnectDTO(transition: $0.key, id: $0.value) }
-        let outgoing = self.outgoing.map { ConnectDTO(transition: $0.key, id: $0.value) }
+        let incoming = self.incoming.flatMap { ts in ts.value.map { ConnectDTO(transition: ts.key, id: $0) } }
+        let outgoing = self.outgoing.flatMap { ts in ts.value.map { ConnectDTO(transition: ts.key, id: $0) } }
         try NodeDTO(id: id, incoming: incoming, outgoing: outgoing).encode(to: encoder)
     }
 }
