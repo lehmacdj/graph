@@ -131,6 +131,16 @@ promptYesNo prompt = do
         | otherwise = promptYesNo "please enter (y/n): "
   result
 
+-- | Check to make sure that the current state of the graph is not dualized
+guardDangerousDualizedOperation ::
+  Members [Readline, Error UserError, Dualizeable] r => Sem r ()
+guardDangerousDualizedOperation = do
+  isDual' <- isDual <$> get @IsDual
+  when isDual' do
+    outputStrLn "the graph is currently dualized"
+    outputStrLn "the operation you are attempting may be dangerous in that state"
+    promptYesNo "proceed (y/n): " >>= bool (throw OperationCancelled) (pure ())
+
 -- | Operations with absolute paths that look like @0:asdf + jkl@ can be
 -- confusing because they might confuse the user into thinking that
 guardDangerousAbsoluteOperation ::
@@ -236,8 +246,12 @@ interpretCommand = \case
     forM_ (dataOf n) $ subsumeUserError @Missing . displayImage . fromStrict
   -- it probably would make sense to factor these commands out into separate
   -- layers of commands that can be handled at different levels
-  Import fp -> currentLocation >>= subsumeUserError . importDirectory fp
+  Import fp -> do
+    guardDangerousDualizedOperation
+    subsumeUserError $ importDirectory fp nilNID
+    changeLocation nilNID
   ImportUrl uri -> do
+    guardDangerousDualizedOperation
     nid <- subsumeUserError (importUrl nilNID uri)
     changeLocation nid
   Debug -> do
