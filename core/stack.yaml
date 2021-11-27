@@ -43,7 +43,7 @@ extra-deps:
 - polysemy-plugin-0.3.0.0
 - polysemy-1.5.0.0
 - polysemy-readline-0.2.0.0
-- polysemy-zoo-0.7.0.1@sha256:60c2921df95f61d43222a75adde4f330e9510320b416132838a354cd81b4bcc5,3846
+- polysemy-zoo-0.7.0.2
 - compact-0.2.0.0@sha256:9c5785bdc178ea6cf8f514ad35a78c64220e3cdb22216534e4cf496765551c7e,2345
 - haskeline-0.8.2
 - terminfo-0.4.1.5 # needed to avoid bug judah/haskeline#162

@@ -2,9 +2,9 @@
 
 module Executable.GraphEditor where
 
-import AppM
 import Completion
 import Control.Lens hiding (index)
+import Control.Monad.Fix
 import Effect.Console
 import Effect.Editor
 import Effect.FileTypeOracle
@@ -16,6 +16,7 @@ import Effect.Time
 import Effect.Web
 import Graph.Serialize2 (doesNodeExist, initializeGraph, nextNodeId)
 import History
+import Interpreters
 import Lang.Command hiding (printTransitions)
 import Lang.Command.Parse
 import MyPrelude
@@ -29,13 +30,13 @@ import System.Environment.XDG.BaseDir (getUserDataDir)
 ioExceptionHandler :: IOError -> IO (Maybe a)
 ioExceptionHandler _ = pure Nothing
 
-defReplSettings :: IO (Settings AppM)
-defReplSettings = do
+defReplSettings :: Env -> IO (Settings IO)
+defReplSettings env = do
   dataDir <- getUserDataDir "ge"
   createDirectoryIfMissing True dataDir
   pure $
     H.Settings
-      { H.complete = completionFunction,
+      { H.complete = completionFunction env,
         H.historyFile = Just $ dataDir </> "history.txt",
         H.autoAddHistory = True
       }
@@ -98,9 +99,6 @@ main = withOptions $ \options -> do
   let graphDir = view graphLocation options
   graphDirInitialization graphDir options
   nextNid <- nextNodeId graphDir
-  env <- initEnv graphDir nextNid
-  replSettings <- defReplSettings
-  runAppM env $
-    runInputT replSettings $
-      interpretAsApp $
-        maybe repl interpretCommand (view executeExpression options)
+  env <- mfix (initEnv graphDir nextNid <=< defReplSettings)
+  runMainEffectsIO env $
+    maybe repl interpretCommand (view executeExpression options)

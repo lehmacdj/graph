@@ -1,14 +1,12 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE TemplateHaskell #-}
 
--- | Instantiates things with a lot of effects, evaluating them in the AppBase
--- monad.
-module AppM where
+-- | Interpreters for running various large stacks of effects that it might
+-- make sense to use while using this library.
+module Interpreters where
 
 import Control.Arrow ((>>>))
 import Control.Lens
-import Control.Monad.Catch
-import Control.Monad.Reader.Class
 import Effect.Console
 import Effect.Editor
 import Effect.FileTypeOracle
@@ -26,11 +24,11 @@ import MyPrelude hiding (Reader, ask)
 import Polysemy.Embed
 import Polysemy.Error hiding (throw)
 import Polysemy.Input
-import Polysemy.MTL
 import Polysemy.Output
 import Polysemy.Readline
 import Polysemy.State
 import System.Console.Haskeline (InputT)
+import qualified System.Console.Haskeline as H
 import UserError
 
 data Env = Env
@@ -38,26 +36,9 @@ data Env = Env
     -- | next id that is unique within the current graph
     _nextId :: IORef NID,
     _history :: IORef History,
-    _isDualized :: IORef IsDual
+    _isDualized :: IORef IsDual,
+    _replSettings :: H.Settings IO
   }
-
-newtype AppM a = AppM {unAppM :: ReaderT Env IO a}
-  deriving
-    ( Functor,
-      Monad,
-      MonadIO,
-      Applicative,
-      MonadReader Env,
-      MonadThrow,
-      MonadCatch,
-      MonadMask
-    )
-
-runAppM :: Env -> AppM a -> IO a
-runAppM env stack =
-  stack
-    & unAppM
-    & flip runReaderT env
 
 makeLenses ''Env
 
@@ -65,13 +46,15 @@ initEnv ::
   FilePath ->
   -- | the next node id to use for generating fresh nodes
   NID ->
+  H.Settings IO ->
   IO Env
-initEnv graphDir nid =
+initEnv graphDir nid _replSettings =
   Env
     <$> newIORef graphDir
     <*> newIORef nid
     <*> newIORef (History [] nilNID [])
     <*> newIORef (IsDual False)
+    <*> pure _replSettings
 
 runLocableHistoryState ::
   Member (State History) effs =>
@@ -111,7 +94,6 @@ type HasMainEffects effs =
         State History,
         Editor,
         GetTime,
-        Embed AppM,
         Embed IO,
         Readline,
         FileTypeOracle,
@@ -125,16 +107,17 @@ type HasMainEffects effs =
 -- of real world things
 -- it takes a function that handles the errors, because that is necessary for
 -- this to have an arbitrary return type
-runMainEffects ::
+runMainEffectsIOWithErrorHandling ::
   forall a.
   ( forall effs.
     Members [Input Env, Embed IO] effs =>
     Sem (Warn UserError : Error UserError : effs) a ->
     Sem effs a
   ) ->
+  Env ->
   (forall effs. HasMainEffects effs => Sem effs a) ->
-  InputT AppM a
-runMainEffects errorHandlingBehavior v = do
+  IO a
+runMainEffectsIOWithErrorHandling errorHandlingBehavior env v = do
   let handler =
         applyInput2 (runWriteGraphDualizeableIO @String)
           >>> applyInput2 (runReadGraphDualizeableIO @String)
@@ -153,20 +136,20 @@ runMainEffects errorHandlingBehavior v = do
           >>> errorHandlingBehavior
           >>> runReadlineFinal
           >>> runFileTypeOracle
-          >>> withEffects @[Input Env, Embed IO, Embed AppM, Embed (InputT AppM), Final (InputT AppM)]
-          >>> runInputMonadReader @AppM
+          >>> withEffects @[Input Env, Embed IO, Embed (InputT IO), Final (InputT IO)]
+          >>> runInputConst env
           >>> runEmbedded liftIO
-          >>> withEffects @[Embed AppM, Embed (InputT AppM), Final (InputT AppM)]
-          >>> runEmbedded lift
-          >>> withEffects @'[Embed (InputT AppM), Final (InputT AppM)]
-          >>> embedToFinal @(InputT AppM)
+          >>> withEffects @'[Embed (InputT IO), Final (InputT IO)]
+          >>> embedToFinal @(InputT IO)
           >>> runFinal
+          >>> H.runInputT (_replSettings env)
   handler v
 
 -- | The existential in the type here is necessary to allow an arbitrary order
 -- to be picked here + to allow other effects (such as Error NoInputProvided)
 -- to automatically be raised into the the list of effects but not others
-interpretAsApp ::
+runMainEffectsIO ::
+  Env ->
   (forall effs. HasMainEffects effs => Sem effs ()) ->
-  InputT AppM ()
-interpretAsApp = runMainEffects printingErrorsAndWarnings
+  IO ()
+runMainEffectsIO = runMainEffectsIOWithErrorHandling printingErrorsAndWarnings
