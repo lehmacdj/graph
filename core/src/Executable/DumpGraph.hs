@@ -6,16 +6,16 @@ import Graph.Serialize2
 import Graph.Types
 import MyPrelude
 
-deserializeNodeWithErrorReporting :: FilePath -> NID -> IO (Node String)
-deserializeNodeWithErrorReporting base nid = do
-  result <- deserializeNode base nid
+printNodeDebugRepresentation :: FilePath -> NID -> IO ()
+printNodeDebugRepresentation base nid = do
+  result :: Either String (Node String) <- deserializeNode base nid
   case result of
-    Right n -> pure n
+    Right n -> print n
     Left e ->
-      error $
-        "couldn't deserialize node " ++ show nid
-          ++ "; failed with error "
-          ++ e
+      say $
+        "couldn't deserialize node " <> tshow nid
+          <> "; failed with error "
+          <> pack e
 
 main :: IO ()
 main = do
@@ -27,4 +27,4 @@ main = do
   -- test results we sort the node ids so that we always dump the graph
   -- in a consistent order
   allNodes <- sort <$> getAllNodeIds graphDir
-  traverse_ (print <=< deserializeNodeWithErrorReporting graphDir) allNodes
+  traverse_ (printNodeDebugRepresentation graphDir) allNodes
