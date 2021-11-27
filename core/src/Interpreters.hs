@@ -153,3 +153,22 @@ runMainEffectsIO ::
   (forall effs. HasMainEffects effs => Sem effs ()) ->
   IO ()
 runMainEffectsIO = runMainEffectsIOWithErrorHandling printingErrorsAndWarnings
+
+-- | Less capable, but less demanding interpreter.
+runReadWriteGraphIO ::
+  FilePath ->
+  Sem
+    [ WriteGraph String,
+      ReadGraph String,
+      Warn UserError,
+      Error UserError,
+      Embed IO
+    ]
+    () ->
+  IO ()
+runReadWriteGraphIO dir =
+  runWriteGraphIO dir
+    >>> runReadGraphIO dir
+    >>> printWarnings @UserError
+    >>> printErrors
+    >>> runM

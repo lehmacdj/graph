@@ -1,12 +1,11 @@
 module Executable.NodeRename (main) where
 
-import Control.Arrow ((>>>))
 import Effect.Graph
 import Effect.Graph.Advanced
-import Effect.Warn
 import Graph.Connect
 import Graph.Node
 import Graph.Types
+import Interpreters (runReadWriteGraphIO)
 import MyPrelude
 import UserError
 
@@ -35,24 +34,6 @@ renumberNodes ::
 renumberNodes = do
   nodes <- nodeManifest @String
   traverse_ applyRewrite $ nodeRewrites nodes
-
-runReadWriteGraphIO ::
-  FilePath ->
-  Sem
-    [ WriteGraph String,
-      ReadGraph String,
-      Warn UserError,
-      Error UserError,
-      Embed IO
-    ]
-    () ->
-  IO ()
-runReadWriteGraphIO dir =
-  runWriteGraphIO dir
-    >>> runReadGraphIO dir
-    >>> printWarnings @UserError
-    >>> printErrors
-    >>> runM
 
 main :: IO ()
 main = do
