@@ -25,6 +25,7 @@ import Polysemy.Embed
 import Polysemy.Error hiding (throw)
 import Polysemy.Input
 import Polysemy.Output
+import Polysemy.Reader
 import Polysemy.Readline
 import Polysemy.State
 import System.Console.Haskeline (InputT)
@@ -103,8 +104,7 @@ type HasMainEffects effs =
     HasGraph String effs
   )
 
--- | general function for interpreting the entire stack of effects in terms
--- of real world things
+-- | general function for interpreting the entire stack of effects in terms of real world things
 -- it takes a function that handles the errors, because that is necessary for
 -- this to have an arbitrary return type
 runMainEffectsIOWithErrorHandling ::
@@ -172,3 +172,19 @@ runReadWriteGraphIO dir =
     >>> printWarnings @UserError
     >>> printErrors
     >>> runM
+
+runLocatedReadWriteGraphIO ::
+  FilePath ->
+  NID ->
+  Sem
+    [ GetLocation,
+      WriteGraph String,
+      ReadGraph String,
+      Warn UserError,
+      Error UserError,
+      Embed IO
+    ]
+    () ->
+  IO ()
+runLocatedReadWriteGraphIO base nid =
+  runReader nid >>> runReadWriteGraphIO base

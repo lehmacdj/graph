@@ -3,16 +3,19 @@ module MyPrelude
     module ClassyPrelude,
 
     -- * All functions in this module
+
     -- Although probably I should change this to an explicit export list
     -- eventually.
     module MyPrelude,
 
     -- * We use Polysemy extensively
+
     -- Individual effects are still imported separately because it is kind of
     -- useful for tracking which effects are used in which modules.
     module Polysemy,
 
     -- * Full module re-exports
+
     -- Most of these should probably be converted to partial imports of just a
     -- few things
     -- TODO: convert these to individual imports using @module X@ or move them
@@ -67,6 +70,11 @@ foldlM1 ::
   NonNull mono ->
   m (Element mono)
 foldlM1 f m = uncurry (foldlM f) (splitFirst m)
+
+-- | Fair 2-way interleaving
+interleave :: [a] -> [a] -> [a]
+interleave [] ys = ys
+interleave (x : xs) ys = x : interleave ys xs
 
 -- | Taken from extras-1.6.17
 concatMapM :: Monad m => (a -> m [b]) -> [a] -> m [b]

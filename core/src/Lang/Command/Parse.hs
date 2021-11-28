@@ -87,6 +87,9 @@ pBack = (command "back" $> Back) <*> number
 pMaterialize :: Parser Command
 pMaterialize = (command "materialize" $> Materialize) <*> some anySingle
 
+pExec :: Parser Command
+pExec = (commandFrom ["exec", "x"] $> Exec) <*> apath
+
 pCommand :: Parser Command
 pCommand =
   try pChangeNode
@@ -114,6 +117,7 @@ pCommand =
     <|> try pEdit
     <|> try pBack
     <|> try pMaterialize
+    <|> try pExec
 
 parseCommand :: String -> Either String Command
 parseCommand = left errorBundlePretty . runParser pCommand "<interactive>"

@@ -31,8 +31,10 @@ import Effect.NodeLocated
 import Effect.Time
 import Effect.Warn
 import Effect.Web
+import qualified Extensibility
 import GHC.Generics
 import Graph (Connect (..), Edge (..), dataOf, nilNID, outgoingConnectsOf)
+import qualified Graph.Serialize2 as S2
 import History
 import Lang.APath
 import MyPrelude
@@ -102,6 +104,10 @@ data Command
     -- to minimize disk footprint; takes a filepath to write the tree to as an
     -- argument.
     Materialize FilePath
+  | -- | Execute some arbitrary Haskell code that has access to the graph at
+    -- the current node. The Haskell code is given by the data at the node given
+    -- as an argument.
+    Exec (APath String)
   deriving (Eq, Show, Ord, Generic)
 
 singleErr :: String -> Set NID -> UserError
@@ -295,3 +301,13 @@ interpretCommand = \case
   Materialize fp -> do
     nid <- subsumeUserError @Missing currentLocation
     exportToDirectory nid fp
+  Exec a -> do
+    traceM "starting exec"
+    (nid, p) <- relativizeAPath a
+    traceShowM (nid, p)
+    let err = singleErr "the argument to exec"
+    target <- the' err =<< subsumeUserError (resolvePathSuccesses nid p)
+    traceShowM target
+    base <- getGraphFilePath
+    traceShowM base
+    Extensibility.runScript (S2.nodeDataFile base target)
