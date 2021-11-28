@@ -5,6 +5,8 @@ module Effect.Editor where
 import Graph (NID)
 import Graph.Serialize2
 import MyPrelude
+import System.Directory
+import System.Environment
 import System.Process.Typed
 
 data Editor m r where
@@ -21,4 +23,7 @@ interpretEditorAsIOVimFSGraph ::
   -- | interprets effect
   Sem (Editor : effs) ~> Sem effs
 interpretEditorAsIOVimFSGraph location = interpret $ \case
-  InvokeEditor nids -> runProcess_ $ proc "vim" (nodeDataFile location <$> nids)
+  InvokeEditor nids -> do
+    editor <- embed $ getEnv "EDITOR"
+    editorToUse <- fromMaybe "vim" <$> embed (findExecutable editor)
+    runProcess_ $ proc editorToUse (nodeDataFile location <$> nids)
