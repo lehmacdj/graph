@@ -55,7 +55,7 @@ baseResolver = "lts-18.14"
 
 -- | Commit to fetch from github when running executable
 commit :: Text
-commit = "74271502e6da21749993cac5f57724b37ddc86eb"
+commit = "d886924e9f1c0f7bed74994c1cb5da08de7359d5"
 
 -- | Contents of the snapshot that is used when calling an executable script.
 -- TODO: clean this up so that it is more testable that this is in good shape
