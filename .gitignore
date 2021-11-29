@@ -1,6 +1,5 @@
 # haskell files
 .stack-work/
-graph.cabal
 *~
 **/tmp/
 **/.tmp/
