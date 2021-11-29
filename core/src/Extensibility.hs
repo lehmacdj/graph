@@ -70,11 +70,15 @@ snapshotContents =
     ++ "    - core/\n"
     ++ "- polysemy-plugin-0.3.0.0\n"
     ++ "- polysemy-1.5.0.0\n"
+    ++ "- polysemy-readline-0.2.0.0@sha256:30633eaee828f967b9f653f5406e55671684ae1ec6c513e3f2de184a301dadd1,2106\n"
+    ++ "- polysemy-zoo-0.7.0.2@sha256:64857606e456c4df033a79e41cef49059b23c98046b76aeadf990b08379dd6e9,3990\n"
+    ++ "- witherable-class-0.0.1@sha256:6ec78f157f715098eecc08dff177064abfc783ee2151a95f5aecff5c4c7d2d95,847\n"
+    ++ "- compact-0.2.0.0@sha256:75ef98cb51201b4a0d6de95cbbb62be6237c092a3d594737346c70c5d56c2380,2413\n"
 
 -- | Dependencies used when running a script. These all need to be available in
 -- the snapshot defined by 'snapshotContents'
 dependencies :: [Text]
-dependencies = ["graph", "polysemy", "lens"]
+dependencies = ["graph", "polysemy", "lens", "polysemy-plugin"]
 
 dependenciesArgs :: [Text]
 dependenciesArgs =

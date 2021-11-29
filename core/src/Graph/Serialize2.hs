@@ -40,7 +40,7 @@ import Graph.Types
 import MyPrelude
 import System.Directory
 import System.FilePath (dropExtension)
-import UserError
+import UserError hiding (catch, throw)
 
 -- | all of the nodes accessible under a given path
 getAllNodeIds :: MonadIO m => FilePath -> m [NID]
@@ -75,7 +75,12 @@ serializeNodeEx ::
 serializeNodeEx n base = do
   createDirectoryIfMissing True base
   BL.writeFile (linksFile base (nidOf n)) (Aeson.encode n)
-  for_ (dataOf n) $ B.writeFile (nodeDataFile base (nidOf n))
+  case dataOf n of
+    Just d -> B.writeFile (nodeDataFile base (nidOf n)) d
+    Nothing ->
+      removeFile (nodeDataFile base (nidOf n)) `catch` \case
+        e | isDoesNotExistError e -> pure ()
+        e -> throwIO e
 
 deserializeNodeF ::
   forall t effs.
