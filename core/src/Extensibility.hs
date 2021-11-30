@@ -8,6 +8,7 @@
 -- TODO: tutorial on how to use this
 module Extensibility where
 
+import qualified Data.ByteString.Lazy as BL
 import Effect.Graph
 import Effect.NodeLocated
 import Effect.Warn
@@ -93,24 +94,23 @@ runScript program = do
   tempDir <- embed do
     tmpParentDir <- getCanonicalTemporaryDirectory
     createTempDirectory tmpParentDir "ge-external-program-call"
-  traceM $ "using tempDir: " ++ tempDir
   let tmpResolver = tempDir </> "snapshot.yaml"
   embed $ writeFile tmpResolver (encodeUtf8 snapshotContents)
-  traceM "wrote resolver"
   nid <- currentLocation
-  traceShowM nid
   base <- getGraphFilePath
-  traceM base
-  traceShowM dependencies
-  traceShowM dependenciesArgs
-  traceShowM tmpResolver
-  traceShowM program
-  traceShowM base
-  traceShowM $ show nid
   let args =
-        fmap unpack ["script", "--resolver", tmpResolver]
+        fmap unpack ["script", "--no-terminal", "--resolver", tmpResolver]
           ++ fmap unpack dependenciesArgs
           ++ [program, "--"]
           ++ [base, show nid]
-  traceM $ "running stack with args:" ++ show args
-  runProcess_ $ proc "stack" args
+  -- TODO: switch to using 'runProcess_' which uses inherit once we no-longer
+  -- need two different versions of terminfo. I was getting:
+  -- > ge: Received ExitFailure (-11) when running
+  -- on the call to 'runProcess_' before. This is a segfault, and based on a
+  -- little bit of research I suspect that it is a consequence of the two
+  -- versions of terminfo being linked.
+  -- Using 'readProcessInterleaved_' seems to avoid it, but is unideal, because
+  -- then we aren't able to interleave reading and writing output if we want
+  -- to have an executable thing.
+  output <- readProcessInterleaved_ $ proc "stack" args
+  embed $ BL.putStr output
