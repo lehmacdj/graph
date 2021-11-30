@@ -3,20 +3,40 @@ module TestPrelude
     module Test.Tasty,
     module Test.Tasty.HUnit,
     withTempGraph,
+    withEmptyTempGraph,
   )
 where
 
 import Graph.Serialize2 (initializeGraph)
 import MyPrelude hiding (assert)
-import System.Directory (createDirectoryIfMissing)
+import System.Directory (copyFile)
+import System.Directory.Tree (AnchoredDirTree ((:/)))
+import qualified System.Directory.Tree as DT
 import Test.Tasty
 import Test.Tasty.HUnit
 
--- | initializes an empty graph putting it in a temporary directory that is
--- deleted after use
-withTempGraph :: (FilePath -> IO a) -> IO a
-withTempGraph action = do
-  createDirectoryIfMissing False ".tmp"
-  withTempDirectory ".tmp" "test.g" $ \tmpDir -> do
-    initializeGraph tmpDir
+-- | initializes a graph that is either empty, or based on a template graph
+-- at the specified location
+withTempGraph ::
+  -- | Template graph (or Nothing for an empty graph)
+  Maybe FilePath ->
+  (FilePath -> IO a) ->
+  IO a
+withTempGraph m_template action = do
+  withSystemTempDirectory "test.g" $ \tmpDir -> do
+    case m_template of
+      Just template -> do
+        _ :/ readTree <- DT.build template
+        whenNonNull (DT.failures readTree) \failures ->
+          sayErr $ "reading template failed with: " <> tshow failures
+        -- we need to overwrite the basename to @.@ so that we don't have an
+        -- excess directory layer in the output
+        let treeToWrite = tmpDir :/ (readTree & DT._name .~ ".")
+        _ :/ writtenTree <- DT.writeDirectoryWith (flip copyFile) treeToWrite
+        whenNonNull (DT.failures writtenTree) \failures ->
+          sayErr $ "copying template failed with: " <> tshow failures
+      Nothing -> initializeGraph tmpDir
     action tmpDir
+
+withEmptyTempGraph :: (FilePath -> IO a) -> IO a
+withEmptyTempGraph = withTempGraph Nothing

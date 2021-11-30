@@ -302,12 +302,8 @@ interpretCommand = \case
     nid <- subsumeUserError @Missing currentLocation
     exportToDirectory nid fp
   Exec a -> do
-    traceM "starting exec"
     (nid, p) <- relativizeAPath a
-    traceShowM (nid, p)
     let err = singleErr "the argument to exec"
     target <- the' err =<< subsumeUserError (resolvePathSuccesses nid p)
-    traceShowM target
     base <- getGraphFilePath
-    traceShowM base
     Extensibility.runScript (S2.nodeDataFile base target)

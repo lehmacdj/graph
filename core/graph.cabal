@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: e64af471526bd881552183c77b6527174065a70740baf8ab0b7e9acbf0571f0c
+-- hash: c446da2a43ea937bc94202d05b89e247236ad29217852889591cd026d0ffbabe
 
 name:           graph
 version:        0.1.0.0
@@ -93,11 +93,13 @@ library
       FlexibleContexts
       GADTs
       LambdaCase
+      NamedFieldPuns
       NoImplicitPrelude
       OverloadedLabels
       OverloadedStrings
       PolyKinds
       RankNTypes
+      RecordWildCards
       ScopedTypeVariables
       StandaloneDeriving
       TupleSections
@@ -109,6 +111,7 @@ library
   build-depends:
       SHA
     , aeson
+    , attoparsec
     , base >=4.7 && <5
     , base64
     , base64-bytestring
@@ -170,11 +173,13 @@ executable dump-graph
       FlexibleContexts
       GADTs
       LambdaCase
+      NamedFieldPuns
       NoImplicitPrelude
       OverloadedLabels
       OverloadedStrings
       PolyKinds
       RankNTypes
+      RecordWildCards
       ScopedTypeVariables
       StandaloneDeriving
       TupleSections
@@ -186,6 +191,7 @@ executable dump-graph
   build-depends:
       SHA
     , aeson
+    , attoparsec
     , base >=4.7 && <5
     , base64
     , base64-bytestring
@@ -248,11 +254,13 @@ executable ge
       FlexibleContexts
       GADTs
       LambdaCase
+      NamedFieldPuns
       NoImplicitPrelude
       OverloadedLabels
       OverloadedStrings
       PolyKinds
       RankNTypes
+      RecordWildCards
       ScopedTypeVariables
       StandaloneDeriving
       TupleSections
@@ -264,6 +272,7 @@ executable ge
   build-depends:
       SHA
     , aeson
+    , attoparsec
     , base >=4.7 && <5
     , base64
     , base64-bytestring
@@ -326,11 +335,13 @@ executable node-rename
       FlexibleContexts
       GADTs
       LambdaCase
+      NamedFieldPuns
       NoImplicitPrelude
       OverloadedLabels
       OverloadedStrings
       PolyKinds
       RankNTypes
+      RecordWildCards
       ScopedTypeVariables
       StandaloneDeriving
       TupleSections
@@ -342,6 +353,7 @@ executable node-rename
   build-depends:
       SHA
     , aeson
+    , attoparsec
     , base >=4.7 && <5
     , base64
     , base64-bytestring
@@ -415,11 +427,13 @@ test-suite graph-test
       FlexibleContexts
       GADTs
       LambdaCase
+      NamedFieldPuns
       NoImplicitPrelude
       OverloadedLabels
       OverloadedStrings
       PolyKinds
       RankNTypes
+      RecordWildCards
       ScopedTypeVariables
       StandaloneDeriving
       TupleSections
@@ -432,6 +446,7 @@ test-suite graph-test
       Glob
     , SHA
     , aeson
+    , attoparsec
     , base >=4.7 && <5
     , base64
     , base64-bytestring

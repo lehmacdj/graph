@@ -1,0 +1,13 @@
+==========stdout==========
+g> no node data
+g> g> Hello world!
+g> g> Hello world!
+Hello world!
+g> g> no node data
+g> Goodbye!
+==========stderr==========
+==========graph-dump==========
+0{in=[], out=[2 via "cat",3 via "clear",1 via "write"]}
+1{in=[0 via "write"], out=[]}
+2{in=[0 via "cat"], out=[]}
+3{in=[0 via "clear"], out=[]}

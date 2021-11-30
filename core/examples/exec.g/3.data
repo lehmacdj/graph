@@ -1,0 +1,37 @@
+{-# LANGUAGE DataKinds #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE NoImplicitPrelude #-}
+{-# LANGUAGE TypeApplications #-}
+
+{-# OPTIONS_GHC -fplugin=Polysemy.Plugin #-}
+
+module Main where
+
+import Control.Lens
+import Effect.Graph
+import Effect.Graph.Advanced
+import Effect.NodeLocated
+import Effect.Warn
+import Extensibility
+import Graph.Types
+import MyPrelude
+import Polysemy.Error
+import UserError
+
+main :: IO ()
+main = defaultMain prog
+
+prog ::
+  Members
+    [ GetLocation,
+      WriteGraph String,
+      ReadGraph String,
+      Warn UserError,
+      Error UserError,
+      Embed IO
+    ]
+    r =>
+  Sem r ()
+prog = do
+  nid <- currentLocation
+  setData nid Nothing

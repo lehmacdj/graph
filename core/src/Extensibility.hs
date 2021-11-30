@@ -79,7 +79,7 @@ snapshotContents =
 -- | Dependencies used when running a script. These all need to be available in
 -- the snapshot defined by 'snapshotContents'
 dependencies :: [Text]
-dependencies = ["graph", "polysemy", "lens", "polysemy-plugin"]
+dependencies = ["graph", "polysemy", "lens", "polysemy-plugin", "bytestring"]
 
 dependenciesArgs :: [Text]
 dependenciesArgs =
@@ -99,7 +99,8 @@ runScript program = do
   nid <- currentLocation
   base <- getGraphFilePath
   let args =
-        fmap unpack ["script", "--no-terminal", "--resolver", tmpResolver]
+        ["script", "--silent", "--no-terminal"]
+          ++ fmap unpack ["--resolver", tmpResolver]
           ++ fmap unpack dependenciesArgs
           ++ [program, "--"]
           ++ [base, show nid]
