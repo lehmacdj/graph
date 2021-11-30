@@ -14,25 +14,34 @@ most of the commands do available in the `Lang.Command`.
 
 View its documentation for additional functionality using `stack exec ge -- --help`.
 
-# Roadmap
-These are the next things I am planning on working on in mostly precedence
-order:
-- include filetypes in graph
+# Planning
+This is the list of things that are small and already broken up into small
+enough tasks conceptually to be worth trying to work on. I keep them sorted in
+hybrid precedence/dependency order as well as I can.
 - switch to `Data.Labels.Generic` for lenses for field accessors
+- include filetypes in graph
+  - maybe use UTIs ala Apple if they seem public enough to use in a third party
+    tool because it would be nice to have something a little bit more advanced
+    than file extensions that can also interop with mime-types etc. eventually
 - label edges with nodes instead of string labels
-- refactor error handling
+- add some initialization logic to the graph
+  - this is related to
 - make ergonomic changes I need to allow me to take notes more easily using this
   tool. Likely canidates are:
   - implement support for extracting wiki style links from markdown files and
     converting them to wiki style links
   - implement some kind of support for dynamic queries
-- add some initialization logic to the graph and make a concept of root location
-  that is sensible
 - migrate from integer NIDs to UUIDs/GUIDs/something similar; there is
   `Graph.Types.BigNID` which is my current candidate for the type to use for
-  this purpose. As a side requirement for this item, we need to mostly obsolesce
-  NIDs from user facing interaction in order to make this a viable change,
-  because typing giant identifier strings isn't really possible.
+  this purpose.
+  - The origin will probably just stay as 0 (or a fully expanded out version
+    thereof, because I think it will need to be unique)
+  - As a side requirement for this item, we need to mostly obsolesce NIDs from
+    user facing interaction in order to make this a viable change, because
+    typing giant identifier strings isn't really possible.
+  - In order to acomplish this, we need at minimum a way to refer to the origin
+    node from anywhere in the graph. Then it will be possible to store aliases
+    to locations as necesary off of the origin.
 
 # big features/future wishes:
 
