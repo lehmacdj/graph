@@ -113,9 +113,9 @@ executables:
     dependencies:
     - graph
 
-  node-rename:
+  migration:
     main:                Main.hs
-    source-dirs:         app/node-rename
+    source-dirs:         app/migration
     ghc-options:
     - -threaded
     - -rtsopts

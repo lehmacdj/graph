@@ -1,4 +1,4 @@
-module Executable.NodeRename (main) where
+module Executable.Migration (main) where
 
 import Effect.Graph
 import Effect.Graph.Advanced

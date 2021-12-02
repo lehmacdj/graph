@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: c446da2a43ea937bc94202d05b89e247236ad29217852889591cd026d0ffbabe
+-- hash: 0a4c2947c7777379f0b6bbb92a0b0112221638f600aada16f01bf4a35c88c781
 
 name:           graph
 version:        0.1.0.0
@@ -45,7 +45,7 @@ library
       Effect.Web
       Executable.DumpGraph
       Executable.GraphEditor
-      Executable.NodeRename
+      Executable.Migration
       Extensibility
       Graph
       Graph'
@@ -320,12 +320,12 @@ executable ge
     , xml-conduit
   default-language: Haskell2010
 
-executable node-rename
+executable migration
   main-is: Main.hs
   other-modules:
       Paths_graph
   hs-source-dirs:
-      app/node-rename
+      app/migration
   default-extensions:
       BangPatterns
       BlockArguments
