@@ -27,6 +27,12 @@ hybrid precedence/dependency order as well as I can.
     tool because it would be nice to have something a little bit more advanced
     than file extensions that can also interop with mime-types etc. eventually
 - label edges with nodes instead of string labels
+- allow slicing a Graph out of the filesystem both with associated data and
+  with minimal metadata only (as two separate functions)
+  - some metadata may be needed to follow edges for example
+  - api will probably be similar to System.Filesystem.Tree
+  - will require generalizing nodes to take a type parameter specifying the
+    type of their associated data
 - add some initialization logic to the graph
   - this is related to
 - make ergonomic changes I need to allow me to take notes more easily using this
