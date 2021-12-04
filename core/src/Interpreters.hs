@@ -19,6 +19,7 @@ import Effect.Util
 import Effect.Warn
 import Effect.Web
 import Graph
+import qualified Graph.Serialize2 as S2
 import History
 import MyPrelude hiding (Reader, ask)
 import Polysemy.Embed
@@ -162,6 +163,7 @@ runReadWriteGraphIO ::
       ReadGraph String,
       Warn UserError,
       Error UserError,
+      FreshNID,
       Embed IO
     ]
     () ->
@@ -171,6 +173,9 @@ runReadWriteGraphIO dir =
     >>> runReadGraphIO dir
     >>> printWarnings @UserError
     >>> printErrors
+    >>> raiseUnder
+    >>> runFreshNIDState
+    >>> (\m -> S2.nextNodeId dir >>= \nextNID -> evalState nextNID m)
     >>> runM
 
 runLocatedReadWriteGraphIO ::
@@ -182,6 +187,7 @@ runLocatedReadWriteGraphIO ::
       ReadGraph String,
       Warn UserError,
       Error UserError,
+      FreshNID,
       Embed IO
     ]
     () ->
