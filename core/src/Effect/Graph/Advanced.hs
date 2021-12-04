@@ -101,7 +101,7 @@ transitionsViaMany ::
   Sem effs NID
 transitionsViaMany nid = \case
   [] -> pure nid
-  x : xs -> transitionsVia nid x >>= (`transitionsViaManyFresh` xs)
+  x : xs -> transitionsVia nid x >>= (`transitionsViaMany` xs)
 
 transitionsViaManyTo ::
   forall t effs seq.
