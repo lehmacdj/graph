@@ -18,8 +18,8 @@ data Direction = In | Out
 
 dirToLens :: Direction -> Lens' (Node t) (Set (Connect t))
 dirToLens = \case
-  In -> nodeIncoming
-  Out -> nodeOutgoing
+  In -> #_nodeIncoming
+  Out -> #_nodeOutgoing
 
 data ReportMissing t m r where
   NodeMissing :: NID -> ReportMissing t m ()
@@ -116,11 +116,11 @@ checkNode nid = reportMissingNode @t $ do
   n <- getNodeSem @t nid
   -- every outgoing edge needs to be present in the corresponding node as incoming
   traverseOf_
-    (nodeOutgoing . folded . to (swapConnect nid))
+    (#_nodeOutgoing . folded . to (swapConnect nid))
     (uncurry (checkConnectExists In))
     n
   -- every incoming edge needs to be present in the corresponding node as outgoing
   traverseOf_
-    (nodeIncoming . folded . to (swapConnect nid))
+    (#_nodeIncoming . folded . to (swapConnect nid))
     (uncurry (checkConnectExists Out))
     n

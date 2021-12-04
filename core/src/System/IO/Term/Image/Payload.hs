@@ -42,26 +42,24 @@ data PayloadArgs = PayloadArgs
     -- | should the image be inlined, default true {1, 0}
     _payloadArgsInline :: Bool
   }
-  deriving (Show, Eq, Ord)
-
-makeLenses ''PayloadArgs
+  deriving (Show, Eq, Ord, Generic)
 
 instance BinarySerialize PayloadArgs where
   intoBuilder a = (`execState` "") $ do
     withJust
-      (view payloadArgsFilename a)
+      (view #_payloadArgsFilename a)
       ( \x ->
           modify (<> ("name=" <> fnEncode x <> ";"))
       )
     withJust
-      (view payloadArgsSize a)
+      (view #_payloadArgsSize a)
       ( \x ->
           modify (<> ("size=" <> fromString (show x) <> ";"))
       )
-    modify (<> ("width=" <> intoBuilder (view payloadArgsWidth a) <> ";"))
-    modify (<> ("height=" <> intoBuilder (view payloadArgsHeight a) <> ";"))
-    modify (<> ("preserveAspectRatio=" <> bEncode (view payloadArgsPreserveAspectRatio a) <> ";"))
-    modify (<> ("inline=" <> bEncode (view payloadArgsInline a)))
+    modify (<> ("width=" <> intoBuilder (view #_payloadArgsWidth a) <> ";"))
+    modify (<> ("height=" <> intoBuilder (view #_payloadArgsHeight a) <> ";"))
+    modify (<> ("preserveAspectRatio=" <> bEncode (view #_payloadArgsPreserveAspectRatio a) <> ";"))
+    modify (<> ("inline=" <> bEncode (view #_payloadArgsInline a)))
     where
       fnEncode = lazyByteString . encode . fromString
       bEncode True = "1"
@@ -72,16 +70,14 @@ data Payload = Payload
     -- | needs to be base 64 encoded
     _payloadData :: LByteString
   }
-  deriving (Show, Eq, Ord)
-
-makeLenses ''Payload
+  deriving (Show, Eq, Ord, Generic)
 
 instance BinarySerialize Payload where
   intoBuilder p =
     charUtf8 '\x1b' <> "]" <> "1337" <> ";"
       <> "File=["
-      <> intoBuilder (view payloadArgs p)
+      <> intoBuilder (view #_payloadArgs p)
       <> "]"
       <> ":"
-      <> lazyByteString (encode (view payloadData p))
+      <> lazyByteString (encode (view #_payloadData p))
       <> charUtf8 '\x07'

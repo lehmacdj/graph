@@ -94,7 +94,7 @@ deserializeNode base nid = do
   fileContents <- liftIO $ B.readFile (linksFile base nid)
   let node = Aeson.eitherDecode (fromStrict fileContents)
   d <- liftIO $ tryGetBinaryData base nid
-  pure $ fmap (nodeData' .~ d) node
+  pure $ fmap (#_nodeData' .~ d) node
 
 doesNodeExist :: MonadIO m => FilePath -> NID -> m Bool
 doesNodeExist base nid = liftIO $ do

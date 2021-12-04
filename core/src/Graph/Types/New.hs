@@ -5,7 +5,6 @@
 module Graph.Types.New where
 
 import Control.DeepSeq
-import Control.Lens (makeLenses, over, view)
 import Data.Aeson
 import GHC.Generics
 import Graph.Types
@@ -24,8 +23,6 @@ instance FromJSON UnlabledEdge
 
 instance ToJSON UnlabledEdge where
   toEncoding = genericToEncoding defaultOptions
-
-makeLenses ''UnlabledEdge
 
 -- | New type of graph node that is inherently labled with NIDs. In this view
 -- we also want to be able to access referents of edges efficiently so we
@@ -52,8 +49,6 @@ instance Show Node' where
       ++ ", data="
       ++ show (_nodeData' n)
       ++ "}"
-
-makeLenses ''Node'
 
 referentEdge :: Edge NID -> UnlabledEdge
 referentEdge (Edge i _ o) = UnlabledEdge i o
@@ -93,9 +88,8 @@ instance ToJSON Node' where
 newtype Graph' = Graph'
   { _graphNodeMap' :: Map NID Node'
   }
-  deriving (Eq, Ord, Generic, NFData)
-
-makeLenses ''Graph'
+  deriving stock (Eq, Ord, Generic)
+  deriving anyclass (NFData)
 
 instance Show Graph' where
   show = unlines' . map show . toList . _graphNodeMap'
@@ -103,10 +97,10 @@ instance Show Graph' where
       unlines' = intercalate "\n"
 
 nodeMap' :: Graph' -> Map NID Node'
-nodeMap' = view graphNodeMap'
+nodeMap' = view #_graphNodeMap'
 
 withNodeMap' :: Graph' -> (Map NID Node' -> Map NID Node') -> Graph'
-withNodeMap' = flip (over graphNodeMap')
+withNodeMap' = flip (over #_graphNodeMap')
 
 dualizeUnlabledEdge :: UnlabledEdge -> UnlabledEdge
 dualizeUnlabledEdge (UnlabledEdge i o) = UnlabledEdge o i

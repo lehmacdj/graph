@@ -1,6 +1,6 @@
 module GraphSpec where
 
-import Control.Lens (filtered, set)
+import Control.Lens (filtered)
 import Graph'
 import Graph.Node'
 import Graph.Types
@@ -111,7 +111,7 @@ test_insertNode =
         (nd 0 [] [] [] "foobar")
         helloWorldGraph
         ( set
-            (traverse . filtered ((== 0) . nidOf) . nodeData')
+            (traverse . filtered ((== 0) . nidOf) . #_nodeData')
             (Just "foobar")
             $ nodesOf (snd helloWorldGraph)
         ),
@@ -121,7 +121,7 @@ test_insertNode =
         (nd 1 [] [] [] "HELLO")
         helloWorldGraph
         ( set
-            (traverse . filtered ((== 1) . nidOf) . nodeData')
+            (traverse . filtered ((== 1) . nidOf) . #_nodeData')
             (Just "HELLO")
             $ nodesOf (snd helloWorldGraph)
         ),

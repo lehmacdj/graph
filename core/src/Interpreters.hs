@@ -41,8 +41,7 @@ data Env = Env
     _isDualized :: IORef IsDual,
     _replSettings :: H.Settings IO
   }
-
-makeLenses ''Env
+  deriving (Generic)
 
 initEnv ::
   FilePath ->
@@ -124,16 +123,16 @@ runMainEffectsIOWithErrorHandling errorHandlingBehavior env v = do
           >>> applyInput2 (runReadGraphDualizeableIO @String)
           >>> applyInput2 interpretEditorAsIOVimFSGraph
           >>> runRawGraphAsInput
-          >>> contramapInputSem @FilePath (embed . readIORef . view filePath)
+          >>> contramapInputSem @FilePath (embed . readIORef . view #_filePath)
           >>> runWebIO
           >>> runFileSystemTreeIO
-          >>> runStateInputIORefOf @IsDual isDualized
+          >>> runStateInputIORefOf @IsDual #_isDualized
           >>> interpretConsoleIO
           >>> interpretTimeAsIO
           >>> runLocableHistoryState
-          >>> runStateInputIORefOf @History history
+          >>> runStateInputIORefOf @History #_history
           >>> runFreshNIDState
-          >>> runStateInputIORefOf nextId
+          >>> runStateInputIORefOf #_nextId
           >>> errorHandlingBehavior
           >>> runReadlineFinal
           >>> runFileTypeOracle

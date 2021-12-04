@@ -75,8 +75,8 @@ primeds f i ig = f (nodeLookup <$> i <*> pure ig) ig
 delEdge :: TransitionValid t => Edge t -> Graph t -> Graph t
 delEdge e g =
   withNodeMap g $
-    adjustMap (over nodeOutgoing (deleteSet (outConnect e))) (source e)
-      . adjustMap (over nodeIncoming (deleteSet (inConnect e))) (sink e)
+    adjustMap (over #_nodeOutgoing (deleteSet (outConnect e))) (source e)
+      . adjustMap (over #_nodeIncoming (deleteSet (inConnect e))) (sink e)
 
 delEdges ::
   TransitionValid t =>
@@ -95,9 +95,9 @@ delNode n g =
       . deleteMap nid
   where
     nid = _nodeId n
-    del = filterSet ((/= nid) . view connectNode)
-    deleteIncoming = over nodeIncoming del
-    deleteOutgoing = over nodeOutgoing del
+    del = filterSet ((/= nid) . view #_connectNode)
+    deleteIncoming = over #_nodeIncoming del
+    deleteOutgoing = over #_nodeOutgoing del
 
 delNode' ::
   TransitionValid t =>
@@ -124,8 +124,8 @@ insertEdge ::
   Graph t
 insertEdge e g =
   withNodeMap g $
-    adjustMap (over nodeOutgoing (insertSet (outConnect e))) (source e)
-      . adjustMap (over nodeIncoming (insertSet (inConnect e))) (sink e)
+    adjustMap (over #_nodeOutgoing (insertSet (outConnect e))) (source e)
+      . adjustMap (over #_nodeIncoming (insertSet (inConnect e))) (sink e)
 
 insertEdges ::
   TransitionValid t =>
@@ -177,7 +177,7 @@ setData ::
   Node t ->
   Graph t ->
   Graph t
-setData d n g = insertNode (set nodeData d (nodeConsistentWithGraph g n)) g
+setData d n g = insertNode (set #_nodeData d (nodeConsistentWithGraph g n)) g
 
 setData' ::
   TransitionValid t =>

@@ -31,7 +31,7 @@ where
 import ClassyPrelude
 import Control.DeepSeq
 import Control.Lens hiding (op)
-import Control.Lens as X (set, view, (&), (.~), (<&>), (^.))
+import Control.Lens as X (over, set, view, (&), (.~), (<&>), (^.))
 import Data.Generics.Labels
 import qualified Data.Set as Set
 import GHC.Stack as X (HasCallStack)

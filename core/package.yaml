@@ -74,9 +74,15 @@ default-extensions:
 - BlockArguments
 - ConstraintKinds
 - DataKinds
+- DeriveAnyClass
+- DeriveFoldable
+- DeriveFunctor
 - DeriveGeneric
+- DeriveTraversable
+- DerivingStrategies
 - FlexibleContexts
 - GADTs
+- GeneralizedNewtypeDeriving
 - LambdaCase
 - NamedFieldPuns
 - NoImplicitPrelude

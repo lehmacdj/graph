@@ -98,9 +98,9 @@ primeds f i ig = f (nodeLookup <$> i <*> pure ig) ig
 delEdge :: Edge NID -> Graph' -> Graph'
 delEdge e g =
   withNodeMap' g $
-    adjustMap (over nodeOutgoing' (deleteSet (outConnect e))) (source e)
-      . adjustMap (over nodeIncoming' (deleteSet (inConnect e))) (sink e)
-      . adjustMap (over nodeReferents (deleteSet (referentEdge e))) (label e)
+    adjustMap (over #_nodeOutgoing' (deleteSet (outConnect e))) (source e)
+      . adjustMap (over #_nodeIncoming' (deleteSet (inConnect e))) (sink e)
+      . adjustMap (over #_nodeReferents (deleteSet (referentEdge e))) (label e)
 
 delEdges :: [Edge NID] -> Graph' -> Graph'
 delEdges = listify delEdge
@@ -119,14 +119,14 @@ internalDelNode n g =
   where
     nid = _nodeId' n
     del =
-      filterSet ((/= nid) . view connectNode)
-        . filterSet ((/= nid) . view connectTransition)
+      filterSet ((/= nid) . view #_connectNode)
+        . filterSet ((/= nid) . view #_connectTransition)
     delByLabel =
-      filterSet ((/= nid) . view unlabledEdgeSource)
-        . filterSet ((/= nid) . view unlabledEdgeSink)
-    deleteIncoming = over nodeIncoming' del
-    deleteOutgoing = over nodeOutgoing' del
-    deleteLabling = over nodeReferents delByLabel
+      filterSet ((/= nid) . view #_unlabledEdgeSource)
+        . filterSet ((/= nid) . view #_unlabledEdgeSink)
+    deleteIncoming = over #_nodeIncoming' del
+    deleteOutgoing = over #_nodeOutgoing' del
+    deleteLabling = over #_nodeReferents delByLabel
 
 delNode :: NID -> Graph' -> Graph'
 delNode = primed internalDelNode
@@ -140,9 +140,9 @@ delNodes = primeds internalDelNodes
 internalInsertEdge :: Edge NID -> Graph' -> Graph'
 internalInsertEdge e g =
   withNodeMap' g $
-    adjustMap (over nodeOutgoing' (insertSet (outConnect e))) (source e)
-      . adjustMap (over nodeIncoming' (insertSet (inConnect e))) (sink e)
-      . adjustMap (over nodeReferents (insertSet (referentEdge e))) (label e)
+    adjustMap (over #_nodeOutgoing' (insertSet (outConnect e))) (source e)
+      . adjustMap (over #_nodeIncoming' (insertSet (inConnect e))) (sink e)
+      . adjustMap (over #_nodeReferents (insertSet (referentEdge e))) (label e)
 
 internalInsertEdges :: [Edge NID] -> Graph' -> Graph'
 internalInsertEdges = listify internalInsertEdge
@@ -218,7 +218,7 @@ isEmptyGraph = null . nodeMap'
 
 -- | sets the data of a node in the graph
 setData :: Maybe ByteString -> NID -> Graph' -> Graph'
-setData d nid = set (graphNodeMap' . ix nid . nodeData') d
+setData d nid = set (#_graphNodeMap' . ix nid . #_nodeData') d
 
 lookupNode :: Graph' -> NID -> Maybe Node'
 lookupNode = flip lookup . nodeMap'

@@ -2,14 +2,10 @@
 
 module Options
   ( Options,
-    graphLocation,
-    executeExpression,
     withOptions,
-    createNew,
   )
 where
 
-import Control.Lens (makeLenses)
 import Lang.Command
 import Lang.Command.Parse
 import MyPrelude
@@ -20,9 +16,7 @@ data Options = Options
     _executeExpression :: Maybe Command,
     _createNew :: Bool
   }
-  deriving (Show)
-
-makeLenses ''Options
+  deriving (Show, Generic)
 
 optionsP :: Parser Options
 optionsP =

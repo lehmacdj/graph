@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 0a4c2947c7777379f0b6bbb92a0b0112221638f600aada16f01bf4a35c88c781
+-- hash: 98fe14917a790dc1ef39bf1f815ffbcf4e52fd35b04b639678841f9e34238407
 
 name:           graph
 version:        0.1.0.0
@@ -89,9 +89,15 @@ library
       BlockArguments
       ConstraintKinds
       DataKinds
+      DeriveAnyClass
+      DeriveFoldable
+      DeriveFunctor
       DeriveGeneric
+      DeriveTraversable
+      DerivingStrategies
       FlexibleContexts
       GADTs
+      GeneralizedNewtypeDeriving
       LambdaCase
       NamedFieldPuns
       NoImplicitPrelude
@@ -169,9 +175,15 @@ executable dump-graph
       BlockArguments
       ConstraintKinds
       DataKinds
+      DeriveAnyClass
+      DeriveFoldable
+      DeriveFunctor
       DeriveGeneric
+      DeriveTraversable
+      DerivingStrategies
       FlexibleContexts
       GADTs
+      GeneralizedNewtypeDeriving
       LambdaCase
       NamedFieldPuns
       NoImplicitPrelude
@@ -250,9 +262,15 @@ executable ge
       BlockArguments
       ConstraintKinds
       DataKinds
+      DeriveAnyClass
+      DeriveFoldable
+      DeriveFunctor
       DeriveGeneric
+      DeriveTraversable
+      DerivingStrategies
       FlexibleContexts
       GADTs
+      GeneralizedNewtypeDeriving
       LambdaCase
       NamedFieldPuns
       NoImplicitPrelude
@@ -331,9 +349,15 @@ executable migration
       BlockArguments
       ConstraintKinds
       DataKinds
+      DeriveAnyClass
+      DeriveFoldable
+      DeriveFunctor
       DeriveGeneric
+      DeriveTraversable
+      DerivingStrategies
       FlexibleContexts
       GADTs
+      GeneralizedNewtypeDeriving
       LambdaCase
       NamedFieldPuns
       NoImplicitPrelude
@@ -423,9 +447,15 @@ test-suite graph-test
       BlockArguments
       ConstraintKinds
       DataKinds
+      DeriveAnyClass
+      DeriveFoldable
+      DeriveFunctor
       DeriveGeneric
+      DeriveTraversable
+      DerivingStrategies
       FlexibleContexts
       GADTs
+      GeneralizedNewtypeDeriving
       LambdaCase
       NamedFieldPuns
       NoImplicitPrelude

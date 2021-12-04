@@ -1,7 +1,3 @@
-{-# LANGUAGE ConstraintKinds #-}
-{-# LANGUAGE DeriveAnyClass #-}
-{-# LANGUAGE DeriveGeneric #-}
-{-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TemplateHaskell #-}
 
 module Graph.Types
@@ -37,8 +33,6 @@ data Connect t = Connect
   }
   deriving (Eq, Ord, Generic, NFData)
 
-makeLenses ''Connect
-
 instance Show t => Show (Connect t) where
   show (Connect t nid) = show nid ++ " via " ++ show t
 
@@ -55,8 +49,6 @@ data Node t = Node
     _nodeData :: Maybe ByteString
   }
   deriving (Eq, Ord, Generic, NFData)
-
-makeLenses ''Node
 
 instance (Show t, Ord t) => Show (Node t) where
   show n =
@@ -75,8 +67,6 @@ data Prenode t = Prenode
     _prenodeOutgoing :: Set (Connect t)
   }
   deriving (Show, Eq, Ord, Generic, NFData)
-
-makeLenses ''Prenode
 
 instance (FromJSON t, TransitionValid t) => FromJSON (Prenode t) where
   parseJSON = genericParseJSON (strippedPrefixOptions "_prenode")
@@ -110,9 +100,8 @@ instance (ToJSON t, TransitionValid t) => ToJSON (Node t) where
 newtype Graph t = Graph
   { _graphNodeMap :: Map NID (Node t)
   }
-  deriving (Eq, Ord, Generic, NFData)
-
-makeLenses ''Graph
+  deriving stock (Eq, Ord, Generic)
+  deriving anyclass (NFData)
 
 instance (Show t, Ord t) => Show (Graph t) where
   show = unlines' . map show . Map.elems . _graphNodeMap
@@ -125,10 +114,10 @@ instance (ToJSON t, TransitionValid t) => ToJSON (Graph t) where
   toEncoding = genericToEncoding defaultOptions
 
 nodeMap :: Graph t -> Map NID (Node t)
-nodeMap = view graphNodeMap
+nodeMap = view #_graphNodeMap
 
 withNodeMap :: Graph t -> (Map NID (Node t) -> Map NID (Node t)) -> Graph t
-withNodeMap = flip (over graphNodeMap)
+withNodeMap = flip (over #_graphNodeMap)
 
 -- | unbiased representation of an edge
 data Edge t = Edge
@@ -137,5 +126,3 @@ data Edge t = Edge
     _edgeSink :: NID
   }
   deriving (Eq, Ord, Generic, NFData, Show)
-
-makeLenses ''Edge

@@ -10,13 +10,13 @@ inConnect :: Edge t -> Connect t
 inConnect (Edge s l _) = Connect l s
 
 source :: Edge t -> NID
-source = view edgeSource
+source = view #_edgeSource
 
 sink :: Edge t -> NID
-sink = view edgeSink
+sink = view #_edgeSink
 
 label :: Edge t -> t
-label = view edgeTransition
+label = view #_edgeTransition
 
 outgoingEdge :: NID -> Connect t -> Edge t
 outgoingEdge s (Connect l t) = Edge s l t

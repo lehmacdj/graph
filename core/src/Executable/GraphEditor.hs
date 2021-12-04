@@ -81,7 +81,7 @@ repl = do
 graphDirInitialization :: FilePath -> Options -> IO ()
 graphDirInitialization graphDir options = do
   graphDirExists <- doesDirectoryExist graphDir
-  if view createNew options
+  if view #_createNew options
     then
       if graphDirExists
         then
@@ -96,9 +96,9 @@ graphDirInitialization graphDir options = do
 
 main :: IO ()
 main = withOptions $ \options -> do
-  let graphDir = view graphLocation options
+  let graphDir = view #_graphLocation options
   graphDirInitialization graphDir options
   nextNid <- nextNodeId graphDir
   env <- mfix (initEnv graphDir nextNid <=< defReplSettings)
   runMainEffectsIO env $
-    maybe repl interpretCommand (view executeExpression options)
+    maybe repl interpretCommand (view #_executeExpression options)

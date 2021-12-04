@@ -6,10 +6,10 @@ import Graph.Types
 import MyPrelude
 
 indegreeOf :: Node t -> Int
-indegreeOf = Set.size . view nodeIncoming
+indegreeOf = Set.size . view #_nodeIncoming
 
 outdegreeOf :: Node t -> Int
-outdegreeOf = Set.size . view nodeOutgoing
+outdegreeOf = Set.size . view #_nodeOutgoing
 
 nidOf :: Node t -> NID
 nidOf = _nodeId
@@ -54,7 +54,7 @@ dataOf ::
   TransitionValid t =>
   Node t ->
   Maybe ByteString
-dataOf = view nodeData
+dataOf = view #_nodeData
 
 -- | Warning! It is up to the user of the graph to ensure that node ids are
 -- unique within the graph
