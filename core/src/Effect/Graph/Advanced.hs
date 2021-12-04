@@ -60,7 +60,7 @@ transitionsVia nid t = do
   n <- getNodeSem nid
   case matchConnect t (outgoingConnectsOf n) of
     [] -> nid `transitionsFreshVia` t
-    -- generalize the choice of node here to an effect?
+    -- generalize the choice of node here to an parameter?
     -- makes sense if we run into trouble with this choosing an arbitrary trans
     n' : _ -> pure n'
 
@@ -163,3 +163,18 @@ cloneNode nid = do
       o = selfLoopify nid nid' $ outgoingConnectsOf n
   insertNode @t (Node nid' i o (dataOf n))
   pure nid'
+
+-- | Caution: using this function is unsafe if the number re-written to is
+-- defined in the graph. It will probably overwrite stuff in unpredictable
+-- ways in that case.
+unsafeRenumberNode ::
+  Members [ReadGraph String, WriteGraph String, Error Missing] effs =>
+  -- | Node to rewrite on left, number to be rewritten to on right
+  (NID, NID) ->
+  Sem effs ()
+unsafeRenumberNode (nid, nid') = do
+  n <- getNodeSem nid
+  let i = selfLoopify nid nid' $ incomingConnectsOf n
+      o = selfLoopify nid nid' $ outgoingConnectsOf n
+  insertNode @String (Node nid' i o (dataOf n))
+  deleteNode @String nid
