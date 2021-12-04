@@ -18,8 +18,6 @@ View its documentation for additional functionality using `stack exec ge -- --he
 This is the list of things that are small and already broken up into small
 enough tasks conceptually to be worth trying to work on. I keep them sorted in
 hybrid precedence/dependency order as well as I can.
-- change date/time information to be more ergonomic format
-  - current format creates very deep hierarchies
 - switch to `Data.Labels.Generic` for lenses for field accessors
 - switch to god module pattern for tests
 - include filetypes in graph
