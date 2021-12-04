@@ -35,10 +35,7 @@ timeToDateStrings time =
     [ formatTime' "%Y" time,
       formatTime' "%m" time,
       formatTime' "%d" time,
-      formatTime' "%H" time,
-      formatTime' "%M" time,
-      formatTime' "%S" time,
-      formatTime' "%q" time
+      formatTime' "%H:%M:%S.%q" time
     ]
   where
     formatTime' = formatTime defaultTimeLocale
