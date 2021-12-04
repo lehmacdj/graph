@@ -1,5 +1,8 @@
--- | Migrate dates with format yyyy/MM/dd/hh/mm/ss/fractional-seconds to
--- yyyy/MM/dd/hh:mm:ss.fractional-seconds.
+-- | This file is for migrations, when making changes that are backwards
+-- incompatible to the graph structure, the commit containing that change
+-- should also contain a migration for fixing up graphs. Hopefully longterm we
+-- can have a more permanent solution, but that isn't necessary until I have a
+-- version that I want to declare "stable"
 module Executable.Migration (main) where
 
 import Control.Lens hiding (index)
@@ -141,6 +144,7 @@ nidsToDeleteFromPrev = drop 1 . map (snd . pairOfConnect)
 
 main :: IO ()
 main = do
+  _ <- error "are you sure you want to use this, not the commit with change; migration should already be complete"
   args :: [String] <- map unpack <$> getArgs
   case index args 0 of
     Nothing -> putStrLn . pack $ "needs one command line argument with a graph"
