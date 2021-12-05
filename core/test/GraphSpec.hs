@@ -4,7 +4,6 @@ import Control.Lens (filtered)
 import Graph'
 import Graph.Node'
 import Graph.Types
-import Graph.Types.New
 import TestPrelude
 
 graphOfNodes :: [Node'] -> Graph'

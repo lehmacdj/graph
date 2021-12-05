@@ -64,7 +64,7 @@ dependencies:
 - unix
 - unliftio
 - validation
-- witherable-class
+- witherable
 - wreq
 - xdg-basedir
 - xml-conduit

@@ -4,7 +4,6 @@
 module Effect.Graph.Advanced where
 
 import Control.Lens
-import Data.Witherable.Class
 import Effect.FreshNID
 import Effect.Graph
 import Effect.NodeLocated
@@ -12,6 +11,7 @@ import Graph hiding (insertEdge, insertNode, setData)
 import Graph.Connect
 import MyPrelude
 import UserError
+import Witherable
 
 getNodes :: Member (ReadGraph t) effs => [NID] -> Sem effs [Node t]
 getNodes = wither getNode

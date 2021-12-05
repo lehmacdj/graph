@@ -6,7 +6,6 @@ import Control.Lens
 import Effect.Graph.Advanced
 import Effect.NodeLocated
 import Effect.Warn
-import Graph
 import Interpreters
 import Lang.Parsing
 import Lang.Path

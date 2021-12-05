@@ -3,9 +3,8 @@
 module Effect.Web where
 
 import MyPrelude
+import Network.Wreq (defaults, getWith, responseBody)
 import UserError
-import Network.Wreq (getWith, defaults, responseBody)
-import Control.Lens
 
 data Web m r where
   GetHttp :: String -> Web m ByteString

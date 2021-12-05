@@ -286,12 +286,12 @@ runWriteStringGraph ::
 runWriteStringGraph = interpret $ \case
   TouchNode nid -> touchNode nid
   DeleteNode nid -> deleteNode nid
-  InsertEdge (Edge i label o) -> do
+  InsertEdge (Edge _i _label _o) -> do
     -- find an already existing string node if it exists
-    undefined
+    _ <- error "not implemented"
     -- insert that edge
-    undefined
-  DeleteEdge e -> undefined
+    error "not implemented"
+  DeleteEdge _e -> error "not implemented"
   SetData nid d -> setData nid d
 
 -- | General handler for WriteGraph parameterized so that it is possible

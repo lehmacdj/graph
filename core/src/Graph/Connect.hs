@@ -1,7 +1,7 @@
 -- | Utilities for dealing with connects and following them.
 module Graph.Connect where
 
-import Control.Lens (filtered, view, (.~))
+import Control.Lens (filtered)
 import Data.Set.Lens
 import Graph
 import MyPrelude
