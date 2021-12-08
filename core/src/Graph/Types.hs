@@ -28,8 +28,8 @@ type TransitionValid t = (Show t, Eq t, Ord t)
 -- The first node isn't represented here, because this is used only in the node
 -- structure where the first node is clear from context.
 data Connect t = Connect
-  { _connectTransition :: t,
-    _connectNode :: NID
+  { transition :: t,
+    node :: NID
   }
   deriving (Eq, Ord, Generic, NFData)
 
@@ -43,20 +43,21 @@ instance (ToJSON t, TransitionValid t) => ToJSON (Connect t) where
 
 data Node t = Node
   { -- | unique node id
-    _nodeId :: NID,
-    _nodeIncoming :: Set (Connect t),
-    _nodeOutgoing :: Set (Connect t),
-    _nodeData :: Maybe ByteString
+    -- TODO once we have NoFieldSelectors use that and name this id
+    nodeId :: NID,
+    incoming :: Set (Connect t),
+    outgoing :: Set (Connect t),
+    associatedData :: Maybe ByteString
   }
   deriving (Eq, Ord, Generic, NFData)
 
 instance (Show t, Ord t) => Show (Node t) where
-  show n =
-    show (_nodeId n) ++ "{"
+  show Node {..} =
+    show nodeId ++ "{"
       ++ "in="
-      ++ show (toList . _nodeIncoming $ n)
+      ++ show (toList incoming)
       ++ ", out="
-      ++ show (toList . _nodeOutgoing $ n)
+      ++ show (toList outgoing)
       ++ "}"
 
 -- | For the purpose of implementing from and ToJSON we use Prenode.
@@ -98,13 +99,13 @@ instance (ToJSON t, TransitionValid t) => ToJSON (Node t) where
   toEncoding = toEncoding . nodeToPrenode
 
 newtype Graph t = Graph
-  { _graphNodeMap :: Map NID (Node t)
+  { nodeMap :: Map NID (Node t)
   }
   deriving stock (Eq, Ord, Generic)
   deriving anyclass (NFData)
 
 instance (Show t, Ord t) => Show (Graph t) where
-  show = unlines' . map show . Map.elems . _graphNodeMap
+  show = unlines' . map show . Map.elems . nodeMap
     where
       unlines' = intercalate "\n"
 
@@ -113,16 +114,13 @@ instance (FromJSON t, TransitionValid t) => FromJSON (Graph t)
 instance (ToJSON t, TransitionValid t) => ToJSON (Graph t) where
   toEncoding = genericToEncoding defaultOptions
 
-nodeMap :: Graph t -> Map NID (Node t)
-nodeMap = view #_graphNodeMap
-
 withNodeMap :: Graph t -> (Map NID (Node t) -> Map NID (Node t)) -> Graph t
-withNodeMap = flip (over #_graphNodeMap)
+withNodeMap = flip (over #nodeMap)
 
 -- | unbiased representation of an edge
 data Edge t = Edge
-  { _edgeSource :: NID,
-    _edgeTransition :: t,
-    _edgeSink :: NID
+  { source :: NID,
+    transition :: t,
+    sink :: NID
   }
   deriving (Eq, Ord, Generic, NFData, Show)

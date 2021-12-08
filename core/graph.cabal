@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 5dbf55dcdc4f4613d065094a3852e85f271bf84d126d9daa247051c8b00ebcbf
+-- hash: 0543b094f272d2715b141a999ef14ee03b5189e9a5347baaefa410d6c79b961b
 
 name:           graph
 version:        0.1.0.0
@@ -95,6 +95,8 @@ library
       DeriveGeneric
       DeriveTraversable
       DerivingStrategies
+      DisambiguateRecordFields
+      DuplicateRecordFields
       FlexibleContexts
       GADTs
       GeneralizedNewtypeDeriving
@@ -181,6 +183,8 @@ executable dump-graph
       DeriveGeneric
       DeriveTraversable
       DerivingStrategies
+      DisambiguateRecordFields
+      DuplicateRecordFields
       FlexibleContexts
       GADTs
       GeneralizedNewtypeDeriving
@@ -268,6 +272,8 @@ executable ge
       DeriveGeneric
       DeriveTraversable
       DerivingStrategies
+      DisambiguateRecordFields
+      DuplicateRecordFields
       FlexibleContexts
       GADTs
       GeneralizedNewtypeDeriving
@@ -355,6 +361,8 @@ executable migration
       DeriveGeneric
       DeriveTraversable
       DerivingStrategies
+      DisambiguateRecordFields
+      DuplicateRecordFields
       FlexibleContexts
       GADTs
       GeneralizedNewtypeDeriving
@@ -453,6 +461,8 @@ test-suite graph-test
       DeriveGeneric
       DeriveTraversable
       DerivingStrategies
+      DisambiguateRecordFields
+      DuplicateRecordFields
       FlexibleContexts
       GADTs
       GeneralizedNewtypeDeriving

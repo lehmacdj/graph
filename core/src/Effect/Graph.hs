@@ -228,17 +228,17 @@ runWriteGraphIO' dir = interpret $ \case
       fromEitherSemVia AesonDeserialize . fromExceptionToUserError $
         S3.deserializeNode dir nid
     let del =
-          filterSet ((/= nid) . view #_connectNode)
-            . filterSet ((/= nid) . view #_connectTransition)
+          filterSet ((/= nid) . view #node)
+            . filterSet ((/= nid) . view #transition)
         delByLabel =
           filterSet ((/= nid) . view #_unlabledEdgeSource)
             . filterSet ((/= nid) . view #_unlabledEdgeSink)
-        delIn = over #_nodeIncoming' del
-        delOut = over #_nodeOutgoing' del
-        delRef = over #_nodeReferents delByLabel
-        neighborsIn = #_nodeIncoming' . folded . (#_connectNode <> #_connectTransition)
-        neighborsOut = #_nodeOutgoing' . folded . (#_connectNode <> #_connectTransition)
-        neighborsRef = #_nodeReferents . folded . (#_unlabledEdgeSink <> #_unlabledEdgeSource)
+        delIn = over #incoming' del
+        delOut = over #outgoing' del
+        delRef = over #referents delByLabel
+        neighborsIn = #incoming' . folded . (#node <> #transition)
+        neighborsOut = #outgoing' . folded . (#node <> #transition)
+        neighborsRef = #referents . folded . (#_unlabledEdgeSink <> #_unlabledEdgeSource)
         neighbors = toSetOf (neighborsIn <> neighborsOut <> neighborsRef) n
     liftIO $ for_ neighbors $ S3.withSerializedNode dir (delIn . delOut . delRef)
     convertError @UserError . fromExceptionToUserError $ S2.removeNode dir nid
@@ -247,16 +247,16 @@ runWriteGraphIO' dir = interpret $ \case
     let (Edge i l o) = ifDualized dual G.dualizeEdge e
     runWriteGraphIO' dir (touchNode i)
     runWriteGraphIO' dir (touchNode o)
-    liftIO $ S3.withSerializedNode dir (#_nodeOutgoing' %~ insertSet (Connect l o)) i
-    liftIO $ S3.withSerializedNode dir (#_nodeIncoming' %~ insertSet (Connect l i)) o
-    liftIO $ S3.withSerializedNode dir (#_nodeReferents %~ insertSet (UnlabledEdge i o)) l
+    liftIO $ S3.withSerializedNode dir (#outgoing' %~ insertSet (Connect l o)) i
+    liftIO $ S3.withSerializedNode dir (#incoming' %~ insertSet (Connect l i)) o
+    liftIO $ S3.withSerializedNode dir (#referents %~ insertSet (UnlabledEdge i o)) l
   DeleteEdge e -> do
     dual <- input @IsDual
     let (Edge i l o) = ifDualized dual G.dualizeEdge e
-    liftIO $ S3.withSerializedNode dir (#_nodeOutgoing' %~ deleteSet (Connect l o)) i
-    liftIO $ S3.withSerializedNode dir (#_nodeIncoming' %~ deleteSet (Connect l i)) o
-    liftIO $ S3.withSerializedNode dir (#_nodeReferents %~ deleteSet (UnlabledEdge i o)) l
-  SetData nid d -> liftIO $ S3.withSerializedNode dir (#_nodeData' .~ d) nid
+    liftIO $ S3.withSerializedNode dir (#outgoing' %~ deleteSet (Connect l o)) i
+    liftIO $ S3.withSerializedNode dir (#incoming' %~ deleteSet (Connect l i)) o
+    liftIO $ S3.withSerializedNode dir (#referents %~ deleteSet (UnlabledEdge i o)) l
+  SetData nid d -> liftIO $ S3.withSerializedNode dir (#associatedData' .~ d) nid
 
 -- -- | fetch a string node representing the provided string, returning an
 -- -- existing one if it already exists, and creating a new one otherwise
@@ -317,11 +317,11 @@ runWriteGraphIODualizeable dir = reinterpret $ \case
       fromExceptionToUserError $ S2.serializeNodeEx (G.emptyNode nid :: Node t) dir
   DeleteNode nid -> do
     n <- S2.deserializeNodeF @t dir nid
-    let del = Set.filter ((/= nid) . view #_connectNode) :: Set (Connect t) -> Set (Connect t)
-        delIn = over #_nodeIncoming del
-        delOut = over #_nodeOutgoing del
-        neighborsIn = toListOf (#_nodeIncoming . folded . #_connectNode) n
-        neighborsOut = toListOf (#_nodeOutgoing . folded . #_connectNode) n
+    let del = Set.filter ((/= nid) . view #node) :: Set (Connect t) -> Set (Connect t)
+        delIn = over #incoming del
+        delOut = over #outgoing del
+        neighborsIn = toListOf (#incoming . folded . #node) n
+        neighborsOut = toListOf (#outgoing . folded . #node) n
         neighbors = ordNub (neighborsIn ++ neighborsOut)
     liftIO $ forM_ neighbors $ S2.withSerializedNode (delIn . delOut) dir
     convertError @UserError . fromExceptionToUserError $ S2.removeNode dir nid
@@ -330,14 +330,14 @@ runWriteGraphIODualizeable dir = reinterpret $ \case
     let (Edge i t o) = ifDualized dual G.dualizeEdge e
     runWriteGraphIODualizeable @t dir (touchNode @t i)
     runWriteGraphIODualizeable @t dir (touchNode @t o)
-    liftIO $ S2.withSerializedNode (#_nodeOutgoing %~ insertSet (Connect t o)) dir i
-    liftIO $ S2.withSerializedNode (#_nodeIncoming %~ insertSet (Connect t i)) dir o
+    liftIO $ S2.withSerializedNode (#outgoing %~ insertSet (Connect t o)) dir i
+    liftIO $ S2.withSerializedNode (#incoming %~ insertSet (Connect t i)) dir o
   DeleteEdge e -> do
     dual <- input @IsDual
     let (Edge i t o) = ifDualized dual G.dualizeEdge e
-    liftIO $ S2.withSerializedNode (#_nodeOutgoing %~ deleteSet (Connect t o)) dir i
-    liftIO $ S2.withSerializedNode (#_nodeIncoming %~ deleteSet (Connect t i)) dir o
-  SetData nid d -> liftIO $ S2.withSerializedNode (#_nodeData .~ d :: Node t -> Node t) dir nid
+    liftIO $ S2.withSerializedNode (#outgoing %~ deleteSet (Connect t o)) dir i
+    liftIO $ S2.withSerializedNode (#incoming %~ deleteSet (Connect t i)) dir o
+  SetData nid d -> liftIO $ S2.withSerializedNode (#associatedData .~ d :: Node t -> Node t) dir nid
 
 -- | Run both the Dualizeable effect and the WriteGraph in IO
 -- The default state of all graphs stored on disk is that they are not dual

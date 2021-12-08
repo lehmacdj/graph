@@ -110,7 +110,7 @@ test_insertNode =
         (nd 0 [] [] [] "foobar")
         helloWorldGraph
         ( set
-            (traverse . filtered ((== 0) . nidOf) . #_nodeData')
+            (traverse . filtered ((== 0) . nidOf) . #associatedData')
             (Just "foobar")
             $ nodesOf (snd helloWorldGraph)
         ),
@@ -120,7 +120,7 @@ test_insertNode =
         (nd 1 [] [] [] "HELLO")
         helloWorldGraph
         ( set
-            (traverse . filtered ((== 1) . nidOf) . #_nodeData')
+            (traverse . filtered ((== 1) . nidOf) . #associatedData')
             (Just "HELLO")
             $ nodesOf (snd helloWorldGraph)
         ),

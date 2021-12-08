@@ -81,7 +81,7 @@ resolvePathSuccesses nid = \case
   One -> pure $ singleton nid
   Wild -> do
     n <- getNodeSem nid
-    pure $ toSetOf (folded . #_connectNode) (outgoingConnectsOf @t n)
+    pure $ toSetOf (folded . #node) (outgoingConnectsOf @t n)
   Literal x -> do
     n <- getNodeSem nid
     pure . setFromList $ matchConnect x (outgoingConnectsOf @t n)

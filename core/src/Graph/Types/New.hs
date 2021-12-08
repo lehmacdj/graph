@@ -29,25 +29,26 @@ instance ToJSON UnlabledEdge where
 -- also include those in the node's representation
 data Node' = Node'
   { -- | unique node id
-    _nodeId' :: NID,
-    _nodeIncoming' :: Set (Connect NID),
-    _nodeOutgoing' :: Set (Connect NID),
-    _nodeReferents :: Set UnlabledEdge,
-    _nodeData' :: Maybe ByteString
+    -- TODO once we have NoFieldSelectors use that and name this id
+    nodeId' :: NID,
+    incoming' :: Set (Connect NID),
+    outgoing' :: Set (Connect NID),
+    referents :: Set UnlabledEdge,
+    associatedData' :: Maybe ByteString
   }
   deriving (Eq, Ord, Generic, NFData)
 
 instance Show Node' where
-  show n =
-    show (_nodeId' n) ++ "{"
+  show Node' {..} =
+    show nodeId' ++ "{"
       ++ "in="
-      ++ show (toList . _nodeIncoming' $ n)
+      ++ show (toList incoming')
       ++ ", out="
-      ++ show (toList . _nodeOutgoing' $ n)
+      ++ show (toList outgoing')
       ++ ", refs="
-      ++ show (toList . _nodeReferents $ n)
+      ++ show (toList referents)
       ++ ", data="
-      ++ show (_nodeData' n)
+      ++ show associatedData'
       ++ "}"
 
 referentEdge :: Edge NID -> UnlabledEdge
@@ -86,21 +87,18 @@ instance ToJSON Node' where
   toEncoding = toEncoding . nodeToPrenode'
 
 newtype Graph' = Graph'
-  { _graphNodeMap' :: Map NID Node'
+  { nodeMap' :: Map NID Node'
   }
   deriving stock (Eq, Ord, Generic)
   deriving anyclass (NFData)
 
 instance Show Graph' where
-  show = unlines' . map show . toList . _graphNodeMap'
+  show = unlines' . map show . toList . nodeMap'
     where
       unlines' = intercalate "\n"
 
-nodeMap' :: Graph' -> Map NID Node'
-nodeMap' = view #_graphNodeMap'
-
 withNodeMap' :: Graph' -> (Map NID Node' -> Map NID Node') -> Graph'
-withNodeMap' = flip (over #_graphNodeMap')
+withNodeMap' = flip (over #nodeMap')
 
 dualizeUnlabledEdge :: UnlabledEdge -> UnlabledEdge
 dualizeUnlabledEdge (UnlabledEdge i o) = UnlabledEdge o i

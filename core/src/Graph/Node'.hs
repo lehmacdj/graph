@@ -7,34 +7,34 @@ import Graph.Types.New
 import MyPrelude
 
 indegreeOf :: Node' -> Int
-indegreeOf = Set.size . view #_nodeIncoming'
+indegreeOf = Set.size . view #incoming'
 
 outdegreeOf :: Node' -> Int
-outdegreeOf = Set.size . view #_nodeOutgoing'
+outdegreeOf = Set.size . view #outgoing'
 
 nidOf :: Node' -> NID
-nidOf = _nodeId'
+nidOf = nodeId'
 
 incomingConnectsOf :: Node' -> Set (Connect NID)
-incomingConnectsOf = _nodeIncoming'
+incomingConnectsOf = incoming'
 
 outgoingConnectsOf :: Node' -> Set (Connect NID)
-outgoingConnectsOf = _nodeOutgoing'
+outgoingConnectsOf = outgoing'
 
 incomingNeighborsOf :: Node' -> Set NID
-incomingNeighborsOf = Set.map _connectNode . incomingConnectsOf
+incomingNeighborsOf = Set.map node . incomingConnectsOf
 
 incomingTransitionsOf :: Node' -> Set NID
-incomingTransitionsOf = Set.map _connectTransition . incomingConnectsOf
+incomingTransitionsOf = Set.map (view #transition) . incomingConnectsOf
 
 outgoingNeighborsOf :: Node' -> Set NID
-outgoingNeighborsOf = Set.map _connectNode . incomingConnectsOf
+outgoingNeighborsOf = Set.map (view #node) . incomingConnectsOf
 
 outgoingTransitionsOf :: Node' -> Set NID
-outgoingTransitionsOf = Set.map _connectTransition . outgoingConnectsOf
+outgoingTransitionsOf = Set.map (view #transition) . outgoingConnectsOf
 
 dataOf :: Node' -> Maybe ByteString
-dataOf = view #_nodeData'
+dataOf = view #associatedData'
 
 -- | Warning! It is up to the user of the graph to ensure that node ids are
 -- unique within the graph

@@ -75,8 +75,8 @@ primeds f i ig = f (nodeLookup <$> i <*> pure ig) ig
 delEdge :: TransitionValid t => Edge t -> Graph t -> Graph t
 delEdge e g =
   withNodeMap g $
-    adjustMap (over #_nodeOutgoing (deleteSet (outConnect e))) (source e)
-      . adjustMap (over #_nodeIncoming (deleteSet (inConnect e))) (sink e)
+    adjustMap (over #outgoing (deleteSet (outConnect e))) (source e)
+      . adjustMap (over #incoming (deleteSet (inConnect e))) (sink e)
 
 delEdges ::
   TransitionValid t =>
@@ -94,10 +94,10 @@ delNode n g =
       . omap deleteOutgoing
       . deleteMap nid
   where
-    nid = _nodeId n
-    del = filterSet ((/= nid) . view #_connectNode)
-    deleteIncoming = over #_nodeIncoming del
-    deleteOutgoing = over #_nodeOutgoing del
+    nid = view #nodeId n
+    del = filterSet ((/= nid) . view #node)
+    deleteIncoming = over #incoming del
+    deleteOutgoing = over #outgoing del
 
 delNode' ::
   TransitionValid t =>
@@ -124,8 +124,8 @@ insertEdge ::
   Graph t
 insertEdge e g =
   withNodeMap g $
-    adjustMap (over #_nodeOutgoing (insertSet (outConnect e))) (source e)
-      . adjustMap (over #_nodeIncoming (insertSet (inConnect e))) (sink e)
+    adjustMap (over #outgoing (insertSet (outConnect e))) (source e)
+      . adjustMap (over #incoming (insertSet (inConnect e))) (sink e)
 
 insertEdges ::
   TransitionValid t =>
@@ -144,9 +144,9 @@ insertNode n g =
   insertEdges (incomingEs ++ outgoingEs) $
     withNodeMap g (insertMap nid n)
   where
-    nid = _nodeId n
-    incomingEs = map (`incomingEdge` nid) (toList (_nodeIncoming n))
-    outgoingEs = map (outgoingEdge nid) (toList (_nodeOutgoing n))
+    nid = view #nodeId n
+    incomingEs = map (`incomingEdge` nid) (toList (view #incoming n))
+    outgoingEs = map (outgoingEdge nid) (toList (view #outgoing n))
 
 insertNodes ::
   TransitionValid t =>
@@ -177,7 +177,7 @@ setData ::
   Node t ->
   Graph t ->
   Graph t
-setData d n g = insertNode (set #_nodeData d (nodeConsistentWithGraph g n)) g
+setData d n g = insertNode (set #associatedData d (nodeConsistentWithGraph g n)) g
 
 setData' ::
   TransitionValid t =>

@@ -80,6 +80,8 @@ default-extensions:
 - DeriveGeneric
 - DeriveTraversable
 - DerivingStrategies
+- DisambiguateRecordFields
+- DuplicateRecordFields
 - FlexibleContexts
 - GADTs
 - GeneralizedNewtypeDeriving

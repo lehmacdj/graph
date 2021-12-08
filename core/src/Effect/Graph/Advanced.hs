@@ -39,8 +39,8 @@ insertNode n = do
   let nid = nidOf n
   touchNode @t nid
   setData @t nid (dataOf n)
-  let esOut = toListOf (#_nodeOutgoing . folded . to (outgoingEdge nid)) n
-      esIn = toListOf (#_nodeIncoming . folded . to (`incomingEdge` nid)) n
+  let esOut = toListOf (#outgoing . folded . to (outgoingEdge nid)) n
+      esIn = toListOf (#incoming . folded . to (`incomingEdge` nid)) n
   forM_ esIn insertEdge
   forM_ esOut insertEdge
 
@@ -128,8 +128,8 @@ mergeNode ::
 mergeNode nid1 nid2 = do
   n1 <- getNodeSem nid1
   n2 <- getNodeSem nid2
-  let cin = #_nodeIncoming %~ selfLoopify nid2 nid1 . (`union` incomingConnectsOf n2)
-      cout = #_nodeOutgoing %~ selfLoopify nid2 nid1 . (`union` outgoingConnectsOf n2)
+  let cin = #incoming %~ selfLoopify nid2 nid1 . (`union` incomingConnectsOf n2)
+      cout = #outgoing %~ selfLoopify nid2 nid1 . (`union` outgoingConnectsOf n2)
       nNew = cin . cout $ n1
   deleteNode @t nid1
   deleteNode @t nid2

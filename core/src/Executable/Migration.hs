@@ -61,9 +61,9 @@ getNodeSem' = subsumeUserError . getNodeSem
 connectsMatchingPredicate :: Node String -> (String -> Bool) -> Set (Connect String)
 connectsMatchingPredicate n predicate =
   flip setOf n $
-    #_nodeOutgoing
+    #outgoing
       . folded
-      . filtered (predicate . view #_connectTransition)
+      . filtered (predicate . view #transition)
 
 leftStrength :: Functor m => (a, m b) -> m (a, b)
 leftStrength (a, mb) = (a,) <$> mb
@@ -74,7 +74,7 @@ augmentWithNode ::
   Connect String ->
   Sem r ([Connect String], Node String)
 augmentWithNode prevConnects =
-  leftStrength . ((: prevConnects) &&& getNodeSem' . view #_connectNode)
+  leftStrength . ((: prevConnects) &&& getNodeSem' . view #node)
 
 migrate ::
   Members
@@ -121,7 +121,7 @@ migrate = do
   let targets =
         concat $
           seconds <&> \(prevConnects, s) ->
-            map ((: prevConnects) &&& view #_connectNode) . toList $
+            map ((: prevConnects) &&& view #node) . toList $
               s `connectsMatchingPredicate` validFS
   nodesToDelete <-
     ordNub . concat <$> for targets \(prevConnects, nid) -> do

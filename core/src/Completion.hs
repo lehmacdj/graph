@@ -86,7 +86,7 @@ completePath env (i, _) = case getPartialPath (takeRelevantFromEnd i) of
         nts <- getNodes @String ntids
         let octs =
               -- outgoing connect transitions
-              toListOf (folded . #_nodeOutgoing . folded . #_connectTransition) nts
+              toListOf (folded . #outgoing . folded . #transition) nts
         pure (fromMaybe i (stripPrefix (reverse end) i), mkCompleter octs end)
 
 completionFunction :: Env -> (String, String) -> IO (String, [Completion])

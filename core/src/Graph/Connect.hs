@@ -22,8 +22,8 @@ pairOfConnect (Connect x nid) = (x, nid)
 -- TODO: make this return (Set NID)
 matchConnect :: TransitionValid t => t -> Set (Connect t) -> [NID]
 matchConnect x cs =
-  map (view #_connectNode)
-    . filter ((== x) . view #_connectTransition)
+  map (view #node)
+    . filter ((== x) . view #transition)
     $ toList cs
 
 -- | selfLoopify n1 n2 is a function that makes self loops on n1 self loops on n2
@@ -33,4 +33,4 @@ selfLoopify ::
   NID ->
   Set (Connect t) ->
   Set (Connect t)
-selfLoopify nid nid' = (setmapped . #_connectNode . filtered (== nid)) .~ nid'
+selfLoopify nid nid' = (setmapped . #node . filtered (== nid)) .~ nid'
