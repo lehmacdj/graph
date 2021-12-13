@@ -35,6 +35,7 @@ import qualified Data.Aeson as Aeson
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Lazy as BL
 import qualified Graph
+import Graph.DataTransferObjects
 import Graph.Node (dataOf, nidOf)
 import Graph.Types
 import MyPrelude
@@ -68,13 +69,13 @@ nodeDataFile base nid = base </> (show nid ++ ".data")
 -- yields better error handling that isn't quite as sketchy
 
 serializeNodeEx ::
-  (ToJSON (Node t), TransitionValid t) =>
+  (ToJSON (NodeDTO t), TransitionValid t) =>
   Node t ->
   FilePath ->
   IO ()
 serializeNodeEx n base = do
   createDirectoryIfMissing True base
-  BL.writeFile (linksFile base (nidOf n)) (Aeson.encode n)
+  BL.writeFile (linksFile base (nidOf n)) (Aeson.encode . nodeToDTO $ n)
   case dataOf n of
     Just d -> B.writeFile (nodeDataFile base (nidOf n)) d
     Nothing ->
@@ -84,7 +85,7 @@ serializeNodeEx n base = do
 
 deserializeNodeF ::
   forall t effs.
-  ( FromJSON (Node t),
+  ( FromJSON (NodeDTO t),
     TransitionValid t,
     Member (Error UserError) effs,
     Member (Embed IO) effs
@@ -101,7 +102,7 @@ deserializeNodeF base nid = do
 -- Nothing. No attempt is made to read the data from the disk.
 deserializeNodeWithoutDataF ::
   forall t effs.
-  ( FromJSON (Node t),
+  ( FromJSON (NodeDTO t),
     TransitionValid t,
     Member (Error UserError) effs,
     Member (Embed IO) effs
@@ -112,14 +113,14 @@ deserializeNodeWithoutDataF ::
 deserializeNodeWithoutDataF base nid = do
   fileContents <- fromExceptionToUserError (B.readFile (linksFile base nid))
   throwLeft
-    . left AesonDeserialize
+    . bimap AesonDeserialize nodeFromDTO
     . Aeson.eitherDecode
     . fromStrict
     $ fileContents
 
 deserializeNode ::
   forall t m.
-  ( FromJSON (Node t),
+  ( FromJSON (NodeDTO t),
     TransitionValid t,
     MonadIO m
   ) =>
@@ -128,7 +129,8 @@ deserializeNode ::
   m (Either String (Node t))
 deserializeNode base nid = do
   fileContents <- liftIO $ B.readFile (linksFile base nid)
-  let node = (Aeson.eitherDecode $ fromStrict fileContents :: Either String (Node t))
+  let node :: Either String (Node t)
+      node = second nodeFromDTO . Aeson.eitherDecode $ fromStrict fileContents
   d <- liftIO $ tryGetBinaryData base nid
   pure $ fmap (#associatedData .~ d) node
 
@@ -155,8 +157,8 @@ removeNode base nid = do
 -- ignore nodes that don't exist or if an error occurs
 withSerializedNode ::
   forall t.
-  ( FromJSON (Node t),
-    ToJSON (Node t),
+  ( FromJSON (NodeDTO t),
+    ToJSON (NodeDTO t),
     TransitionValid t
   ) =>
   (Node t -> Node t) ->

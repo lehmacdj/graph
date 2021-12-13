@@ -108,8 +108,8 @@ runRawGraphWithPath p = runInputConst p . runRawGraphAsInput . raiseUnder
 -- serialization format to access the graph
 runReadGraphIO ::
   ( Member (Embed IO) effs,
-    FromJSON (Node t),
-    ToJSON (Node t),
+    FromJSON t,
+    ToJSON t,
     TransitionValid t
   ) =>
   FilePath ->
@@ -122,8 +122,8 @@ runReadGraphIO dir = runInputConst (IsDual False) . runReadGraphIODualizeable di
 runReadGraphIODualizeable ::
   forall t effs.
   ( Member (Embed IO) effs,
-    FromJSON (Node t),
-    ToJSON (Node t),
+    FromJSON t,
+    ToJSON t,
     TransitionValid t
   ) =>
   FilePath ->
@@ -159,8 +159,8 @@ runReadGraphDualizeableIO ::
   forall t effs.
   ( Member (Embed IO) effs,
     Member Dualizeable effs,
-    FromJSON (Node t),
-    ToJSON (Node t),
+    FromJSON t,
+    ToJSON t,
     TransitionValid t
   ) =>
   FilePath ->
@@ -205,8 +205,8 @@ runWriteGraphIO ::
   forall t effs.
   ( Member (Embed IO) effs,
     Members [Error UserError, Warn UserError] effs,
-    FromJSON (Node t),
-    ToJSON (Node t),
+    FromJSON t,
+    ToJSON t,
     TransitionValid t
   ) =>
   FilePath ->
@@ -305,8 +305,8 @@ runWriteGraphIODualizeable ::
   ( Member (Embed IO) effs,
     Member (Error UserError) effs,
     Member (Warn UserError) effs,
-    FromJSON (Node t),
-    ToJSON (Node t),
+    FromJSON t,
+    ToJSON t,
     TransitionValid t
   ) =>
   FilePath ->
@@ -347,8 +347,8 @@ runWriteGraphDualizeableIO ::
   forall t effs.
   ( Member (Embed IO) effs,
     Members [Dualizeable, Error UserError, Warn UserError] effs,
-    FromJSON (Node t),
-    ToJSON (Node t),
+    FromJSON t,
+    ToJSON t,
     TransitionValid t
   ) =>
   FilePath ->

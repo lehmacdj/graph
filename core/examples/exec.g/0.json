@@ -1,1 +1,1 @@
-{"id":0,"incoming":[],"outgoing":[{"_connectTransition":"cat","_connectNode":2},{"_connectTransition":"clear","_connectNode":3},{"_connectTransition":"write","_connectNode":1}]}
+{"id":0,"incoming":[],"outgoing":[{"t":"cat","n":2},{"t":"clear","n":3},{"t":"write","n":1}]}

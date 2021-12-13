@@ -1,7 +1,6 @@
 module TestPrelude
   ( module MyPrelude,
-    module Test.Tasty,
-    module Test.Tasty.HUnit,
+    module X,
     withTempGraph,
     withEmptyTempGraph,
   )
@@ -12,8 +11,9 @@ import MyPrelude hiding (assert)
 import System.Directory (copyFile)
 import System.Directory.Tree (AnchoredDirTree ((:/)))
 import qualified System.Directory.Tree as DT
-import Test.Tasty
-import Test.Tasty.HUnit
+import Test.Hspec.Expectations as X
+import Test.Tasty as X
+import Test.Tasty.HUnit as X
 
 -- | initializes a graph that is either empty, or based on a template graph
 -- at the specified location

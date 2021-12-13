@@ -40,6 +40,7 @@ dependencies:
 - free
 - generic-lens
 - haskeline
+- hspec-expectations
 - html-conduit
 - http-conduit
 - http-types
@@ -80,6 +81,7 @@ default-extensions:
 - DeriveGeneric
 - DeriveTraversable
 - DerivingStrategies
+- DerivingVia
 - DisambiguateRecordFields
 - DuplicateRecordFields
 - FlexibleContexts

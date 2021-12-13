@@ -1,3 +1,5 @@
+{-# LANGUAGE UndecidableInstances #-}
+
 module MyPrelude
   ( -- * Fundamentally MyPrelude is ClassyPrelude with some extra stuff
     module ClassyPrelude,
@@ -32,8 +34,11 @@ import ClassyPrelude
 import Control.DeepSeq
 import Control.Lens hiding (op)
 import Control.Lens as X (over, set, view, (&), (.~), (<&>), (^.))
+import Data.Aeson
+import Data.Coerce as X (Coercible, coerce)
 import Data.Generics.Labels
 import qualified Data.Set as Set
+import GHC.Generics as X (Generic, Rep)
 import GHC.Stack as X (HasCallStack)
 import Polysemy
 import Polysemy.Error
@@ -128,3 +133,19 @@ handleError action handler = do
   case result of
     Right x -> pure x
     Left e -> handler e
+
+newtype FastGenericEncoding a = GenericEncodingAeson
+  {unGenericEncodingAeson :: a}
+
+instance
+  (Generic a, GToJSON' Encoding Zero (Rep a), GToJSON' Value Zero (Rep a)) =>
+  ToJSON (FastGenericEncoding a)
+  where
+  toJSON = genericToJSON defaultOptions . unGenericEncodingAeson
+  toEncoding = genericToEncoding defaultOptions . unGenericEncodingAeson
+
+instance
+  (Generic a, GFromJSON Zero (Rep a)) =>
+  FromJSON (FastGenericEncoding a)
+  where
+  parseJSON = fmap GenericEncodingAeson . genericParseJSON defaultOptions

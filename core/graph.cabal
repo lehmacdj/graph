@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 0543b094f272d2715b141a999ef14ee03b5189e9a5347baaefa410d6c79b961b
+-- hash: a29879bc5b3a96221bf289d428f2cd50b40da2117df3c7442e5de75a46bf1759
 
 name:           graph
 version:        0.1.0.0
@@ -50,10 +50,10 @@ library
       Graph
       Graph'
       Graph.Connect
+      Graph.DataTransferObjects
       Graph.Edge
       Graph.Node
       Graph.Node'
-      Graph.Serialize
       Graph.Serialize2
       Graph.Serialize3
       Graph.Types
@@ -95,6 +95,7 @@ library
       DeriveGeneric
       DeriveTraversable
       DerivingStrategies
+      DerivingVia
       DisambiguateRecordFields
       DuplicateRecordFields
       FlexibleContexts
@@ -137,6 +138,7 @@ library
     , free
     , generic-lens
     , haskeline
+    , hspec-expectations
     , html-conduit
     , http-conduit
     , http-types
@@ -183,6 +185,7 @@ executable dump-graph
       DeriveGeneric
       DeriveTraversable
       DerivingStrategies
+      DerivingVia
       DisambiguateRecordFields
       DuplicateRecordFields
       FlexibleContexts
@@ -226,6 +229,7 @@ executable dump-graph
     , generic-lens
     , graph
     , haskeline
+    , hspec-expectations
     , html-conduit
     , http-conduit
     , http-types
@@ -272,6 +276,7 @@ executable ge
       DeriveGeneric
       DeriveTraversable
       DerivingStrategies
+      DerivingVia
       DisambiguateRecordFields
       DuplicateRecordFields
       FlexibleContexts
@@ -315,6 +320,7 @@ executable ge
     , generic-lens
     , graph
     , haskeline
+    , hspec-expectations
     , html-conduit
     , http-conduit
     , http-types
@@ -361,6 +367,7 @@ executable migration
       DeriveGeneric
       DeriveTraversable
       DerivingStrategies
+      DerivingVia
       DisambiguateRecordFields
       DuplicateRecordFields
       FlexibleContexts
@@ -404,6 +411,7 @@ executable migration
     , generic-lens
     , graph
     , haskeline
+    , hspec-expectations
     , html-conduit
     , http-conduit
     , http-types
@@ -438,6 +446,7 @@ test-suite graph-test
   main-is: Spec.hs
   other-modules:
       Effect.UtilSpec
+      Graph.DataTransferObjectsSpec
       Graph.Types.NIDSpec
       GraphEditorGoldenSpec
       GraphSpec
@@ -461,6 +470,7 @@ test-suite graph-test
       DeriveGeneric
       DeriveTraversable
       DerivingStrategies
+      DerivingVia
       DisambiguateRecordFields
       DuplicateRecordFields
       FlexibleContexts
@@ -505,6 +515,7 @@ test-suite graph-test
     , generic-lens
     , graph
     , haskeline
+    , hspec-expectations
     , html-conduit
     , http-conduit
     , http-types
