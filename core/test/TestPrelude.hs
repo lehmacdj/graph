@@ -3,9 +3,11 @@ module TestPrelude
     module X,
     withTempGraph,
     withEmptyTempGraph,
+    representedByJson,
   )
 where
 
+import Data.Aeson
 import Graph.Serialize2 (initializeGraph)
 import MyPrelude hiding (assert)
 import System.Directory (copyFile)
@@ -40,3 +42,12 @@ withTempGraph m_template action = do
 
 withEmptyTempGraph :: (FilePath -> IO a) -> IO a
 withEmptyTempGraph = withTempGraph Nothing
+
+representedByJson ::
+  (ToJSON a, FromJSON a, Eq a, Show a) => a -> LByteString -> TestTree
+representedByJson x j =
+  testGroup
+    (show x ++ " has correct json representation")
+    [ testCase "serializes" $ encode x `shouldBe` j,
+      testCase "deserializes" $ eitherDecode j `shouldBe` Right x
+    ]

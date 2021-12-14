@@ -231,14 +231,14 @@ runWriteGraphIO' dir = interpret $ \case
           filterSet ((/= nid) . view #node)
             . filterSet ((/= nid) . view #transition)
         delByLabel =
-          filterSet ((/= nid) . view #_unlabledEdgeSource)
-            . filterSet ((/= nid) . view #_unlabledEdgeSink)
+          filterSet ((/= nid) . view #source)
+            . filterSet ((/= nid) . view #sink)
         delIn = over #incoming' del
         delOut = over #outgoing' del
         delRef = over #referents delByLabel
         neighborsIn = #incoming' . folded . (#node <> #transition)
         neighborsOut = #outgoing' . folded . (#node <> #transition)
-        neighborsRef = #referents . folded . (#_unlabledEdgeSink <> #_unlabledEdgeSource)
+        neighborsRef = #referents . folded . (#sink <> #source)
         neighbors = toSetOf (neighborsIn <> neighborsOut <> neighborsRef) n
     liftIO $ for_ neighbors $ S3.withSerializedNode dir (delIn . delOut . delRef)
     convertError @UserError . fromExceptionToUserError $ S2.removeNode dir nid

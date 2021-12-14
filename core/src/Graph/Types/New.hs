@@ -1,7 +1,3 @@
-{-# LANGUAGE DeriveAnyClass #-}
-{-# LANGUAGE DeriveGeneric #-}
-{-# LANGUAGE TemplateHaskell #-}
-
 module Graph.Types.New where
 
 import Control.DeepSeq
@@ -11,8 +7,8 @@ import Graph.Types
 import MyPrelude
 
 data UnlabledEdge = UnlabledEdge
-  { _unlabledEdgeSource :: NID,
-    _unlabledEdgeSink :: NID
+  { source :: NID,
+    sink :: NID
   }
   deriving (Eq, Ord, Generic, NFData)
 
@@ -56,35 +52,6 @@ referentEdge (Edge i _ o) = UnlabledEdge i o
 
 labledWith :: NID -> UnlabledEdge -> Edge NID
 labledWith l (UnlabledEdge i o) = Edge i l o
-
--- | For the purpose of implementing from and ToJSON we use Prenode'.
-data Prenode' = Prenode'
-  { -- | unique node id
-    _prenode'Id :: NID,
-    _prenode'Incoming :: Set (Connect NID),
-    _prenode'Outgoing :: Set (Connect NID),
-    _prenode'Referents :: Set UnlabledEdge
-  }
-  deriving (Show, Eq, Ord, Generic, NFData)
-
-instance FromJSON Prenode' where
-  parseJSON = genericParseJSON (strippedPrefixOptions "_prenode'")
-
-instance ToJSON Prenode' where
-  toEncoding = genericToEncoding (strippedPrefixOptions "_prenode'")
-
-prenodeToNode' :: Prenode' -> Node'
-prenodeToNode' (Prenode' nid i o r) = Node' nid i o r Nothing
-
-nodeToPrenode' :: Node' -> Prenode'
-nodeToPrenode' (Node' nid i o r _) = Prenode' nid i o r
-
-instance FromJSON Node' where
-  parseJSON = fmap prenodeToNode' . parseJSON
-
-instance ToJSON Node' where
-  toJSON = toJSON . nodeToPrenode'
-  toEncoding = toEncoding . nodeToPrenode'
 
 newtype Graph' = Graph'
   { nodeMap' :: Map NID Node'

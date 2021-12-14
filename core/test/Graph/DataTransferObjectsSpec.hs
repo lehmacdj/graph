@@ -1,18 +1,8 @@
 module Graph.DataTransferObjectsSpec where
 
-import Data.Aeson
 import Graph.DataTransferObjects
 import Graph.Types
 import TestPrelude
-
-representedByJson ::
-  (ToJSON a, FromJSON a, Eq a, Show a) => a -> LByteString -> TestTree
-representedByJson x j =
-  testGroup
-    (show x ++ " has correct json representation")
-    [ testCase "serializes" $ encode x `shouldBe` j,
-      testCase "deserializes" $ eitherDecode j `shouldBe` Right x
-    ]
 
 test_nodeDTO_backwardsCompat :: TestTree
 test_nodeDTO_backwardsCompat =

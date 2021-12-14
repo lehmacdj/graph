@@ -6,9 +6,7 @@ where
 import Control.DeepSeq
 import Control.Lens
 import Data.Aeson
-import qualified Data.Char as Char
 import qualified Data.Map as Map
-import Data.Maybe (fromJust)
 import GHC.Generics
 import MyPrelude
 
@@ -57,16 +55,6 @@ instance (Show t, Ord t) => Show (Node t) where
       ++ ", out="
       ++ show (toList outgoing)
       ++ "}"
-
-lowercaseFirst :: String -> String
-lowercaseFirst [] = []
-lowercaseFirst (x : xs) = Char.toLower x : xs
-
-strippedPrefixOptions :: String -> Options
-strippedPrefixOptions prefix =
-  defaultOptions
-    { fieldLabelModifier = lowercaseFirst . fromJust . stripPrefix prefix
-    }
 
 newtype Graph t = Graph
   { nodeMap :: Map NID (Node t)

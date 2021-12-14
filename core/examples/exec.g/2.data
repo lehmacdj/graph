@@ -1,7 +1,9 @@
 {-# LANGUAGE DataKinds #-}
+{-# LANGUAGE NoImplicitPrelude #-}
+{-# LANGUAGE OverloadedLabels #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TypeApplications #-}
-{-# LANGUAGE NoImplicitPrelude #-}
+
 {-# OPTIONS_GHC -fplugin=Polysemy.Plugin #-}
 
 module Main where
@@ -35,6 +37,6 @@ prog ::
 prog = do
   nid <- currentLocation
   n <- subsumeUserError $ getNodeSem nid
-  case n ^. nodeData of
+  case n ^. #associatedData of
     Nothing -> say "no node data"
     Just x -> embed $ B.putStr x

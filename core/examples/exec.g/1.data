@@ -1,6 +1,7 @@
 {-# LANGUAGE DataKinds #-}
-{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE NoImplicitPrelude #-}
+{-# LANGUAGE OverloadedLabels #-}
+{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TypeApplications #-}
 
 {-# OPTIONS_GHC -fplugin=Polysemy.Plugin #-}
@@ -35,5 +36,5 @@ prog ::
 prog = do
   nid <- currentLocation
   n <- subsumeUserError $ getNodeSem nid
-  setData nid . maybe Just (\x y -> Just (x <> y))  (n ^. nodeData) $
+  setData nid . maybe Just (\x y -> Just (x <> y))  (n ^. #associatedData) $
     encodeUtf8 "Hello world!\n"

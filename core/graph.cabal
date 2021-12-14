@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: a29879bc5b3a96221bf289d428f2cd50b40da2117df3c7442e5de75a46bf1759
+-- hash: e5431683395124bc5981e417a92d545fb1a75d9b15c71e0f12846ef007d7a0af
 
 name:           graph
 version:        0.1.0.0
@@ -51,6 +51,7 @@ library
       Graph'
       Graph.Connect
       Graph.DataTransferObjects
+      Graph.DataTransferObjects.V3
       Graph.Edge
       Graph.Node
       Graph.Node'
@@ -446,6 +447,7 @@ test-suite graph-test
   main-is: Spec.hs
   other-modules:
       Effect.UtilSpec
+      Graph.DataTransferObjects.V3Spec
       Graph.DataTransferObjectsSpec
       Graph.Types.NIDSpec
       GraphEditorGoldenSpec

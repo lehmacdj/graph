@@ -49,6 +49,7 @@ import qualified Data.Aeson as Aeson
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Lazy as BL
 import qualified Graph'
+import Graph.DataTransferObjects.V3
 import Graph.Node' (dataOf, emptyNode, nidOf)
 import Graph.Types
 import Graph.Types.New
@@ -84,7 +85,7 @@ nodeDataFile base nid = base </> (show nid ++ ".data")
 serializeNode :: MonadIO m => FilePath -> Node' -> m ()
 serializeNode base n = liftIO $ do
   createDirectoryIfMissing True base
-  BL.writeFile (linksFile base (nidOf n)) (Aeson.encode n)
+  BL.writeFile (linksFile base (nidOf n)) (Aeson.encode $ nodeToDTO n)
   for_ (dataOf n) $ B.writeFile (nodeDataFile base (nidOf n))
 
 -- | returns Left AesonParseError or a successfully parsed node. IOException
@@ -92,7 +93,7 @@ serializeNode base n = liftIO $ do
 deserializeNode :: MonadIO m => FilePath -> NID -> m (Either String Node')
 deserializeNode base nid = do
   fileContents <- liftIO $ B.readFile (linksFile base nid)
-  let node = Aeson.eitherDecode (fromStrict fileContents)
+  let node = second nodeFromDTO . Aeson.eitherDecode $ fromStrict fileContents
   d <- liftIO $ tryGetBinaryData base nid
   pure $ fmap (#associatedData' .~ d) node
 
