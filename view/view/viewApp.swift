@@ -24,8 +24,9 @@ struct viewApp: App {
 
     var body: some Scene {
         WindowGroup {
-            if let fileUrl = fileUrl {
-                ContentView(fileUrl: fileUrl)
+            if let fileUrl = fileUrl,
+               !presentingFileImporter {
+                ContentView(fileUrl: fileUrl, presentingFileImporter: $presentingFileImporter)
             } else {
                 // TODO: this behavior is broken; but semi functional it would be good if I could
                 // get the prompt to always appear if there isn't a fileUrl; but its good enough

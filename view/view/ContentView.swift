@@ -11,10 +11,18 @@ import QuickLookThumbnailing
 
 struct ContentView: View {
     let fileUrl: URL
+    @Binding var presentingFileImporter: Bool
 
     var body: some View {
         NavigationView {
             NodeView(of: Root(dir: fileUrl).origin)
+                .toolbar {
+                    ToolbarItem(placement: .navigationBarLeading) {
+                        Button(action: { presentingFileImporter.toggle() }) {
+                            Text("Select graph")
+                        }
+                    }
+                }
         }
         .navigationViewStyle(StackNavigationViewStyle())
     }
