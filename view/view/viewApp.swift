@@ -9,29 +9,21 @@ import SwiftUI
 
 @main
 struct viewApp: App {
-    @State var fileUrl: URL? = nil {
-        didSet {
-            switch fileUrl {
-            case .some(_):
-                presentingFileImporter = false
-            case .none:
-                presentingFileImporter = true
-            }
-        }
-    }
+    @State var fileUrl: URL? = nil
 
     @State var presentingFileImporter: Bool = true
 
     var body: some Scene {
         WindowGroup {
-            if let fileUrl = fileUrl,
-               !presentingFileImporter {
-                ContentView(fileUrl: fileUrl, presentingFileImporter: $presentingFileImporter)
+            if let fileUrl = fileUrl {
+                ContentView(fileUrl: fileUrl, doSelectFile: initiateFileSelection)
             } else {
-                // TODO: this behavior is broken; but semi functional it would be good if I could
-                // get the prompt to always appear if there isn't a fileUrl; but its good enough
-                Button("Please select a graph directory...", action: { presentingFileImporter.toggle() })
+                Button("Please select a graph directory...", action: { presentingFileImporter = true })
                     .onTapGesture { presentingFileImporter = true }
+                    .onAppear { presentingFileImporter = true }
+                    .onChange(of: presentingFileImporter) { _ in
+                        initiateFileSelection()
+                    }
                     .fileImporter(
                         isPresented: $presentingFileImporter,
                         allowedContentTypes: [.graph, .directory, .folder],
@@ -40,7 +32,12 @@ struct viewApp: App {
             }
         }
     }
-    
+
+    func initiateFileSelection() {
+        fileUrl = nil
+        presentingFileImporter = true
+    }
+
     func setFileURL(_ result: Result<URL, Error>) {
         switch result {
         case .success(let url):
@@ -54,6 +51,8 @@ struct viewApp: App {
             fileUrl = url
         case .failure(let err):
             error(err.localizedDescription)
+            fileUrl = nil
+            presentingFileImporter = true
         }
     }
 }
