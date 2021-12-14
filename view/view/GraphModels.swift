@@ -179,8 +179,8 @@ struct ConnectDTO: Decodable, Encodable {
     let transition: String
     let id: NID
     enum CodingKeys: String, CodingKey {
-        case transition = "_connectTransition"
-        case id = "_connectNode"
+        case transition = "t"
+        case id = "n"
     }
 }
 
