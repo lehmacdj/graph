@@ -18,17 +18,31 @@ struct viewApp: App {
             if let fileUrl = fileUrl {
                 ContentView(fileUrl: fileUrl, doSelectFile: initiateFileSelection)
             } else {
-                Button("Please select a graph directory...", action: { presentingFileImporter = true })
-                    .onTapGesture { presentingFileImporter = true }
-                    .onAppear { presentingFileImporter = true }
-                    .onChange(of: presentingFileImporter) { _ in
-                        initiateFileSelection()
+                Button("Please select a graph directory...", action: {
+                    // TODO(iOS 16): check if this is still necessary
+                    // Note: ideally we would not even need to use the button and just
+                    // persistently present the .fileImporter here
+                    // workaround error causing dismissing the the fileImporter sheet
+                    // with a swipe causing presentingFileImporter to be stuck in on state
+                    // https://stackoverflow.com/questions/69613669
+                    if presentingFileImporter {
+                        presentingFileImporter = false
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                            presentingFileImporter = true
+                        }
+                    } else {
+                        presentingFileImporter = true
                     }
-                    .fileImporter(
-                        isPresented: $presentingFileImporter,
-                        allowedContentTypes: [.graph, .directory, .folder],
-                        onCompletion: setFileURL
-                    )
+                })
+                .onAppear { presentingFileImporter = true }
+                .onChange(of: presentingFileImporter) { _ in
+                    initiateFileSelection()
+                }
+                .fileImporter(
+                    isPresented: $presentingFileImporter,
+                    allowedContentTypes: [.graph, .directory, .folder],
+                    onCompletion: setFileURL
+                )
             }
         }
     }
