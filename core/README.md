@@ -18,7 +18,6 @@ View its documentation for additional functionality using `stack exec ge -- --he
 This is the list of things that are small and already broken up into small
 enough tasks conceptually to be worth trying to work on. I keep them sorted in
 hybrid precedence/dependency order as well as I can.
-- switch to god module pattern for tests
 - include filetypes in graph
   - maybe use UTIs ala Apple if they seem public enough to use in a third party
     tool because it would be nice to have something a little bit more advanced

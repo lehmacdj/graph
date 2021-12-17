@@ -69,6 +69,13 @@ dependencies:
 - wreq
 - xdg-basedir
 - xml-conduit
+# below are test dependencies which are collapsed into main dependencies due to
+# God module structure
+- Glob
+- tasty
+- tasty-hunit
+- tasty-discover
+- tasty-golden
 
 default-extensions:
 - BangPatterns
@@ -145,7 +152,7 @@ executables:
 
 tests:
   graph-test:
-    main:                Spec.hs
+    main:                Main.hs
     source-dirs:         test
     ghc-options:
     - -threaded
@@ -154,8 +161,3 @@ tests:
     - -Wall
     dependencies:
     - graph
-    - Glob
-    - tasty
-    - tasty-hunit
-    - tasty-discover
-    - tasty-golden

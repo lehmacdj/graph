@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: e5431683395124bc5981e417a92d545fb1a75d9b15c71e0f12846ef007d7a0af
+-- hash: a5cb9a512018a48e60bdadf819fa3a9e177c3a85e799d2d51755ee16654e0ed4
 
 name:           graph
 version:        0.1.0.0
@@ -41,6 +41,7 @@ library
       Effect.NodeLocated
       Effect.Time
       Effect.Util
+      Effect.UtilSpec
       Effect.Warn
       Effect.Web
       Executable.DumpGraph
@@ -52,6 +53,8 @@ library
       Graph.Connect
       Graph.DataTransferObjects
       Graph.DataTransferObjects.V3
+      Graph.DataTransferObjects.V3Spec
+      Graph.DataTransferObjectsSpec
       Graph.Edge
       Graph.Node
       Graph.Node'
@@ -61,25 +64,35 @@ library
       Graph.Types.ConversionToNew
       Graph.Types.New
       Graph.Types.NID
+      Graph.Types.NIDSpec
+      GraphEditorGoldenSpec
+      GraphSpec
       History
+      HistorySpec
       Interpreters
       Lang.APath
       Lang.APath.Parse
       Lang.Command
       Lang.Command.Parse
+      Lang.Command.ParseSpec
       Lang.Parsing
+      Lang.ParsingSpec
       Lang.Path
       Lang.Path.Parse
       Lang.Path.Partial
+      Lang.Path.PartialSpec
+      Lang.PathSpec
       MyPrelude
       Options
       Polysemy.MTL
       Singleton
+      Spec
       SpecialNodes
       System.Directory.Clone
       System.IO.Term.BinarySerialize
       System.IO.Term.Image
       System.IO.Term.Image.Payload
+      TestPrelude
       UserError
   other-modules:
       Paths_graph
@@ -119,7 +132,8 @@ library
       ViewPatterns
   ghc-options: -Wall -fplugin=Polysemy.Plugin -flate-specialise -fspecialise-aggressively
   build-depends:
-      SHA
+      Glob
+    , SHA
     , aeson
     , attoparsec
     , base >=4.7 && <5
@@ -155,6 +169,10 @@ library
     , polysemy-zoo
     , random
     , random-shuffle
+    , tasty
+    , tasty-discover
+    , tasty-golden
+    , tasty-hunit
     , temporary
     , text
     , time
@@ -209,7 +227,8 @@ executable dump-graph
       ViewPatterns
   ghc-options: -Wall -fplugin=Polysemy.Plugin -flate-specialise -fspecialise-aggressively -threaded -rtsopts -with-rtsopts=-N
   build-depends:
-      SHA
+      Glob
+    , SHA
     , aeson
     , attoparsec
     , base >=4.7 && <5
@@ -246,6 +265,10 @@ executable dump-graph
     , polysemy-zoo
     , random
     , random-shuffle
+    , tasty
+    , tasty-discover
+    , tasty-golden
+    , tasty-hunit
     , temporary
     , text
     , time
@@ -300,7 +323,8 @@ executable ge
       ViewPatterns
   ghc-options: -Wall -fplugin=Polysemy.Plugin -flate-specialise -fspecialise-aggressively -threaded -rtsopts -with-rtsopts=-N
   build-depends:
-      SHA
+      Glob
+    , SHA
     , aeson
     , attoparsec
     , base >=4.7 && <5
@@ -337,6 +361,10 @@ executable ge
     , polysemy-zoo
     , random
     , random-shuffle
+    , tasty
+    , tasty-discover
+    , tasty-golden
+    , tasty-hunit
     , temporary
     , text
     , time
@@ -391,7 +419,8 @@ executable migration
       ViewPatterns
   ghc-options: -Wall -fplugin=Polysemy.Plugin -flate-specialise -fspecialise-aggressively -threaded -rtsopts -with-rtsopts=-N
   build-depends:
-      SHA
+      Glob
+    , SHA
     , aeson
     , attoparsec
     , base >=4.7 && <5
@@ -428,6 +457,10 @@ executable migration
     , polysemy-zoo
     , random
     , random-shuffle
+    , tasty
+    , tasty-discover
+    , tasty-golden
+    , tasty-hunit
     , temporary
     , text
     , time
@@ -444,20 +477,8 @@ executable migration
 
 test-suite graph-test
   type: exitcode-stdio-1.0
-  main-is: Spec.hs
+  main-is: Main.hs
   other-modules:
-      Effect.UtilSpec
-      Graph.DataTransferObjects.V3Spec
-      Graph.DataTransferObjectsSpec
-      Graph.Types.NIDSpec
-      GraphEditorGoldenSpec
-      GraphSpec
-      HistorySpec
-      Lang.Command.ParseSpec
-      Lang.ParsingSpec
-      Lang.Path.PartialSpec
-      Lang.PathSpec
-      TestPrelude
       Paths_graph
   hs-source-dirs:
       test
