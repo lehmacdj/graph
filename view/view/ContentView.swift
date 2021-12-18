@@ -12,7 +12,7 @@ import QuickLookThumbnailing
 struct ContentView: View {
     let fileUrl: URL
     let doSelectFile: () -> ()
-    
+
     var body: some View {
         NavigationView {
             NodeView(of: Root(dir: fileUrl).origin)

@@ -45,7 +45,7 @@ struct Root {
             return Node(root: self, meta: meta, dataUrl: mDataUrl)
         }
         nonmutating set {
-            // 
+            //
             guard let node = newValue else {
                 error("must specify node when writing; but was nil for nid: \(id)")
                 return
@@ -86,7 +86,7 @@ struct Root {
 
 struct Tags {
     let tagNode: Node
-    
+
     var tagOptions: [String] {
         return tagNode.outgoing
     }
@@ -204,7 +204,7 @@ extension NodeMeta: Decodable, Encodable {
         case incoming
         case outgoing
     }
-    
+
     public init(from decoder: Decoder) throws {
         let dto = try NodeDTO(from: decoder)
         id = dto.id
