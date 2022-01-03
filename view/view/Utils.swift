@@ -29,6 +29,11 @@ func error(_ message: String, callingFunction: String = #function) {
     log(message, level: .error, callingFunction: callingFunction)
 }
 
+func trace<T>(_ val: T, level: LogLevel = .info, callingFunction: String = #function) -> T {
+    log(String(reflecting: val), level: .info, callingFunction: callingFunction)
+    return val
+}
+
 enum LogLevel: Int, Equatable {
     case error = 1
     case warning = 2

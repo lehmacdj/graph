@@ -92,6 +92,12 @@ struct NodeView: View {
            let data = node.data,
            let uiImage = UIImage(data: data) {
             ImageView(uiImage: uiImage)
+        } else if node.outgoing.isEmpty,
+                  let data = node.data,
+                  let string = String(data: data, encoding: .utf8),
+                  let url = URL(string: string.trimmingCharacters(in: .whitespacesAndNewlines)),
+                  url.scheme?.starts(with: "http") ?? false {
+            SafariView(url: url)
         } else {
             // Consider using something like this to allow a grid to be used on iPad.
             // However, to get this looking good, it will take somewhat substantially
@@ -158,6 +164,12 @@ struct NodeView: View {
             if let uiImage = UIImage(data: data) {
                 NavigationLink(destination: ImageView(uiImage: uiImage)) {
                     NodePreviewView(label: "This node has data!", node: node)
+                }
+            } else if let str = String(data: data, encoding: .utf8),
+                      let url = URL(string: str.trimmingCharacters(in: .whitespacesAndNewlines)),
+                      url.scheme?.starts(with: "http") ?? false {
+                NavigationLink(destination: SafariView(url: url)) {
+                    NodePreviewView(label: "This node has a url!", node: node)
                 }
             } else {
                 // TODO: support more data kinds
