@@ -4,6 +4,7 @@
 module Effect.Graph.Advanced where
 
 import Control.Lens
+import Data.Monoid (First (First))
 import Effect.FreshNID
 import Effect.Graph
 import Effect.NodeLocated
@@ -130,7 +131,9 @@ mergeNode nid1 nid2 = do
   n2 <- getNodeSem nid2
   let cin = #incoming %~ selfLoopify nid2 nid1 . (`union` incomingConnectsOf n2)
       cout = #outgoing %~ selfLoopify nid2 nid1 . (`union` outgoingConnectsOf n2)
-      nNew = cin . cout $ n1
+      -- take n2's data first so it is easier to overwrite data if desireable
+      cdata = #associatedData .~ alaf First foldMap (view #associatedData) [n2, n1]
+      nNew = cdata . cin . cout $ n1
   deleteNode @t nid1
   deleteNode @t nid2
   insertNode @t nNew
