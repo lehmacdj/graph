@@ -13,6 +13,7 @@ extension NID {
     static let tags: NID = 1
 }
 
+/// Root represents the base directory for a graph. It also offers some conveniences for accessing some standardized parts of the graph.
 struct Root {
     let dir: URL
     let basePath: URL
@@ -32,36 +33,7 @@ struct Root {
 
     subscript(id: NID) -> Node? {
         get {
-            guard let metaContents = try? Data(contentsOf: metaPath(for: id)) else {
-                warn("couldn't access file contents for nid: \(id)")
-                return nil
-            }
-            guard let meta = try? JSONDecoder().decode(NodeMeta.self, from: metaContents) else {
-                warn("couldn't decode json data")
-                return nil
-            }
-            let dataUrl = dataPath(for: id)
-            let mDataUrl = FileManager().fileExists(atPath: dataUrl.path) ? dataUrl : nil
-            return Node(root: self, meta: meta, dataUrl: mDataUrl)
-        }
-        nonmutating set {
-            //
-            guard let node = newValue else {
-                error("must specify node when writing; but was nil for nid: \(id)")
-                return
-            }
-            guard node.meta.id == id else {
-                error("mismatch in id of node being written \(node.meta.id) and place being written to \(id)")
-                return
-            }
-            guard let metaContents = try? JSONEncoder().encode(node.meta) else {
-                error("failed to encode node: \(id)")
-                return
-            }
-            guard let _ = try? metaContents.write(to: metaPath(for: node.meta.id)) else {
-                error("failed to write node metadata for \(id)")
-                return
-            }
+            return Node(nid: id, root: self)
         }
     }
 
@@ -92,16 +64,17 @@ struct Tags {
     }
 }
 
-struct Node {
-    let root: Root
-    let meta: NodeMeta
-    let dataUrl: URL?
+/// Eventually this will replace Node, and nodes will always monitor the filesystem.
+class Node {
+    // MARK: node metadata
 
-    var data: Data? { dataUrl.flatMap({ try? Data(contentsOf: $0)}) }
+    let nid: NID
 
-    var outgoing: [String] {
-        return Array(meta.outgoing.keys)
-    }
+    // this initialized last by method call and will never be nil after successful
+    // initialization because constructor would return nil if this failed to initialize
+    @Published var meta: NodeMeta!
+
+    var outgoing: [String] { Array(meta.outgoing.keys) }
 
     subscript(transition: String) -> [Node] {
         guard let ids = meta.outgoing[transition] else {
@@ -110,6 +83,7 @@ struct Node {
         }
         return ids.compactMap { root[$0] }
     }
+
     var tags: Set<String> {
         return Set(
             meta.incoming
@@ -117,46 +91,76 @@ struct Node {
                 .keys)
     }
 
-    func withNewTags(_ newTags: Set<String>) -> Node {
-        var meta = self.meta
-        var newIncoming = meta.incoming.filter {
-            !$1.contains(NID.tags)
+    // MARK: data
+
+    var dataUrl: URL? {
+        let dataUrl = root.dataPath(for: nid)
+        return FileManager().fileExists(atPath: dataUrl.path) ? dataUrl : nil
+    }
+    var data: Data? { dataUrl.flatMap({ try? Data(contentsOf: $0)}) }
+
+    // MARK: private
+
+    // TODO: make this private / push through the consequences of that
+    let root: Root
+
+    private let metaChangeSource: DispatchSourceFileSystemObject
+    private let metaHandle: FileHandle
+
+    /// Prefer initializing this via a factory method that constructs it from a static Node or from the Root directly
+    fileprivate init?(nid: NID, root: Root) {
+        self.nid = nid
+        self.root = root
+
+        let metaFileDescriptor = open(root.metaPath(for: nid).path, O_EVTONLY | O_RDONLY)
+        self.metaHandle = FileHandle(fileDescriptor: metaFileDescriptor)
+        self.metaChangeSource =
+            DispatchSource.makeFileSystemObjectSource(
+                fileDescriptor: self.metaHandle.fileDescriptor,
+                eventMask: .write,
+                queue: DispatchQueue.main)
+
+        guard let initialMeta = tryGetMeta() else {
+            return nil
         }
-        for tag in newTags {
-            newIncoming.appendSeq([NID.tags], toKey: tag)
+
+        self.meta = initialMeta
+
+        metaChangeSource.setEventHandler { [weak self] in
+            if let meta = self?.tryGetMeta() {
+                self?.meta = meta
+            }
         }
-        meta.incoming = newIncoming
-        return Node(root: root, meta: meta, dataUrl: dataUrl)
+
+        metaChangeSource.activate()
     }
 
-    // Behavior of this function is broken because swift ui caches stuff too
-    // long (rightfully, but I was hoping I could be cheeky and get away with it).
-    // Fix below is probably necessary
-    //
-    // Extremely dirty function to perform side effects on FS representation
-    // then return new node with modified stuff modified as change occurred
-    // TODO: instead of this dirty hack, rewrite Node using Combine to
-    // watch their file and update automatically when changed. Will need
-    // to also watch for this change in the views somehow. Perhaps, this logic
-    // should be in a Node wrapper type instead of node itself, although TBH
-    // Node kind of is that for NodeMeta already.
-    func settingTagsTo(_ newTags: Set<String>) -> Node {
-        guard let tags = root.tags else {
-            warn("mutating is impossible because there is no tags node")
-            return self
+    deinit {
+        do {
+            try metaHandle.close()
+        } catch {
+            warn("unexpected error while closing a file")
         }
-        var tagMeta = tags.tagNode.meta
-        var tagNewOutgoing = tagMeta.outgoing.filter {
-            !$1.contains(self.meta.id)
+    }
+
+    private func tryGetMeta() -> NodeMeta? {
+        do {
+            try metaHandle.seek(toOffset: 0)
+        } catch {
+            warn("failed to seek file")
+            return nil
         }
-        for tag in newTags {
-            tagNewOutgoing.appendSeq([self.meta.id], toKey: tag)
+
+        guard let metaContents = try? metaHandle.readToEnd() else {
+            warn("couldn't access file contents for nid: \(nid)")
+            return nil
         }
-        tagMeta.outgoing = tagNewOutgoing
-        root[NID.tags] = Node(root: root, meta: tagMeta, dataUrl: dataUrl)
-        let newNode = self.withNewTags(newTags)
-        root[self.meta.id] = newNode
-        return newNode
+        guard let meta = try? JSONDecoder().decode(NodeMeta.self, from: metaContents) else {
+            warn("couldn't decode json data")
+            return nil
+        }
+
+        return meta
     }
 }
 
@@ -167,10 +171,6 @@ extension NID {
 
 struct NodeMeta {
     var id: NID
-    // TODO: this data structure is broken for cases when there
-    // is more than one link from a given node
-    // Maybe just represent as pairs with lookup function? Or could
-    // do a [String:[NID]] possibly
     var incoming: [String:[NID]]
     var outgoing: [String:[NID]]
 }
