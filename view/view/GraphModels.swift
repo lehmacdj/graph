@@ -59,20 +59,72 @@ struct Root {
 struct Tags {
     let tagNode: Node
 
-    var tagOptions: [String] {
-        return tagNode.outgoing
+    var tagOptions: Set<String> {
+        return Set(tagNode.outgoing)
+    }
+
+    func modify(for node: Node, adding toAdd: Set<String>, removing toRemove: Set<String>) {
+        debug("node: \(node.nid), adding: \(toAdd), removing: \(toRemove)")
+        assert(toAdd.intersection(toRemove).isEmpty, "can't add and remove the same tag")
+
+        var tagMeta = tagNode.meta
+        var nodeMeta = node.meta
+
+        func setLikeAppend(_ mnids: [NID]?, elem nid: NID) -> [NID] {
+            var nids = Set(mnids ?? [])
+            nids.insert(nid)
+            return [NID](nids)
+        }
+
+        for tag in toAdd {
+            tagMeta.outgoing[tag] = setLikeAppend(tagMeta.outgoing[tag], elem: node.nid)
+            nodeMeta.incoming[tag] = setLikeAppend(tagMeta.incoming[tag], elem: tagNode.nid)
+        }
+
+        func setLikeRemove(_ mnids: [NID]?, elem nid: NID) -> [NID] {
+            var nids = Set(mnids ?? [])
+            nids.remove(nid)
+            return [NID](nids)
+        }
+
+        for tag in toRemove {
+            tagMeta.outgoing[tag] = setLikeRemove(tagMeta.outgoing[tag], elem: node.nid)
+            nodeMeta.incoming[tag] = setLikeRemove(tagMeta.incoming[tag], elem: tagNode.nid)
+        }
+
+        node.meta = nodeMeta
+        tagNode.meta = tagMeta
     }
 }
 
 /// Eventually this will replace Node, and nodes will always monitor the filesystem.
-class Node {
+class Node: ObservableObject {
     // MARK: node metadata
 
     let nid: NID
 
-    // this initialized last by method call and will never be nil after successful
-    // initialization because constructor would return nil if this failed to initialize
-    @Published var meta: NodeMeta!
+    var meta: NodeMeta {
+        get { _meta }
+        set {
+            guard let data: Data = try? JSONEncoder().encode(newValue) else {
+                warn("failed to encode JSON for NodeMeta")
+                return
+            }
+
+            do {
+                // suspend notifications when writing so we don't get a spurious one
+                metaChangeSource.suspend()
+                try data.write(to: root.metaPath(for: nid), options: .atomic)
+                metaChangeSource.resume()
+
+                // by not changing _meta until after having written the file successfully
+                // we ensure that the view represents the actual state of the world
+                _meta = newValue
+            } catch {
+                warn("failed writing data for node to disk")
+            }
+        }
+    }
 
     var outgoing: [String] { Array(meta.outgoing.keys) }
 
@@ -85,10 +137,26 @@ class Node {
     }
 
     var tags: Set<String> {
-        return Set(
-            meta.incoming
-                .filter { $0.value.contains(NID.tags) }
-                .keys)
+        get {
+            return Set(
+                meta.incoming
+                    .filter { $0.value.contains(NID.tags) }
+                    .keys)
+        }
+        set {
+            guard let tags = root.tags else {
+                warn("trying to set tags, but there is no tags node")
+                return
+            }
+
+            let oldTags = self.tags
+            let newTags = newValue
+
+            tags.modify(
+                for: self,
+                adding: newTags.subtracting(oldTags),
+                removing: oldTags.subtracting(newTags))
+        }
     }
 
     // MARK: data
@@ -100,6 +168,14 @@ class Node {
     var data: Data? { dataUrl.flatMap({ try? Data(contentsOf: $0)}) }
 
     // MARK: private
+
+    // this is the backing node metadata for this node. We keep it private to
+    // encourage users of the node api to make all of the changes to a node
+    // they want to at once and then set it. This is more performant, since
+    // every write to meta results in a file write
+    // this initialized last by method call and will never be nil after successful
+    // initialization because constructor would return nil if this failed to initialize
+    @Published private var _meta: NodeMeta!
 
     // TODO: make this private / push through the consequences of that
     let root: Root
@@ -124,11 +200,11 @@ class Node {
             return nil
         }
 
-        self.meta = initialMeta
+        self._meta = initialMeta
 
         metaChangeSource.setEventHandler { [weak self] in
             if let meta = self?.tryGetMeta() {
-                self?.meta = meta
+                self?._meta = meta
             }
         }
 

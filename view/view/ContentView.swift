@@ -45,7 +45,7 @@ struct ImageView: View {
 
 struct NodePreviewView: View {
     let label: String
-    let node: Node
+    @ObservedObject var node: Node
 
     var body: some View {
         if let data = node.data,
@@ -64,10 +64,10 @@ struct NodePreviewView: View {
 }
 
 struct NodeView: View {
-    @State var node: Node
+    @StateObject var node: Node
 
     init(of node: Node) {
-        _node = State(initialValue: node)
+        _node = StateObject(wrappedValue: node)
     }
 
     @State var showingTags: Bool = false
@@ -130,10 +130,9 @@ struct NodeView: View {
                    let tagOptions = node.root.tags?.tagOptions {
                     TagEditor(
                         initial: tags,
-                        options: tagOptions,
+                        options: [String](tagOptions),
                         commit: { newTags in
-                            warn("committing is disabled because its broken")
-                            // self.node = node.settingTagsTo(newTags)
+                            node.tags = newTags
                             showingTags = false
                         },
                         cancel: { showingTags = false })
