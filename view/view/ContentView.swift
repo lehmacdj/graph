@@ -99,16 +99,6 @@ struct NodeView: View {
                   url.scheme?.starts(with: "http") ?? false {
             SafariView(url: url)
         } else {
-            // Consider using something like this to allow a grid to be used on iPad.
-            // However, to get this looking good, it will take somewhat substantially
-            // more tweaking to make it look similar to the original list view
-            // ScrollView {
-            //    LazyVGrid(columns: [GridItem(.adaptive(minimum: 300, maximum: 400))]) {
-            //        ForEach(itemsToDisplay) { item in
-            //            ListItemView(node: node, item: item)
-            //        }
-            //    }
-            // }
             List(itemsToDisplay) { item in
                 listItemView(for: item)
             }
