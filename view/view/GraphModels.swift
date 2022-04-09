@@ -13,8 +13,9 @@ extension NID {
     static let tags: NID = 1
 }
 
-/// Root represents the base directory for a graph. It also offers some conveniences for accessing some standardized parts of the graph.
-struct Root {
+/// Represents the  represents the base directory for a graph.
+/// Offers a flyweight mechanism for retrieving Node model objects that represent nodes in the graph.
+class Graph {
     let dir: URL
     let basePath: URL
 
@@ -31,9 +32,20 @@ struct Root {
         basePath.appendingPathComponent(nid.dataPath)
     }
 
+    // need to use NSMapTable here because it supports weak references which is important for
+    // this cache so that we don't end up retaining nodes longer than we need to
+    private var internedNodes = NSMapTable<NSNumber, Node>(keyOptions: .copyIn, valueOptions: .weakMemory)
+
     subscript(id: NID) -> Node? {
         get {
-            return Node(nid: id, root: self)
+            if let node = internedNodes.object(forKey: NSNumber(value: id)) {
+                return node
+            } else if let node = Node(nid: id, root: self) {
+                internedNodes.setObject(node, forKey: NSNumber(value: id))
+                return node
+            } else {
+                return nil
+            }
         }
     }
 
@@ -178,13 +190,13 @@ class Node: ObservableObject {
     @Published private var _meta: NodeMeta!
 
     // TODO: make this private / push through the consequences of that
-    let root: Root
+    let root: Graph
 
     private let metaChangeSource: DispatchSourceFileSystemObject
     private let metaHandle: FileHandle
 
     /// Prefer initializing this via a factory method that constructs it from a static Node or from the Root directly
-    fileprivate init?(nid: NID, root: Root) {
+    fileprivate init?(nid: NID, root: Graph) {
         self.nid = nid
         self.root = root
 

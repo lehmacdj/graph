@@ -15,7 +15,7 @@ struct ContentView: View {
 
     var body: some View {
         NavigationView {
-            NodeView(of: Root(dir: fileUrl).origin)
+            NodeView(of: Graph(dir: fileUrl).origin)
                 .toolbar {
                     ToolbarItem(placement: .navigationBarLeading) {
                         Button(action: doSelectFile) {
