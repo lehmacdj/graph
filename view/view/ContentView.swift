@@ -105,10 +105,54 @@ struct NodeView: View {
         }
     }
 
+    struct TagToggler: View {
+        @ObservedObject var node: Node
+        let tag: String
+        let active: String
+        let inactive: String
+
+        init(node: Node, tag: String, fillableSymbol: String) {
+            self.node = node
+            self.tag = tag
+            self.active = "\(fillableSymbol).fill"
+            self.inactive = fillableSymbol
+        }
+
+        private func toggleTag() {
+            var tags = node.tags
+            if tags.contains(tag) {
+                tags.remove(tag)
+                node.tags = tags
+            } else {
+                tags.insert(tag)
+                node.tags = tags
+            }
+        }
+
+        var body: some View {
+            Button(action: toggleTag) {
+                if node.tags.contains(tag) {
+                    Image(systemName: active)
+                } else {
+                    Image(systemName: inactive)
+                }
+            }
+        }
+    }
+
     var body: some View {
         content
             .navigationTitle(Text("\(node.meta.id)"))
             .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    TagToggler(node: node, tag: "to-worsen", fillableSymbol: "trash")
+                }
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    TagToggler(node: node, tag: "to-update", fillableSymbol: "bookmark")
+                }
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    TagToggler(node: node, tag: "to-favorite", fillableSymbol: "star")
+                }
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button(action: { showingTags.toggle() }) {
                         Text("Tags")
