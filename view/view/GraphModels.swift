@@ -90,7 +90,7 @@ struct Tags {
 
         for tag in toAdd {
             tagMeta.outgoing[tag] = setLikeAppend(tagMeta.outgoing[tag], elem: node.nid)
-            nodeMeta.incoming[tag] = setLikeAppend(tagMeta.incoming[tag], elem: tagNode.nid)
+            nodeMeta.incoming[tag] = setLikeAppend(nodeMeta.incoming[tag], elem: tagNode.nid)
         }
 
         func setLikeRemove(_ mnids: [NID]?, elem nid: NID) -> [NID] {
@@ -101,10 +101,20 @@ struct Tags {
 
         for tag in toRemove {
             tagMeta.outgoing[tag] = setLikeRemove(tagMeta.outgoing[tag], elem: node.nid)
-            nodeMeta.incoming[tag] = setLikeRemove(tagMeta.incoming[tag], elem: tagNode.nid)
+            nodeMeta.incoming[tag] = setLikeRemove(nodeMeta.incoming[tag], elem: tagNode.nid)
         }
 
-        node.meta = nodeMeta
+        // we need to specially account for the case where node = tagNode because the
+        // aliasing would cause us to loose half of the updates
+        if node.nid == tagNode.nid {
+            // all we need to do to account for the aliasing is to set the incoming correctly
+            // this works because we only modify incoming for nodeMeta and not outgoing
+            // (and we only modify outgoing for tagNode and not incoming)
+            tagMeta.incoming = nodeMeta.incoming
+        } else {
+            node.meta = nodeMeta
+        }
+
         tagNode.meta = tagMeta
     }
 }
