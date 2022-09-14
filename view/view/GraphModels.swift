@@ -211,6 +211,10 @@ class Node: ObservableObject {
         self.root = root
 
         let metaFileDescriptor = open(root.metaPath(for: nid).path, O_EVTONLY | O_RDONLY)
+        if metaFileDescriptor == -1 {
+            warn("metadata file for node \(nid) does not exist or cannot be opened")
+            return nil
+        }
         self.metaHandle = FileHandle(fileDescriptor: metaFileDescriptor)
         self.metaChangeSource =
             DispatchSource.makeFileSystemObjectSource(

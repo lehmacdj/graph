@@ -36,6 +36,7 @@ struct ImageView: View {
         ZoomableScrollView {
             Image(uiImage: uiImage)
         }
+        .overlay(navigationVisible ? ImageStats(uiImage: uiImage) : nil, alignment: .bottomTrailing)
         .onTapGesture { navigationVisible = !navigationVisible }
         .ignoresSafeArea(.all)
         .navigationBarHidden(!navigationVisible)
@@ -92,7 +93,7 @@ struct NodeView: View {
            let data = node.data,
            let uiImage = UIImage(data: data) {
             ImageView(uiImage: uiImage)
-        } else if node.outgoing.isEmpty,
+            } else if node.outgoing.isEmpty,
                   let data = node.data,
                   let string = String(data: data, encoding: .utf8),
                   let url = URL(string: string.trimmingCharacters(in: .whitespacesAndNewlines)),
@@ -217,6 +218,18 @@ struct NodeView: View {
                 Text("Transition \(l) to nonexistent node \(nid)")
             }
         }
+    }
+}
+
+struct ImageStats: View {
+    let uiImage: UIImage
+
+    @ViewBuilder
+    var body: some View {
+        Text("\(Int(uiImage.size.width)) x \(Int(uiImage.size.height))")
+            .padding()
+            .background(.background, in: Capsule())
+            .opacity(0.7)
     }
 }
 
