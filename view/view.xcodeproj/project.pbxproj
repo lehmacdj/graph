@@ -20,6 +20,7 @@
 		0313681627149ECE00E69F83 /* ZoomableScrollView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0313681527149ECE00E69F83 /* ZoomableScrollView.swift */; };
 		03596F142724A60F00766388 /* PreviewView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 03596F132724A60F00766388 /* PreviewView.swift */; };
 		0375E7C82782C06000FB6548 /* SafariView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0375E7C72782C06000FB6548 /* SafariView.swift */; };
+		03D1D8DE28FB559B00E76F27 /* NodeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 03D1D8DD28FB559B00E76F27 /* NodeView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -59,6 +60,7 @@
 		0313681527149ECE00E69F83 /* ZoomableScrollView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ZoomableScrollView.swift; sourceTree = "<group>"; };
 		03596F132724A60F00766388 /* PreviewView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PreviewView.swift; sourceTree = "<group>"; };
 		0375E7C72782C06000FB6548 /* SafariView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SafariView.swift; sourceTree = "<group>"; };
+		03D1D8DD28FB559B00E76F27 /* NodeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NodeView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -109,9 +111,9 @@
 		031367E12713FCF200E69F83 /* view */ = {
 			isa = PBXGroup;
 			children = (
+				03D1D8DF28FB564700E76F27 /* AppViews */,
 				031367E22713FCF200E69F83 /* viewApp.swift */,
 				031367E42713FCF200E69F83 /* UTI.swift */,
-				031367E62713FCF200E69F83 /* ContentView.swift */,
 				031367E82713FCF400E69F83 /* Assets.xcassets */,
 				031367ED2713FCF400E69F83 /* Info.plist */,
 				031367EA2713FCF400E69F83 /* Preview Content */,
@@ -149,6 +151,15 @@
 				031368032713FCF400E69F83 /* Info.plist */,
 			);
 			path = viewUITests;
+			sourceTree = "<group>";
+		};
+		03D1D8DF28FB564700E76F27 /* AppViews */ = {
+			isa = PBXGroup;
+			children = (
+				031367E62713FCF200E69F83 /* ContentView.swift */,
+				03D1D8DD28FB559B00E76F27 /* NodeView.swift */,
+			);
+			path = AppViews;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -284,6 +295,7 @@
 				03596F142724A60F00766388 /* PreviewView.swift in Sources */,
 				03136814271415FA00E69F83 /* Extensions.swift in Sources */,
 				0313681627149ECE00E69F83 /* ZoomableScrollView.swift in Sources */,
+				03D1D8DE28FB559B00E76F27 /* NodeView.swift in Sources */,
 				031367E32713FCF200E69F83 /* viewApp.swift in Sources */,
 				031367E52713FCF200E69F83 /* UTI.swift in Sources */,
 				0375E7C82782C06000FB6548 /* SafariView.swift in Sources */,

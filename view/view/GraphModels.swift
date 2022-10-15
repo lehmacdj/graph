@@ -72,7 +72,7 @@ struct Tags {
     let tagNode: Node
 
     var tagOptions: Set<String> {
-        return Set(tagNode.outgoing)
+        return Set(tagNode.meta.outgoing.keys)
     }
 
     func modify(for node: Node, adding toAdd: Set<String>, removing toRemove: Set<String>) {
@@ -119,6 +119,15 @@ struct Tags {
     }
 }
 
+struct NodeTransition: Identifiable {
+    let transition: String
+    let nid: NID
+
+    var id: some Hashable {
+        return nid
+    }
+}
+
 /// Eventually this will replace Node, and nodes will always monitor the filesystem.
 class Node: ObservableObject {
     // MARK: node metadata
@@ -148,7 +157,25 @@ class Node: ObservableObject {
         }
     }
 
-    var outgoing: [String] { Array(meta.outgoing.keys) }
+    var outgoing: [NodeTransition] {
+        var result = [NodeTransition]()
+        for (transition, nids) in meta.outgoing {
+            for nid in nids {
+                result.append(NodeTransition(transition: transition, nid: nid))
+            }
+        }
+        return result
+    }
+
+    var incoming: [NodeTransition] {
+        var result = [NodeTransition]()
+        for (transition, nids) in meta.incoming {
+            for nid in nids {
+                result.append(NodeTransition(transition: transition, nid: nid))
+            }
+        }
+        return result
+    }
 
     subscript(transition: String) -> [Node] {
         guard let ids = meta.outgoing[transition] else {
