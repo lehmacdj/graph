@@ -66,6 +66,70 @@ class Graph {
         }
         return Tags(tagNode: tags)
     }
+
+    func addLink(from startNode: Node, to endNode: Node, via transition: String) {
+        // specially handle the case of a single node because otherwise
+        // we would overwrite only half of the metadata
+        if startNode.nid == endNode.nid {
+            // there is only actually one node
+            let node = startNode
+            var nodeMeta = startNode.meta
+            nodeMeta.outgoing[transition] = (nodeMeta.outgoing[transition] ?? Set()).inserting(node.nid)
+            nodeMeta.incoming[transition] = (nodeMeta.incoming[transition] ?? Set()).inserting(node.nid)
+            node.meta = nodeMeta
+        } else {
+            var startMeta = startNode.meta
+            var endMeta = endNode.meta
+            startMeta.outgoing[transition] = (startMeta.outgoing[transition] ?? Set()).inserting(endNode.nid)
+            endMeta.incoming[transition] = (endMeta.incoming[transition] ?? Set()).inserting(startNode.nid)
+            startNode.meta = startMeta
+            endNode.meta = endMeta
+        }
+    }
+
+    func removeLink(from startNode: Node, to endNode: Node, via transition: String) {
+        // specially handle the case of a single node because otherwise
+        // we would overwrite only half of the metadata
+        if startNode.nid == endNode.nid {
+            // there is only actually one node
+            let node = startNode
+            var nodeMeta = startNode.meta
+            nodeMeta.outgoing[transition] = nodeMeta.outgoing[transition]?.removing(node.nid)
+            nodeMeta.incoming[transition] = nodeMeta.incoming[transition]?.removing(node.nid)
+            node.meta = nodeMeta
+        } else {
+            var startMeta = startNode.meta
+            var endMeta = endNode.meta
+            startMeta.outgoing[transition] = startMeta.outgoing[transition]?.removing(endNode.nid)
+            endMeta.incoming[transition] = endMeta.incoming[transition]?.removing(startNode.nid)
+            startNode.meta = startMeta
+            endNode.meta = endMeta
+        }
+    }
+
+    func forceRemove(node: Node) {
+        for parent in node.incoming {
+            if let parentNode = self[parent.nid] {
+                var parentMeta = parentNode.meta
+                parentMeta.outgoing[parent.transition] = parentMeta.outgoing[parent.transition]?.removing(node.nid)
+                parentNode.meta = parentMeta
+            } else {
+                warn("parent (\(parent.nid)) of \(node.nid) is missing")
+            }
+        }
+
+        for child in node.outgoing {
+            if let childNode = self[child.nid] {
+                var childMeta = childNode.meta
+                childMeta.incoming[child.transition] = childMeta.outgoing[child.transition]?.removing(node.nid)
+                childNode.meta = childMeta
+            } else {
+                warn("child (\(child.nid)) of \(node.nid) is missing")
+            }
+        }
+
+        node.deleteMetaAndData()
+    }
 }
 
 struct Tags {
@@ -203,6 +267,20 @@ class Node: ObservableObject {
         return FileManager().fileExists(atPath: dataUrl.path) ? dataUrl : nil
     }
     var data: Data? { dataUrl.flatMap({ try? Data(contentsOf: $0)}) }
+
+    // MARK: fileprivate
+
+    fileprivate func deleteMetaAndData() {
+        let fileManager = FileManager()
+        do {
+            try fileManager.removeItem(at: root.metaPath(for: nid))
+            if let dataUrl = dataUrl {
+                try fileManager.removeItem(at: dataUrl)
+            }
+        } catch {
+            warn("failed while removing a file")
+        }
+    }
 
     // MARK: private
 
