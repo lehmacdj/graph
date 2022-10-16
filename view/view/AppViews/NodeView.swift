@@ -145,9 +145,8 @@ struct NodeView: View {
                 isPresented: $showingForceDeleteNodeConfirmation,
                 actions: {
                     Button("Delete", role: .destructive) {
-                        // do the deleting
+                        node.root.forceRemove(node: node)
                     }
-
                 },
                 message: {
                     Text("Force deleting a node is not reversible.")
