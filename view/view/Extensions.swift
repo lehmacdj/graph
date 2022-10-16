@@ -11,6 +11,16 @@ extension String: Identifiable {
     public var id: String { self }
 }
 
+extension Set {
+    func inserting(_ newElement: Self.Element) -> Set {
+        return mutate(self) { $0.insert(newElement) }
+    }
+
+    func removing(_ member: Self.Element) -> Set {
+        return mutate(self) { $0.remove(member) }
+    }
+}
+
 extension Dictionary where Value: Sequence {
     /// Append a sequence to a list stored at some value. If there isn't
     /// a present value, the sequence is converted to a list and stored.

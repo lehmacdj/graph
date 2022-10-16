@@ -48,3 +48,9 @@ extension LogLevel: Comparable {
         return lhs.rawValue > rhs.rawValue
     }
 }
+
+func mutate<T>(_ value: T, mutator: (inout T) -> ()) -> T {
+    var value = value
+    mutator(&value)
+    return value
+}

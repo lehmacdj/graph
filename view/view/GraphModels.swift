@@ -82,26 +82,14 @@ struct Tags {
         var tagMeta = tagNode.meta
         var nodeMeta = node.meta
 
-        func setLikeAppend(_ mnids: [NID]?, elem nid: NID) -> [NID] {
-            var nids = Set(mnids ?? [])
-            nids.insert(nid)
-            return [NID](nids)
-        }
-
         for tag in toAdd {
-            tagMeta.outgoing[tag] = setLikeAppend(tagMeta.outgoing[tag], elem: node.nid)
-            nodeMeta.incoming[tag] = setLikeAppend(nodeMeta.incoming[tag], elem: tagNode.nid)
-        }
-
-        func setLikeRemove(_ mnids: [NID]?, elem nid: NID) -> [NID] {
-            var nids = Set(mnids ?? [])
-            nids.remove(nid)
-            return [NID](nids)
+            tagMeta.outgoing[tag] = (tagMeta.outgoing[tag] ?? Set()).inserting(node.nid)
+            nodeMeta.incoming[tag] = (nodeMeta.incoming[tag] ?? Set()).inserting(tagNode.nid)
         }
 
         for tag in toRemove {
-            tagMeta.outgoing[tag] = setLikeRemove(tagMeta.outgoing[tag], elem: node.nid)
-            nodeMeta.incoming[tag] = setLikeRemove(nodeMeta.incoming[tag], elem: tagNode.nid)
+            tagMeta.outgoing[tag] = tagMeta.outgoing[tag]?.removing(node.nid)
+            nodeMeta.incoming[tag] = nodeMeta.incoming[tag]?.removing(tagNode.nid)
         }
 
         // we need to specially account for the case where node = tagNode because the
@@ -300,8 +288,8 @@ extension NID {
 
 struct NodeMeta {
     var id: NID
-    var incoming: [String:[NID]]
-    var outgoing: [String:[NID]]
+    var incoming: [String:Set<NID>]
+    var outgoing: [String:Set<NID>]
 }
 
 struct ConnectDTO: Decodable, Encodable {
@@ -341,12 +329,12 @@ extension NodeMeta: Decodable, Encodable {
         for c in dto.incoming {
             incomingDict.appendSeq([c.id], toKey: c.transition)
         }
-        incoming = incomingDict
+        incoming = incomingDict.mapValues { Set($0) }
         var outgoingDict = [String:[NID]](minimumCapacity: dto.outgoing.count)
         for c in dto.outgoing {
             outgoingDict.appendSeq([c.id], toKey: c.transition)
         }
-        outgoing = outgoingDict
+        outgoing = outgoingDict.mapValues { Set($0) }
     }
 
     public func encode(to encoder: Encoder) throws {
