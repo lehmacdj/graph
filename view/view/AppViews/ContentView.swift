@@ -44,26 +44,6 @@ struct ImageView: View {
     }
 }
 
-struct NodePreviewView: View {
-    let label: String
-    @ObservedObject var node: Node
-
-    var body: some View {
-        if let data = node.data,
-           let uiImage = UIImage(data: data) {
-            HStack {
-                Image(uiImage: uiImage)
-                    .resizable()
-                    .aspectRatio(contentMode: .fit)
-                    .frame(maxHeight: 120)
-                Text(label)
-            }
-        } else {
-            Text(label)
-        }
-    }
-}
-
 struct ImageStats: View {
     let uiImage: UIImage
 

@@ -171,12 +171,17 @@ struct Tags {
     }
 }
 
-struct NodeTransition: Identifiable {
+struct NodeTransition: Identifiable, Comparable {
     let transition: String
     let nid: NID
 
     var id: some Hashable {
-        return nid
+        return "\(transition)\(nid)"
+    }
+
+    static func < (lhs: NodeTransition, rhs: NodeTransition) -> Bool {
+        return lhs.transition < rhs.transition
+        || lhs.transition == rhs.transition && lhs.nid < rhs.nid
     }
 }
 
@@ -216,7 +221,7 @@ class Node: ObservableObject {
                 result.append(NodeTransition(transition: transition, nid: nid))
             }
         }
-        return result
+        return result.sorted()
     }
 
     var incoming: [NodeTransition] {
@@ -226,7 +231,7 @@ class Node: ObservableObject {
                 result.append(NodeTransition(transition: transition, nid: nid))
             }
         }
-        return result
+        return result.sorted()
     }
 
     subscript(transition: String) -> [Node] {

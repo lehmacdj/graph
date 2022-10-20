@@ -55,10 +55,8 @@ struct NodeView: View {
 
     @ViewBuilder
     func linkForTransition(_ item: NodeTransition) -> some View {
-        if let node = self.node.root[item.nid] {
-            NavigationLink(destination: NodeView(of: node)) {
-                NodePreviewView(label: item.transition, node: node)
-            }
+        if let destination = self.node.root[item.nid] {
+            LinkForTransition(from: node, to: destination, via: item.transition)
         } else {
             Text("Transition \(item.transition) to nonexistent node \(item.nid)")
         }
@@ -80,7 +78,7 @@ struct NodeView: View {
         } else {
             List {
                 Section {
-                    ForEach(node.outgoing.sorted(on: \.transition)) { item in
+                    ForEach(node.outgoing) { item in
                         linkForTransition(item)
                     }
                 }
