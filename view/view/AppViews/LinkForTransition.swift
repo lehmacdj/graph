@@ -72,6 +72,10 @@ struct LinkForTransition: View {
             Text("Deleting a transition is not reversible.")
         }
         .swipeActions(edge: .trailing) {
+            // this button can't be role: .destructive because if it
+            // is SwiftUI tries to be smart by removing the list item
+            // but that cancels the confirmation dialogue that is attached
+            // to the list item
             Button() {
                 confirmingDelete = true
             } label: {
