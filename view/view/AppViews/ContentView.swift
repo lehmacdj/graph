@@ -92,63 +92,8 @@ struct TagEditor: View {
     }
 }
 
-struct MenuView: View {
-    @State var showingConfirmDelete = false
-
-    var body: some View {
-        VStack {
-            Text("On long press")
-                .contextMenu {
-                    Button("Force delete node", role: .destructive)
-                    {
-                        showingConfirmDelete = true
-                    }
-                }
-                .alert("Force deleting is not reversible", isPresented: $showingConfirmDelete) {
-                    Button("Cancel") {
-                        showingConfirmDelete = false
-                    }
-                    Button("Delete", role: .destructive) {
-                        print("deleted")
-                    }
-                }
-            Menu("On tap") {
-                menuItems
-            }
-        }
-    }
-
-    var menuItems: some View {
-        Group {
-            Button("Action 1", action: {})
-            Button("Action 2", action: {})
-            Button("Action 3", action: {})
-        }
-    }
-}
-
-struct AlertView: View {
-    @State private var isAlert = false
-
-    var body: some View {
-            Button(action: {
-                self.isAlert = true
-            }) {
-                Text("Click Alert")
-                .foregroundColor(Color.white)
-            }
-            .padding()
-            .background(Color.blue)
-            .alert(isPresented: $isAlert) { () -> Alert in
-                Alert(title: Text("iOSDevCenters"), message: Text("This Tutorial for SwiftUI Alert."), primaryButton: .default(Text("Okay"), action: {
-                    print("Okay Click")
-                }), secondaryButton: .default(Text("Dismiss")))
-        }
-    }
-}
-
 struct ContentView_Previews: PreviewProvider {
     static var previews: some View {
-        MenuView()
+        Text("Preview not supported")
     }
 }
