@@ -36,6 +36,12 @@ pQuery = (commandFrom ["q", "query"] $> Query) <*> apath <*> transition
 pTag :: Parser Command
 pTag = (commandFrom ["tag", "t"] $> Tag) <*> apath <*> apath
 
+pText :: Parser Command
+pText = (commandFrom ["text", "mkt"] $> Text) <*> transition <*> some anySingle
+
+pDescribe :: Parser Command
+pDescribe = (commandFrom ["describe", "desc"] $> Describe) <*> some anySingle
+
 pRemove :: Parser Command
 pRemove = (command "rm" $> Remove) <*> apath
 
@@ -100,6 +106,8 @@ pCommand =
     <|> try pList
     <|> try pQuery
     <|> try pTag
+    <|> try pText
+    <|> try pDescribe
     <|> try pRemove
     <|> try pRemoveNode
     <|> try pAt

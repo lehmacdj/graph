@@ -60,6 +60,9 @@ data Command
     Query (APath String) String
   | -- | t
     Tag (APath String) (APath String)
+  | Text String String
+  | -- | desc
+    Describe String
   | -- | rm
     Remove (APath String)
   | -- | rmnf
@@ -216,9 +219,14 @@ interpretCommand = \case
     (nid', q) <- relativizeAPath b
     let err = singleErr "the last argument of tag"
     target <- the' err =<< subsumeUserError (resolvePathSuccesses nid' q)
-    nnids <- subsumeUserError (mkPath nid p)
+    nnids <- subsumeUserError (mkPath nid (p :/ Literal ""))
     _ <- subsumeUserError (mergeNodes @String (target `ncons` toList nnids))
     pure ()
+  Text t s -> do
+    nid <- currentLocation
+    vNid <- the' (error "only creating one path") =<< subsumeUserError (mkPath nid (Literal t))
+    setData vNid (Just (encodeUtf8 (fromString s)))
+  Describe d -> interpretCommand (Text "description" d)
   At a c -> do
     (nid, p) <- relativizeAPath a
     locations <- subsumeUserError (resolvePathSuccesses nid p)
