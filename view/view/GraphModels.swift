@@ -139,35 +139,39 @@ struct Tags {
         return Set(tagNode.meta.outgoing.keys)
     }
 
+    var tagNids: Set<NID> {
+        return Set(tagNode.meta.outgoing.values.flatMap { $0 })
+    }
+
     func modify(for node: Node, adding toAdd: Set<String>, removing toRemove: Set<String>) {
         debug("node: \(node.nid), adding: \(toAdd), removing: \(toRemove)")
         assert(toAdd.intersection(toRemove).isEmpty, "can't add and remove the same tag")
 
-        var tagMeta = tagNode.meta
-        var nodeMeta = node.meta
-
         for tag in toAdd {
-            tagMeta.outgoing[tag] = (tagMeta.outgoing[tag] ?? Set()).inserting(node.nid)
-            nodeMeta.incoming[tag] = (nodeMeta.incoming[tag] ?? Set()).inserting(tagNode.nid)
+            let tagContainers = tagNode[tag]
+            if tagContainers.isEmpty {
+                warn("can't create new node yet")
+                continue
+            } else if tagContainers.count > 1 {
+                warn("more than one node with same transition as tag: \(tag)")
+                continue
+            }
+            let tagContainer = tagContainers[0]
+            tagNode.root.addLink(from: tagContainer, to: node, via: "")
         }
 
         for tag in toRemove {
-            tagMeta.outgoing[tag] = tagMeta.outgoing[tag]?.removing(node.nid)
-            nodeMeta.incoming[tag] = nodeMeta.incoming[tag]?.removing(tagNode.nid)
+            let tagContainers = tagNode[tag]
+            if tagContainers.isEmpty {
+                warn("can't create new node yet")
+                continue
+            } else if tagContainers.count > 1 {
+                warn("more than one node with same transition as tag: \(tag)")
+                continue
+            }
+            let tagContainer = tagContainers[0]
+            tagNode.root.removeLink(from: tagContainer, to: node, via: "")
         }
-
-        // we need to specially account for the case where node = tagNode because the
-        // aliasing would cause us to loose half of the updates
-        if node.nid == tagNode.nid {
-            // all we need to do to account for the aliasing is to set the incoming correctly
-            // this works because we only modify incoming for nodeMeta and not outgoing
-            // (and we only modify outgoing for tagNode and not incoming)
-            tagMeta.incoming = nodeMeta.incoming
-        } else {
-            node.meta = nodeMeta
-        }
-
-        tagNode.meta = tagMeta
     }
 }
 
@@ -244,10 +248,20 @@ class Node: ObservableObject {
 
     var tags: Set<String> {
         get {
-            return Set(
+            let tagContainers = Set(
                 meta.incoming
-                    .filter { $0.value.contains(NID.tags) }
-                    .keys)
+                    .filter { !$0.value.intersection(root.tags?.tagNids ?? Set()).isEmpty }
+                    .values
+                    .flatMap { $0 })
+            var result = Set<String>()
+            for tagContainer in tagContainers {
+                if let tagContainer = root[tagContainer] {
+                    for tag in tagContainer.meta.incoming.filter({ $0.value.contains(NID.tags) }).keys {
+                        result.insert(tag)
+                    }
+                }
+            }
+            return result
         }
         set {
             guard let tags = root.tags else {
