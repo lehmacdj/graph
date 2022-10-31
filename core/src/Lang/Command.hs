@@ -214,9 +214,9 @@ interpretCommand = \case
   Tag a b -> do
     (nid, p) <- relativizeAPath a
     (nid', q) <- relativizeAPath b
-    nnids <- subsumeUserError (mkPath nid p)
     let err = singleErr "the last argument of tag"
     target <- the' err =<< subsumeUserError (resolvePathSuccesses nid' q)
+    nnids <- subsumeUserError (mkPath nid p)
     _ <- subsumeUserError (mergeNodes @String (target `ncons` toList nnids))
     pure ()
   At a c -> do
