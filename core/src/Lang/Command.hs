@@ -111,6 +111,9 @@ data Command
     -- the current node. The Haskell code is given by the data at the node given
     -- as an argument.
     Exec (APath String)
+  | -- | Collect same transitions into a transition to a single node that
+    -- transitions to the nodes the previous transition used to
+    Collect String
   deriving (Eq, Show, Ord, Generic)
 
 singleErr :: String -> Set NID -> UserError
@@ -315,3 +318,12 @@ interpretCommand = \case
     target <- the' err =<< subsumeUserError (resolvePathSuccesses nid p)
     base <- getGraphFilePath
     Extensibility.runScript (S2.nodeDataFile base target)
+  Collect t -> do
+    currentNid <- currentLocation
+    nids <- subsumeUserError (resolvePathSuccesses currentNid (Literal t))
+    newNid <-
+      the' (error "only creating one path")
+        =<< subsumeUserError (mkPath currentNid (Literal t))
+    for_ nids $ \nid -> do
+      deleteEdge (Edge currentNid t nid)
+      insertEdge (Edge newNid "" nid)

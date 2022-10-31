@@ -96,6 +96,9 @@ pMaterialize = (command "materialize" $> Materialize) <*> some anySingle
 pExec :: Parser Command
 pExec = (commandFrom ["exec", "x"] $> Exec) <*> apath
 
+pCollect :: Parser Command
+pCollect = (command "collect" $> Collect) <*> transition
+
 pCommand :: Parser Command
 pCommand =
   try pChangeNode
@@ -126,6 +129,7 @@ pCommand =
     <|> try pBack
     <|> try pMaterialize
     <|> try pExec
+    <|> try pCollect
 
 parseCommand :: String -> Either String Command
 parseCommand = left errorBundlePretty . runParser pCommand "<interactive>"
