@@ -153,7 +153,7 @@ struct Tags {
                 warn("can't create new node yet")
                 continue
             } else if tagContainers.count > 1 {
-                warn("more than one node with same transition as tag: \(tag)")
+                warn("more than one node with same transition as tag, skipping: \(tag)")
                 continue
             }
             let tagContainer = tagContainers[0]
@@ -166,7 +166,7 @@ struct Tags {
                 warn("can't create new node yet")
                 continue
             } else if tagContainers.count > 1 {
-                warn("more than one node with same transition as tag: \(tag)")
+                warn("more than one node with same transition as tag, skipping: \(tag)")
                 continue
             }
             let tagContainer = tagContainers[0]

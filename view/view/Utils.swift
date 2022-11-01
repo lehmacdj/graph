@@ -11,26 +11,26 @@ import Foundation
 let logLevel = LogLevel.verbose
 
 /// Logging function to be abstracted out into a real logging framework later if that seems worth it
-func log(_ message: String, level: LogLevel = .info, callingFunction: String = #function) {
+func log(_ message: String, level: LogLevel = .info, file: String = #file, callingFunction: String = #function, line: Int = #line, column: Int = #column) {
     if level >= logLevel {
-        print("[\(Date())][\(callingFunction)][\(level)]: \(message)")
+        print("[\(Date())][\(file):\(line):\(column)][\(callingFunction)][\(level)]: \(message)")
     }
 }
 
-func debug(_ message: String, callingFunction: String = #function) {
-    log(message, level: .debug, callingFunction: callingFunction)
+func debug(_ message: String, file: String = #file, callingFunction: String = #function, line: Int = #line, column: Int = #column) {
+    log(message, level: .debug, file: file, callingFunction: callingFunction, line: line, column: column)
 }
 
-func warn(_ message: String, callingFunction: String = #function) {
-    log(message, level: .warning, callingFunction: callingFunction)
+func warn(_ message: String, file: String = #file, callingFunction: String = #function, line: Int = #line, column: Int = #column) {
+    log(message, level: .warning, file: file, callingFunction: callingFunction, line: line, column: column)
 }
 
-func error(_ message: String, callingFunction: String = #function) {
-    log(message, level: .error, callingFunction: callingFunction)
+func error(_ message: String, file: String = #file, callingFunction: String = #function, line: Int = #line, column: Int = #column) {
+    log(message, level: .error, file: file, callingFunction: callingFunction, line: line, column: column)
 }
 
-func trace<T>(_ val: T, level: LogLevel = .info, callingFunction: String = #function) -> T {
-    log(String(reflecting: val), level: .info, callingFunction: callingFunction)
+func trace<T>(_ val: T, level: LogLevel = .info, file: String = #file, callingFunction: String = #function, line: Int = #line, column: Int = #column) -> T {
+    log(String(reflecting: val), level: .info, file: file, callingFunction: callingFunction, line: line, column: column)
     return val
 }
 
