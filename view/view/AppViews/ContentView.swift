@@ -6,8 +6,6 @@
 //
 
 import SwiftUI
-import QuickLook
-import QuickLookThumbnailing
 
 struct ContentView: View {
     let fileUrl: URL

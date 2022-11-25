@@ -128,7 +128,7 @@ struct NodeView: View {
                    let tagOptions = node.root.tags?.tagOptions {
                     TagEditor(
                         initial: tags,
-                        options: [String](tagOptions),
+                        options: [String](tagOptions).sorted(),
                         commit: { newTags in
                             node.tags = newTags
                             showingTags = false

@@ -3,7 +3,7 @@
 	archiveVersion = 1;
 	classes = {
 	};
-	objectVersion = 50;
+	objectVersion = 52;
 	objects = {
 
 /* Begin PBXBuildFile section */
@@ -18,6 +18,13 @@
 		0313681227140A0900E69F83 /* Utils.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0313681127140A0900E69F83 /* Utils.swift */; };
 		03136814271415FA00E69F83 /* Extensions.swift in Sources */ = {isa = PBXBuildFile; fileRef = 03136813271415FA00E69F83 /* Extensions.swift */; };
 		0313681627149ECE00E69F83 /* ZoomableScrollView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0313681527149ECE00E69F83 /* ZoomableScrollView.swift */; };
+		0326BF27292951D700ECA18F /* BitCollections in Frameworks */ = {isa = PBXBuildFile; productRef = 0326BF26292951D700ECA18F /* BitCollections */; };
+		0326BF29292951D700ECA18F /* Collections in Frameworks */ = {isa = PBXBuildFile; productRef = 0326BF28292951D700ECA18F /* Collections */; };
+		0326BF2B292951D700ECA18F /* DequeModule in Frameworks */ = {isa = PBXBuildFile; productRef = 0326BF2A292951D700ECA18F /* DequeModule */; };
+		0326BF2D292951D700ECA18F /* HeapModule in Frameworks */ = {isa = PBXBuildFile; productRef = 0326BF2C292951D700ECA18F /* HeapModule */; };
+		0326BF2F292951D700ECA18F /* OrderedCollections in Frameworks */ = {isa = PBXBuildFile; productRef = 0326BF2E292951D700ECA18F /* OrderedCollections */; };
+		0326BF31292951D700ECA18F /* PersistentCollections in Frameworks */ = {isa = PBXBuildFile; productRef = 0326BF30292951D700ECA18F /* PersistentCollections */; };
+		0326BF33292951D700ECA18F /* SortedCollections in Frameworks */ = {isa = PBXBuildFile; productRef = 0326BF32292951D700ECA18F /* SortedCollections */; };
 		0339C23E29010DA000345CB1 /* LinkForTransition.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0339C23D29010DA000345CB1 /* LinkForTransition.swift */; };
 		03596F142724A60F00766388 /* PreviewView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 03596F132724A60F00766388 /* PreviewView.swift */; };
 		0375E7C82782C06000FB6548 /* SafariView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0375E7C72782C06000FB6548 /* SafariView.swift */; };
@@ -70,6 +77,13 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				0326BF2F292951D700ECA18F /* OrderedCollections in Frameworks */,
+				0326BF31292951D700ECA18F /* PersistentCollections in Frameworks */,
+				0326BF29292951D700ECA18F /* Collections in Frameworks */,
+				0326BF33292951D700ECA18F /* SortedCollections in Frameworks */,
+				0326BF27292951D700ECA18F /* BitCollections in Frameworks */,
+				0326BF2D292951D700ECA18F /* HeapModule in Frameworks */,
+				0326BF2B292951D700ECA18F /* DequeModule in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -181,6 +195,15 @@
 			dependencies = (
 			);
 			name = view;
+			packageProductDependencies = (
+				0326BF26292951D700ECA18F /* BitCollections */,
+				0326BF28292951D700ECA18F /* Collections */,
+				0326BF2A292951D700ECA18F /* DequeModule */,
+				0326BF2C292951D700ECA18F /* HeapModule */,
+				0326BF2E292951D700ECA18F /* OrderedCollections */,
+				0326BF30292951D700ECA18F /* PersistentCollections */,
+				0326BF32292951D700ECA18F /* SortedCollections */,
+			);
 			productName = view;
 			productReference = 031367DF2713FCF200E69F83 /* view.app */;
 			productType = "com.apple.product-type.application";
@@ -252,6 +275,9 @@
 				Base,
 			);
 			mainGroup = 031367D62713FCF200E69F83;
+			packageReferences = (
+				0326BF25292951D700ECA18F /* XCRemoteSwiftPackageReference "swift-collections" */,
+			);
 			productRefGroup = 031367E02713FCF200E69F83 /* Products */;
 			projectDirPath = "";
 			projectRoot = "";
@@ -636,6 +662,55 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		0326BF25292951D700ECA18F /* XCRemoteSwiftPackageReference "swift-collections" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/apple/swift-collections.git";
+			requirement = {
+				branch = main;
+				kind = branch;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		0326BF26292951D700ECA18F /* BitCollections */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 0326BF25292951D700ECA18F /* XCRemoteSwiftPackageReference "swift-collections" */;
+			productName = BitCollections;
+		};
+		0326BF28292951D700ECA18F /* Collections */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 0326BF25292951D700ECA18F /* XCRemoteSwiftPackageReference "swift-collections" */;
+			productName = Collections;
+		};
+		0326BF2A292951D700ECA18F /* DequeModule */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 0326BF25292951D700ECA18F /* XCRemoteSwiftPackageReference "swift-collections" */;
+			productName = DequeModule;
+		};
+		0326BF2C292951D700ECA18F /* HeapModule */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 0326BF25292951D700ECA18F /* XCRemoteSwiftPackageReference "swift-collections" */;
+			productName = HeapModule;
+		};
+		0326BF2E292951D700ECA18F /* OrderedCollections */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 0326BF25292951D700ECA18F /* XCRemoteSwiftPackageReference "swift-collections" */;
+			productName = OrderedCollections;
+		};
+		0326BF30292951D700ECA18F /* PersistentCollections */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 0326BF25292951D700ECA18F /* XCRemoteSwiftPackageReference "swift-collections" */;
+			productName = PersistentCollections;
+		};
+		0326BF32292951D700ECA18F /* SortedCollections */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 0326BF25292951D700ECA18F /* XCRemoteSwiftPackageReference "swift-collections" */;
+			productName = SortedCollections;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = 031367D72713FCF200E69F83 /* Project object */;
 }
