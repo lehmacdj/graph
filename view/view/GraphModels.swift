@@ -18,10 +18,29 @@ extension NID {
 class Graph {
     let dir: URL
     let basePath: URL
+    var nextNodeId: NID
 
-    init(dir: URL) {
+    init?(dir: URL) {
         self.dir = dir
         basePath = dir
+        nextNodeId = 1
+        if !FileManager.default.fileExists(atPath: metaPath(for: NID.origin).absoluteString) {
+            return nil
+        }
+        guard let contents = try? FileManager.default.contentsOfDirectory(at: dir, includingPropertiesForKeys: [.nameKey]) else {
+            return nil
+        }
+        var maxNodeId = NID.origin
+        for url in contents {
+            if url.lastPathComponent.hasSuffix(".json"),
+               let dotIx = url.lastPathComponent.lastIndex(of: ".") {
+                if let id = Int(url.lastPathComponent[...dotIx]),
+                   id > maxNodeId {
+                    maxNodeId = id
+                }
+            }
+        }
+        nextNodeId = maxNodeId + 1
     }
 
     func metaPath(for nid: NID) -> URL {
@@ -65,6 +84,21 @@ class Graph {
             return nil
         }
         return Tags(tagNode: tags)
+    }
+
+    /// Creates a new node not connected to anything
+    func createNewNode() -> Node? {
+        let newMeta = NodeMeta(id: nextNodeId, incoming: [:], outgoing: [:])
+        guard let data: Data = try? JSONEncoder().encode(newMeta) else {
+            warn("failed to encode JSON for NodeMeta")
+            return nil
+        }
+        FileManager.default.createFile(atPath: metaPath(for: nextNodeId).absoluteString, contents: data)
+        guard let node = self[nextNodeId] else {
+            return nil
+        }
+        nextNodeId += 1
+        return node
     }
 
     func addLink(from startNode: Node, to endNode: Node, via transition: String) {

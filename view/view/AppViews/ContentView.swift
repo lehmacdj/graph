@@ -13,14 +13,18 @@ struct ContentView: View {
 
     var body: some View {
         NavigationView {
-            NodeView(of: Graph(dir: fileUrl).origin)
-                .toolbar {
-                    ToolbarItem(placement: .navigationBarLeading) {
-                        Button(action: doSelectFile) {
-                            Text("Select graph")
+            if let graph = Graph(dir: fileUrl) {
+                NodeView(of: graph.origin)
+                    .toolbar {
+                        ToolbarItem(placement: .navigationBarLeading) {
+                            Button(action: doSelectFile) {
+                                Text("Select graph")
+                            }
                         }
                     }
-                }
+            } else {
+                Text("Couldn't read directory; invalid graph").foregroundColor(.red)
+            }
         }
         .navigationViewStyle(StackNavigationViewStyle())
     }
