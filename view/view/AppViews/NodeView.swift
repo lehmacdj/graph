@@ -78,7 +78,7 @@ struct NodeView: View {
         } else {
             List {
                 Section {
-                    ForEach(node.outgoing) { item in
+                    ForEach(node.outgoing.sorted(on: { [node.isFavorite(child: $0.nid) ? "" : " ", $0.transition] } )) { item in
                         linkForTransition(item)
                     }
                 }

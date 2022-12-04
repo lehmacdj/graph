@@ -260,7 +260,7 @@ class Node: ObservableObject {
                 result.append(NodeTransition(transition: transition, nid: nid))
             }
         }
-        return result.sorted()
+        return result
     }
 
     var incoming: [NodeTransition] {
@@ -270,7 +270,7 @@ class Node: ObservableObject {
                 result.append(NodeTransition(transition: transition, nid: nid))
             }
         }
-        return result.sorted()
+        return result
     }
 
     subscript(transition: String) -> [Node] {
@@ -328,22 +328,22 @@ class Node: ObservableObject {
         return node
     }
 
-    private func links(to node: Node) -> [String] {
+    private func links(to nid: NID) -> [String] {
         var result = [String]()
         for (transition, targets) in self.meta.outgoing {
-            if targets.contains(node.nid) {
+            if targets.contains(nid) {
                 result.append(transition)
             }
         }
         return result
     }
 
-    func isFavorite(child: Node) -> Bool {
+    func isFavorite(child: NID) -> Bool {
         return !favorites.links(to: child).isEmpty
     }
 
     func toggleFavorite(child: Node) {
-        if let favoriteLinks = favorites.links(to: child).nilIfEmpty() {
+        if let favoriteLinks = favorites.links(to: child.nid).nilIfEmpty() {
             for favoriteLink in favoriteLinks {
                 root.removeLink(from: favorites, to: child, via: favoriteLink)
             }
@@ -352,12 +352,12 @@ class Node: ObservableObject {
         }
     }
 
-    func isWorse(child: Node) -> Bool {
+    func isWorse(child: NID) -> Bool {
         return !worse.links(to: child).isEmpty
     }
 
     func toggleWorse(child: Node) {
-        if let worseLinks = worse.links(to: child).nilIfEmpty() {
+        if let worseLinks = worse.links(to: child.nid).nilIfEmpty() {
             for worseLink in worseLinks {
                 root.removeLink(from: worse, to: child, via: worseLink)
             }

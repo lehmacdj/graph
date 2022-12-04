@@ -51,3 +51,18 @@ extension Sequence {
         return self.sorted(by: { x, y in projection(x) < projection(y) })
     }
 }
+
+extension Array: Comparable where Array.Element: Comparable {
+    public static func < (lhs: Array<Element>, rhs: Array<Element>) -> Bool {
+        var i = 0
+        while (i < lhs.count && i < rhs.count) {
+            if lhs[i] < rhs[i] {
+                return true
+            } else if lhs[i] > rhs[i] {
+                return false
+            }
+            i += 1
+        }
+        return lhs.count > rhs.count
+    }
+}

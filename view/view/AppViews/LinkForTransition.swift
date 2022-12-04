@@ -94,7 +94,7 @@ struct LinkForTransition: View {
             Button() {
                 source.toggleWorse(child: destination)
             } label: {
-                if source.isWorse(child: destination) {
+                if source.isWorse(child: destination.nid) {
                     Label("Unworsen", systemImage: "xmark.bin.fill")
                 } else {
                     Label("Worsen", systemImage: "xmark.bin")
@@ -105,7 +105,7 @@ struct LinkForTransition: View {
             Button() {
                 source.toggleFavorite(child: destination)
             } label: {
-                if source.isFavorite(child: destination) {
+                if source.isFavorite(child: destination.nid) {
                     Label("Unfavorite", systemImage: "star.fill")
                 } else {
                     Label("Favorite", systemImage: "star")
