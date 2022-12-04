@@ -86,9 +86,32 @@ struct LinkForTransition: View {
             Button() {
                 editing = true
             } label: {
-                Label("Edit", systemImage: "pencil")
+                Label("More", systemImage: "pencil")
             }
             .tint(.orange)
+        }
+        .swipeActions(edge: .leading, allowsFullSwipe: false) {
+            Button() {
+                source.toggleWorse(child: destination)
+            } label: {
+                if source.isWorse(child: destination) {
+                    Label("Unworsen", systemImage: "xmark.bin.fill")
+                } else {
+                    Label("Worsen", systemImage: "xmark.bin")
+                }
+            }
+            .tint(.purple)
+
+            Button() {
+                source.toggleFavorite(child: destination)
+            } label: {
+                if source.isFavorite(child: destination) {
+                    Label("Unfavorite", systemImage: "star.fill")
+                } else {
+                    Label("Favorite", systemImage: "star")
+                }
+            }
+            .tint(.yellow)
         }
     }
 }

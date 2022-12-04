@@ -34,6 +34,16 @@ extension Dictionary where Value: Sequence {
     }
 }
 
+extension Collection {
+    public func nilIfEmpty() -> Self? {
+        if self.isEmpty {
+            return nil
+        } else {
+            return self
+        }
+    }
+}
+
 extension Sequence {
     public func sorted<T>(
         on projection: (Element) -> T

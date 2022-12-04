@@ -87,15 +87,16 @@ class Graph {
     }
 
     /// Creates a new node not connected to anything
-    func createNewNode() -> Node? {
+    func createNewNode() -> Node {
         let newMeta = NodeMeta(id: nextNodeId, incoming: [:], outgoing: [:])
         guard let data: Data = try? JSONEncoder().encode(newMeta) else {
-            warn("failed to encode JSON for NodeMeta")
-            return nil
+            error("failed to encode JSON for NodeMeta")
+            fatalError("couldn't create a node")
         }
         FileManager.default.createFile(atPath: metaPath(for: nextNodeId).absoluteString, contents: data)
         guard let node = self[nextNodeId] else {
-            return nil
+            error("couldn't access newly created node")
+            fatalError("couldn't create a node")
         }
         nextNodeId += 1
         return node
@@ -310,6 +311,58 @@ class Node: ObservableObject {
                 for: self,
                 adding: newTags.subtracting(oldTags),
                 removing: oldTags.subtracting(newTags))
+        }
+    }
+
+    var favorites: Node {
+        return self["favorites"].first ?? createNewChild(via: "favorites")
+    }
+
+    var worse: Node {
+        return self["favorites"].first ?? createNewChild(via: "worse")
+    }
+
+    private func createNewChild(via transition: String) -> Node{
+        let node = root.createNewNode()
+        root.addLink(from: self, to: node, via: transition)
+        return node
+    }
+
+    private func links(to node: Node) -> [String] {
+        var result = [String]()
+        for (transition, targets) in self.meta.outgoing {
+            if targets.contains(node.nid) {
+                result.append(transition)
+            }
+        }
+        return result
+    }
+
+    func isFavorite(child: Node) -> Bool {
+        return !favorites.links(to: child).isEmpty
+    }
+
+    func toggleFavorite(child: Node) {
+        if let favoriteLinks = favorites.links(to: child).nilIfEmpty() {
+            for favoriteLink in favoriteLinks {
+                root.removeLink(from: favorites, to: child, via: favoriteLink)
+            }
+        } else {
+            root.addLink(from: favorites, to: child, via: "")
+        }
+    }
+
+    func isWorse(child: Node) -> Bool {
+        return !worse.links(to: child).isEmpty
+    }
+
+    func toggleWorse(child: Node) {
+        if let worseLinks = worse.links(to: child).nilIfEmpty() {
+            for worseLink in worseLinks {
+                root.removeLink(from: worse, to: child, via: worseLink)
+            }
+        } else {
+            root.addLink(from: worse, to: child, via: "")
         }
     }
 
