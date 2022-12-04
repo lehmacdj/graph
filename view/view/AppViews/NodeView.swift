@@ -78,9 +78,11 @@ struct NodeView: View {
         } else {
             List {
                 Section {
-                    ForEach(node.outgoing.sorted(on: { [node.isFavorite(child: $0.nid) ? "" : " ", $0.transition] } )) { item in
-                        linkForTransition(item)
-                    }
+                    ForEach(node.outgoing.lazy
+                        .filter({ !node.isWorse(child: $0.nid) })
+                        .sorted(on: { [node.isFavorite(child: $0.nid) ? "" : " ", $0.transition] } )) { item in
+                            linkForTransition(item)
+                        }
                 }
                 Section("Backlinks") {
                     ForEach(node.incoming.sorted(on: \.transition)) { item in
