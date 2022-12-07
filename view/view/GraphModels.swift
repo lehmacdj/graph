@@ -24,17 +24,21 @@ class Graph {
         self.dir = dir
         basePath = dir
         nextNodeId = 1
-        if !FileManager.default.fileExists(atPath: metaPath(for: NID.origin).absoluteString) {
+        if !FileManager.default.fileExists(atPath: metaPath(for: NID.origin).path) {
+            warn("couldn't find origin node meta data file")
             return nil
         }
         guard let contents = try? FileManager.default.contentsOfDirectory(at: dir, includingPropertiesForKeys: [.nameKey]) else {
+            warn("wasn't able to access contents of directory representing grap")
             return nil
         }
         var maxNodeId = NID.origin
         for url in contents {
-            if url.lastPathComponent.hasSuffix(".json"),
-               let dotIx = url.lastPathComponent.lastIndex(of: ".") {
-                if let id = Int(url.lastPathComponent[...dotIx]),
+            let lastPathComponent = url.lastPathComponent
+            if lastPathComponent.hasSuffix(".json"),
+               let dotIx = lastPathComponent.lastIndex(of: ".") {
+                let dotPrevIx = lastPathComponent.index(before: dotIx)
+                if let id = Int(url.lastPathComponent[...dotPrevIx]),
                    id > maxNodeId {
                     maxNodeId = id
                 }
@@ -93,7 +97,10 @@ class Graph {
             error("failed to encode JSON for NodeMeta")
             fatalError("couldn't create a node")
         }
-        FileManager.default.createFile(atPath: metaPath(for: nextNodeId).absoluteString, contents: data)
+        guard FileManager.default.createFile(atPath: metaPath(for: nextNodeId).path, contents: data) else {
+            error("failed to create file for new node")
+            fatalError("failed to create a file")
+        }
         guard let node = self[nextNodeId] else {
             error("couldn't access newly created node")
             fatalError("couldn't create a node")
@@ -314,15 +321,15 @@ class Node: ObservableObject {
         }
     }
 
-    var favorites: Node {
-        return self["favorites"].first ?? createNewChild(via: "favorites")
+    var favorites: Node? {
+        return self["favorites"].first
     }
 
-    var worse: Node {
-        return self["favorites"].first ?? createNewChild(via: "worse")
+    var worse: Node? {
+        return self["worse"].first
     }
 
-    private func createNewChild(via transition: String) -> Node{
+    private func createNewChild(via transition: String) -> Node {
         let node = root.createNewNode()
         root.addLink(from: self, to: node, via: transition)
         return node
@@ -339,30 +346,30 @@ class Node: ObservableObject {
     }
 
     func isFavorite(child: NID) -> Bool {
-        return !favorites.links(to: child).isEmpty
+        return !(favorites?.links(to: child).isEmpty ?? true)
     }
 
     func toggleFavorite(child: Node) {
-        if let favoriteLinks = favorites.links(to: child.nid).nilIfEmpty() {
+        if let favoriteLinks = favorites?.links(to: child.nid).nilIfEmpty() {
             for favoriteLink in favoriteLinks {
-                root.removeLink(from: favorites, to: child, via: favoriteLink)
+                root.removeLink(from: favorites ?? createNewChild(via: "favorites"), to: child, via: favoriteLink)
             }
         } else {
-            root.addLink(from: favorites, to: child, via: "")
+            root.addLink(from: favorites ?? createNewChild(via: "favorites"), to: child, via: "")
         }
     }
 
     func isWorse(child: NID) -> Bool {
-        return !worse.links(to: child).isEmpty
+        return !(worse?.links(to: child).isEmpty ?? true)
     }
 
     func toggleWorse(child: Node) {
-        if let worseLinks = worse.links(to: child.nid).nilIfEmpty() {
+        if let worseLinks = worse?.links(to: child.nid).nilIfEmpty() {
             for worseLink in worseLinks {
-                root.removeLink(from: worse, to: child, via: worseLink)
+                root.removeLink(from: worse ?? createNewChild(via: "worse"), to: child, via: worseLink)
             }
         } else {
-            root.addLink(from: worse, to: child, via: "")
+            root.addLink(from: worse ?? createNewChild(via: "worse"), to: child, via: "")
         }
     }
 

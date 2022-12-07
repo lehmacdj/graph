@@ -34,14 +34,21 @@ struct LinkForTransition: View {
     @ObservedObject var source: Node
     @ObservedObject var destination: Node
     let transition: String
+    let direction: LinkDirection // only forward links get certain modification actions
+
+    enum LinkDirection {
+        case forward
+        case backward
+    }
 
     @State var confirmingDelete: Bool = false
     @State var editing: Bool = false
 
-    init(from source: Node, to destination: Node, via transition: String) {
+    init(from source: Node, to destination: Node, via transition: String, direction: LinkDirection) {
         self.source = source
         self.destination = destination
         self.transition = transition
+        self.direction = direction
     }
 
     var body: some View {
@@ -90,28 +97,30 @@ struct LinkForTransition: View {
             }
             .tint(.orange)
         }
-        .swipeActions(edge: .leading, allowsFullSwipe: false) {
-            Button() {
-                source.toggleWorse(child: destination)
-            } label: {
-                if source.isWorse(child: destination.nid) {
-                    Label("Unworsen", systemImage: "xmark.bin.fill")
-                } else {
-                    Label("Worsen", systemImage: "xmark.bin")
+        .swipeActions(edge: .leading) {
+            if direction == .forward {
+                Button() {
+                    source.toggleFavorite(child: destination)
+                } label: {
+                    if source.isFavorite(child: destination.nid) {
+                        Label("Unfavorite", systemImage: "star.fill")
+                    } else {
+                        Label("Favorite", systemImage: "star")
+                    }
                 }
-            }
-            .tint(.purple)
 
-            Button() {
-                source.toggleFavorite(child: destination)
-            } label: {
-                if source.isFavorite(child: destination.nid) {
-                    Label("Unfavorite", systemImage: "star.fill")
-                } else {
-                    Label("Favorite", systemImage: "star")
+                .tint(.yellow)
+                Button() {
+                    source.toggleWorse(child: destination)
+                } label: {
+                    if source.isWorse(child: destination.nid) {
+                        Label("Unworsen", systemImage: "xmark.bin.fill")
+                    } else {
+                        Label("Worsen", systemImage: "xmark.bin")
+                    }
                 }
+                .tint(.purple)
             }
-            .tint(.yellow)
         }
     }
 }

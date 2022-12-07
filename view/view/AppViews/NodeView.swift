@@ -54,9 +54,9 @@ struct NodeView: View {
     @State var showingForceDeleteNodeConfirmation: Bool = false
 
     @ViewBuilder
-    func linkForTransition(_ item: NodeTransition) -> some View {
+    func linkForTransition(_ item: NodeTransition, direction: LinkForTransition.LinkDirection) -> some View {
         if let destination = self.node.root[item.nid] {
-            LinkForTransition(from: node, to: destination, via: item.transition)
+            LinkForTransition(from: node, to: destination, via: item.transition, direction: direction)
         } else {
             Text("Transition \(item.transition) to nonexistent node \(item.nid)")
         }
@@ -77,16 +77,38 @@ struct NodeView: View {
             }
         } else {
             List {
+                if let _ = node.favorites {
+                    // render the favorites section if there is a favorites node
+                    Section("Favorites") {
+                        ForEach(node.outgoing.lazy
+                            .filter({ node.isFavorite(child: $0.nid) })
+                            .sorted(on: \.transition)) { item in
+                            linkForTransition(item, direction: .forward)
+                        }
+                    }
+                }
                 Section {
                     ForEach(node.outgoing.lazy
-                        .filter({ !node.isWorse(child: $0.nid) })
-                        .sorted(on: { [node.isFavorite(child: $0.nid) ? "" : " ", $0.transition] } )) { item in
-                            linkForTransition(item)
+                        .filter({ !node.isWorse(child: $0.nid) && !node.isFavorite(child: $0.nid) })
+                        .sorted(on: \.transition)) { item in
+                            linkForTransition(item, direction: .forward)
                         }
                 }
                 Section("Backlinks") {
                     ForEach(node.incoming.sorted(on: \.transition)) { item in
-                        linkForTransition(item)
+                        linkForTransition(item, direction: .backward)
+                    }
+                }
+                if let _ = node.worse {
+                    // Show a section with all of the nodes marked worse if we have a worse node
+                    // Even though it would be tempting to make this hidden, that's not a good
+                    // idea because then it would be possible to completely hide the "worse" node
+                    Section("Worse") {
+                        ForEach(node.outgoing.lazy
+                            .filter({ node.isWorse(child: $0.nid) })
+                            .sorted(on: \.transition)) { item in
+                                linkForTransition(item, direction: .forward)
+                            }
                     }
                 }
             }
