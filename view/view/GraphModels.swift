@@ -357,6 +357,7 @@ class Node: ObservableObject {
         } else {
             root.addLink(from: favorites ?? createNewChild(via: "favorites"), to: child, via: "")
         }
+        objectWillChange.send()
     }
 
     func isWorse(child: NID) -> Bool {
@@ -371,6 +372,7 @@ class Node: ObservableObject {
         } else {
             root.addLink(from: worse ?? createNewChild(via: "worse"), to: child, via: "")
         }
+        objectWillChange.send()
     }
 
     // MARK: data
