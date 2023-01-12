@@ -282,7 +282,9 @@ class Node: ObservableObject {
 
     subscript(transition: String) -> [Node] {
         guard let ids = meta.outgoing[transition] else {
-            warn("didn't find transition \(transition) from node \(meta.id)")
+            // debug because sometimes we use this to check if an optional transition
+            // exists, and the log message is too noisy to be a warning
+            debug("didn't find transition \(transition) from node \(meta.id)")
             return []
         }
         return ids.compactMap { root[$0] }
