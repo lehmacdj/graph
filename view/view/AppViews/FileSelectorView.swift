@@ -69,6 +69,7 @@ struct FileSelectorView: View {
 
     func initiateFileSelection() {
         fileUrl = nil
+        fileUrlBookmark = nil
         presentingFileImporter = true
     }
 

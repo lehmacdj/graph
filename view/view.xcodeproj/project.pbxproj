@@ -138,10 +138,6 @@
 				0313680F2713FCFF00E69F83 /* GraphModels.swift */,
 				0313681127140A0900E69F83 /* Utils.swift */,
 				03136813271415FA00E69F83 /* Extensions.swift */,
-				0313681527149ECE00E69F83 /* ZoomableScrollView.swift */,
-				03596F132724A60F00766388 /* PreviewView.swift */,
-				0375E7C72782C06000FB6548 /* SafariView.swift */,
-				035450012969D74100B5AAF6 /* FileSelectorView.swift */,
 			);
 			path = view;
 			sourceTree = "<group>";
@@ -175,6 +171,10 @@
 		03D1D8DF28FB564700E76F27 /* AppViews */ = {
 			isa = PBXGroup;
 			children = (
+				0313681527149ECE00E69F83 /* ZoomableScrollView.swift */,
+				03596F132724A60F00766388 /* PreviewView.swift */,
+				0375E7C72782C06000FB6548 /* SafariView.swift */,
+				035450012969D74100B5AAF6 /* FileSelectorView.swift */,
 				031367E62713FCF200E69F83 /* ContentView.swift */,
 				03D1D8DD28FB559B00E76F27 /* NodeView.swift */,
 				0339C23D29010DA000345CB1 /* LinkForTransition.swift */,
