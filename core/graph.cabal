@@ -1,10 +1,10 @@
 cabal-version: 1.12
 
--- This file has been generated from package.yaml by hpack version 0.34.5.
+-- This file has been generated from package.yaml by hpack version 0.35.1.
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: a5cb9a512018a48e60bdadf819fa3a9e177c3a85e799d2d51755ee16654e0ed4
+-- hash: 5276bc2f1cae59981c4ab6f6c5005f0483f683e006bd4587185b8cd2c3f6e23d
 
 name:           graph
 version:        0.1.0.0
@@ -70,8 +70,6 @@ library
       History
       HistorySpec
       Interpreters
-      Lang.APath
-      Lang.APath.Parse
       Lang.Command
       Lang.Command.Parse
       Lang.Command.ParseSpec
@@ -125,6 +123,7 @@ library
       RecordWildCards
       ScopedTypeVariables
       StandaloneDeriving
+      StrictData
       TupleSections
       TypeApplications
       TypeFamilies
@@ -220,6 +219,7 @@ executable dump-graph
       RecordWildCards
       ScopedTypeVariables
       StandaloneDeriving
+      StrictData
       TupleSections
       TypeApplications
       TypeFamilies
@@ -316,6 +316,7 @@ executable ge
       RecordWildCards
       ScopedTypeVariables
       StandaloneDeriving
+      StrictData
       TupleSections
       TypeApplications
       TypeFamilies
@@ -412,6 +413,7 @@ executable migration
       RecordWildCards
       ScopedTypeVariables
       StandaloneDeriving
+      StrictData
       TupleSections
       TypeApplications
       TypeFamilies
@@ -509,6 +511,7 @@ test-suite graph-test
       RecordWildCards
       ScopedTypeVariables
       StandaloneDeriving
+      StrictData
       TupleSections
       TypeApplications
       TypeFamilies

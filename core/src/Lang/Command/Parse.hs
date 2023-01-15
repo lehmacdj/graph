@@ -2,39 +2,39 @@ module Lang.Command.Parse where
 
 import Control.Arrow (left)
 import Data.Functor
-import Lang.APath
-import Lang.APath.Parse
 import Lang.Command
 import Lang.Parsing
+import Lang.Path
+import Lang.Path.Parse
 import MyPrelude hiding (some, try)
 import Text.Megaparsec
 
-apath :: Parser (APath String)
-apath = pAPath transition
+path :: Parser (Path String)
+path = pPath transition
 
 pChangeNode :: Parser Command
-pChangeNode = (command "cd" $> ChangeNode) <*> apath
+pChangeNode = (command "cd" $> ChangeNode) <*> path
 
 pDualize :: Parser Command
 pDualize = command "d" $> Dualize
 
 pMake :: Parser Command
-pMake = (command "mk" $> Make) <*> apath
+pMake = (command "mk" $> Make) <*> path
 
 pMerge :: Parser Command
-pMerge = (command "mg" $> Merge) <*> apath
+pMerge = (command "mg" $> Merge) <*> path
 
 pClone :: Parser Command
-pClone = (command "cl" $> Clone) <*> apath <*> transition
+pClone = (command "cl" $> Clone) <*> path <*> transition
 
 pList :: Parser Command
 pList = command "ls" $> ListOut
 
 pQuery :: Parser Command
-pQuery = (commandFrom ["q", "query"] $> Query) <*> apath <*> transition
+pQuery = (commandFrom ["q", "query"] $> Query) <*> path <*> transition
 
 pTag :: Parser Command
-pTag = (commandFrom ["tag", "t"] $> Tag) <*> apath <*> apath
+pTag = (commandFrom ["tag", "t"] $> Tag) <*> path <*> path
 
 pText :: Parser Command
 pText = (commandFrom ["text", "mkt"] $> Text) <*> transition <*> some anySingle
@@ -43,13 +43,13 @@ pDescribe :: Parser Command
 pDescribe = (commandFrom ["describe", "desc"] $> Describe) <*> some anySingle
 
 pRemove :: Parser Command
-pRemove = (command "rm" $> Remove) <*> apath
+pRemove = (command "rm" $> Remove) <*> path
 
 pRemoveNode :: Parser Command
-pRemoveNode = (command "rmnf" $> RemoveNode) <*> apath
+pRemoveNode = (command "rmnf" $> RemoveNode) <*> path
 
 pAt :: Parser Command
-pAt = (command "at" $> At) <*> apath <*> pCommand
+pAt = (command "at" $> At) <*> path <*> pCommand
 
 pNodeId :: Parser Command
 pNodeId = command "nid" $> NodeId
@@ -79,10 +79,10 @@ pFix :: Parser Command
 pFix = command "fix" $> Fix
 
 pMove :: Parser Command
-pMove = (command "mv" $> Move) <*> apath <*> apath
+pMove = (command "mv" $> Move) <*> path <*> path
 
 pRename :: Parser Command
-pRename = (command "rn" $> Rename) <*> apath <*> apath
+pRename = (command "rn" $> Rename) <*> path <*> path
 
 pEdit :: Parser Command
 pEdit = command "vi" $> Edit
@@ -94,7 +94,7 @@ pMaterialize :: Parser Command
 pMaterialize = (command "materialize" $> Materialize) <*> some anySingle
 
 pExec :: Parser Command
-pExec = (commandFrom ["exec", "x"] $> Exec) <*> apath
+pExec = (commandFrom ["exec", "x"] $> Exec) <*> path
 
 pCollect :: Parser Command
 pCollect = (command "collect" $> Collect) <*> transition

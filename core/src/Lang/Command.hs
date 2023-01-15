@@ -14,7 +14,6 @@
 -- paths and if possible nondeterministic paths too
 module Lang.Command where
 
-import Control.Lens (has)
 import Control.Monad (zipWithM_)
 import Effect.Console
 import Effect.Editor
@@ -36,8 +35,8 @@ import GHC.Generics
 import Graph (Connect (..), Edge (..), dataOf, nilNID, outgoingConnectsOf)
 import qualified Graph.Serialize2 as S2
 import History
-import Lang.APath
-import MyPrelude
+import Lang.Path
+import MyPrelude hiding (throwString)
 import Polysemy.Readline
 import Polysemy.State
 import Singleton
@@ -45,30 +44,30 @@ import UserError
 
 data Command
   = -- | cd
-    ChangeNode (APath String)
+    ChangeNode (Path String)
   | -- | d
     Dualize
   | -- | mk
-    Make (APath String)
+    Make (Path String)
   | -- | mg
-    Merge (APath String)
+    Merge (Path String)
   | -- | cl
-    Clone (APath String) String
+    Clone (Path String) String
   | -- | ls
     ListOut
   | -- | q
-    Query (APath String) String
+    Query (Path String) String
   | -- | t
-    Tag (APath String) (APath String)
+    Tag (Path String) (Path String)
   | Text String String
   | -- | desc
     Describe String
   | -- | rm
-    Remove (APath String)
+    Remove (Path String)
   | -- | rmnf
-    RemoveNode (APath String)
+    RemoveNode (Path String)
   | -- | at
-    At (APath String) Command
+    At (Path String) Command
   | -- | dd
     Dedup String
   | -- | flatten:
@@ -93,9 +92,9 @@ data Command
   | -- | fix
     Fix
   | -- | mv
-    Move (APath String) (APath String)
+    Move (Path String) (Path String)
   | -- | rn
-    Rename (APath String) (APath String)
+    Rename (Path String) (Path String)
   | -- | vi
     Edit
   | -- | back: Go back in history by a certain number of steps. Greater number
@@ -110,7 +109,7 @@ data Command
   | -- | Execute some arbitrary Haskell code that has access to the graph at
     -- the current node. The Haskell code is given by the data at the node given
     -- as an argument.
-    Exec (APath String)
+    Exec (Path String)
   | -- | Collect same transitions into a transition to a single node that
     -- transitions to the nodes the previous transition used to
     Collect String
@@ -153,19 +152,6 @@ guardDangerousDualizedOperation = do
     outputStrLn "the operation you are attempting may be dangerous in that state"
     promptYesNo "proceed (y/n): " >>= bool (throw OperationCancelled) (pure ())
 
--- | Operations with absolute paths that look like @0:asdf + jkl@ can be
--- confusing because they might confuse the user into thinking that
-guardDangerousAbsoluteOperation ::
-  Members [Readline, Error UserError] effs =>
-  APath String ->
-  Set NID ->
-  Sem effs ()
-guardDangerousAbsoluteOperation a nids =
-  when (has #_Absolute a && length nids > 1) do
-    outputStrLn "the operation you are attempting will affect nodes:"
-    outputStrLn . show . toList $ nids
-    promptYesNo "proceed (y/n): " >>= bool (throw OperationCancelled) (pure ())
-
 interpretCommand ::
   ( Members [Console, Error UserError, SetLocation, GetLocation, Dualizeable] effs,
     Members [FileSystemTree, Web, FreshNID, GetTime, Editor, State History] effs,
@@ -180,58 +166,60 @@ interpretCommand ::
   Command ->
   Sem effs ()
 interpretCommand = \case
-  ChangeNode a -> do
-    (nid, p) <- relativizeAPath a
+  ChangeNode p -> do
+    nid <- currentLocation
     let err = singleErr "cd"
     nid' <- the' err =<< subsumeUserError @Missing (resolvePathSuccesses nid p)
     changeLocation nid'
   NodeId -> currentLocation >>= echo . show
   Dualize -> dualize
-  Make a -> do
-    (nid, p) <- relativizeAPath a
-    subsumeUserError $ mkPath nid p >> pure ()
-  Merge a -> do
-    (nid, p) <- relativizeAPath a
+  Make p -> do
+    nid <- currentLocation
+    case mkRelativePath p of
+      Just rp -> subsumeUserError $ mkPath nid rp >> pure ()
+      Nothing -> throwString "mk must take a relative path"
+  Merge p -> do
+    nid <- currentLocation
     nids <- subsumeUserError (resolvePathSuccesses nid p)
-    guardDangerousAbsoluteOperation a nids
     whenNonNull (setToList nids) $
       \xs -> subsumeUserError (mergeNodes @String xs) >> pure ()
-  Remove a -> do
-    (nid, p) <- relativizeAPath a
+  Remove p -> do
+    nid <- currentLocation
     subsumeUserError $ delPath nid p
-  RemoveNode a -> do
-    (nid, p) <- relativizeAPath a
+  RemoveNode p -> do
+    nid <- currentLocation
     nids <- subsumeUserError (resolvePathSuccesses nid p)
-    guardDangerousAbsoluteOperation a nids
     forM_ nids $ deleteNode @String
-  Clone a t -> do
-    (nid, p) <- relativizeAPath a
+  Clone p t -> do
+    nid <- currentLocation
     let err = singleErr "clone"
     nid' <- the' err =<< subsumeUserError (resolvePathSuccesses nid p)
     nid'' <- subsumeUserError (cloneNode @String nid')
     cnid <- currentLocation
     insertEdge $ Edge cnid t nid''
-  Query a t -> do
-    (nid, p) <- relativizeAPath a
+  Query p t -> do
+    nid <- currentLocation
     nids <- subsumeUserError (resolvePathSuccesses nid p)
     nnid <- subsumeUserError (nid `transitionsFreshVia` t)
     _ <- subsumeUserError (mergeNodes @String (nnid `ncons` toList nids))
     pure ()
-  Tag a b -> do
-    (nid, p) <- relativizeAPath a
-    (nid', q) <- relativizeAPath b
+  Tag p q -> do
+    nid <- currentLocation
     let err = singleErr "the last argument of tag"
-    target <- the' err =<< subsumeUserError (resolvePathSuccesses nid' q)
-    nnids <- subsumeUserError (mkPath nid (p :/ Literal ""))
-    _ <- subsumeUserError (mergeNodes @String (target `ncons` toList nnids))
-    pure ()
+    target <- the' err =<< subsumeUserError (resolvePathSuccesses nid q)
+    case mkRelativePath (p :/ Literal "") of
+      Just rp -> do
+        nnids <- subsumeUserError (mkPath nid rp)
+        _ <- subsumeUserError (mergeNodes @String (target `ncons` toList nnids))
+        pure ()
+      Nothing -> throwString "tag must take a relative path"
   Text t s -> do
     nid <- currentLocation
-    vNid <- the' (error "only creating one path") =<< subsumeUserError (mkPath nid (Literal t))
+    vNid <- the' (error "only creating one path") =<< subsumeUserError (mkPath nid (UnsafeRelativePath (Literal t)))
     setData vNid (Just (encodeUtf8 (fromString s)))
   Describe d -> interpretCommand (Text "description" d)
-  At a c -> do
-    (nid, p) <- relativizeAPath a
+  At p c -> do
+    nid <- currentLocation
     locations <- subsumeUserError (resolvePathSuccesses nid p)
     forM_ locations $ \nid' -> local @NID (const nid') $ interpretCommand c
   Dedup t -> do
@@ -280,22 +268,20 @@ interpretCommand = \case
   -- nodeManifest @String >>= echo . show
   Check -> reportToConsole @String (fsck @String)
   Fix -> fixErrors @String (fsck @String)
-  Move a b -> do
-    (nid, p) <- relativizeAPath a
-    (nid', q) <- relativizeAPath b
+  Move p q -> do
+    nid <- currentLocation
     let err = singleErr "the last argument of mv"
-    target <- the' err =<< subsumeUserError (resolvePathSuccesses nid' q)
+    target <- the' err =<< subsumeUserError (resolvePathSuccesses nid q)
     subsumeUserError (mvPath nid p target)
-  Rename a b -> do
-    (nid, p) <- relativizeAPath a
-    (nid', q) <- relativizeAPath b
+  Rename p q -> do
+    nid <- currentLocation
     let err xs =
           OtherError $
             "the first argument to rn require the path to only resolve to "
               ++ "one node but they resolved to \n"
               ++ (show . map endPoint . setToList $ xs)
     c <- the' err =<< subsumeUserError (resolvePathSuccessesDetail nid p)
-    subsumeUserError (renameDPath c nid' q)
+    subsumeUserError (renameDPath c nid q)
   Edit -> do
     n <- subsumeUserError @Missing currentLocation
     invokeEditor [n]
@@ -312,8 +298,8 @@ interpretCommand = \case
   Materialize fp -> do
     nid <- subsumeUserError @Missing currentLocation
     exportToDirectory nid fp
-  Exec a -> do
-    (nid, p) <- relativizeAPath a
+  Exec p -> do
+    nid <- currentLocation
     let err = singleErr "the argument to exec"
     target <- the' err =<< subsumeUserError (resolvePathSuccesses nid p)
     base <- getGraphFilePath
@@ -323,7 +309,7 @@ interpretCommand = \case
     nids <- subsumeUserError (resolvePathSuccesses currentNid (Literal t))
     newNid <-
       the' (error "only creating one path")
-        =<< subsumeUserError (mkPath currentNid (Literal t))
+        =<< subsumeUserError (mkPath currentNid (UnsafeRelativePath (Literal t)))
     for_ nids $ \nid -> do
       deleteEdge (Edge currentNid t nid)
       insertEdge (Edge newNid "" nid)

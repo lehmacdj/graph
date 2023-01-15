@@ -6,12 +6,16 @@ import Control.Monad.Combinators.Expr
 import Data.Functor
 import Lang.Parsing
 import Lang.Path
-import MyPrelude
+import MyPrelude hiding (try)
+import Text.Megaparsec (try, (<?>))
+import Text.Megaparsec.Char (char)
 
 pathTerm :: Parser t -> Parser (Path t)
 pathTerm pTransition =
-  (symbol "#" $> One)
+  try (Absolute <$> (char '#' *> nodeId))
+    <|> (symbol "#" $> One)
     <|> (symbol "*" $> Wild)
+    <|> (symbol "!" $> Zero)
     <|> (Literal <$> pTransition)
     <|> parens (pPath pTransition)
 
@@ -26,4 +30,9 @@ table =
   ]
 
 pPath :: Parser t -> Parser (Path t)
-pPath pTransition = makeExprParser (pathTerm pTransition) table
+pPath pTransition = do
+  path <- makeExprParser (pathTerm pTransition) table
+  guard (isValidPath path) <?> "valid path"
+  pure path
+
+-- TODO: write unit tests for parser

@@ -1,13 +1,11 @@
 module Lang.Path.Partial where
 
-import Graph (NID)
-import Lang.APath.Parse
 import Lang.Parsing
 import Lang.Path
 import Lang.Path.Parse
 import MyPrelude hiding (many, try)
-import qualified Text.Megaparsec as MP
 import Text.Megaparsec
+import qualified Text.Megaparsec as MP
 import Text.Megaparsec.Char
 
 -- | from Text.Megaparsec
@@ -40,27 +38,26 @@ pPathSegment = pathTerm transition
 -- | a list of path segments that are interpreted as being separated by
 -- concatenation, followed by a string that represents the last
 data PartialPath
-  = PartialPath (Maybe NID) [Path String] String
-  | MissingSlash (Maybe NID) [Path String]
+  = PartialPath [Path String] String
+  | MissingSlash [Path String]
   deriving (Show, Eq, Ord)
 
 pPartialPath :: Parser PartialPath
 pPartialPath = do
-  nodeSpecifier <- optional (nodeId <* symbol ":")
   prepath' <-
     try (Left <$> pPathSegment `sepBy` symbol "/")
       <|> (Right <$> pPathSegment `endBy` symbol "/")
   case prepath' of
-    Right prepath -> pure $ PartialPath nodeSpecifier prepath ""
+    Right prepath -> pure $ PartialPath prepath ""
     Left prepath -> case unsnoc prepath of
-      Just (path, Literal end) -> pure $ PartialPath nodeSpecifier path end
-      Just _ -> pure $ MissingSlash nodeSpecifier prepath
-      Nothing -> pure $ PartialPath nodeSpecifier [] ""
+      Just (path, Literal end) -> pure $ PartialPath path end
+      Just _ -> pure $ MissingSlash prepath
+      Nothing -> pure $ PartialPath [] ""
 
 pLastPartialPath :: Parser PartialPath
 pLastPartialPath =
   try (c *> pPartialPath <* eof)
-    <|> c *> pAPath transition *> pPartialPath <* eof
+    <|> c *> pPath transition *> pPartialPath <* eof
   where
     c = lexeme (many (oneOf (":.-_" :: String) <|> alphaNumChar) <* lookAhead s)
 

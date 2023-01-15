@@ -74,15 +74,15 @@ failCompletionWithOriginalInputOnErrorOrWarning i =
 completePath :: Env -> (String, String) -> IO (String, [Completion])
 completePath env (i, _) = case getPartialPath (takeRelevantFromEnd i) of
   Nothing -> pure (i, [])
-  Just (MissingSlash _ _) -> pure (i, [simpleCompletion "/"])
-  Just (PartialPath nid pp end) ->
+  Just (MissingSlash _) -> pure (i, [simpleCompletion "/"])
+  Just (PartialPath pp end) ->
     runMainEffectsIOWithErrorHandling
       (failCompletionWithOriginalInputOnErrorOrWarning i)
       env
       $ do
         let p = foldr (:/) One pp
-        l <- currentLocation
-        ntids <- toList <$> subsumeUserError (resolvePathSuccesses (fromMaybe l nid) p)
+        nid <- currentLocation
+        ntids <- toList <$> subsumeUserError (resolvePathSuccesses nid p)
         nts <- getNodes @String ntids
         let octs =
               -- outgoing connect transitions

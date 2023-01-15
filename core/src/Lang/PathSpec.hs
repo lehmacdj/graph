@@ -27,10 +27,10 @@ test_path =
     resolvePath' = primed . resolvePath
     pathLit =
       Set.fromList
-        [ DPath [FromVia 0 "a", FromVia 1 "b"] 0 [],
-          DPath [FromVia 0 "a", FromVia 1 "b"] 2 []
+        [ DPath 0 [FromVia 0 "a", FromVia 1 "b"] 0 [],
+          DPath 0 [FromVia 0 "a", FromVia 1 "b"] 2 []
         ]
         @=? resolvePath' (Literal "a" :/ Literal "b") 0 testGraph
     pathLitNondet =
-      Set.fromList [DPath [FromVia 0 "a", FromVia 1 "c"] 2 []]
+      Set.fromList [DPath 0 [FromVia 0 "a", FromVia 1 "c"] 2 []]
         @=? resolvePath' (Literal "a" :/ Literal "c") 0 testGraph
