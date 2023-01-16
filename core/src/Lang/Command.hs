@@ -175,9 +175,7 @@ interpretCommand = \case
   Dualize -> dualize
   Make p -> do
     nid <- currentLocation
-    case mkRelativePath p of
-      Just rp -> subsumeUserError $ mkPath nid rp >> pure ()
-      Nothing -> throwString "mk must take a relative path"
+    subsumeUserError $ mkPath nid p >> pure ()
   Merge p -> do
     nid <- currentLocation
     nids <- subsumeUserError (resolvePathSuccesses nid p)
@@ -207,15 +205,12 @@ interpretCommand = \case
     nid <- currentLocation
     let err = singleErr "the last argument of tag"
     target <- the' err =<< subsumeUserError (resolvePathSuccesses nid q)
-    case mkRelativePath (p :/ Literal "") of
-      Just rp -> do
-        nnids <- subsumeUserError (mkPath nid rp)
-        _ <- subsumeUserError (mergeNodes @String (target `ncons` toList nnids))
-        pure ()
-      Nothing -> throwString "tag must take a relative path"
+    nnids <- subsumeUserError (mkPath nid (p :/ Literal ""))
+    _ <- subsumeUserError (mergeNodes @String (target `ncons` toList nnids))
+    pure ()
   Text t s -> do
     nid <- currentLocation
-    vNid <- the' (error "only creating one path") =<< subsumeUserError (mkPath nid (UnsafeRelativePath (Literal t)))
+    vNid <- the' (error "only creating one path") =<< subsumeUserError (mkPath nid (Literal t))
     setData vNid (Just (encodeUtf8 (fromString s)))
   Describe d -> interpretCommand (Text "description" d)
   At p c -> do
@@ -309,7 +304,7 @@ interpretCommand = \case
     nids <- subsumeUserError (resolvePathSuccesses currentNid (Literal t))
     newNid <-
       the' (error "only creating one path")
-        =<< subsumeUserError (mkPath currentNid (UnsafeRelativePath (Literal t)))
+        =<< subsumeUserError (mkPath currentNid (Literal t))
     for_ nids $ \nid -> do
       deleteEdge (Edge currentNid t nid)
       insertEdge (Edge newNid "" nid)

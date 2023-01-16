@@ -91,9 +91,6 @@ data Path t
     Path t :& Path t
   deriving (Show, Eq, Ord)
 
-newtype RelativePath t = UnsafeRelativePath (Path t)
-  deriving (Show, Eq, Ord)
-
 isValidPath :: Path t -> Bool
 isValidPath = \case
   Absolute _ -> True
@@ -129,11 +126,6 @@ isValidPath = \case
         _ :+ _ -> False
         _ :& _ -> False
         _ :/ _ -> False
-
-mkRelativePath :: TransitionValid t => Path t -> Maybe (RelativePath t)
-mkRelativePath p
-  | isFullyRelativePath p = Just (UnsafeRelativePath p)
-  | otherwise = Nothing
 
 isFullyRelativePath :: TransitionValid t => Path t -> Bool
 isFullyRelativePath = all (isNothing . fst) . setToList . listifyNewPath
@@ -225,11 +217,11 @@ mkPath ::
     HasGraph t effs
   ) =>
   NID ->
-  RelativePath t ->
+  Path t ->
   Sem effs (Set NID)
-mkPath nid (UnsafeRelativePath p) =
-  fmap setFromList . forM (setToList (assertListifiedRelativePath (listifyNewPath p))) $
-    \x -> transitionsViaManyFresh nid x
+mkPath nid p =
+  fmap setFromList . forM (setToList (listifyNewPath p)) $
+    \(m_nid, x) -> transitionsViaManyFresh (fromMaybe nid m_nid) x
 
 -- | Construct a graph that contains only the edges passed through
 -- by the literal edges in the path.
