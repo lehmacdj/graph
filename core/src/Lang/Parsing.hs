@@ -70,6 +70,9 @@ number = do
     Just _ -> pure $ negate n
     Nothing -> pure n
 
+anyText :: Parser Text
+anyText = pack <$> some anySingle
+
 parens :: Parser a -> Parser a
 parens = between (symbol "(") (symbol ")")
 

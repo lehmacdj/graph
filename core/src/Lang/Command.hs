@@ -87,6 +87,8 @@ data Command
     Import FilePath
   | -- | wget
     ImportUrl String
+  | -- | al for add link though its really just generally adding text
+    AddText Text
   | -- | fsck
     Check
   | -- | fix
@@ -253,6 +255,10 @@ interpretCommand = \case
   ImportUrl uri -> do
     guardDangerousDualizedOperation
     nid <- subsumeUserError (importUrl nilNID uri)
+    changeLocation nid
+  AddText text -> do
+    guardDangerousDualizedOperation
+    nid <- subsumeUserError (importData nilNID (encodeUtf8 text))
     changeLocation nid
   Debug -> do
     echo "current node:"

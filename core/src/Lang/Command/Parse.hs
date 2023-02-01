@@ -99,6 +99,9 @@ pExec = (commandFrom ["exec", "x"] $> Exec) <*> path
 pCollect :: Parser Command
 pCollect = (command "collect" $> Collect) <*> transition
 
+pAddText :: Parser Command
+pAddText = (commandFrom ["add-text", "al"] $> AddText) <*> anyText
+
 pCommand :: Parser Command
 pCommand =
   try pChangeNode
@@ -130,6 +133,7 @@ pCommand =
     <|> try pMaterialize
     <|> try pExec
     <|> try pCollect
+    <|> try pAddText
 
 parseCommand :: String -> Either String Command
 parseCommand = left errorBundlePretty . runParser pCommand "<interactive>"
