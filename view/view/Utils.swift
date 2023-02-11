@@ -21,6 +21,10 @@ func debug(_ message: String, file: String = #file, callingFunction: String = #f
     log(message, level: .debug, file: file, callingFunction: callingFunction, line: line, column: column)
 }
 
+func info(_ message: String, file: String = #file, callingFunction: String = #function, line: Int = #line, column: Int = #column) {
+    log(message, level: .info, file: file, callingFunction: callingFunction, line: line, column: column)
+}
+
 func warn(_ message: String, file: String = #file, callingFunction: String = #function, line: Int = #line, column: Int = #column) {
     log(message, level: .warning, file: file, callingFunction: callingFunction, line: line, column: column)
 }

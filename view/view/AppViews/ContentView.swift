@@ -7,24 +7,43 @@
 
 import SwiftUI
 
+private enum Loading<T> {
+    case loading
+    case loaded(T)
+}
+
 struct ContentView: View {
     let fileUrl: URL
     let doSelectFile: () -> ()
 
+    @State private var graph: Loading<Graph?> = .loading
+
     var body: some View {
         NavigationView {
-            if let graph = Graph(dir: fileUrl) {
-                NodeView(of: graph.origin)
-                    .toolbar {
-                        ToolbarItem(placement: .navigationBarLeading) {
-                            Button(action: doSelectFile) {
-                                Text("Select graph")
-                            }
+            HStack {
+                switch graph {
+                case .loading:
+                    Text("Loading...")
+                case .loaded(nil):
+                    Text("Couldn't read directory; invalid graph").foregroundColor(.red)
+                case .loaded(let .some(graph)):
+                    NodeView(of: graph.origin)
+                        .refreshable {
+                            await graph.refresh()
                         }
-                    }
-            } else {
-                Text("Couldn't read directory; invalid graph").foregroundColor(.red)
+                }
             }
+            .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button(action: doSelectFile) {
+                        Text("Select graph")
+                    }
+                }
+            }
+        }
+        .task(id: fileUrl) {
+            graph = .loading
+            graph = .loaded(await Graph(dir: fileUrl))
         }
         .navigationViewStyle(StackNavigationViewStyle())
     }

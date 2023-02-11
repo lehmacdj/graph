@@ -5,6 +5,7 @@
 //  Created by Devin Lehmacher on 10/10/21.
 //
 
+import Combine
 import Foundation
 
 typealias NID = Int
@@ -18,33 +19,67 @@ extension NID {
 class Graph {
     let dir: URL
     let basePath: URL
-    var nextNodeId: NID
+    var maxNodeId: NID
+    var cloudDocumentsPull: Task<Never, Never>?
 
-    init?(dir: URL) {
+    init?(dir: URL) async {
         self.dir = dir
         basePath = dir
-        nextNodeId = 1
+        maxNodeId = NID.origin
         if !FileManager.default.fileExists(atPath: metaPath(for: NID.origin).path) {
             warn("couldn't find origin node meta data file")
             return nil
         }
-        guard let contents = try? FileManager.default.contentsOfDirectory(at: dir, includingPropertiesForKeys: [.nameKey]) else {
-            warn("wasn't able to access contents of directory representing grap")
-            return nil
-        }
-        var maxNodeId = NID.origin
-        for url in contents {
-            let lastPathComponent = url.lastPathComponent
-            if lastPathComponent.hasSuffix(".json"),
-               let dotIx = lastPathComponent.lastIndex(of: ".") {
-                let dotPrevIx = lastPathComponent.index(before: dotIx)
-                if let id = Int(url.lastPathComponent[...dotPrevIx]),
-                   id > maxNodeId {
-                    maxNodeId = id
-                }
+        cloudDocumentsPull = await pullCloudDocuments()
+    }
+
+    func updateMaxNodeId(from url: URL) {
+        let lastPathComponent = url.lastPathComponent
+        if lastPathComponent.hasSuffix(".json"),
+           let dotIx = lastPathComponent.lastIndex(of: ".") {
+            let dotPrevIx = lastPathComponent.index(before: dotIx)
+            if let id = Int(url.lastPathComponent[...dotPrevIx]),
+               id > maxNodeId {
+                maxNodeId = id
             }
         }
-        nextNodeId = maxNodeId + 1
+    }
+
+    func refresh() async {
+        cloudDocumentsPull = await pullCloudDocuments()
+    }
+
+    @MainActor
+    func pullCloudDocuments() async -> Task<Never, Never> {
+        let query = NSMetadataQuery()
+        query.searchScopes = [NSMetadataQueryAccessibleUbiquitousExternalDocumentsScope, dir]
+        query.predicate = NSPredicate(value: true)
+        @Sendable func updateWithQueryResults() {
+            query.disableUpdates()
+            for result in query.results as! [NSMetadataItem] {
+                let url = result.value(forAttribute: NSMetadataItemURLKey) as! URL
+                updateMaxNodeId(from: url)
+            }
+            query.enableUpdates()
+        }
+        let semaphor = Semaphor(initialCount: 0)
+        let task: Task<Never, Never> = Task {
+            for await _ in NotificationCenter.default.notifications(named: .NSMetadataQueryDidFinishGathering) {
+                info("received initial query results")
+                updateWithQueryResults()
+                await semaphor.signal()
+                break
+            }
+            for await _ in NotificationCenter.default.notifications(named: .NSMetadataQueryDidUpdate) {
+                info("received query result update")
+                updateWithQueryResults()
+            }
+            fatalError("should continue waiting forever in above loop")
+        }
+        query.start()
+        info("started query to fetch iCloud Document contents")
+        await semaphor.wait()
+        return task
     }
 
     func metaPath(for nid: NID) -> URL {
@@ -92,20 +127,20 @@ class Graph {
 
     /// Creates a new node not connected to anything
     func createNewNode() -> Node {
-        let newMeta = NodeMeta(id: nextNodeId, incoming: [:], outgoing: [:])
+        let newMeta = NodeMeta(id: maxNodeId + 1, incoming: [:], outgoing: [:])
         guard let data: Data = try? JSONEncoder().encode(newMeta) else {
             error("failed to encode JSON for NodeMeta")
             fatalError("couldn't create a node")
         }
-        guard FileManager.default.createFile(atPath: metaPath(for: nextNodeId).path, contents: data) else {
+        guard FileManager.default.createFile(atPath: metaPath(for: maxNodeId).path, contents: data) else {
             error("failed to create file for new node")
             fatalError("failed to create a file")
         }
-        guard let node = self[nextNodeId] else {
+        guard let node = self[maxNodeId + 1] else {
             error("couldn't access newly created node")
             fatalError("couldn't create a node")
         }
-        nextNodeId += 1
+        maxNodeId += 1
         return node
     }
 
