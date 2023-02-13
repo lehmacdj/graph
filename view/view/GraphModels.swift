@@ -127,20 +127,21 @@ class Graph {
 
     /// Creates a new node not connected to anything
     func createNewNode() -> Node {
-        let newMeta = NodeMeta(id: maxNodeId + 1, incoming: [:], outgoing: [:])
+        let newNodeId = maxNodeId + 1
+        let newMeta = NodeMeta(id: newNodeId, incoming: [:], outgoing: [:])
         guard let data: Data = try? JSONEncoder().encode(newMeta) else {
             error("failed to encode JSON for NodeMeta")
             fatalError("couldn't create a node")
         }
-        guard FileManager.default.createFile(atPath: metaPath(for: maxNodeId).path, contents: data) else {
+        guard FileManager.default.createFile(atPath: metaPath(for: newNodeId).path, contents: data) else {
             error("failed to create file for new node")
             fatalError("failed to create a file")
         }
-        guard let node = self[maxNodeId + 1] else {
+        guard let node = self[newNodeId] else {
             error("couldn't access newly created node")
             fatalError("couldn't create a node")
         }
-        maxNodeId += 1
+        maxNodeId = max(newNodeId, maxNodeId)
         return node
     }
 
