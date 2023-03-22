@@ -132,16 +132,14 @@
 		031367E12713FCF200E69F83 /* view */ = {
 			isa = PBXGroup;
 			children = (
+				032959EE29CA997A00FDE138 /* Utils */,
+				032959ED29CA996000FDE138 /* Model */,
 				0368D1E829976B4C0026D9EE /* view.entitlements */,
 				03D1D8DF28FB564700E76F27 /* AppViews */,
 				031367E22713FCF200E69F83 /* viewApp.swift */,
-				033449D32999602B00BBCCC4 /* Semaphor.swift */,
 				031367E82713FCF400E69F83 /* Assets.xcassets */,
 				031367ED2713FCF400E69F83 /* Info.plist */,
 				031367EA2713FCF400E69F83 /* Preview Content */,
-				0313680F2713FCFF00E69F83 /* GraphModels.swift */,
-				0313681127140A0900E69F83 /* Utils.swift */,
-				03136813271415FA00E69F83 /* Extensions.swift */,
 			);
 			path = view;
 			sourceTree = "<group>";
@@ -170,6 +168,24 @@
 				031368032713FCF400E69F83 /* Info.plist */,
 			);
 			path = viewUITests;
+			sourceTree = "<group>";
+		};
+		032959ED29CA996000FDE138 /* Model */ = {
+			isa = PBXGroup;
+			children = (
+				0313680F2713FCFF00E69F83 /* GraphModels.swift */,
+			);
+			path = Model;
+			sourceTree = "<group>";
+		};
+		032959EE29CA997A00FDE138 /* Utils */ = {
+			isa = PBXGroup;
+			children = (
+				033449D32999602B00BBCCC4 /* Semaphor.swift */,
+				0313681127140A0900E69F83 /* Utils.swift */,
+				03136813271415FA00E69F83 /* Extensions.swift */,
+			);
+			path = Utils;
 			sourceTree = "<group>";
 		};
 		03D1D8DF28FB564700E76F27 /* AppViews */ = {
