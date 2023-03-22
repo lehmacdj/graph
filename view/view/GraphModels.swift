@@ -20,7 +20,7 @@ class Graph {
     let dir: URL
     let basePath: URL
     var maxNodeId: NID
-    var cloudDocumentsPull: Task<Never, Never>?
+    var cloudDocumentsPull: Task<Void, Never>?
 
     init?(dir: URL) async {
         self.dir = dir
@@ -46,11 +46,12 @@ class Graph {
     }
 
     func refresh() async {
+        cloudDocumentsPull?.cancel()
         cloudDocumentsPull = await pullCloudDocuments()
     }
 
     @MainActor
-    func pullCloudDocuments() async -> Task<Never, Never> {
+    func pullCloudDocuments() async -> Task<Void, Never> {
         let query = NSMetadataQuery()
         query.searchScopes = [NSMetadataQueryAccessibleUbiquitousExternalDocumentsScope, dir]
         query.predicate = NSPredicate(value: true)
@@ -63,7 +64,7 @@ class Graph {
             query.enableUpdates()
         }
         let semaphor = Semaphor(initialCount: 0)
-        let task: Task<Never, Never> = Task {
+        let task: Task<Void, Never> = Task {
             for await _ in NotificationCenter.default.notifications(named: .NSMetadataQueryDidFinishGathering) {
                 info("received initial query results")
                 updateWithQueryResults()
@@ -74,7 +75,7 @@ class Graph {
                 info("received query result update")
                 updateWithQueryResults()
             }
-            fatalError("should continue waiting forever in above loop")
+            info("completed (almost certainly because Task was cancelled)")
         }
         query.start()
         info("started query to fetch iCloud Document contents")
