@@ -2,7 +2,6 @@
 
 module UserError
   ( module UserError,
-    NonEmpty (..),
     left,
     (#),
     module Polysemy.Error,
@@ -11,7 +10,6 @@ where
 
 import Control.Arrow (left)
 import Control.Lens
-import Data.List.NonEmpty (NonEmpty (..))
 import Graph (NID)
 import MyPrelude
 import Network.HTTP.Conduit (HttpException)

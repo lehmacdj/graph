@@ -99,6 +99,7 @@ default-extensions:
 - NoImplicitPrelude
 - OverloadedLabels
 - OverloadedStrings
+- PatternSynonyms
 - PolyKinds
 - RankNTypes
 - RecordWildCards

@@ -37,6 +37,7 @@ import Control.Lens as X (over, set, view, (&), (.~), (<&>), (^.))
 import Data.Aeson
 import Data.Coerce as X (Coercible, coerce)
 import Data.Generics.Labels
+import Data.List.NonEmpty as X (NonEmpty (..))
 import qualified Data.Set as Set
 import GHC.Generics as X (Generic, Rep)
 import GHC.Stack as X (HasCallStack)
@@ -149,3 +150,18 @@ instance
   FromJSON (FastGenericEncoding a)
   where
   parseJSON = fmap GenericEncodingAeson . genericParseJSON defaultOptions
+
+-- | A newtype wrapper for a list that contains at least two elements
+newtype TwoElemList a = UnsafeTwoElemList {unTwoElemList :: [a]}
+  deriving stock (Show, Eq, Ord, Functor, Foldable, Traversable)
+  deriving newtype (Semigroup)
+  deriving anyclass (MonoFoldable, MonoTraversable, MonoFunctor)
+
+type instance Element (TwoElemList a) = a
+
+twoElemList :: a -> a -> [a] -> TwoElemList a
+twoElemList x x' xs = UnsafeTwoElemList (x : x' : xs)
+
+intoElems :: HasCallStack => TwoElemList a -> (a, NonEmpty a)
+intoElems (UnsafeTwoElemList (x : x' : xs)) = (x, x' :| xs)
+intoElems (UnsafeTwoElemList _) = error "intoElems: broken invariant"

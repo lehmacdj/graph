@@ -115,6 +115,8 @@ data Command
   | -- | Collect same transitions into a transition to a single node that
     -- transitions to the nodes the previous transition used to
     Collect String
+  | -- | Execute a list of commands sequentially
+    Seq (TwoElemList Command)
   deriving (Eq, Show, Ord, Generic)
 
 singleErr :: String -> Set NID -> UserError
@@ -314,3 +316,5 @@ interpretCommand = \case
     for_ nids $ \nid -> do
       deleteEdge (Edge currentNid t nid)
       insertEdge (Edge newNid "" nid)
+  Seq ps -> do
+    toList ps & traverse_ interpretCommand

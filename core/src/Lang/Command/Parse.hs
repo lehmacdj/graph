@@ -49,7 +49,7 @@ pRemoveNode :: Parser Command
 pRemoveNode = (command "rmnf" $> RemoveNode) <*> path
 
 pAt :: Parser Command
-pAt = (command "at" $> At) <*> path <*> pCommand
+pAt = (command "at" $> At) <*> path <*> pCommandTerm
 
 pNodeId :: Parser Command
 pNodeId = command "nid" $> NodeId
@@ -102,8 +102,8 @@ pCollect = (command "collect" $> Collect) <*> transition
 pAddText :: Parser Command
 pAddText = (commandFrom ["add-text", "al"] $> AddText) <*> anyText
 
-pCommand :: Parser Command
-pCommand =
+pCommandTerm :: Parser Command
+pCommandTerm =
   try pChangeNode
     <|> try pDualize
     <|> try pMake
@@ -134,6 +134,12 @@ pCommand =
     <|> try pExec
     <|> try pCollect
     <|> try pAddText
+    <|> try (braces pCommand)
+
+pCommand :: Parser Command
+pCommand =
+  try (Seq <$> (pCommandTerm `sepBy2` symbol ";"))
+    <|> pCommandTerm
 
 parseCommand :: String -> Either String Command
 parseCommand = left errorBundlePretty . runParser pCommand "<interactive>"

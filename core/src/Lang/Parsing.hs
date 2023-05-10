@@ -5,7 +5,7 @@ import Data.Char
 import Data.Void
 import Graph (NID)
 import qualified Graph.Types.NID as BigNID
-import MyPrelude hiding (some, try)
+import MyPrelude hiding (many, some, try)
 import Text.Megaparsec
 import Text.Megaparsec.Char
 import qualified Text.Megaparsec.Char.Lexer as L
@@ -76,16 +76,22 @@ anyText = pack <$> some anySingle
 parens :: Parser a -> Parser a
 parens = between (symbol "(") (symbol ")")
 
+braces :: Parser a -> Parser a
+braces = between (symbol "{") (symbol "}")
+
 -- these all lookahead for space to ensure that arguments are space separated
 -- the intended paradigm for commands is that commands all require a following
--- space, then perform their own logic for argument separation as needed.
--- All other parsers are expected to consume any following space
--- indiscriminately.
+-- space or ; (when in a Seq) or } (when in braces), then perform their own
+-- logic for argument separation as needed. All other parsers are expected to
+-- consume any following space indiscriminately.
 
 command :: String -> Parser String
-command i = L.lexeme s (string i <* lookAhead (space1 <|> eof))
+command i = L.lexeme s (string i <* lookAhead (space1 <|> eof <|> ((symbol ";" <|> symbol "}") $> ())))
 
 commandFrom :: [String] -> Parser String
 commandFrom [] = empty
 commandFrom [x] = command x
 commandFrom (x : xs) = try (command x) <|> commandFrom xs
+
+sepBy2 :: Parser a -> Parser sep -> Parser (TwoElemList a)
+sepBy2 p sep = twoElemList <$> p <*> (sep *> p) <*> many (sep *> p)

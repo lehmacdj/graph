@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 5276bc2f1cae59981c4ab6f6c5005f0483f683e006bd4587185b8cd2c3f6e23d
+-- hash: 3e414e659d773a6bab642eda5532fd7a74f76c0b9417fe6bee5e621b033af51b
 
 name:           graph
 version:        0.1.0.0
@@ -118,6 +118,7 @@ library
       NoImplicitPrelude
       OverloadedLabels
       OverloadedStrings
+      PatternSynonyms
       PolyKinds
       RankNTypes
       RecordWildCards
@@ -214,6 +215,7 @@ executable dump-graph
       NoImplicitPrelude
       OverloadedLabels
       OverloadedStrings
+      PatternSynonyms
       PolyKinds
       RankNTypes
       RecordWildCards
@@ -311,6 +313,7 @@ executable ge
       NoImplicitPrelude
       OverloadedLabels
       OverloadedStrings
+      PatternSynonyms
       PolyKinds
       RankNTypes
       RecordWildCards
@@ -408,6 +411,7 @@ executable migration
       NoImplicitPrelude
       OverloadedLabels
       OverloadedStrings
+      PatternSynonyms
       PolyKinds
       RankNTypes
       RecordWildCards
@@ -506,6 +510,7 @@ test-suite graph-test
       NoImplicitPrelude
       OverloadedLabels
       OverloadedStrings
+      PatternSynonyms
       PolyKinds
       RankNTypes
       RecordWildCards
