@@ -6,11 +6,12 @@
 //
 
 import SwiftUI
+import AsyncButton
 
 struct LabelEditor: View {
     @State var label: String
     @Binding var displayed: Bool
-    let action: (String) -> ()
+    let action: (String) async -> ()
 
     var body: some View {
         HStack {
@@ -20,8 +21,8 @@ struct LabelEditor: View {
             }
             // without applying this button style the button takes over the entire row via List's behavior
             .buttonStyle(BorderlessButtonStyle())
-            Button("Confirm") {
-                action(label)
+            AsyncButton("Confirm") {
+                await action(label)
                 displayed = false
             }
             // without applying this button style the button takes over the entire row via List's behavior
@@ -30,50 +31,51 @@ struct LabelEditor: View {
     }
 }
 
-struct LinkForTransition: View {
-    @ObservedObject var source: Node
-    @ObservedObject var destination: Node
-    let transition: String
-    let direction: LinkDirection // only forward links get certain modification actions
+struct TransitionView: View {
+    @ObservedObject var vm: TransitionVM
 
-    enum LinkDirection {
-        case forward
-        case backward
+    @State private var confirmingDelete: Bool = false
+    @State private var editing: Bool = false
+
+    init(_ transitionVM: TransitionVM) {
+        self.vm = transitionVM
     }
 
-    @State var confirmingDelete: Bool = false
-    @State var editing: Bool = false
-
-    init(from source: Node, to destination: Node, via transition: String, direction: LinkDirection) {
-        self.source = source
-        self.destination = destination
-        self.transition = transition
-        self.direction = direction
+    var thumbnail: some View {
+        Suspense(vm.thumbnail) { loadingThumbnail in
+            if let loadingThumbnail {
+                Suspense(loadingThumbnail) { thumbnail in
+                    Image(uiImage: thumbnail)
+                        .resizable()
+                        .aspectRatio(contentMode: .fit)
+                }
+                .frame(height: 120)
+            }
+        } placeholder: {
+            // until we know if we have a thumbnail assume we don't
+            EmptyView()
+        }
     }
 
     var body: some View {
         HStack {
-            if let data = destination.data,
-               let uiImage = UIImage(data: data) {
-                Image(uiImage: uiImage)
-                    .resizable()
-                    .aspectRatio(contentMode: .fit)
-                    .frame(maxHeight: 120)
-            }
+            thumbnail
+
             if editing {
-                LabelEditor(label: transition, displayed: $editing) { newLabel in
-                    source.root.removeLink(from: source, to: destination, via: transition)
-                    source.root.addLink(from: source, to: destination, via: newLabel)
+                LabelEditor(label: vm.transition, displayed: $editing) { newLabel in
+                    await vm.updateTransitionName(to: newLabel)
                 }
             } else {
-                NavigationLink(destination: NodeView(of: destination)) {
-                    Text(transition)
+                Suspense(vm.destination) { destination in
+                    NavigationLink(destination: NodeView(of: destination)) {
+                        Text(vm.transition)
+                    }
                 }
             }
         }
         .alert("Really delete transition?", isPresented: $confirmingDelete) {
-            Button("Delete", role: .destructive) {
-                source.root.removeLink(from: source, to: destination, via: transition)
+            AsyncButton("Delete", role: .destructive) {
+                await vm.removeTransition()
             }
         } message: {
             Text("Deleting a transition is not reversible.")
@@ -98,22 +100,22 @@ struct LinkForTransition: View {
             .tint(.orange)
         }
         .swipeActions(edge: .leading) {
-            if direction == .forward {
-                Button() {
-                    source.toggleFavorite(child: destination)
+            if vm.direction == .forward {
+                AsyncButton() {
+                    await vm.toggleFavorite()
                 } label: {
-                    if source.isFavorite(child: destination.nid) {
+                    if vm.isFavorite {
                         Label("Unfavorite", systemImage: "star.fill")
                     } else {
                         Label("Favorite", systemImage: "star")
                     }
                 }
-
                 .tint(.yellow)
-                Button() {
-                    source.toggleWorse(child: destination)
+
+                AsyncButton() {
+                    await vm.toggleWorse()
                 } label: {
-                    if source.isWorse(child: destination.nid) {
+                    if vm.isWorse {
                         Label("Unworsen", systemImage: "xmark.bin.fill")
                     } else {
                         Label("Worsen", systemImage: "xmark.bin")
@@ -122,6 +124,8 @@ struct LinkForTransition: View {
                 .tint(.purple)
             }
         }
+        .task { await vm.load() }
+        .onDisappear { vm.weaken() }
     }
 }
 

@@ -17,19 +17,19 @@ func log(_ message: String, level: LogLevel = .info, file: String = #file, calli
     }
 }
 
-func debug(_ message: String, file: String = #file, callingFunction: String = #function, line: Int = #line, column: Int = #column) {
+func logDebug(_ message: String, file: String = #file, callingFunction: String = #function, line: Int = #line, column: Int = #column) {
     log(message, level: .debug, file: file, callingFunction: callingFunction, line: line, column: column)
 }
 
-func info(_ message: String, file: String = #file, callingFunction: String = #function, line: Int = #line, column: Int = #column) {
+func logInfo(_ message: String, file: String = #file, callingFunction: String = #function, line: Int = #line, column: Int = #column) {
     log(message, level: .info, file: file, callingFunction: callingFunction, line: line, column: column)
 }
 
-func warn(_ message: String, file: String = #file, callingFunction: String = #function, line: Int = #line, column: Int = #column) {
+func logWarn(_ message: String, file: String = #file, callingFunction: String = #function, line: Int = #line, column: Int = #column) {
     log(message, level: .warning, file: file, callingFunction: callingFunction, line: line, column: column)
 }
 
-func error(_ message: String, file: String = #file, callingFunction: String = #function, line: Int = #line, column: Int = #column) {
+func logError(_ message: String, file: String = #file, callingFunction: String = #function, line: Int = #line, column: Int = #column) {
     log(message, level: .error, file: file, callingFunction: callingFunction, line: line, column: column)
 }
 

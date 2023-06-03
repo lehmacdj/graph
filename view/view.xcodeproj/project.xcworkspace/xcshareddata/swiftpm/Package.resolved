@@ -17,6 +17,15 @@
         "branch" : "main",
         "revision" : "0d4b9e3346eb0373ac6f85fe799b44b9b7e86d7e"
       }
+    },
+    {
+      "identity" : "swiftui-async-button",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/lorenzofiamingo/swiftui-async-button",
+      "state" : {
+        "revision" : "9fe9ccddf59c7e4185aa978547fbb9d95236455e",
+        "version" : "1.1.0"
+      }
     }
   ],
   "version" : 2

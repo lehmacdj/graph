@@ -5,32 +5,32 @@
 //  Created by Devin Lehmacher on 10/10/21.
 //
 
+import AsyncButton
 import SwiftUI
-
-private enum Loading<T> {
-    case loading
-    case loaded(T)
-}
 
 struct ContentView: View {
     let fileUrl: URL
     let doSelectFile: () -> ()
 
-    @State private var graph: Loading<Graph?> = .loading
+    @State private var graphAndRoot: Loading<(GraphManager, Node)?> = .loading
 
     var body: some View {
         NavigationView {
             HStack {
-                switch graph {
+                switch graphAndRoot {
+                case .idle:
+                    Text("Idle")
                 case .loading:
                     Text("Loading...")
                 case .loaded(nil):
                     Text("Couldn't read directory; invalid graph").foregroundColor(.red)
-                case .loaded(let .some(graph)):
-                    NodeView(of: graph.origin)
+                case .loaded(.some((let graph, let origin))):
+                    NodeView(of: NodeVM(for: origin.nid, in: graph))
                         .refreshable {
                             await graph.refresh()
                         }
+                case .failed(let error):
+                    ErrorIndicator(for: error)
                 }
             }
             .toolbar {
@@ -42,8 +42,13 @@ struct ContentView: View {
             }
         }
         .task(id: fileUrl) {
-            graph = .loading
-            graph = .loaded(await Graph(dir: fileUrl))
+            graphAndRoot = .loading
+            guard let graphManager = await GraphManager(dir: fileUrl) else {
+                graphAndRoot = .loaded(nil)
+                return
+            }
+            let origin = await graphManager.origin
+            graphAndRoot = .loaded((graphManager, origin))
         }
         .navigationViewStyle(StackNavigationViewStyle())
     }
@@ -78,7 +83,7 @@ struct ImageStats: View {
 }
 
 struct TagEditor: View {
-    init(initial: Set<String>, options: [String], commit: @escaping (Set<String>) -> (), cancel: @escaping () -> ()) {
+    init(initial: Set<String>, options: [String], commit: @escaping (Set<String>) async -> (), cancel: @escaping () async -> ()) {
         self.actual = initial
         self.options = options
         self.commitAction = commit
@@ -87,8 +92,8 @@ struct TagEditor: View {
 
     @State var actual: Set<String>
     let options: [String]
-    let commitAction: (Set<String>) -> ()
-    let cancelAction: () -> ()
+    let commitAction: (Set<String>) async -> ()
+    let cancelAction: () async -> ()
 
     @State var searchString: String = ""
 
@@ -100,10 +105,10 @@ struct TagEditor: View {
             .environment(\.editMode, .constant(.active))
             .searchable(text: $searchString, placement: .automatic, prompt: "Tag search ...")
             HStack {
-                Button(action: cancelAction) {
+                AsyncButton(action: cancelAction) {
                     Text("Cancel")
                 }
-                Button(action: { commitAction(actual)}) {
+                AsyncButton(action: { await commitAction(actual)}) {
                     Text("Commit")
                 }
             }

@@ -9,18 +9,18 @@ import Foundation
 
 /// Represents the  represents the base directory for a graph.
 /// Offers a flyweight mechanism for retrieving Node model objects that represent nodes in the graph.
-class Graph {
-    let dir: URL
+actor GraphManager: ObservableObject {
     let basePath: URL
+
     var maxNodeId: NID
-    var cloudDocumentsPull: Task<Void, Never>?
+
+    private var cloudDocumentsPull: Task<Void, Never>?
 
     init?(dir: URL) async {
-        self.dir = dir
         basePath = dir
         maxNodeId = NID.origin
         if !FileManager.default.fileExists(atPath: metaPath(for: NID.origin).path) {
-            warn("couldn't find origin node meta data file")
+            logWarn("couldn't find origin node meta data file")
             return nil
         }
         cloudDocumentsPull = await pullCloudDocuments()
@@ -46,41 +46,41 @@ class Graph {
     @MainActor
     func pullCloudDocuments() async -> Task<Void, Never> {
         let query = NSMetadataQuery()
-        query.searchScopes = [NSMetadataQueryAccessibleUbiquitousExternalDocumentsScope, dir]
+        query.searchScopes = [NSMetadataQueryAccessibleUbiquitousExternalDocumentsScope, basePath]
         query.predicate = NSPredicate(value: true)
-        @Sendable func updateWithQueryResults() {
+        @Sendable func updateWithQueryResults() async {
             query.disableUpdates()
             for result in query.results as! [NSMetadataItem] {
                 let url = result.value(forAttribute: NSMetadataItemURLKey) as! URL
-                updateMaxNodeId(from: url)
+                await updateMaxNodeId(from: url)
             }
             query.enableUpdates()
         }
         let semaphor = Semaphor(initialCount: 0)
         let task: Task<Void, Never> = Task {
             for await _ in NotificationCenter.default.notifications(named: .NSMetadataQueryDidFinishGathering) {
-                info("received initial query results")
-                updateWithQueryResults()
+                logInfo("received initial query results")
+                await updateWithQueryResults()
                 await semaphor.signal()
                 break
             }
             for await _ in NotificationCenter.default.notifications(named: .NSMetadataQueryDidUpdate) {
-                info("received query result update")
-                updateWithQueryResults()
+                logInfo("received query result update")
+                await updateWithQueryResults()
             }
-            info("completed (almost certainly because Task was cancelled)")
+            logInfo("completed (almost certainly because Task was cancelled)")
         }
         query.start()
-        info("started query to fetch iCloud Document contents")
+        logInfo("started query to fetch iCloud Document contents")
         await semaphor.wait()
         return task
     }
 
-    func metaPath(for nid: NID) -> URL {
+    nonisolated func metaPath(for nid: NID) -> URL {
         basePath.appendingPathComponent(nid.metaPath)
     }
 
-    func dataPath(for nid: NID) -> URL {
+    nonisolated func dataPath(for nid: NID) -> URL {
         basePath.appendingPathComponent(nid.dataPath)
     }
 
@@ -103,7 +103,7 @@ class Graph {
 
     var origin: Node {
         guard let origin = self[NID.origin] else {
-            error("origin node doesn't exist")
+            logError("origin node doesn't exist")
             fatalError("origin node doesn't exist")
         }
         return origin
@@ -113,10 +113,10 @@ class Graph {
         guard let tags = self[NID.tags],
               let tagIncoming = tags.meta.incoming["tags"],
               tagIncoming.contains(NID.origin) else {
-            warn("no tags node found")
+            logWarn("no tags node found")
             return nil
         }
-        return Tags(tagNode: tags)
+        return Tags(tagNode: tags, root: self)
     }
 
     /// Creates a new node not connected to anything
@@ -124,19 +124,28 @@ class Graph {
         let newNodeId = maxNodeId + 1
         let newMeta = NodeMeta(id: newNodeId, incoming: [:], outgoing: [:])
         guard let data: Data = try? JSONEncoder().encode(newMeta) else {
-            error("failed to encode JSON for NodeMeta")
+            logError("failed to encode JSON for NodeMeta")
             fatalError("couldn't create a node")
         }
         guard FileManager.default.createFile(atPath: metaPath(for: newNodeId).path, contents: data) else {
-            error("failed to create file for new node")
+            logError("failed to create file for new node")
             fatalError("failed to create a file")
         }
         guard let node = self[newNodeId] else {
-            error("couldn't access newly created node")
+            logError("couldn't access newly created node")
             fatalError("couldn't create a node")
         }
         maxNodeId = max(newNodeId, maxNodeId)
         return node
+    }
+
+    func addLink(from start: NID, to end: NID, via transition: String) {
+        guard let start = self[start],
+              let end = self[end] else {
+            return
+        }
+
+        addLink(from: start, to: end, via: transition)
     }
 
     func addLink(from startNode: Node, to endNode: Node, via transition: String) {
@@ -157,6 +166,15 @@ class Graph {
             startNode.meta = startMeta
             endNode.meta = endMeta
         }
+    }
+
+    func removeLink(from start: NID, to end: NID, via transition: String) {
+        guard let start = self[start],
+              let end = self[end] else {
+            return
+        }
+
+        removeLink(from: start, to: end, via: transition)
     }
 
     func removeLink(from startNode: Node, to endNode: Node, via transition: String) {
@@ -186,7 +204,7 @@ class Graph {
                 parentMeta.outgoing[parent.transition] = parentMeta.outgoing[parent.transition]?.removing(node.nid)
                 parentNode.meta = parentMeta
             } else {
-                warn("parent (\(parent.nid)) of \(node.nid) is missing")
+                logWarn("parent (\(parent.nid)) of \(node.nid) is missing")
             }
         }
 
@@ -196,7 +214,7 @@ class Graph {
                 childMeta.incoming[child.transition] = childMeta.outgoing[child.transition]?.removing(node.nid)
                 childNode.meta = childMeta
             } else {
-                warn("child (\(child.nid)) of \(node.nid) is missing")
+                logWarn("child (\(child.nid)) of \(node.nid) is missing")
             }
         }
 

@@ -47,7 +47,7 @@ struct FileSelectorView: View {
                 fileUrl = try? URL(resolvingBookmarkData: fileUrlBookmark, bookmarkDataIsStale: &stale)
 
                 guard fileUrl?.startAccessingSecurityScopedResource() == true else {
-                    warn("unable to start accessing fileUrl resolved from bookmark data")
+                    logWarn("unable to start accessing fileUrl resolved from bookmark data")
                     presentingFileImporter = true
                     return
                 }
@@ -77,7 +77,7 @@ struct FileSelectorView: View {
         switch result {
         case .success(let url):
             guard url.startAccessingSecurityScopedResource() else {
-                warn("wasn't granted access to \(url.path)")
+                logWarn("wasn't granted access to \(url.path)")
                 return
             }
 
@@ -89,7 +89,7 @@ struct FileSelectorView: View {
 
             fileUrl = url
         case .failure(let err):
-            error(err.localizedDescription)
+            logError(err.localizedDescription)
             fileUrl = nil
             presentingFileImporter = true
         }

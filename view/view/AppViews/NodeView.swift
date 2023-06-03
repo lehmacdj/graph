@@ -6,47 +6,13 @@
 //
 
 import SwiftUI
-
-struct TagToggler: View {
-    @ObservedObject var node: Node
-    let tag: String
-    let active: String
-    let inactive: String
-
-    init(node: Node, tag: String, fillableSymbol: String) {
-        self.node = node
-        self.tag = tag
-        self.active = "\(fillableSymbol).fill"
-        self.inactive = fillableSymbol
-    }
-
-    private func toggleTag() {
-        var tags = node.tags
-        if tags.contains(tag) {
-            tags.remove(tag)
-            node.tags = tags
-        } else {
-            tags.insert(tag)
-            node.tags = tags
-        }
-    }
-
-    var body: some View {
-        Button(action: toggleTag) {
-            if node.tags.contains(tag) {
-                Image(systemName: active)
-            } else {
-                Image(systemName: inactive)
-            }
-        }
-    }
-}
+import AsyncButton
 
 struct NodeView: View {
-    @StateObject var node: Node
+    @StateObject var vm: NodeVM
 
-    init(of node: Node) {
-        _node = StateObject(wrappedValue: node)
+    init(of node: NodeVM) {
+        _vm = StateObject(wrappedValue: node)
     }
 
     @State var showingTags: Bool = false
@@ -54,17 +20,41 @@ struct NodeView: View {
     @State var showingForceDeleteNodeConfirmation: Bool = false
 
     @ViewBuilder
-    func linkForTransition(_ item: NodeTransition, direction: LinkForTransition.LinkDirection) -> some View {
-        if let destination = self.node.root[item.nid] {
-            LinkForTransition(from: node, to: destination, via: item.transition, direction: direction)
-        } else {
-            Text("Transition \(item.transition) to nonexistent node \(item.nid)")
+    func links(_ state: NodeVM.State) -> some View {
+        List {
+            if let favorites = state.favoriteLinks {
+                Section("Favorites") {
+                    ForEach(favorites) { favorite in
+                        TransitionView(favorite)
+                    }
+                }
+            }
+            
+            Section {
+                ForEach(state.links) { link in
+                    TransitionView(link)
+                }
+            }
+            
+            Section("Backlinks") {
+                ForEach(state.backlinks) { backlink in
+                    TransitionView(backlink)
+                }
+            }
+            
+            if let worses = state.worseLinks {
+                Section("Worse") {
+                    ForEach(worses) { worse in
+                        TransitionView(worse)
+                    }
+                }
+            }
         }
     }
 
     @ViewBuilder
-    var content: some View {
-        if let data = node.data, !showingLinks {
+    func loadedContent(_ state: NodeVM.State) -> some View {
+        if let data = state.data, !showingLinks {
             if let uiImage = UIImage(data: data) {
                 ImageView(uiImage: uiImage)
             } else if let string = String(data: data, encoding: .utf8),
@@ -76,103 +66,88 @@ struct NodeView: View {
                 Text("Node has data with unknown kind")
             }
         } else {
-            List {
-                if let _ = node.favorites {
-                    // render the favorites section if there is a favorites node
-                    Section("Favorites") {
-                        ForEach(node.outgoing.lazy
-                            .filter({ node.isFavorite(child: $0.nid) })
-                            .sorted(on: \.transition)) { item in
-                            linkForTransition(item, direction: .forward)
+            links(state)
+        }
+    }
+
+    @ViewBuilder
+    var content: some View {
+        switch vm.state {
+        case .idle:
+            Text("Idle")
+        case .loading:
+            ProgressView()
+        case .failed(let error):
+            ErrorIndicator(for: error)
+        case .loaded(let state):
+            loadedContent(state)
+                .toolbar {
+                    ToolbarItem(placement: .navigationBarTrailing) {
+                        Menu {
+                            Button(
+                                "Force delete node",
+                                role: .destructive) {
+                                    showingForceDeleteNodeConfirmation = true
+                                }
+                            // TODO: "smart" actions that lists some common actions on nodes that can be done quickly
+                            // e.g. apply specific tags
+                        } label: {
+                            Image(systemName: "list.bullet")
                         }
                     }
-                }
-                Section {
-                    ForEach(node.outgoing.lazy
-                        .filter({ !node.isWorse(child: $0.nid) && !node.isFavorite(child: $0.nid) })
-                        .sorted(on: \.transition)) { item in
-                            linkForTransition(item, direction: .forward)
-                        }
-                }
-                Section("Backlinks") {
-                    ForEach(node.incoming.sorted(on: \.transition)) { item in
-                        linkForTransition(item, direction: .backward)
-                    }
-                }
-                if let _ = node.worse {
-                    // Show a section with all of the nodes marked worse if we have a worse node
-                    // Even though it would be tempting to make this hidden, that's not a good
-                    // idea because then it would be possible to completely hide the "worse" node
-                    Section("Worse") {
-                        ForEach(node.outgoing.lazy
-                            .filter({ node.isWorse(child: $0.nid) })
-                            .sorted(on: \.transition)) { item in
-                                linkForTransition(item, direction: .forward)
+                    ToolbarItem(placement: .navigationBarTrailing) {
+                        FillableSymbolToggle(isActive: state.tags.contains("to-update"), fillableSymbol: .bookmark) {
+                            // TODO: cleanup sus potential race condition access
+                            // one approach might be to have a value in the graph saying if an operation is in progress, this could be passed as an environment value and controls could use it to disable themselves
+                            // of course this requires us to trust ourselves to remember to disable all relevant controls
+                            // plus this makes controls somewhat less reusable, and wouldn't work if we threw a random Button in the mix somewhere
+                            if state.tags.contains("to-update") {
+                                await state.set(tags: state.tags.removing("to-update"))
+                            } else {
+                                await state.set(tags: state.tags.inserting("to-update"))
                             }
+                        }
+                    }
+                    ToolbarItem(placement: .navigationBarTrailing) {
+                        Button(action: { showingTags.toggle() }) {
+                            Image(systemName: "tag")
+                        }
+                    }
+                    ToolbarItem(placement: .navigationBarTrailing) {
+                        Button(action: { showingLinks.toggle() }) {
+                            Image(systemName: "link")
+                        }
                     }
                 }
-            }
+                .sheet(isPresented: $showingTags) {
+                    TagEditor(
+                        initial: state.tags,
+                        options: [String](state.possibleTags).sorted(),
+                        commit: { newTags in
+                            await state.set(tags: newTags)
+                            showingTags = false
+                        },
+                        cancel: { showingTags = false })
+                }
+                .alert(
+                    "Really force delete node?",
+                    isPresented: $showingForceDeleteNodeConfirmation,
+                    actions: {
+                        AsyncButton("Delete", role: .destructive) {
+                            // TODO: make state a state machine that transitions to a deleted state
+                            await state.forceRemove()
+                        }
+                    },
+                    message: {
+                        Text("Force deleting a node is not reversible.")
+                    })
         }
     }
 
     var body: some View {
         content
-            .navigationTitle(Text("\(node.meta.id)"))
-            .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    TagToggler(node: node, tag: "to-worsen", fillableSymbol: "trash")
-                        .contextMenu {
-                            // TODO also want menu item for normal action
-                            Button(
-                                "Force delete node",
-                                role: .destructive) {
-                                showingForceDeleteNodeConfirmation = true
-                            }
-                        }
-                }
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    TagToggler(node: node, tag: "to-update", fillableSymbol: "bookmark")
-                }
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    TagToggler(node: node, tag: "to-favorite", fillableSymbol: "star")
-                }
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button(action: { showingTags.toggle() }) {
-                        Image(systemName: "tag")
-                    }
-                }
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button(action: { showingLinks.toggle() }) {
-                        Image(systemName: "link")
-                    }
-                }
-            }
-            .sheet(isPresented: $showingTags) {
-                if let tags = node.tags,
-                   let tagOptions = node.root.tags?.tagOptions {
-                    TagEditor(
-                        initial: tags,
-                        options: [String](tagOptions).sorted(),
-                        commit: { newTags in
-                            node.tags = newTags
-                            showingTags = false
-                        },
-                        cancel: { showingTags = false })
-                } else {
-                    Text("Error couldn't find tags to present")
-                }
-            }
-            .alert(
-                "Really force delete node?",
-                isPresented: $showingForceDeleteNodeConfirmation,
-                actions: {
-                    Button("Delete", role: .destructive) {
-                        node.root.forceRemove(node: node)
-                    }
-                },
-                message: {
-                    Text("Force deleting a node is not reversible.")
-                })
+            .navigationTitle(Text("\(vm.nid)"))
+            .task { await vm.load() }
     }
 }
 
