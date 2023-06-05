@@ -97,6 +97,9 @@ data Command
     Move (Path String) (Path String)
   | -- | rn
     Rename (Path String) (Path String)
+  | -- | alias, cp: while cp is misleading it's similar enough to shell cp that
+    -- naming it cp is better for muscle memory + al is already taken by add link
+    Alias (Path String) (Path String)
   | -- | vi
     Edit
   | -- | back: Go back in history by a certain number of steps. Greater number
@@ -285,6 +288,15 @@ interpretCommand = \case
               ++ (show . map endPoint . setToList $ xs)
     c <- the' err =<< subsumeUserError (resolvePathSuccessesDetail nid p)
     subsumeUserError (renameDPath c nid q)
+  Alias p q -> do
+    nid <- currentLocation
+    let err xs =
+          OtherError $
+            "the first argument to rn require the path to only resolve to "
+              ++ "one node but they resolved to \n"
+              ++ (show . map endPoint . setToList $ xs)
+    c <- the' err =<< subsumeUserError (resolvePathSuccessesDetail nid p)
+    subsumeUserError (aliasDPath c nid q)
   Edit -> do
     n <- subsumeUserError @Missing currentLocation
     invokeEditor [n]

@@ -84,6 +84,9 @@ pMove = (command "mv" $> Move) <*> path <*> path
 pRename :: Parser Command
 pRename = (command "rn" $> Rename) <*> path <*> path
 
+pAlias :: Parser Command
+pAlias = (commandFrom ["alias", "cp"] $> Alias) <*> path <*> path
+
 pEdit :: Parser Command
 pEdit = command "vi" $> Edit
 
@@ -128,6 +131,7 @@ pCommandTerm =
     <|> try pFix
     <|> try pMove
     <|> try pRename
+    <|> try pAlias
     <|> try pEdit
     <|> try pBack
     <|> try pMaterialize

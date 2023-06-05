@@ -299,6 +299,28 @@ renameDPath dpathFrom nidPathStart pathTo =
         insertEdge (Edge newRoot t' nid)
       _ -> pure ()
 
+-- | alias a one path to another path
+aliasDPath ::
+  forall t effs.
+  ( Members [FreshNID, Error Missing] effs,
+    HasGraph t effs
+  ) =>
+  DPath t ->
+  NID ->
+  -- | this path must either be of the form DPath _ nid [t]
+  -- or of the form (splitLast -> Just (DPath _ nid _, t, _))
+  Path t ->
+  Sem effs ()
+aliasDPath dpathFrom nidPathStart pathTo =
+  withJust (splitLast dpathFrom) $ \(DPath {}, _, nid) -> do
+    successes <- resolvePathSuccessesDetail nidPathStart pathTo
+    forM_ successes $ \case
+      (DPath _ _ newRoot [t']) -> do
+        insertEdge (Edge newRoot t' nid)
+      (splitLast -> Just (DPath _ _ newRoot _, t', _)) -> do
+        insertEdge (Edge newRoot t' nid)
+      _ -> pure ()
+
 -- | Turn a path into a set of DPaths where the set denotes disjunction.
 -- Similar to converting to a NFA for paths. Each path also has a start point
 -- or Nothing to represent that the path is relative.
