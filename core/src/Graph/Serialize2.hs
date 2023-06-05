@@ -52,12 +52,24 @@ getAllNodeIds base = do
   pure nodes
 
 -- | the next unused node id in the graph
+-- we assume that all programs editing the graph, maintain a number in the origin node.
+-- long term I'd still like to move to random ids, with a next pointer on nodes
+-- to indiciate sequence that nodes were created in instead of the numeric indexes
+-- I'm currently using for node ids
+-- TODO: switch to random ids, and remove this kludge
 nextNodeId :: MonadIO m => FilePath -> m Int
 nextNodeId base = do
-  nids <- getAllNodeIds base
-  case maximum (Nothing `ncons` map Just nids) of
-    Nothing -> pure 0
-    Just x -> pure $ x + 1
+  maybeNextNodeId <- readMay . decodeUtf8 <$> readFile (nodeDataFile base 0)
+  case maybeNextNodeId of
+    Just nextId -> pure nextId
+    -- fallback to the old method in case there are graphs that don't support this yet
+    Nothing -> do
+      nids <- getAllNodeIds base
+      let nextId = case maximum (Nothing `ncons` map Just nids) of
+            Nothing -> 1
+            Just x -> x + 1
+      writeFile (nodeDataFile base 0) (encodeUtf8 . tshow $ nextId)
+      pure nextId
 
 linksFile :: FilePath -> NID -> FilePath
 linksFile base nid = base </> (show nid ++ ".json")
@@ -166,11 +178,9 @@ withSerializedNode ::
   NID ->
   IO ()
 withSerializedNode f base nid =
-  let ignoreErrors :: Sem [Error UserError, Embed IO] () -> Sem '[Embed IO] ()
-      ignoreErrors = (`handleError` \(_ :: UserError) -> pure ())
-   in runM . ignoreErrors . withEffects @[Error UserError, Embed IO] $ do
-        n <- deserializeNodeF @t @[Error UserError, Embed IO] base nid
-        fromExceptionToUserError $ serializeNodeEx (f n) base
+  runM . printErrors . withEffects @[Error UserError, Embed IO] $ do
+    n <- deserializeNodeF @t @[Error UserError, Embed IO] base nid
+    fromExceptionToUserError $ serializeNodeEx (f n) base
 
 readGraph :: MonadIO m => FilePath -> m (Either String (Graph String))
 readGraph base = do

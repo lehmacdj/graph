@@ -119,7 +119,8 @@ runMainEffectsIOWithErrorHandling ::
   IO a
 runMainEffectsIOWithErrorHandling errorHandlingBehavior env v = do
   let handler =
-        applyInput2 (runWriteGraphDualizeableIO @String)
+        runFreshNIDStateOriginNode
+          >>> applyInput2 (runWriteGraphDualizeableIO @String)
           >>> applyInput2 (runReadGraphDualizeableIO @String)
           >>> applyInput2 interpretEditorAsIOVimFSGraph
           >>> runRawGraphAsInput
@@ -131,7 +132,6 @@ runMainEffectsIOWithErrorHandling errorHandlingBehavior env v = do
           >>> interpretTimeAsIO
           >>> runLocableHistoryState
           >>> runStateInputIORefOf @History #_history
-          >>> runFreshNIDState
           >>> runStateInputIORefOf #_nextId
           >>> errorHandlingBehavior
           >>> runReadlineFinal
