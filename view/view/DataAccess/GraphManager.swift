@@ -12,18 +12,28 @@ import Foundation
 actor GraphManager: ObservableObject {
     let basePath: URL
 
-    var maxNodeId: NID
+    var nextNodeId: NID
 
     private var cloudDocumentsPull: Task<Void, Never>?
 
     init?(dir: URL) async {
         basePath = dir
-        maxNodeId = NID.origin
+        nextNodeId = 1
         if !FileManager.default.fileExists(atPath: metaPath(for: NID.origin).path) {
             logWarn("couldn't find origin node meta data file")
             return nil
         }
-        cloudDocumentsPull = await pullCloudDocuments()
+        let dataPath = dataPath(for: NID.origin)
+        if !FileManager.default.fileExists(atPath: dataPath.path),
+           let data = try? Data(contentsOf: dataPath),
+           let string = String(data: data, encoding: .utf8),
+           let nextNodeId = Int(string)
+        {
+            self.nextNodeId = nextNodeId
+        } else {
+            nextNodeId = NID.origin
+            cloudDocumentsPull = await pullCloudDocuments()
+        }
     }
 
     func updateMaxNodeId(from url: URL) {
@@ -32,15 +42,17 @@ actor GraphManager: ObservableObject {
            let dotIx = lastPathComponent.lastIndex(of: ".") {
             let dotPrevIx = lastPathComponent.index(before: dotIx)
             if let id = Int(url.lastPathComponent[...dotPrevIx]),
-               id > maxNodeId {
-                maxNodeId = id
+               id >= nextNodeId {
+                nextNodeId = id + 1
             }
         }
     }
 
     func refresh() async {
-        cloudDocumentsPull?.cancel()
-        cloudDocumentsPull = await pullCloudDocuments()
+        if let cloudDocumentsPull {
+            cloudDocumentsPull.cancel()
+            self.cloudDocumentsPull = await pullCloudDocuments()
+        }
     }
 
     @MainActor
@@ -121,7 +133,7 @@ actor GraphManager: ObservableObject {
 
     /// Creates a new node not connected to anything
     func createNewNode() -> Node {
-        let newNodeId = maxNodeId + 1
+        let newNodeId = nextNodeId
         let newMeta = NodeMeta(id: newNodeId, incoming: [:], outgoing: [:])
         guard let data: Data = try? JSONEncoder().encode(newMeta) else {
             logError("failed to encode JSON for NodeMeta")
@@ -135,7 +147,13 @@ actor GraphManager: ObservableObject {
             logError("couldn't access newly created node")
             fatalError("couldn't create a node")
         }
-        maxNodeId = max(newNodeId, maxNodeId)
+        nextNodeId = nextNodeId + 1
+        do {
+            try Data(String(nextNodeId).utf8).write(to: dataPath(for: NID.origin))
+        } catch {
+            logError("failed to update nextNodeId")
+            fatalError("failed to update nextNodeId")
+        }
         return node
     }
 
