@@ -24,14 +24,14 @@ actor GraphManager: ObservableObject {
             return nil
         }
         let dataPath = dataPath(for: NID.origin)
-        if !FileManager.default.fileExists(atPath: dataPath.path),
-           let data = try? Data(contentsOf: dataPath),
+        if let data = try? Data(contentsOf: dataPath),
            let string = String(data: data, encoding: .utf8),
            let nextNodeId = Int(string)
         {
             self.nextNodeId = nextNodeId
         } else {
             nextNodeId = NID.origin
+            logWarn("fell back to reading max node id from directory contents")
             cloudDocumentsPull = await pullCloudDocuments()
         }
     }

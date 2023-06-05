@@ -192,12 +192,18 @@ class Node: ObservableObject {
     // MARK: data
 
     var dataUrl: URL? {
+        guard nid != NID.origin else {
+            // even though origin has some info about maxNodeId we want to pretend that doesn't
+            // exist. We want to eventually get rid of that data and allow the origin to potentially
+            // have it's own data again in the future
+            return nil
+        }
         let dataUrl = root.dataPath(for: nid)
         return FileManager.default.fileExists(atPath: dataUrl.path) ? dataUrl : nil
     }
 
     var hasData: Bool {
-        dataUrl == nil
+        dataUrl == nil || nid == NID.origin
     }
 
     var data: Data? {
