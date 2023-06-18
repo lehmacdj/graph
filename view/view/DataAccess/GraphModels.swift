@@ -14,9 +14,9 @@ extension NID {
     static let tags: NID = 1
 }
 
-struct Tags {
-    let tagNode: Node
-    let root: GraphManager
+struct Tags<N: Node> {
+    let tagNode: N
+    let root: GraphManager<N>
 
     var tagOptions: Set<String> {
         return Set(tagNode.meta.outgoing.keys)
@@ -26,7 +26,7 @@ struct Tags {
         return Set(tagNode.meta.outgoing.values.flatMap { $0 })
     }
 
-    func modify(for node: Node, adding toAdd: Set<String>, removing toRemove: Set<String>) async {
+    func modify(for node: N, adding toAdd: Set<String>, removing toRemove: Set<String>) async {
         logDebug("node: \(node.nid), adding: \(toAdd), removing: \(toRemove)")
         assert(toAdd.intersection(toRemove).isEmpty, "can't add and remove the same tag")
 

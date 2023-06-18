@@ -2,39 +2,84 @@
 //  Node.swift
 //  view
 //
-//  Created by Devin Lehmacher on 3/26/23.
+//  Created by Devin Lehmacher on 6/18/23.
 //
 
+import Combine
 import Foundation
 
-class Node: ObservableObject {
-    // MARK: node metadata
+typealias DefaultNode = DocumentNode
 
-    let nid: NID
+protocol Node: AnyObject, ObservableObject {
+    init?(nid: NID, root: GraphManager<Self>) async
 
-    var meta: NodeMeta {
-        get { _meta }
-        set {
-            guard let data: Data = try? JSONEncoder().encode(newValue) else {
-                logWarn("failed to encode JSON for NodeMeta")
-                return
-            }
+    /// The id of this node
+    var nid: NID { get }
 
-            do {
-                // suspend notifications when writing so we don't get a spurious one
-                metaChangeSource.suspend()
-                try data.write(to: root.metaPath(for: nid), options: .atomic)
-                metaChangeSource.resume()
+    /// The metadata for this node
+    var meta: NodeMeta { get set }
 
-                // by not changing _meta until after having written the file successfully
-                // we ensure that the view represents the actual state of the world
-                _meta = newValue
-            } catch {
-                logWarn("failed writing data for node to disk")
-            }
-        }
-    }
+    /// Get all nodes that this node has outgoing transitions to
+    var outgoing: [NodeTransition] { get }
 
+    /// Get all nodes that have incoming transitions to this node
+    var incoming: [NodeTransition] { get }
+
+    /// Get the nodes that are linked by a transition from this node
+    subscript(transition: String) -> [Self] { get async }
+
+    // MARK: tags
+
+    /// Get the set of tags for this node. Defaults to empty set if unable to get tags (this is sus)
+    var tags: Set<String> { get async }
+
+    /// Set all of the tags for the node
+    func set(tags: Set<String>) async
+
+    /// Toggle one tag for the node
+    func toggle(tag: String) async
+
+    // MARK: managing node favorites/worse
+
+    /// Get the favorites node if it exists
+    var favorites: Self? { get async }
+
+    /// Get the favorites node creating a new child if it does not
+    func favorites() async -> Self
+
+    func isFavorite(child: NID) async -> Bool
+
+    func toggleFavorite(child: Self) async
+
+    /// Get the worse node if it exists
+    var worse: Self? { get async }
+
+    /// Get the worse node creating a new child if it does not
+    func worse() async -> Self
+
+    func isWorse(child: NID) async -> Bool
+
+    func toggleWorse(child: Self) async
+
+    // MARK: managing node associated data
+
+    var dataURL: URL? { get }
+
+    /// whether the data requires a download from iCloud to be accessed
+    /// this is for avoiding downloading stuff when it would just be used to
+    /// display a thumbnail
+    var dataRequiresDownload: Bool { get }
+
+    var data: DataDocument<Self>? { get async }
+
+    func deleteMetaAndData()
+}
+
+protocol GraphManagerNode: Node {
+    var manager: GraphManager<Self> { get }
+}
+
+extension Node {
     var outgoing: [NodeTransition] {
         meta
             .outgoing
@@ -53,55 +98,15 @@ class Node: ObservableObject {
         return result
     }
 
-    subscript(transition: String) -> [Node] {
-        get async {
-            guard let ids = meta.outgoing[transition] else {
-                // debug because sometimes we use this to check if an optional transition
-                // exists, and the log message is too noisy to be a warning
-                logDebug("didn't find transition \(transition) from node \(meta.id)")
-                return []
+    /// Utility function likely to be useful to implementations of Node
+    func links(to nid: NID) -> [String] {
+        var result = [String]()
+        for (transition, targets) in self.meta.outgoing {
+            if targets.contains(nid) {
+                result.append(transition)
             }
-            return await Array(ids.async.compactMap { [weak self] in await self?.root[$0] })
         }
-    }
-
-    // TODO: it's sus that this always returns a set even if one doesn't exist
-    // it would be good to more gracefully support graphs without tags, or not
-    // support opening a graph that doesn't have them
-    var tags: Set<String> {
-        get async {
-            guard let tags = await root.tags else {
-                return Set()
-            }
-            let tagContainers = Set(
-                meta.incoming
-                    .filter { !$0.value.intersection(tags.tagNids).isEmpty }
-                    .values
-                    .flatMap { $0 })
-            var result = Set<String>()
-            for tagContainer in tagContainers {
-                if let tagContainer = await root[tagContainer] {
-                    for tag in tagContainer.meta.incoming.filter({ $0.value.contains(NID.tags) }).keys {
-                        result.insert(tag)
-                    }
-                }
-            }
-            return result
-        }
-    }
-
-    func set(tags newTags: Set<String>) async {
-            guard let tags = await root.tags else {
-                logWarn("trying to set tags, but there is no tags node")
-                return
-            }
-
-            let oldTags = await self.tags
-
-            await tags.modify(
-                for: self,
-                adding: newTags.subtracting(oldTags),
-                removing: oldTags.subtracting(newTags))
+        return result
     }
 
     func toggle(tag: String) async {
@@ -115,13 +120,77 @@ class Node: ObservableObject {
         }
     }
 
-    var favorites: Node? {
+    func isFavorite(child: NID) async -> Bool {
+        return !(await favorites?.links(to: child).isEmpty ?? true)
+    }
+
+    func isWorse(child: NID) async -> Bool {
+        return !(await worse?.links(to: child).isEmpty ?? true)
+    }
+}
+
+extension GraphManagerNode {
+    subscript(transition: String) -> [Self] {
+        get async {
+            guard let ids = meta.outgoing[transition] else {
+                // debug because sometimes we use this to check if an optional transition
+                // exists, and the log message is too noisy to be a warning
+                logDebug("didn't find transition \(transition) from node \(meta.id)")
+                return []
+            }
+            return await Array(ids.async.compactMap { await self.manager[$0] })
+        }
+    }
+
+    var tags: Set<String> {
+        get async {
+            guard let tags = await manager.tags else {
+                return Set()
+            }
+            let tagContainers = Set(
+                meta.incoming
+                    .filter { !$0.value.intersection(tags.tagNids).isEmpty }
+                    .values
+                    .flatMap { $0 })
+            var result = Set<String>()
+            for tagContainer in tagContainers {
+                if let tagContainer = await manager[tagContainer] {
+                    for tag in tagContainer.meta.incoming.filter({ $0.value.contains(NID.tags) }).keys {
+                        result.insert(tag)
+                    }
+                }
+            }
+            return result
+        }
+    }
+
+    func set(tags newTags: Set<String>) async {
+        guard let tags = await manager.tags else {
+            logWarn("trying to set tags, but there is no tags node")
+            return
+        }
+
+        let oldTags = await self.tags
+
+        await tags.modify(
+            for: self,
+            adding: newTags.subtracting(oldTags),
+            removing: oldTags.subtracting(newTags))
+    }
+
+    func createNewChild(via transition: String) async -> Self {
+        let node = await manager.createNewNode()
+        await manager.addLink(from: self, to: node, via: transition)
+        return node
+    }
+
+    var favorites: Self? {
         get async {
             await self["favorites"].first
         }
     }
 
-    func favorites() async -> Node {
+    func favorites() async -> Self {
         if let favorites = await favorites {
             return favorites
         }
@@ -129,13 +198,13 @@ class Node: ObservableObject {
         return await createNewChild(via: "favorites")
     }
 
-    var worse: Node? {
+    var worse: Self? {
         get async {
             await self["worse"].first
         }
     }
 
-    func worse() async -> Node {
+    func worse() async -> Self {
         if let worse = await worse {
             return worse
         }
@@ -143,163 +212,28 @@ class Node: ObservableObject {
         return await createNewChild(via: "worse")
     }
 
-    private func createNewChild(via transition: String) async -> Node {
-        let node = await root.createNewNode()
-        await root.addLink(from: self, to: node, via: transition)
-        return node
-    }
+}
 
-    private func links(to nid: NID) -> [String] {
-        var result = [String]()
-        for (transition, targets) in self.meta.outgoing {
-            if targets.contains(nid) {
-                result.append(transition)
-            }
-        }
-        return result
-    }
-
-    func isFavorite(child: NID) async -> Bool {
-        return !(await favorites?.links(to: child).isEmpty ?? true)
-    }
-
-    func toggleFavorite(child: Node) async {
+extension GraphManagerNode where ObjectWillChangePublisher == ObservableObjectPublisher {
+    func toggleFavorite(child: Self) async {
         if let favoriteLinks = await favorites?.links(to: child.nid).nilIfEmpty() {
             for favoriteLink in favoriteLinks {
-                await root.removeLink(from: favorites(), to: child, via: favoriteLink)
+                await manager.removeLink(from: favorites(), to: child, via: favoriteLink)
             }
         } else {
-            await root.addLink(from: await favorites(), to: child, via: "")
+            await manager.addLink(from: await favorites(), to: child, via: "")
         }
         objectWillChange.send()
     }
 
-    func isWorse(child: NID) async -> Bool {
-        return !(await worse?.links(to: child).isEmpty ?? true)
-    }
-
-    func toggleWorse(child: Node) async {
+    func toggleWorse(child: Self) async {
         if let worseLinks = await worse?.links(to: child.nid).nilIfEmpty() {
             for worseLink in worseLinks {
-                await root.removeLink(from: await worse(), to: child, via: worseLink)
+                await manager.removeLink(from: await worse(), to: child, via: worseLink)
             }
         } else {
-            await root.addLink(from: await worse(), to: child, via: "")
+            await manager.addLink(from: await worse(), to: child, via: "")
         }
         objectWillChange.send()
-    }
-
-    // MARK: data
-
-    var dataUrl: URL? {
-        guard nid != NID.origin else {
-            // even though origin has some info about maxNodeId we want to pretend that doesn't
-            // exist. We want to eventually get rid of that data and allow the origin to potentially
-            // have it's own data again in the future
-            return nil
-        }
-        let dataUrl = root.dataPath(for: nid)
-        return FileManager.default.fileExists(atPath: dataUrl.path) ? dataUrl : nil
-    }
-
-    var hasData: Bool {
-        dataUrl == nil || nid == NID.origin
-    }
-
-    var data: Data? {
-        get async throws {
-            guard let dataUrl else { return nil }
-            let session = URLSession(configuration: .ephemeral)
-            let (data, _) = try await session.data(from: dataUrl)
-            return data
-        }
-    }
-
-    func deleteMetaAndData() {
-        let fileManager = FileManager()
-        do {
-            try fileManager.removeItem(at: root.metaPath(for: nid))
-            if let dataUrl = dataUrl {
-                try fileManager.removeItem(at: dataUrl)
-            }
-        } catch {
-            logWarn("failed while removing a file")
-        }
-    }
-
-    // MARK: private
-
-    // this is the backing node metadata for this node. We keep it private to
-    // encourage users of the node api to make all of the changes to a node
-    // they want to at once and then set it. This is more performant, since
-    // every write to meta results in a file write
-    // this initialized last by method call and will never be nil after successful
-    // initialization because constructor would return nil if this failed to initialize
-    @Published private var _meta: NodeMeta!
-
-    // TODO: make this private / push through the consequences of that
-    let root: GraphManager
-
-    private let metaChangeSource: DispatchSourceFileSystemObject
-    private let metaHandle: FileHandle
-
-    /// Prefer initializing this via a factory method that constructs it from a static Node or from the Root directly
-    init?(nid: NID, root: GraphManager) {
-        self.nid = nid
-        self.root = root
-
-        let metaFileDescriptor = open(root.metaPath(for: nid).path, O_EVTONLY | O_RDONLY)
-        if metaFileDescriptor == -1 {
-            logWarn("metadata file for node \(nid) does not exist or cannot be opened")
-            return nil
-        }
-        self.metaHandle = FileHandle(fileDescriptor: metaFileDescriptor)
-        self.metaChangeSource =
-            DispatchSource.makeFileSystemObjectSource(
-                fileDescriptor: self.metaHandle.fileDescriptor,
-                eventMask: .write,
-                queue: DispatchQueue.main)
-
-        guard let initialMeta = tryGetMeta() else {
-            return nil
-        }
-
-        self._meta = initialMeta
-
-        metaChangeSource.setEventHandler { [weak self] in
-            if let meta = self?.tryGetMeta() {
-                self?._meta = meta
-            }
-        }
-
-        metaChangeSource.activate()
-    }
-
-    deinit {
-        do {
-            try metaHandle.close()
-        } catch {
-            logWarn("unexpected error while closing a file")
-        }
-    }
-
-    private func tryGetMeta() -> NodeMeta? {
-        do {
-            try metaHandle.seek(toOffset: 0)
-        } catch {
-            logWarn("failed to seek file")
-            return nil
-        }
-
-        guard let metaContents = try? metaHandle.readToEnd() else {
-            logWarn("couldn't access file contents for nid: \(nid)")
-            return nil
-        }
-        guard let meta = try? JSONDecoder().decode(NodeMeta.self, from: metaContents) else {
-            logWarn("couldn't decode json data")
-            return nil
-        }
-
-        return meta
     }
 }

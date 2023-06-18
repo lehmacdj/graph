@@ -77,10 +77,11 @@ struct FileSelectorView: View {
         switch result {
         case .success(let url):
             guard url.startAccessingSecurityScopedResource() else {
-                logWarn("wasn't granted access to \(url.path)")
+                logWarn("wasn't granted access to \(url)")
                 return
             }
 
+            logInfo("successfully got access to \(url)")
             fileUrlBookmark = try? url.bookmarkData()
 
             if let oldUrl = fileUrl {

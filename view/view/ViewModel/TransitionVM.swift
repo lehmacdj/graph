@@ -14,19 +14,31 @@ enum Direction {
 }
 
 @MainActor
-class TransitionVM: ObservableObject {
+class TransitionVM<N: Node>: ObservableObject {
     let direction: Direction
     @Published var transition: String
-    @Published var thumbnail: Loading<Loading<UIImage>?> = .idle
+    @Published var thumbnail: Loading<ThumbnailValue> = .idle
     @Published var isFavorite: Bool
     @Published var isWorse: Bool
-    @Published var destination: Loading<NodeVM> = .idle
+    @Published var destination: Loading<NodeVM<N>> = .idle
 
-    private let manager: GraphManager
-    private let source: Node
+    enum ThumbnailValue {
+        case noThumbnail
+
+        /// File isn't on device so we won't attempt to generate a thumbnail
+        case cloudFile
+
+        case thumbnail(Loading<UIImage>)
+    }
+
+    private let manager: GraphManager<N>
+    private let source: N
     private let destinationNid: NID
 
-    init(source: Node, transition: NodeTransition, direction: Direction, manager: GraphManager, isFavorite: Bool, isWorse: Bool) {
+    /// The destination node if it's been acquired
+    private var destinationNode: N?
+
+    init(source: N, transition: NodeTransition, direction: Direction, manager: GraphManager<N>, isFavorite: Bool, isWorse: Bool) {
         self.source = source
         self.transition = transition.transition
         self.direction = direction
@@ -37,42 +49,39 @@ class TransitionVM: ObservableObject {
     }
 
     func load() async {
+        guard destinationNode == nil else {
+            return
+        }
+
         self.thumbnail = .loading
         self.destination = .loading
 
-        let destinationNode: Node
+        let destinationNode: N
         do {
             destinationNode = try await manager[destinationNid].unwrapped("node \(destinationNid) doesn't exist")
         } catch {
             logError(error.localizedDescription)
             self.thumbnail = .failed(error)
             self.destination = .failed(error)
+            self.destinationNode = nil
             return
         }
 
         logInfo("successfully fetched destinationNode \(destinationNid)")
         self.destination = .loaded(NodeVM(for: destinationNid, in: manager))
+        self.destinationNode = destinationNode
 
-        if destinationNode.hasData {
-            self.thumbnail = .loaded(nil)
+        if destinationNode.dataURL == nil {
+            self.thumbnail = .loaded(.noThumbnail)
+        } else if destinationNode.dataRequiresDownload {
+            self.thumbnail = .loaded(.cloudFile)
         } else {
-            self.thumbnail = .loaded(.loading)
-            do {
-                let data = try await destinationNode.data.unwrapped("checked hasData but doesn't have it")
-                if let image = UIImage(data: data) {
-                    self.thumbnail = .loaded(.loaded(image))
-                } else {
-                    self.thumbnail = .loaded(nil)
-                }
-            } catch {
-                self.thumbnail = .loaded(.failed(error))
-            }
+            await fetchThumbnail()
         }
     }
 
     func weaken() {
-        // TODO: do something so that it's possible for the thumbnail to be deallocated
-        // this will help with memory usage
+        destinationNode = nil
     }
 
     func toggleFavorite() async {
@@ -81,6 +90,19 @@ class TransitionVM: ObservableObject {
 
     func toggleWorse() async {
         // TODO: implement
+    }
+
+    func fetchThumbnail() async {
+        do {
+            let data = try (await destinationNode?.data?.data).unwrapped("data doesn't exist")
+            if let image = UIImage(data: data) {
+                self.thumbnail = .loaded(.thumbnail(.loaded(image)))
+            } else {
+                self.thumbnail = .loaded(.noThumbnail)
+            }
+        } catch {
+            self.thumbnail = .loaded(.thumbnail(.failed(error)))
+        }
     }
 
     func updateTransitionName(to newName: String) async {

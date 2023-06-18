@@ -8,22 +8,22 @@
 import Foundation
 
 @MainActor
-class NodeVM: ObservableObject {
+class NodeVM<N: Node>: ObservableObject {
     let nid: NID
 
-    @Published var node: Loading<Node> = .idle
+    @Published var node: Loading<N> = .idle
     @Published var state: Loading<State> = .idle
 
     struct State {
-        fileprivate let node: Node
-        fileprivate let manager: GraphManager
+        fileprivate let node: N
+        fileprivate let manager: GraphManager<N>
 
         let data: Data?
 
-        let favoriteLinks: [TransitionVM]?
-        let links: [TransitionVM]
-        let worseLinks: [TransitionVM]?
-        let backlinks: [TransitionVM]
+        let favoriteLinks: [TransitionVM<N>]?
+        let links: [TransitionVM<N>]
+        let worseLinks: [TransitionVM<N>]?
+        let backlinks: [TransitionVM<N>]
 
         let tags: Set<String>
         let possibleTags: Set<String>
@@ -37,19 +37,19 @@ class NodeVM: ObservableObject {
         }
     }
 
-    private let manager: GraphManager
+    private let manager: GraphManager<N>
 
-    init(for nid: NID, in graph: GraphManager) {
+    init(for nid: NID, in graph: GraphManager<N>) {
         self.nid = nid
         self.manager = graph
     }
 
     func load() async {
         state = .loading
-        let node: Node
-        let favoritesNode: Node?
-        let worseNode: Node?
-        let data: Data?
+        let node: N
+        let favoritesNode: N?
+        let worseNode: N?
+        let data: DataDocument<N>?
         let tags: Set<String>
         let tagOptions: Set<String>
         do {
@@ -61,7 +61,7 @@ class NodeVM: ObservableObject {
             async let possibleTagsAsync = manager.tags?.tagOptions
             favoritesNode = await favoritesAsync
             worseNode = await worseAsync
-            data = try await dataAsync
+            data = await dataAsync
             tags = await tagsAsync
             tagOptions = await possibleTagsAsync ?? Set()
         } catch {
@@ -87,7 +87,7 @@ class NodeVM: ObservableObject {
             }
         }
 
-        func mkTransitionVMs(_ transitions: [NodeTransition], inDirection direction: Direction, isFavorite: Bool, isWorse: Bool) -> [TransitionVM] {
+        func mkTransitionVMs(_ transitions: [NodeTransition], inDirection direction: Direction, isFavorite: Bool, isWorse: Bool) -> [TransitionVM<N>] {
             transitions.sorted().map {
                 TransitionVM(source: node, transition: $0, direction: direction, manager: self.manager, isFavorite: isFavorite, isWorse: isWorse)
             }
@@ -96,7 +96,7 @@ class NodeVM: ObservableObject {
         state = .loaded(State(
             node: node,
             manager: manager,
-            data: data,
+            data: data?.data,
             favoriteLinks: favoritesSet != nil ? mkTransitionVMs(favorites, inDirection: .forward, isFavorite: true, isWorse: false) : nil,
             links: mkTransitionVMs(normal, inDirection: .forward, isFavorite: false, isWorse: false),
             worseLinks: worseSet != nil ? mkTransitionVMs(worse, inDirection: .forward, isFavorite: false, isWorse: true) : nil,

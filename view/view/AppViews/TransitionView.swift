@@ -32,18 +32,23 @@ struct LabelEditor: View {
 }
 
 struct TransitionView: View {
-    @StateObject var vm: TransitionVM
+    @StateObject var vm: TransitionVM<DefaultNode>
 
     @State private var confirmingDelete: Bool = false
     @State private var editing: Bool = false
 
-    init(_ transitionVM: TransitionVM) {
+    init(_ transitionVM: TransitionVM<DefaultNode>) {
         _vm = StateObject(wrappedValue: transitionVM)
     }
 
     var thumbnail: some View {
         Suspense(vm.thumbnail) { loadingThumbnail in
-            if let loadingThumbnail {
+            switch loadingThumbnail {
+            case .noThumbnail:
+                EmptyView()
+            case .cloudFile:
+                Image(systemName: "cloud")
+            case .thumbnail(let loadingThumbnail):
                 Suspense(loadingThumbnail) { thumbnail in
                     Image(uiImage: thumbnail)
                         .resizable()
@@ -66,9 +71,15 @@ struct TransitionView: View {
                     await vm.updateTransitionName(to: newLabel)
                 }
             } else {
-                Suspense(vm.destination) { destination in
-                    NavigationLink(destination: NodeView(of: destination)) {
-                        Text(vm.transition)
+                if case .loaded(.cloudFile) = vm.thumbnail {
+                    AsyncButton(vm.transition, role: .none) {
+                        await vm.fetchThumbnail()
+                    }
+                } else {
+                    Suspense(vm.destination) { destination in
+                        NavigationLink(destination: NodeView(of: destination)) {
+                            Text(vm.transition)
+                        }
                     }
                 }
             }

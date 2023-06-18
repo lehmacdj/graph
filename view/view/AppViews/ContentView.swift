@@ -12,7 +12,7 @@ struct ContentView: View {
     let fileUrl: URL
     let doSelectFile: () -> ()
 
-    @State private var graphAndRoot: Loading<(GraphManager, Node)?> = .loading
+    @State private var graphAndRoot: Loading<(GraphManager<DefaultNode>, DefaultNode)?> = .loading
 
     var body: some View {
         NavigationView {
@@ -26,9 +26,6 @@ struct ContentView: View {
                     Text("Couldn't read directory; invalid graph").foregroundColor(.red)
                 case .loaded(.some((let graph, let origin))):
                     NodeView(of: NodeVM(for: origin.nid, in: graph))
-                        .refreshable {
-                            await graph.refresh()
-                        }
                 case .failed(let error):
                     ErrorIndicator(for: error)
                 }
@@ -43,7 +40,7 @@ struct ContentView: View {
         }
         .task(id: fileUrl) {
             graphAndRoot = .loading
-            guard let graphManager = await GraphManager(dir: fileUrl) else {
+            guard let graphManager = await GraphManager<DefaultNode>(dir: fileUrl) else {
                 graphAndRoot = .loaded(nil)
                 return
             }
