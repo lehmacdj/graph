@@ -45,6 +45,10 @@ class NodeVM<N: Node>: ObservableObject {
     }
 
     func load() async {
+        guard case .idle = state else {
+            return
+        }
+
         state = .loading
         let node: N
         let favoritesNode: N?
@@ -74,13 +78,13 @@ class NodeVM<N: Node>: ObservableObject {
         var normal = [NodeTransition]()
         var worse = [NodeTransition]()
 
-        let favoritesSet: Set<NodeTransition>? = favoritesNode.map { Set($0.outgoing) }
-        let worseSet: Set<NodeTransition>? = worseNode.map { Set($0.outgoing) }
+        let favoritesSet: Set<NID>? = favoritesNode.map { Set($0.outgoing.map { $0.nid }) }
+        let worseSet: Set<NID>? = worseNode.map { Set($0.outgoing.map { $0.nid }) }
 
         for child in node.outgoing {
-            if let favoritesSet, favoritesSet.contains(child) {
+            if let favoritesSet, favoritesSet.contains(child.nid) {
                 favorites.append(child)
-            } else if let worseSet, worseSet.contains(child) {
+            } else if let worseSet, worseSet.contains(child.nid) {
                 worse.append(child)
             } else {
                 normal.append(child)

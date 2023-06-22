@@ -49,7 +49,7 @@ class TransitionVM<N: Node>: ObservableObject {
     }
 
     func load() async {
-        guard destinationNode == nil else {
+        guard case .idle = destination else {
             return
         }
 

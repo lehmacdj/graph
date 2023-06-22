@@ -136,6 +136,14 @@ actor GraphManager<N: Node>: ObservableObject {
         addLink(from: start, to: end, via: transition)
     }
 
+    func addLink(from startNode: N, to end: NID, via transition: String) async {
+        guard let endNode = await self[end] else {
+            return
+        }
+
+        addLink(from: startNode, to: endNode, via: transition)
+    }
+
     func addLink(from startNode: N, to endNode: N, via transition: String) {
         // specially handle the case of a single node because otherwise
         // we would overwrite only half of the metadata
@@ -163,6 +171,14 @@ actor GraphManager<N: Node>: ObservableObject {
         }
 
         removeLink(from: start, to: end, via: transition)
+    }
+
+    func removeLink(from startNode: N, to end: NID, via transition: String) async {
+        guard let endNode = await self[end] else {
+            return
+        }
+
+        removeLink(from: startNode, to: endNode, via: transition)
     }
 
     func removeLink(from startNode: N, to endNode: N, via transition: String) {
