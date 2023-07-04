@@ -49,7 +49,7 @@ protocol Node: AnyObject, ObservableObject {
 
     func isFavorite(child: NID) async -> Bool
 
-    func toggleFavorite(child: Self) async
+    func toggleFavorite(child: NID) async
 
     /// Get the worse node if it exists
     var worse: Self? { get async }
@@ -59,7 +59,7 @@ protocol Node: AnyObject, ObservableObject {
 
     func isWorse(child: NID) async -> Bool
 
-    func toggleWorse(child: Self) async
+    func toggleWorse(child: NID) async
 
     // MARK: managing node associated data
 
@@ -215,25 +215,38 @@ extension GraphManagerNode {
 }
 
 extension GraphManagerNode where ObjectWillChangePublisher == ObservableObjectPublisher {
-    func toggleFavorite(child: Self) async {
-        if let favoriteLinks = await favorites?.links(to: child.nid).nilIfEmpty() {
-            for favoriteLink in favoriteLinks {
-                await manager.removeLink(from: favorites(), to: child, via: favoriteLink)
+    func toggleFavorite(child childNID: NID) async {
+        if let favoriteLinks = await favorites?.links(to: childNID).nilIfEmpty() {
+            if let favorites = await favorites {
+                // if favorites doesn't exist, no need to remove from favorites node either
+                for favoriteLink in favoriteLinks {
+                    await manager.removeLink(from: favorites, to: childNID, via: favoriteLink)
+                }
+                logInfo("unfavorited node")
+            } else {
+                logWarn("not unfavoriting node because favorites node doesn't exist")
             }
         } else {
-            await manager.addLink(from: await favorites(), to: child, via: "")
+            objectWillChange.send()
+            await manager.addLink(from: await favorites(), to: childNID, via: "")
+            logInfo("successfully favorited node")
         }
-        objectWillChange.send()
     }
 
-    func toggleWorse(child: Self) async {
-        if let worseLinks = await worse?.links(to: child.nid).nilIfEmpty() {
-            for worseLink in worseLinks {
-                await manager.removeLink(from: await worse(), to: child, via: worseLink)
+    func toggleWorse(child childNID: NID) async {
+        if let worseLinks = await worse?.links(to: childNID).nilIfEmpty() {
+            if let worse = await worse {
+                objectWillChange.send()
+                for worseLink in worseLinks {
+                    await manager.removeLink(from: worse, to: childNID, via: worseLink)
+                }
+            } else {
+                logWarn("not unworsening node because worse node doesn't exist")
             }
         } else {
-            await manager.addLink(from: await worse(), to: child, via: "")
+            objectWillChange.send()
+            await manager.addLink(from: await worse(), to: childNID, via: "")
+            logInfo("successfully worsened node")
         }
-        objectWillChange.send()
     }
 }

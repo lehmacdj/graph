@@ -16,6 +16,7 @@ enum Direction {
 @MainActor
 class TransitionVM<N: Node>: ObservableObject {
     let direction: Direction
+    let destinationNid: NID
     @Published var transition: String
     @Published var thumbnail: Loading<ThumbnailValue> = .idle
     @Published var isFavorite: Bool
@@ -32,13 +33,25 @@ class TransitionVM<N: Node>: ObservableObject {
     }
 
     private let manager: GraphManager<N>
+
+    /// link to parent node, should always be retained because the transition is only ever presented as a part of a node
+    private weak var parent: NodeVM<N>!
+
     private let source: N
-    private let destinationNid: NID
 
     /// The destination node if it's been acquired
     private var destinationNode: N?
 
-    init(source: N, transition: NodeTransition, direction: Direction, manager: GraphManager<N>, isFavorite: Bool, isWorse: Bool) {
+    init(
+        parent: NodeVM<N>,
+        source: N,
+        transition: NodeTransition,
+        direction: Direction,
+        manager: GraphManager<N>,
+        isFavorite: Bool,
+        isWorse: Bool
+    ) {
+        self.parent = parent
         self.source = source
         self.transition = transition.transition
         self.direction = direction
@@ -81,21 +94,24 @@ class TransitionVM<N: Node>: ObservableObject {
     }
 
     func weaken() {
-        destinationNode = nil
+//        destinationNode = nil
     }
 
     func toggleFavorite() async {
-        // TODO: implement
+        await parent.toggleFavorite(child: destinationNid)
+        isFavorite.toggle()
     }
 
     func toggleWorse() async {
-        // TODO: implement
+        await parent.toggleWorse(child: destinationNid)
+        isWorse.toggle()
     }
 
     func fetchThumbnail() async {
         do {
-            let data = try (await destinationNode?.data?.data).unwrapped("data doesn't exist")
-            if let image = UIImage(data: data) {
+            let destinationNode = try destinationNode.unwrapped("destinationNode doesn't exist")
+            let dataDocument = try await destinationNode.data.unwrapped("data's document initializer returned nil")
+            if let image = UIImage(data: dataDocument.data) {
                 self.thumbnail = .loaded(.thumbnail(.loaded(image)))
             } else {
                 self.thumbnail = .loaded(.noThumbnail)

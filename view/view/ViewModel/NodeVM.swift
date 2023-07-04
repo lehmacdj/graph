@@ -18,15 +18,15 @@ class NodeVM<N: Node>: ObservableObject {
         fileprivate let node: N
         fileprivate let manager: GraphManager<N>
 
-        let data: Data?
+        var data: Data?
 
-        let favoriteLinks: [TransitionVM<N>]?
-        let links: [TransitionVM<N>]
-        let worseLinks: [TransitionVM<N>]?
-        let backlinks: [TransitionVM<N>]
+        var favoriteLinks: [TransitionVM<N>]?
+        var links: [TransitionVM<N>]
+        var worseLinks: [TransitionVM<N>]?
+        var backlinks: [TransitionVM<N>]
 
-        let tags: Set<String>
-        let possibleTags: Set<String>
+        var tags: Set<String>
+        var possibleTags: Set<String>
 
         func set(tags: Set<String>) async {
             await node.set(tags: tags)
@@ -48,7 +48,7 @@ class NodeVM<N: Node>: ObservableObject {
         guard case .idle = state else {
             return
         }
-
+        
         state = .loading
         let node: N
         let favoritesNode: N?
@@ -93,7 +93,7 @@ class NodeVM<N: Node>: ObservableObject {
 
         func mkTransitionVMs(_ transitions: [NodeTransition], inDirection direction: Direction, isFavorite: Bool, isWorse: Bool) -> [TransitionVM<N>] {
             transitions.sorted().map {
-                TransitionVM(source: node, transition: $0, direction: direction, manager: self.manager, isFavorite: isFavorite, isWorse: isWorse)
+                TransitionVM(parent: self, source: node, transition: $0, direction: direction, manager: self.manager, isFavorite: isFavorite, isWorse: isWorse)
             }
         }
 
@@ -108,5 +108,28 @@ class NodeVM<N: Node>: ObservableObject {
             tags: tags,
             possibleTags: tagOptions
         ))
+    }
+
+    func toggleFavorite(child: NID) async {
+//        if case .loaded(let node) = node {
+//            await node.toggleFavorite(child: child)
+//            var isFavoriteNow = await node.isFavorite(child: child)
+//            if case .loaded(let state) = state {
+//                var state = state
+//                if isFavoriteNow {
+//                    state.favoriteLinks?.append(contentsOf: state.links.filter { $0.destinationNid == child})
+//                    state.links.
+//                } else {
+//                    state.links.append
+//                    state.favoriteLinks?.removeAll { $0.destinationNid == child
+//                    }
+//                }
+//            }
+//        } else {
+//            logInfo("skipping toggleFavorite because NodeVM not loaded")
+//        }
+    }
+
+    func toggleWorse(child: NID) async {
     }
 }
