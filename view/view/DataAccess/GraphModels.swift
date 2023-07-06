@@ -100,14 +100,6 @@ struct NodeDTO: Decodable, Encodable {
     let outgoing: [ConnectDTO]
 }
 
-private extension DecodingError {
-    /// Helper that returns a generic decoding error given a codingPath and a detailed description.
-    /// Do try to use one of the more specific overloads first if you want to use this though.
-    static func dataCorruptedError(for codingPath: [CodingKey], debugDescription: String) -> DecodingError {
-        return DecodingError.dataCorrupted(Context(codingPath: codingPath, debugDescription: debugDescription))
-    }
-}
-
 extension NodeMeta: Decodable, Encodable {
     enum NodeKeys: String, CodingKey {
         case id

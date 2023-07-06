@@ -7,7 +7,7 @@
 
 import Foundation
 
-public enum Loading<T> {
+enum Loading<T> {
     case idle
     case loading
     case loaded(T)
@@ -23,7 +23,7 @@ public enum Loading<T> {
 }
 
 extension Loading: Identifiable where T: Identifiable {
-    public var id: some Hashable {
+    var id: some Hashable {
         switch self {
         case .idle:
             return "idle"

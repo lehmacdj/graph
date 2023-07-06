@@ -5,6 +5,9 @@
 //  Created by Devin Lehmacher on 4/7/21.
 //
 
+// Utility functions here, so want them to stick around most likely.
+// periphery:ignore:all
+
 import Foundation
 
 /// Log level to use when logging traces via log function

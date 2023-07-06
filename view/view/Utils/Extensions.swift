@@ -5,6 +5,9 @@
 //  Created by Devin Lehmacher on 10/10/21.
 //
 
+// This file contains utility functions that we want to keep even if unused.
+// periphery:ignore:all
+
 import Foundation
 
 extension String: Identifiable {

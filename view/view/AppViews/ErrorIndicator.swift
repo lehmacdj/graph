@@ -36,8 +36,9 @@ struct ErrorIndicator: View {
     }
 }
 
-private struct TestError: Error {
-    let code = "I am an error"
+// periphery:ignore
+private struct TestError: LocalizedError {
+    let code = "I am a error"
     let reason = "This is a test"
 }
 

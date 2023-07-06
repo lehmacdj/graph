@@ -42,18 +42,6 @@ actor GraphManager<N: Node>: ObservableObject {
         }
     }
 
-    func updateMaxNodeId(from url: URL) {
-        let lastPathComponent = url.lastPathComponent
-        if lastPathComponent.hasSuffix(".json"),
-           let dotIx = lastPathComponent.lastIndex(of: ".") {
-            let dotPrevIx = lastPathComponent.index(before: dotIx)
-            if let id = Int(url.lastPathComponent[...dotPrevIx]),
-               id >= nextNodeId {
-                nextNodeId = id + 1
-            }
-        }
-    }
-
     nonisolated func metaPath(for nid: NID) -> URL {
         basePath.appendingPathComponent(nid.metaPath)
     }

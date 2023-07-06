@@ -8,6 +8,7 @@
 import Foundation
 import AsyncAlgorithms
 
+// periphery:ignore
 public actor Semaphor {
     private var channel: AsyncChannel<()>
     private var count: Int

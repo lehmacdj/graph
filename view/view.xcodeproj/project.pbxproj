@@ -3,8 +3,22 @@
 	archiveVersion = 1;
 	classes = {
 	};
-	objectVersion = 52;
+	objectVersion = 54;
 	objects = {
+
+/* Begin PBXAggregateTarget section */
+		037869C22A5655FB00FEE005 /* Periphery */ = {
+			isa = PBXAggregateTarget;
+			buildConfigurationList = 037869C32A5655FB00FEE005 /* Build configuration list for PBXAggregateTarget "Periphery" */;
+			buildPhases = (
+				037869C62A56560E00FEE005 /* ShellScript */,
+			);
+			dependencies = (
+			);
+			name = Periphery;
+			productName = Periphery;
+		};
+/* End PBXAggregateTarget section */
 
 /* Begin PBXBuildFile section */
 		030CD85829F62B6800C27442 /* FillableSymbol.swift in Sources */ = {isa = PBXBuildFile; fileRef = 030CD85729F62B6800C27442 /* FillableSymbol.swift */; };
@@ -324,8 +338,9 @@
 		031367D72713FCF200E69F83 /* Project object */ = {
 			isa = PBXProject;
 			attributes = {
+				BuildIndependentTargetsInParallel = YES;
 				LastSwiftUpdateCheck = 1250;
-				LastUpgradeCheck = 1250;
+				LastUpgradeCheck = 1430;
 				TargetAttributes = {
 					031367DE2713FCF200E69F83 = {
 						CreatedOnToolsVersion = 12.5.1;
@@ -337,6 +352,9 @@
 					031367FC2713FCF400E69F83 = {
 						CreatedOnToolsVersion = 12.5.1;
 						TestTargetID = 031367DE2713FCF200E69F83;
+					};
+					037869C22A5655FB00FEE005 = {
+						CreatedOnToolsVersion = 14.3.1;
 					};
 				};
 			};
@@ -361,6 +379,7 @@
 				031367DE2713FCF200E69F83 /* view */,
 				031367F12713FCF400E69F83 /* viewTests */,
 				031367FC2713FCF400E69F83 /* viewUITests */,
+				037869C22A5655FB00FEE005 /* Periphery */,
 			);
 		};
 /* End PBXProject section */
@@ -390,6 +409,27 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXResourcesBuildPhase section */
+
+/* Begin PBXShellScriptBuildPhase section */
+		037869C62A56560E00FEE005 /* ShellScript */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+			);
+			outputFileListPaths = (
+			);
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "/opt/homebrew/bin/periphery scan --format xcode\n";
+		};
+/* End PBXShellScriptBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
 		031367DB2713FCF200E69F83 /* Sources */ = {
@@ -720,6 +760,22 @@
 			};
 			name = Release;
 		};
+		037869C42A5655FB00FEE005 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+			};
+			name = Debug;
+		};
+		037869C52A5655FB00FEE005 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -755,6 +811,15 @@
 			buildConfigurations = (
 				0313680D2713FCF400E69F83 /* Debug */,
 				0313680E2713FCF400E69F83 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		037869C32A5655FB00FEE005 /* Build configuration list for PBXAggregateTarget "Periphery" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				037869C42A5655FB00FEE005 /* Debug */,
+				037869C52A5655FB00FEE005 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

@@ -8,6 +8,7 @@
 import AsyncAlgorithms
 import Foundation
 
+// periphery:ignore
 struct UbiquitousFileAttributes {
     let isUbiquitous: Bool
 
@@ -91,10 +92,9 @@ struct UbiquitousFileAttributes {
     ])
 }
 
+// periphery:ignore
 actor UbiquitousFile {
     let url: URL
-
-    private var task: Task<Void, Never>?
 
     struct AttributeListenerState {
         let lastSentAttributeRevision: Int

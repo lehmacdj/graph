@@ -11,7 +11,6 @@ import Foundation
 class NodeVM<N: Node>: ObservableObject {
     let nid: NID
 
-    @Published var node: Loading<N> = .idle
     @Published var state: Loading<State> = .idle
 
     struct State {
@@ -110,7 +109,7 @@ class NodeVM<N: Node>: ObservableObject {
         ))
     }
 
-    func toggleFavorite(child: NID) async {
+    func toggleFavorite(child _: NID) async {
 //        if case .loaded(let node) = node {
 //            await node.toggleFavorite(child: child)
 //            var isFavoriteNow = await node.isFavorite(child: child)
@@ -130,6 +129,6 @@ class NodeVM<N: Node>: ObservableObject {
 //        }
     }
 
-    func toggleWorse(child: NID) async {
+    func toggleWorse(child _: NID) async {
     }
 }
