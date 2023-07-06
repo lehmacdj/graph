@@ -18,6 +18,7 @@ protocol Node: AnyObject, ObservableObject {
 
     /// The metadata for this node
     var meta: NodeMeta { get set }
+    var metaPublisher: AnyPublisher<NodeMeta, Never> { get }
 
     /// Get all nodes that this node has outgoing transitions to
     var outgoing: [NodeTransition] { get }

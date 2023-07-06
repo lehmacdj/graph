@@ -5,10 +5,12 @@
 //  Created by Devin Lehmacher on 6/18/23.
 //
 
+import Combine
 import UIKit
 import UniformTypeIdentifiers
 
 final class DocumentNode: UIDocument, GraphManagerNode {
+
     // MARK: Node
 
     let nid: NID
@@ -24,7 +26,11 @@ final class DocumentNode: UIDocument, GraphManagerNode {
     }
 
     /// Initialized with initially invalid information, but we read before returning from the constructor so it's never invalid to an outside observer
-    var meta: NodeMeta = .init(id: -1, incoming: [:], outgoing: [:])
+    @Published var meta: NodeMeta = .init(id: -1, incoming: [:], outgoing: [:])
+
+    var metaPublisher: AnyPublisher<NodeMeta, Never> {
+        $meta.eraseToAnyPublisher()
+    }
 
     subscript(transition: String) -> [DocumentNode] {
         get async {
