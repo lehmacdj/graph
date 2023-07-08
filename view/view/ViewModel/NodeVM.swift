@@ -56,7 +56,7 @@ class NodeVM<N: Node>: ObservableObject {
         let tags: Set<String>
         let tagOptions: Set<String>
         do {
-            node = try await manager[nid].unwrapped("node \(nid) doesn't exist")
+            node = try await manager[nid]
             async let favoritesAsync = node.favorites
             async let worseAsync = node.worse
             async let dataAsync = node.data

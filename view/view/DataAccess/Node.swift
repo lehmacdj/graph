@@ -11,7 +11,7 @@ import Foundation
 typealias DefaultNode = DocumentNode
 
 protocol Node: AnyObject, ObservableObject {
-    init?(nid: NID, root: GraphManager<Self>) async
+    init(nid: NID, root: GraphManager<Self>) async throws
 
     /// The id of this node
     var nid: NID { get }
@@ -139,7 +139,7 @@ extension GraphManagerNode {
                 logDebug("didn't find transition \(transition) from node \(meta.id)")
                 return []
             }
-            return await Array(ids.async.compactMap { await self.manager[$0] })
+            return await Array(ids.async.compactMap { try? await self.manager[$0] })
         }
     }
 
@@ -155,7 +155,7 @@ extension GraphManagerNode {
                     .flatMap { $0 })
             var result = Set<String>()
             for tagContainer in tagContainers {
-                if let tagContainer = await manager[tagContainer] {
+                if let tagContainer = try? await manager[tagContainer] {
                     for tag in tagContainer.meta.incoming.filter({ $0.value.contains(NID.tags) }).keys {
                         result.insert(tag)
                     }

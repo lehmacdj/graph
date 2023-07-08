@@ -71,7 +71,7 @@ class TransitionVM<N: Node>: ObservableObject {
 
         let destinationNode: N
         do {
-            destinationNode = try await manager[destinationNid].unwrapped("node \(destinationNid) doesn't exist")
+            destinationNode = try await manager[destinationNid]
         } catch {
             logError(error.localizedDescription)
             self.thumbnail = .failed(error)

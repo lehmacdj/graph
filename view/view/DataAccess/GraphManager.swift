@@ -54,24 +54,26 @@ actor GraphManager<N: Node>: ObservableObject {
     // this cache so that we don't end up retaining nodes longer than we need to
     private var internedNodes = NSMapTable<NSNumber, N>(keyOptions: .copyIn, valueOptions: .weakMemory)
 
-    subscript(id: NID) -> N? {
-        get async {
+    subscript(id: NID) -> N {
+        get async throws {
             if let node = internedNodes.object(forKey: NSNumber(value: id)) {
                 return node
-            } else if let node = await N(nid: id, root: self) {
-                internedNodes.setObject(node, forKey: NSNumber(value: id))
-                return node
-            } else {
-                return nil
             }
+
+            let node = try await N(nid: id, root: self)
+            internedNodes.setObject(node, forKey: NSNumber(value: id))
+            return node
         }
     }
 
     var origin: N {
         get async {
-            guard let origin = await self[NID.origin] else {
-                logError("origin node doesn't exist")
-                fatalError("origin node doesn't exist")
+            let origin: N
+            do {
+                origin = try await self[NID.origin]
+            } catch {
+                logError("origin node doesn't exist: \(error)")
+                fatalError("origin node doesn't exist: \(error)")
             }
             return origin
         }
@@ -79,7 +81,7 @@ actor GraphManager<N: Node>: ObservableObject {
 
     var tags: Tags<N>? {
         get async {
-            guard let tags = await self[NID.tags],
+            guard let tags = try? await self[NID.tags],
                   let tagIncoming = tags.meta.incoming["tags"],
                   tagIncoming.contains(NID.origin) else {
                 logWarn("no tags node found")
@@ -101,7 +103,7 @@ actor GraphManager<N: Node>: ObservableObject {
             logError("failed to create file for new node")
             fatalError("failed to create a file")
         }
-        guard let node = await self[newNodeId] else {
+        guard let node = try? await self[newNodeId] else {
             logError("couldn't access newly created node")
             fatalError("couldn't create a node")
         }
@@ -116,8 +118,8 @@ actor GraphManager<N: Node>: ObservableObject {
     }
 
     func addLink(from start: NID, to end: NID, via transition: String) async {
-        guard let start = await self[start],
-              let end = await self[end] else {
+        guard let start = try? await self[start],
+              let end = try? await self[end] else {
             return
         }
 
@@ -125,7 +127,7 @@ actor GraphManager<N: Node>: ObservableObject {
     }
 
     func addLink(from startNode: N, to end: NID, via transition: String) async {
-        guard let endNode = await self[end] else {
+        guard let endNode = try? await self[end] else {
             return
         }
 
@@ -153,8 +155,8 @@ actor GraphManager<N: Node>: ObservableObject {
     }
 
     func removeLink(from start: NID, to end: NID, via transition: String) async {
-        guard let start = await self[start],
-              let end = await self[end] else {
+        guard let start = try? await self[start],
+              let end = try? await self[end] else {
             return
         }
 
@@ -162,7 +164,7 @@ actor GraphManager<N: Node>: ObservableObject {
     }
 
     func removeLink(from startNode: N, to end: NID, via transition: String) async {
-        guard let endNode = await self[end] else {
+        guard let endNode = try? await self[end] else {
             return
         }
 
@@ -191,7 +193,7 @@ actor GraphManager<N: Node>: ObservableObject {
 
     func forceRemove(node: N) async {
         for parent in node.incoming {
-            if let parentNode = await self[parent.nid] {
+            if let parentNode = try? await self[parent.nid] {
                 var parentMeta = parentNode.meta
                 parentMeta.outgoing[parent.transition] = parentMeta.outgoing[parent.transition]?.removing(node.nid)
                 parentNode.meta = parentMeta
@@ -201,7 +203,7 @@ actor GraphManager<N: Node>: ObservableObject {
         }
 
         for child in node.outgoing {
-            if let childNode = await self[child.nid] {
+            if let childNode = try? await self[child.nid] {
                 var childMeta = childNode.meta
                 childMeta.incoming[child.transition] = childMeta.outgoing[child.transition]?.removing(node.nid)
                 childNode.meta = childMeta

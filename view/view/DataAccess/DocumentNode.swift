@@ -16,12 +16,28 @@ final class DocumentNode: UIDocument, GraphManagerNode {
     let nid: NID
     let manager: GraphManager<DocumentNode>
 
-    init?(nid: NID, root: GraphManager<DocumentNode>) async {
+    struct FailedToOpenDocument: LocalizedError, Codable {
+        let documentClosed: Bool
+        let inConflict: Bool
+        let savingError: Bool
+        let editingDisabled: Bool
+        let progressAvailable: Bool
+
+        init(documentState: UIDocument.State) {
+            documentClosed = documentState.contains(.closed)
+            inConflict = documentState.contains(.inConflict)
+            savingError = documentState.contains(.savingError)
+            editingDisabled = documentState.contains(.editingDisabled)
+            progressAvailable = documentState.contains(.progressAvailable)
+        }
+    }
+
+    init(nid: NID, root: GraphManager<DocumentNode>) async throws {
         self.nid = nid
         self.manager = root
         super.init(fileURL: manager.metaPath(for: nid))
         guard await super.open() else {
-            return nil
+            throw FailedToOpenDocument(documentState: documentState)
         }
     }
 
@@ -38,7 +54,7 @@ final class DocumentNode: UIDocument, GraphManagerNode {
                 logDebug("didn't find transition \(transition) from node \(meta.id)")
                 return []
             }
-            return await Array(ids.async.compactMap { [weak self] in await self?.manager[$0] })
+            return await Array(ids.async.compactMap { [weak self] in try? await self?.manager[$0] })
         }
     }
 
