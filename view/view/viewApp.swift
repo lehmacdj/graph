@@ -11,8 +11,7 @@ import SwiftUI
 struct viewApp: App {
     var body: some Scene {
         WindowGroup {
-            ZoomableView_Previews.previews
-//            FileSelectorView()
+            FileSelectorView()
         }
     }
 }

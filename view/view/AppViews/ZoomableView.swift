@@ -45,7 +45,7 @@ struct ZoomableView<Content: View>: View {
 
     @GestureState private var gestureAngle: Angle = .zero
     private var rotationGesture: some Gesture {
-        RotateGesture(minimumAngleDelta: .radians(2 * .pi * 0.01))
+        RotateGesture(minimumAngleDelta: .radians(2 * .pi * 0.05))
             .updating($gestureAngle) { value, gestureState, _ in
                 gestureState = value.rotation
             }
@@ -84,7 +84,7 @@ struct ZoomableView<Content: View>: View {
         GeometryReader { outerGeometry in
             ScrollView([.horizontal, .vertical]) {
                 Color.clear
-                    .frame(width: contentSize.width, height: contentSize.height)
+                    .frame(width: contentSize.width * scale, height: contentSize.height * scale)
                     .anchorPreference(key: ContentCenterPreference.self, value: .center) {
                         outerGeometry[$0]
                     }
@@ -97,8 +97,7 @@ struct ZoomableView<Content: View>: View {
                     }
                     .modifier(_RotationEffect(angle: gestureAngle).ignoredByLayout())
                     .rotationEffect(angle)
-                    .modifier(_ScaleEffect(scale: CGSize(square: gestureScale)).ignoredByLayout())
-                    .scaleEffect(scale)
+                    .modifier(_ScaleEffect(scale: CGSize(square: scale * gestureScale)).ignoredByLayout())
                     .offset(contentCenter - (outerGeometry.size / 2).vector)
             }
             .onPreferenceChange(ContentSizePreference.self) {

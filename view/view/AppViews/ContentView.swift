@@ -56,9 +56,10 @@ struct ImageView: View {
     @State var navigationVisible: Bool = false
 
     var body: some View {
-        ZoomableScrollView {
+        ZoomableView {
             Image(uiImage: uiImage)
         }
+        .border(Color.green)
         .overlay(navigationVisible ? ImageStats(uiImage: uiImage) : nil, alignment: .bottomTrailing)
         .onTapGesture { navigationVisible = !navigationVisible }
         .ignoresSafeArea(.all)
