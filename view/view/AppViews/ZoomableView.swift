@@ -7,6 +7,23 @@
 
 import SwiftUI
 
+enum ZoomState {
+    case fit
+    case fill
+    case actualSize
+
+    var next: ZoomState {
+        switch self {
+        case .fit:
+            return .fill
+        case .fill:
+            return .actualSize
+        case .actualSize:
+            return .fit
+        }
+    }
+}
+
 struct ZoomableView<Content: View>: View {
     private let content: Content
 
@@ -35,6 +52,32 @@ struct ZoomableView<Content: View>: View {
             .onEnded { value in angle += value.rotation }
     }
 
+    private func applyZoomState(zoomState: ZoomState, viewSize: CGSize) {
+        switch zoomState {
+        case .fit:
+            scale = min(viewSize.width / contentSize.width,  viewSize.height / contentSize.height)
+            angle = .zero
+        case .fill:
+            scale = max(viewSize.width / contentSize.width, viewSize.height / contentSize.height)
+            angle = .zero
+        case .actualSize:
+            scale = 1.0
+            angle = .zero
+        }
+    }
+
+
+    private func doubleTapGesture(_ viewSize: CGSize) -> some Gesture {
+        TapGesture(count: 2).onEnded {
+            applyZoomState(zoomState: nextZoomState, viewSize: viewSize)
+            nextZoomState = nextZoomState.next
+        }
+    }
+
+    /// Next zoom state to use for double tap
+    @State var nextZoomState: ZoomState = .fit
+
+    @State var didInitialZoom: Bool = false
     @State var contentSize: CGSize = .zero
 
     var body: some View {
@@ -46,8 +89,6 @@ struct ZoomableView<Content: View>: View {
                         outerGeometry[$0]
                     }
             }
-            .gesture(rotationGesture)
-            .simultaneousGesture(magnificationGesture)
             .backgroundPreferenceValue(ContentCenterPreference.self) { contentCenter in
                 content
                     .fixedSize()
@@ -60,9 +101,17 @@ struct ZoomableView<Content: View>: View {
                     .scaleEffect(scale)
                     .offset(contentCenter - (outerGeometry.size / 2).vector)
             }
-        }
-        .onPreferenceChange(ContentSizePreference.self) {
-            contentSize = $0
+            .onPreferenceChange(ContentSizePreference.self) {
+                contentSize = $0
+                if !didInitialZoom {
+                    applyZoomState(zoomState: nextZoomState, viewSize: outerGeometry.size)
+                    nextZoomState = nextZoomState.next
+                    didInitialZoom = true
+                }
+            }
+            .gesture(doubleTapGesture(outerGeometry.size))
+            .gesture(rotationGesture)
+            .simultaneousGesture(magnificationGesture)
         }
     }
 }
@@ -92,8 +141,8 @@ struct ZoomableView_Previews: PreviewProvider {
     static var previews: some View {
         ZoomableView {
             Rectangle().fill(Gradient(colors: [.red, .blue]))
-                .frame(idealWidth: 500, idealHeight: 500)
+                .frame(width: 100, height: 2000)
         }
-        .scrollIndicators(.hidden)
+        .ignoresSafeArea()
     }
 }
