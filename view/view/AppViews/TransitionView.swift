@@ -32,12 +32,12 @@ struct LabelEditor: View {
 }
 
 struct TransitionView: View {
-    @StateObject var vm: TransitionVM<DefaultNode>
+    @StateObject var vm: SemiSynchronousTransitionVM<DefaultNode>
 
     @State private var confirmingDelete: Bool = false
     @State private var editing: Bool = false
 
-    init(_ transitionVM: TransitionVM<DefaultNode>) {
+    init(_ transitionVM: SemiSynchronousTransitionVM<DefaultNode>) {
         _vm = StateObject(wrappedValue: transitionVM)
     }
 

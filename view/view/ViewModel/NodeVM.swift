@@ -7,128 +7,38 @@
 
 import Foundation
 
-@MainActor
-class NodeVM<N: Node>: ObservableObject {
-    let nid: NID
+protocol NodeState<N> {
+    associatedtype N: Node
 
-    @Published var state: Loading<State> = .idle
+    var data: Data? { get set }
 
-    struct State {
-        fileprivate let node: N
-        fileprivate let manager: GraphManager<N>
+    var favoriteLinks: [AnyTransitionVM<N>]? { get }
 
-        var data: Data?
+    var links: [AnyTransitionVM<N>] { get }
 
-        var favoriteLinks: [TransitionVM<N>]?
-        var links: [TransitionVM<N>]
-        var worseLinks: [TransitionVM<N>]?
-        var backlinks: [TransitionVM<N>]
+    var worseLinks: [AnyTransitionVM<N>]? { get }
 
-        var tags: Set<String>
-        var possibleTags: Set<String>
+    var backlinks: [AnyTransitionVM<N>] { get }
 
-        func set(tags: Set<String>) async {
-            await node.set(tags: tags)
-        }
+    var tags: Set<String> { get }
 
-        func forceRemove() async {
-            await manager.forceRemove(node: node)
-        }
-    }
+    var possibleTags: Set<String> { get }
 
-    private let manager: GraphManager<N>
+    func set(tags: Set<String>) async
 
-    init(for nid: NID, in graph: GraphManager<N>) {
-        self.nid = nid
-        self.manager = graph
-    }
+    func forceRemove() async
+}
 
-    func load() async {
-        guard case .idle = state else {
-            return
-        }
-        
-        state = .loading
-        let node: N
-        let favoritesNode: N?
-        let worseNode: N?
-        let data: DataDocument<N>?
-        let tags: Set<String>
-        let tagOptions: Set<String>
-        do {
-            node = try await manager[nid]
-            async let favoritesAsync = node.favorites
-            async let worseAsync = node.worse
-            async let dataAsync = node.data
-            async let tagsAsync = node.tags
-            async let possibleTagsAsync = manager.tags?.tagOptions
-            favoritesNode = await favoritesAsync
-            worseNode = await worseAsync
-            data = await dataAsync
-            tags = await tagsAsync
-            tagOptions = await possibleTagsAsync ?? Set()
-        } catch {
-            logError(error.localizedDescription)
-            state = .failed(error)
-            return
-        }
+@MainActor protocol NodeVM<N>: ObservableObject {
+    associatedtype N: Node
 
-        var favorites = [NodeTransition]()
-        var normal = [NodeTransition]()
-        var worse = [NodeTransition]()
+    var nid: NID { get }
 
-        let favoritesSet: Set<NID>? = favoritesNode.map { Set($0.outgoing.map { $0.nid }) }
-        let worseSet: Set<NID>? = worseNode.map { Set($0.outgoing.map { $0.nid }) }
+    var state: Loading<any NodeState<N>> { get set }
 
-        for child in node.outgoing {
-            if let favoritesSet, favoritesSet.contains(child.nid) {
-                favorites.append(child)
-            } else if let worseSet, worseSet.contains(child.nid) {
-                worse.append(child)
-            } else {
-                normal.append(child)
-            }
-        }
+    func load() async
 
-        func mkTransitionVMs(_ transitions: [NodeTransition], inDirection direction: Direction, isFavorite: Bool, isWorse: Bool) -> [TransitionVM<N>] {
-            transitions.sorted().map {
-                TransitionVM(parent: self, source: node, transition: $0, direction: direction, manager: self.manager, isFavorite: isFavorite, isWorse: isWorse)
-            }
-        }
+    func toggleFavorite(child _: NID) async
 
-        state = .loaded(State(
-            node: node,
-            manager: manager,
-            data: data?.data,
-            favoriteLinks: favoritesSet != nil ? mkTransitionVMs(favorites, inDirection: .forward, isFavorite: true, isWorse: false) : nil,
-            links: mkTransitionVMs(normal, inDirection: .forward, isFavorite: false, isWorse: false),
-            worseLinks: worseSet != nil ? mkTransitionVMs(worse, inDirection: .forward, isFavorite: false, isWorse: true) : nil,
-            backlinks: mkTransitionVMs(node.incoming, inDirection: .backward, isFavorite: false, isWorse: false),
-            tags: tags,
-            possibleTags: tagOptions
-        ))
-    }
-
-    func toggleFavorite(child _: NID) async {
-//        if case .loaded(let node) = node {
-//            await node.toggleFavorite(child: child)
-//            var isFavoriteNow = await node.isFavorite(child: child)
-//            if case .loaded(let state) = state {
-//                var state = state
-//                if isFavoriteNow {
-//                    state.favoriteLinks?.append(contentsOf: state.links.filter { $0.destinationNid == child})
-//                    state.links.
-//                } else {
-//                    state.links.append
-//                    state.favoriteLinks?.removeAll { $0.destinationNid == child
-//                    }
-//                }
-//            }
-//        } else {
-//            logInfo("skipping toggleFavorite because NodeVM not loaded")
-//        }
-    }
-
-    func toggleWorse(child _: NID) async {
-    }
+    func toggleWorse(child _: NID) async
 }

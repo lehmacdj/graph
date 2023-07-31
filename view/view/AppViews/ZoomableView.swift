@@ -34,6 +34,7 @@ struct ZoomableView<Content: View>: View {
     @State private var scale: CGFloat = 1.0
     @State private var angle: Angle = .zero
 
+    // handle scaleAnchor & rotateAnchor to make scaling and rotating better
     @GestureState private var gestureScale: CGFloat = 1.0
     var magnificationGesture: some Gesture {
         MagnifyGesture(minimumScaleDelta: 0.01)
@@ -43,13 +44,16 @@ struct ZoomableView<Content: View>: View {
             .onEnded { value in scale *= value.magnification }
     }
 
+    let minimumRotation = Angle.radians(2 * .pi * 0.03)
     @GestureState private var gestureAngle: Angle = .zero
     private var rotationGesture: some Gesture {
-        RotateGesture(minimumAngleDelta: .radians(2 * .pi * 0.05))
+        RotateGesture(minimumAngleDelta: minimumRotation)
             .updating($gestureAngle) { value, gestureState, _ in
                 gestureState = value.rotation
             }
-            .onEnded { value in angle += value.rotation }
+            .onEnded { value in
+                angle += value.rotation
+            }
     }
 
     private func applyZoomState(zoomState: ZoomState, viewSize: CGSize) {
@@ -108,9 +112,10 @@ struct ZoomableView<Content: View>: View {
                     didInitialZoom = true
                 }
             }
+            // it seems like the magnify gesture on it's own breaks when simultaneous with the rotation gesture; maybe worth trying to use SimultaneousGesture explicitly in order to resolve the conflict somehow
+            //            .gesture(rotationGesture)
+            .gesture(magnificationGesture)
             .gesture(doubleTapGesture(outerGeometry.size))
-            .gesture(rotationGesture)
-            .simultaneousGesture(magnificationGesture)
         }
     }
 }
