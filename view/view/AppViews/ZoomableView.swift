@@ -37,14 +37,14 @@ struct ZoomableView<Content: View>: View {
     // handle scaleAnchor & rotateAnchor to make scaling and rotating better
     @GestureState private var gestureScale: CGFloat = 1.0
     var magnificationGesture: some Gesture {
-        MagnifyGesture(minimumScaleDelta: 0.01)
+        MagnifyGesture(minimumScaleDelta: 0.01 * scale)
             .updating($gestureScale) { value, gestureState, _ in
                 gestureState = value.magnification
             }
             .onEnded { value in scale *= value.magnification }
     }
 
-    let minimumRotation = Angle.radians(2 * .pi * 0.03)
+    let minimumRotation = Angle.radians(2 * .pi * 0.01)
     @GestureState private var gestureAngle: Angle = .zero
     private var rotationGesture: some Gesture {
         RotateGesture(minimumAngleDelta: minimumRotation)
