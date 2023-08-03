@@ -56,7 +56,7 @@ struct FileSelectorView: View {
                     self.fileUrlBookmark = try? fileUrl?.bookmarkData()
                 }
             }
-            .onChange(of: presentingFileImporter) { _ in
+            .onChange(of: presentingFileImporter) {
                 initiateFileSelection()
             }
             .fileImporter(

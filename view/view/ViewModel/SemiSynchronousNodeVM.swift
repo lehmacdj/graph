@@ -7,10 +7,10 @@
 
 import Foundation
 
-class SemiSynchronousNodeVM<N: Node>: ObservableObject {
+class SemiSynchronousNodeVM<N: Node>: ObservableObject, NodeVM {
     let nid: NID
 
-    @Published var state: Loading<State> = .idle
+    @Published var state: Loading<any NodeState<N>> = .idle
 
     struct State: NodeState {
         fileprivate let node: N
@@ -18,10 +18,10 @@ class SemiSynchronousNodeVM<N: Node>: ObservableObject {
 
         var data: Data?
 
-        var favoriteLinks: [SemiSynchronousTransitionVM<N>]?
-        var links: [SemiSynchronousTransitionVM<N>]
-        var worseLinks: [SemiSynchronousTransitionVM<N>]?
-        var backlinks: [SemiSynchronousTransitionVM<N>]
+        var favoriteLinks: [AnyTransitionVM<N>]?
+        var links: [AnyTransitionVM<N>]
+        var worseLinks: [AnyTransitionVM<N>]?
+        var backlinks: [AnyTransitionVM<N>]
 
         var tags: Set<String>
         var possibleTags: Set<String>
@@ -44,8 +44,11 @@ class SemiSynchronousNodeVM<N: Node>: ObservableObject {
 
     func load() async {
         guard case .idle = state else {
+            logDebug("skipping initializing of state because already loading")
             return
         }
+
+        logDebug("starting to initialize state")
 
         state = .loading
         let node: N
@@ -72,12 +75,16 @@ class SemiSynchronousNodeVM<N: Node>: ObservableObject {
             return
         }
 
+        logDebug("done fetching data")
+
         var favorites = [NodeTransition]()
         var normal = [NodeTransition]()
         var worse = [NodeTransition]()
 
         let favoritesSet: Set<NID>? = favoritesNode.map { Set($0.outgoing.map { $0.nid }) }
         let worseSet: Set<NID>? = worseNode.map { Set($0.outgoing.map { $0.nid }) }
+
+        logDebug("creating children")
 
         for child in node.outgoing {
             if let favoritesSet, favoritesSet.contains(child.nid) {
@@ -89,16 +96,19 @@ class SemiSynchronousNodeVM<N: Node>: ObservableObject {
             }
         }
 
-        func mkTransitionVMs(_ transitions: [NodeTransition], inDirection direction: Direction, isFavorite: Bool, isWorse: Bool) -> [SemiSynchronousTransitionVM<N>] {
+        func mkTransitionVMs(_ transitions: [NodeTransition], inDirection direction: Direction, isFavorite: Bool, isWorse: Bool) -> [AnyTransitionVM<N>] {
             transitions.sorted().map {
                 SemiSynchronousTransitionVM(parent: self, source: node, transition: $0, direction: direction, manager: self.manager, isFavorite: isFavorite, isWorse: isWorse)
+                    .eraseToAnyTransitionVM()
             }
         }
+
+        logDebug("about to create state")
 
         state = .loaded(State(
             node: node,
             manager: manager,
-            data: await data?.data,
+            data: data?.data,
             favoriteLinks: favoritesSet != nil ? mkTransitionVMs(favorites, inDirection: .forward, isFavorite: true, isWorse: false) : nil,
             links: mkTransitionVMs(normal, inDirection: .forward, isFavorite: false, isWorse: false),
             worseLinks: worseSet != nil ? mkTransitionVMs(worse, inDirection: .forward, isFavorite: false, isWorse: true) : nil,
@@ -106,6 +116,8 @@ class SemiSynchronousNodeVM<N: Node>: ObservableObject {
             tags: tags,
             possibleTags: tagOptions
         ))
+
+        logDebug("about to return")
     }
 
     func toggleFavorite(child _: NID) async {

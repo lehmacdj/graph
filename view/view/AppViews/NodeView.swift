@@ -9,9 +9,9 @@ import SwiftUI
 import AsyncButton
 
 struct NodeView: View {
-    @StateObject var vm: SemiSynchronousNodeVM<DefaultNode>
+    @StateObject var vm: AnyNodeVM<DefaultNode>
 
-    init(of node: SemiSynchronousNodeVM<DefaultNode>) {
+    init(of node: AnyNodeVM<DefaultNode>) {
         _vm = StateObject(wrappedValue: node)
     }
 
@@ -20,7 +20,7 @@ struct NodeView: View {
     @State var showingForceDeleteNodeConfirmation: Bool = false
 
     @ViewBuilder
-    func links(_ state: SemiSynchronousNodeVM<DefaultNode>.State) -> some View {
+    func links(_ state: any NodeState<DefaultNode>) -> some View {
         List {
             if let favorites = state.favoriteLinks {
                 Section("Favorites") {
@@ -53,7 +53,7 @@ struct NodeView: View {
     }
 
     @ViewBuilder
-    func loadedContent(_ state: SemiSynchronousNodeVM<DefaultNode>.State) -> some View {
+    func loadedContent(_ state: any NodeState<DefaultNode>) -> some View {
         if let data = state.data, !showingLinks {
             if let uiImage = UIImage(data: data) {
                 ImageView(uiImage: uiImage)
@@ -147,7 +147,9 @@ struct NodeView: View {
     var body: some View {
         content
             .navigationTitle(Text("\(vm.nid)"))
-            .task { await vm.load() }
+            .task {
+                await vm.load()
+            }
     }
 }
 

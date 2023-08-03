@@ -8,23 +8,14 @@
 import Foundation
 import SwiftUI
 
-class SemiSynchronousTransitionVM<N: Node>: ObservableObject {
+class SemiSynchronousTransitionVM<N: Node>: ObservableObject, TransitionVM {
     let direction: Direction
     let destinationNid: NID
     @Published var transition: String
     @Published var thumbnail: Loading<ThumbnailValue> = .idle
     @Published var isFavorite: Bool
     @Published var isWorse: Bool
-    @Published var destination: Loading<SemiSynchronousNodeVM<N>> = .idle
-
-    enum ThumbnailValue {
-        case noThumbnail
-
-        /// File isn't on device so we won't attempt to generate a thumbnail
-        case cloudFile
-
-        case thumbnail(Loading<UIImage>)
-    }
+    @Published var destination: Loading<AnyNodeVM<N>> = .idle
 
     private let manager: GraphManager<N>
 
@@ -75,7 +66,7 @@ class SemiSynchronousTransitionVM<N: Node>: ObservableObject {
         }
 
         logInfo("successfully fetched destinationNode \(destinationNid)")
-        self.destination = .loaded(SemiSynchronousNodeVM(for: destinationNid, in: manager))
+        self.destination = await .loaded(SemiSynchronousNodeVM(for: destinationNid, in: manager).eraseToAnyNodeVM())
         self.destinationNode = destinationNode
 
         if destinationNode.dataURL == nil {

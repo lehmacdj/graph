@@ -5,6 +5,7 @@
 //  Created by Devin Lehmacher on 7/30/23.
 //
 
+import Combine
 import Foundation
 
 class AnyTransitionVM<N_: Node>: TransitionVM {
@@ -12,8 +13,12 @@ class AnyTransitionVM<N_: Node>: TransitionVM {
 
     init<VM: TransitionVM<N>>(erasing underlying: VM) {
         self.underlying = underlying
+        self.underlyingChangeSubscription = underlying.objectWillChange.sink { [weak self] _ in
+            self?.objectWillChange.send()
+        }
     }
 
+    private var underlyingChangeSubscription: AnyCancellable?
     private var underlying: any TransitionVM<N_>
 
     var direction: Direction { underlying.direction }
@@ -71,5 +76,11 @@ class AnyTransitionVM<N_: Node>: TransitionVM {
     
     func removeTransition() async {
         await underlying.removeTransition()
+    }
+}
+
+extension TransitionVM {
+    func eraseToAnyTransitionVM() -> AnyTransitionVM<N> {
+        AnyTransitionVM(erasing: self)
     }
 }

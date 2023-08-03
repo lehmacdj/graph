@@ -42,3 +42,10 @@ protocol NodeState<N> {
 
     func toggleWorse(child _: NID) async
 }
+
+extension NodeVM {
+    func eraseToAnyNodeVM() -> AnyNodeVM<N> {
+        logDebug("stuff happening")
+        return AnyNodeVM(erasing: self)
+    }
+}
