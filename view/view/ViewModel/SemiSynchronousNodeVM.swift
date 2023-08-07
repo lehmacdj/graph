@@ -33,6 +33,12 @@ class SemiSynchronousNodeVM<N: Node>: ObservableObject, NodeVM {
         func forceRemove() async {
             await manager.forceRemove(node: node)
         }
+
+        func toggleFavorite(child _: NID) async {
+        }
+
+        func toggleWorse(child _: NID) async {
+        }
     }
 
     private let manager: GraphManager<N>
@@ -105,7 +111,7 @@ class SemiSynchronousNodeVM<N: Node>: ObservableObject, NodeVM {
 
         logDebug("about to create state")
 
-        state = .loaded(State(
+        state = await .loaded(State(
             node: node,
             manager: manager,
             data: data?.data,
@@ -118,11 +124,5 @@ class SemiSynchronousNodeVM<N: Node>: ObservableObject, NodeVM {
         ))
 
         logDebug("about to return")
-    }
-
-    func toggleFavorite(child _: NID) async {
-    }
-
-    func toggleWorse(child _: NID) async {
     }
 }

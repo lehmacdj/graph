@@ -66,7 +66,7 @@ class SemiSynchronousTransitionVM<N: Node>: ObservableObject, TransitionVM {
         }
 
         logInfo("successfully fetched destinationNode \(destinationNid)")
-        self.destination = await .loaded(SemiSynchronousNodeVM(for: destinationNid, in: manager).eraseToAnyNodeVM())
+        self.destination = .loaded(SemiSynchronousNodeVM(for: destinationNid, in: manager).eraseToAnyNodeVM())
         self.destinationNode = destinationNode
 
         if destinationNode.dataURL == nil {
@@ -83,12 +83,18 @@ class SemiSynchronousTransitionVM<N: Node>: ObservableObject, TransitionVM {
     }
 
     func toggleFavorite() async {
-        await parent.toggleFavorite(child: destinationNid)
+        guard case .loaded(let state) = parent.state else {
+            return
+        }
+        await state.toggleFavorite(child: destinationNid)
         isFavorite.toggle()
     }
 
     func toggleWorse() async {
-        await parent.toggleWorse(child: destinationNid)
+        guard case .loaded(let state) = parent.state else {
+            return
+        }
+        await state.toggleWorse(child: destinationNid)
         isWorse.toggle()
     }
 

@@ -6,6 +6,7 @@
 //
 
 import Foundation
+import Observation
 
 protocol NodeState<N> {
     associatedtype N: Node
@@ -27,9 +28,13 @@ protocol NodeState<N> {
     func set(tags: Set<String>) async
 
     func forceRemove() async
+
+    func toggleFavorite(child _: NID) async
+
+    func toggleWorse(child _: NID) async
 }
 
-@MainActor protocol NodeVM<N>: ObservableObject {
+protocol NodeVM<N>: Observable, ObservableObject {
     associatedtype N: Node
 
     var nid: NID { get }
@@ -37,10 +42,6 @@ protocol NodeState<N> {
     var state: Loading<any NodeState<N>> { get set }
 
     func load() async
-
-    func toggleFavorite(child _: NID) async
-
-    func toggleWorse(child _: NID) async
 }
 
 extension NodeVM {

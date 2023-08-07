@@ -33,12 +33,4 @@ class AnyNodeVM<N_: Node>: NodeVM {
     func load() async {
         await underlying.load()
     }
-    
-    func toggleFavorite(child: NID) async {
-        await underlying.toggleFavorite(child: child)
-    }
-    
-    func toggleWorse(child: NID) async {
-        await underlying.toggleWorse(child: child)
-    }
 }
