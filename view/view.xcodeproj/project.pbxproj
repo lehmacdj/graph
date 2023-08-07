@@ -28,7 +28,7 @@
 		031367EC2713FCF400E69F83 /* Preview Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 031367EB2713FCF400E69F83 /* Preview Assets.xcassets */; };
 		031367F72713FCF400E69F83 /* viewTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 031367F62713FCF400E69F83 /* viewTests.swift */; };
 		031368022713FCF400E69F83 /* viewUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 031368012713FCF400E69F83 /* viewUITests.swift */; };
-		031368102713FCFF00E69F83 /* GraphModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0313680F2713FCFF00E69F83 /* GraphModels.swift */; };
+		031368102713FCFF00E69F83 /* GraphSerialization.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0313680F2713FCFF00E69F83 /* GraphSerialization.swift */; };
 		0313681227140A0900E69F83 /* Utils.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0313681127140A0900E69F83 /* Utils.swift */; };
 		03136814271415FA00E69F83 /* Extensions.swift in Sources */ = {isa = PBXBuildFile; fileRef = 03136813271415FA00E69F83 /* Extensions.swift */; };
 		0313681627149ECE00E69F83 /* ZoomableScrollView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0313681527149ECE00E69F83 /* ZoomableScrollView.swift */; };
@@ -46,6 +46,7 @@
 		033449D72999634000BBCCC4 /* AsyncAlgorithms in Frameworks */ = {isa = PBXBuildFile; productRef = 033449D62999634000BBCCC4 /* AsyncAlgorithms */; };
 		0339C23E29010DA000345CB1 /* TransitionView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0339C23D29010DA000345CB1 /* TransitionView.swift */; };
 		035450022969D74100B5AAF6 /* FileSelectorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 035450012969D74100B5AAF6 /* FileSelectorView.swift */; };
+		03589E892A8096EC004AD75B /* Tags.swift in Sources */ = {isa = PBXBuildFile; fileRef = 03589E882A8096EC004AD75B /* Tags.swift */; };
 		03596F142724A60F00766388 /* PreviewView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 03596F132724A60F00766388 /* PreviewView.swift */; };
 		0375E7C82782C06000FB6548 /* SafariView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0375E7C72782C06000FB6548 /* SafariView.swift */; };
 		038C93012A3954BF0059C8D6 /* UbiquitousFile.swift in Sources */ = {isa = PBXBuildFile; fileRef = 038C93002A3954BF0059C8D6 /* UbiquitousFile.swift */; };
@@ -98,7 +99,7 @@
 		031367FD2713FCF400E69F83 /* viewUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = viewUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		031368012713FCF400E69F83 /* viewUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = viewUITests.swift; sourceTree = "<group>"; };
 		031368032713FCF400E69F83 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
-		0313680F2713FCFF00E69F83 /* GraphModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GraphModels.swift; sourceTree = "<group>"; };
+		0313680F2713FCFF00E69F83 /* GraphSerialization.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GraphSerialization.swift; sourceTree = "<group>"; };
 		0313681127140A0900E69F83 /* Utils.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Utils.swift; sourceTree = "<group>"; };
 		03136813271415FA00E69F83 /* Extensions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Extensions.swift; sourceTree = "<group>"; };
 		0313681527149ECE00E69F83 /* ZoomableScrollView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ZoomableScrollView.swift; sourceTree = "<group>"; };
@@ -108,6 +109,7 @@
 		033449D32999602B00BBCCC4 /* Semaphor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Semaphor.swift; sourceTree = "<group>"; };
 		0339C23D29010DA000345CB1 /* TransitionView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TransitionView.swift; sourceTree = "<group>"; };
 		035450012969D74100B5AAF6 /* FileSelectorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FileSelectorView.swift; sourceTree = "<group>"; };
+		03589E882A8096EC004AD75B /* Tags.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Tags.swift; sourceTree = "<group>"; };
 		03596F132724A60F00766388 /* PreviewView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PreviewView.swift; sourceTree = "<group>"; };
 		0368D1E829976B4C0026D9EE /* view.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = view.entitlements; sourceTree = "<group>"; };
 		0375E7C72782C06000FB6548 /* SafariView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SafariView.swift; sourceTree = "<group>"; };
@@ -228,11 +230,12 @@
 		032959ED29CA996000FDE138 /* DataAccess */ = {
 			isa = PBXGroup;
 			children = (
-				0313680F2713FCFF00E69F83 /* GraphModels.swift */,
+				0313680F2713FCFF00E69F83 /* GraphSerialization.swift */,
 				032959F129CAC31F00FDE138 /* GraphManager.swift */,
 				03A934BF2A3EBD930011DB8D /* Node.swift */,
 				03A934C12A3EC10F0011DB8D /* DocumentNode.swift */,
 				03A934C32A3F8AC20011DB8D /* DataDocument.swift */,
+				03589E882A8096EC004AD75B /* Tags.swift */,
 			);
 			path = DataAccess;
 			sourceTree = "<group>";
@@ -474,6 +477,7 @@
 				038C93012A3954BF0059C8D6 /* UbiquitousFile.swift in Sources */,
 				03A934C22A3EC10F0011DB8D /* DocumentNode.swift in Sources */,
 				0313681627149ECE00E69F83 /* ZoomableScrollView.swift in Sources */,
+				03589E892A8096EC004AD75B /* Tags.swift in Sources */,
 				033449D42999602B00BBCCC4 /* Semaphor.swift in Sources */,
 				03A934C42A3F8AC20011DB8D /* DataDocument.swift in Sources */,
 				03DD60D829D15891005EC4A5 /* NodeVM.swift in Sources */,
@@ -481,7 +485,7 @@
 				031367E32713FCF200E69F83 /* viewApp.swift in Sources */,
 				0375E7C82782C06000FB6548 /* SafariView.swift in Sources */,
 				038C93032A397ECF0059C8D6 /* Errors.swift in Sources */,
-				031368102713FCFF00E69F83 /* GraphModels.swift in Sources */,
+				031368102713FCFF00E69F83 /* GraphSerialization.swift in Sources */,
 				031367E72713FCF200E69F83 /* ContentView.swift in Sources */,
 				03DD60D629D11E04005EC4A5 /* ErrorIndicator.swift in Sources */,
 				03EB93042A62158E0014BBF8 /* ZoomableView.swift in Sources */,
