@@ -13,9 +13,12 @@ class AnyTransitionVM<N_: Node>: TransitionVM {
 
     init<VM: TransitionVM<N>>(erasing underlying: VM) {
         self.underlying = underlying
-        self.underlyingChangeSubscription = underlying.objectWillChange.sink { [weak self] _ in
-            self?.objectWillChange.send()
-        }
+        self.underlyingChangeSubscription = underlying
+            .objectWillChange
+            .receive(on: RunLoop.main)
+            .sink { [weak self] _ in
+                self?.objectWillChange.send()
+            }
     }
 
     private var underlyingChangeSubscription: AnyCancellable?

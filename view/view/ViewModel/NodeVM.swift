@@ -34,7 +34,7 @@ protocol NodeState<N> {
     func toggleWorse(child _: NID) async
 }
 
-protocol NodeVM<N>: Observable, ObservableObject {
+@MainActor protocol NodeVM<N>: Observable, ObservableObject {
     associatedtype N: Node
 
     var nid: NID { get }

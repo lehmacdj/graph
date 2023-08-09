@@ -1,14 +1,14 @@
 //
-//  SemiSynchronousTransitionVM.swift
+//  SubscribingTransitionVM.swift
 //  view
 //
-//  Created by Devin Lehmacher on 7/21/23.
+//  Created by Devin Lehmacher on 8/7/23.
 //
 
 import Foundation
 import SwiftUI
 
-class SemiSynchronousTransitionVM<N: Node>: ObservableObject, TransitionVM {
+class SubscribingTransitionVM<N: Node>: ObservableObject, TransitionVM {
     let direction: Direction
     let destinationNid: NID
     @Published var transition: String
@@ -20,7 +20,7 @@ class SemiSynchronousTransitionVM<N: Node>: ObservableObject, TransitionVM {
     private let manager: GraphManager<N>
 
     /// link to parent node, should always be retained because the transition is only ever presented as a part of a node
-    private weak var parent: SemiSynchronousNodeVM<N>!
+    private weak var parent: SubscribingNodeVM<N>!
 
     private let source: N
 
@@ -28,7 +28,7 @@ class SemiSynchronousTransitionVM<N: Node>: ObservableObject, TransitionVM {
     private var destinationNode: N?
 
     init(
-        parent: SemiSynchronousNodeVM<N>,
+        parent: SubscribingNodeVM<N>,
         source: N,
         transition: NodeTransition,
         direction: Direction,
@@ -66,7 +66,7 @@ class SemiSynchronousTransitionVM<N: Node>: ObservableObject, TransitionVM {
         }
 
         logInfo("successfully fetched destinationNode \(destinationNid)")
-        self.destination = await .loaded(SemiSynchronousNodeVM(for: destinationNid, in: manager).eraseToAnyNodeVM())
+        self.destination = await .loaded(SubscribingNodeVM(for: destinationNid, in: manager).eraseToAnyNodeVM())
         self.destinationNode = destinationNode
 
         if destinationNode.dataURL == nil {
@@ -122,7 +122,7 @@ class SemiSynchronousTransitionVM<N: Node>: ObservableObject, TransitionVM {
     }
 }
 
-extension SemiSynchronousTransitionVM: Identifiable {
+extension SubscribingTransitionVM: Identifiable {
     var id: some Hashable {
         "\(transition)\(destinationNid)"
     }

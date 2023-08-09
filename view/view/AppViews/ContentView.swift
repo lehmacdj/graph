@@ -25,7 +25,7 @@ struct ContentView: View {
                 case .loaded(nil):
                     Text("Couldn't read directory; invalid graph").foregroundColor(.red)
                 case .loaded(.some((let graph, let origin))):
-                    let nodeVM = SemiSynchronousNodeVM(for: origin.nid, in: graph).eraseToAnyNodeVM()
+                    let nodeVM = SubscribingNodeVM(for: origin.nid, in: graph).eraseToAnyNodeVM()
                     NodeView(of: nodeVM)
                 case .failed(let error):
                     ErrorIndicator(for: error)

@@ -111,7 +111,7 @@ class SemiSynchronousNodeVM<N: Node>: ObservableObject, NodeVM {
 
         logDebug("about to create state")
 
-        state = await .loaded(State(
+        state = .loaded(State(
             node: node,
             manager: manager,
             data: data?.data,
