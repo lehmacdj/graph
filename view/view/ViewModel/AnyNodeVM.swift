@@ -30,3 +30,9 @@ import Foundation
         await underlying.load()
     }
 }
+
+extension NodeVM {
+    func eraseToAnyNodeVM() -> AnyNodeVM<N> {
+        return AnyNodeVM(erasing: self)
+    }
+}

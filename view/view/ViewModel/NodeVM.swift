@@ -43,10 +43,3 @@ protocol NodeVM<N>: Observable {
 
     func load() async
 }
-
-extension NodeVM {
-    func eraseToAnyNodeVM() -> AnyNodeVM<N> {
-        logDebug("stuff happening")
-        return AnyNodeVM(erasing: self)
-    }
-}

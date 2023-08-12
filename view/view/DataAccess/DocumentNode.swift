@@ -65,22 +65,36 @@ final class DocumentNode: UIDocument, GraphManagerNode {
             // have it's own data again in the future
             return nil
         }
+
         let dataURL = manager.dataPath(for: nid)
-        guard let attributes = try? dataURL.resourceValues(forKeys: [.isUbiquitousItemKey]),
-              let isUbiquitousItem = attributes.isUbiquitousItem else {
-            logWarn("failed to determine if item exists in iCloud")
+        guard !FileManager().fileExists(atPath: dataURL.absoluteString) else {
+            return dataURL
+        }
+
+        do {
+            let attributes = try dataURL.resourceValues(forKeys: [.isUbiquitousItemKey])
+            if let isUbiquitousItem = attributes.isUbiquitousItem, isUbiquitousItem {
+                return dataURL
+            } else {
+                // attributes.isUbiquitousItem is nil when the file does not exist
+                return nil
+            }
+        } catch {
+            logWarn("failed to determine if item exists in iCloud: \(error)")
             return nil
         }
-        return isUbiquitousItem ? dataURL : nil
     }
 
     var dataRequiresDownload: Bool {
-        guard let attributes = try? dataURL?.resourceValues(forKeys: [.ubiquitousItemDownloadingStatusKey]),
-              let downloadingStatus = attributes.ubiquitousItemDownloadingStatus else {
-            logWarn("failed to determine if file needs to be downloaded")
+        do {
+            let dataURL = try dataURL.unwrapped("need data URL to know if data exists")
+            let attributes = try dataURL.resourceValues(forKeys: [.ubiquitousItemDownloadingStatusKey])
+            let downloadingStatus = try attributes.ubiquitousItemDownloadingStatus.unwrapped("we requested .ubiquitousItemDownloadingStatusKey")
+            return downloadingStatus != .current
+        } catch {
+            logWarn("failed to determine if file needs to be downloaded: \(error)")
             return false
         }
-        return downloadingStatus != .current
     }
 
     var data: DataDocument<DocumentNode>? {

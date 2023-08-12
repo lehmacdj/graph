@@ -54,11 +54,11 @@ import Combine
 
     func load() async {
         guard case .idle = state else {
-            logDebug("skipping initializing of state because already loading")
+            logInfo("skipping initializing of state because already loading")
             return
         }
 
-        logDebug("starting to initialize state")
+        logInfo("starting to initialize state")
 
         state = .loading
         let node: N
@@ -70,7 +70,7 @@ import Combine
             return
         }
 
-        logDebug("fetched initial node state")
+        logInfo("fetched initial node state")
 
         let semaphore = Semaphor(initialCount: 0)
         let task = Task.detached { [weak self, weak semaphore] in
@@ -89,7 +89,7 @@ import Combine
                 let tags = await tagsAsync
                 let tagOptions = await possibleTagsAsync ?? Set()
 
-                logDebug("done fetching data from node")
+                logInfo("done fetching data from node")
 
                 var favorites = [NodeTransition]()
                 var normal = [NodeTransition]()
@@ -98,7 +98,7 @@ import Combine
                 let favoritesSet: Set<NID>? = favoritesNode.map { Set($0.outgoing.map { $0.nid }) }
                 let worseSet: Set<NID>? = worseNode.map { Set($0.outgoing.map { $0.nid }) }
 
-                logDebug("creating children")
+                logInfo("creating children")
 
                 for child in node.outgoing {
                     if let favoritesSet, favoritesSet.contains(child.nid) {
@@ -117,7 +117,7 @@ import Combine
                     }
                 }
 
-                logDebug("about to create state")
+                logInfo("about to create state")
 
                 let state: Loading<any NodeState<N>> = await .loaded(State(
                     node: node,
@@ -132,10 +132,10 @@ import Combine
                 ))
                 Task { @MainActor in
                     self.state = state
-                    logDebug("updated state")
+                    logInfo("updated state")
                 }
 
-                logDebug("finished fetching data")
+                logInfo("finished fetching data")
 
                 if self.task == nil {
                     await semaphore?.signal()

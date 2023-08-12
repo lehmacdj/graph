@@ -65,8 +65,8 @@ import SwiftUI
             return
         }
 
-        logInfo("successfully fetched destinationNode \(destinationNid)")
-        self.destination = await .loaded(SubscribingNodeVM(for: destinationNid, in: manager).eraseToAnyNodeVM())
+        logDebug("successfully fetched destinationNode \(destinationNid)")
+        self.destination = .loaded(SubscribingNodeVM(for: destinationNid, in: manager).eraseToAnyNodeVM())
         self.destinationNode = destinationNode
 
         if destinationNode.dataURL == nil {
@@ -83,7 +83,7 @@ import SwiftUI
     }
 
     func toggleFavorite() async {
-        guard case .loaded(let state) = await parent.state else {
+        guard case .loaded(let state) = parent.state else {
             return
         }
         await state.toggleFavorite(child: destinationNid)
@@ -91,7 +91,7 @@ import SwiftUI
     }
 
     func toggleWorse() async {
-        guard case .loaded(let state) = await parent.state else {
+        guard case .loaded(let state) = parent.state else {
             return
         }
         await state.toggleWorse(child: destinationNid)
@@ -100,6 +100,7 @@ import SwiftUI
 
     func fetchThumbnail() async {
         do {
+            logDebug("starting to fetch thumbnail")
             let destinationNode = try destinationNode.unwrapped("destinationNode doesn't exist")
             let dataDocument = try await destinationNode.data.unwrapped("data's document initializer returned nil")
             if let image = UIImage(data: await dataDocument.data) {
@@ -107,7 +108,9 @@ import SwiftUI
             } else {
                 self.thumbnail = .loaded(.noThumbnail)
             }
+            logDebug("successfully loaded thumbnail")
         } catch {
+            logError("failed to load thumbnail: \(error)")
             self.thumbnail = .loaded(.thumbnail(.failed(error)))
         }
     }
