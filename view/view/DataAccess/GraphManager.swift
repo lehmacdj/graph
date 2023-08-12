@@ -9,7 +9,7 @@ import Foundation
 
 /// Represents the  represents the base directory for a graph.
 /// Offers a flyweight mechanism for retrieving Node model objects that represent nodes in the graph.
-actor GraphManager<N: Node>: ObservableObject {
+actor GraphManager<N: Node> {
     let basePath: URL
 
     var nextNodeId: NID

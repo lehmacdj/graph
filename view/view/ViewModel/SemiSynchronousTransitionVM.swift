@@ -8,7 +8,7 @@
 import Foundation
 import SwiftUI
 
-class SemiSynchronousTransitionVM<N: Node>: ObservableObject, TransitionVM {
+class SemiSynchronousTransitionVM<N: Node>: TransitionVM {
     let direction: Direction
     let destinationNid: NID
     @Published var transition: String

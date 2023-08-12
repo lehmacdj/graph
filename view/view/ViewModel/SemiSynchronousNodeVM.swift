@@ -7,7 +7,7 @@
 
 import Foundation
 
-class SemiSynchronousNodeVM<N: Node>: ObservableObject, NodeVM {
+class SemiSynchronousNodeVM<N: Node>: NodeVM {
     let nid: NID
 
     @Published var state: Loading<any NodeState<N>> = .idle
@@ -111,7 +111,7 @@ class SemiSynchronousNodeVM<N: Node>: ObservableObject, NodeVM {
 
         logDebug("about to create state")
 
-        state = .loaded(State(
+        state = await .loaded(State(
             node: node,
             manager: manager,
             data: data?.data,

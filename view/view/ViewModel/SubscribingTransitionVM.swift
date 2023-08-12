@@ -8,14 +8,14 @@
 import Foundation
 import SwiftUI
 
-class SubscribingTransitionVM<N: Node>: ObservableObject, TransitionVM {
+@Observable class SubscribingTransitionVM<N: Node>: TransitionVM {
     let direction: Direction
     let destinationNid: NID
-    @Published var transition: String
-    @Published var thumbnail: Loading<ThumbnailValue> = .idle
-    @Published var isFavorite: Bool
-    @Published var isWorse: Bool
-    @Published var destination: Loading<AnyNodeVM<N>> = .idle
+    var transition: String
+    var thumbnail: Loading<ThumbnailValue> = .idle
+    var isFavorite: Bool
+    var isWorse: Bool
+    var destination: Loading<AnyNodeVM<N>> = .idle
 
     private let manager: GraphManager<N>
 

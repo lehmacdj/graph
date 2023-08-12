@@ -23,7 +23,7 @@ enum ThumbnailValue {
     case thumbnail(Loading<UIImage>)
 }
 
-protocol TransitionVM<N>: ObservableObject, Identifiable {
+protocol TransitionVM<N>: Observable, Identifiable {
     associatedtype N: Node
 
     var direction: Direction { get }

@@ -8,17 +8,13 @@
 import Combine
 import Foundation
 
-class AnyNodeVM<N_: Node>: NodeVM {
+@Observable class AnyNodeVM<N_: Node>: NodeVM {
     typealias N = N_
 
     init<VM: NodeVM<N>>(erasing underlying: VM) {
         self.underlying = underlying
-        self.underlyingChangeSubscription = underlying.objectWillChange.sink { [weak self] _ in
-            self?.objectWillChange.send()
-        }
     }
 
-    private var underlyingChangeSubscription: AnyCancellable?
     private var underlying: any NodeVM<N_>
 
     var state: Loading<any NodeState<N_>> {

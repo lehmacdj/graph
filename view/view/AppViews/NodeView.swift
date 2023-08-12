@@ -9,10 +9,10 @@ import SwiftUI
 import AsyncButton
 
 struct NodeView: View {
-    @StateObject var vm: AnyNodeVM<DefaultNode>
+    @State var vm: AnyNodeVM<DefaultNode>
 
     init(of node: AnyNodeVM<DefaultNode>) {
-        _vm = StateObject(wrappedValue: node)
+        _vm = State(wrappedValue: node)
     }
 
     @State var showingTags: Bool = false

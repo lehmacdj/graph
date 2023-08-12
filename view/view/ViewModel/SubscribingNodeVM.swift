@@ -9,10 +9,10 @@ import Foundation
 import Observation
 import Combine
 
-@MainActor class SubscribingNodeVM<N: Node>: ObservableObject, NodeVM {
+@Observable class SubscribingNodeVM<N: Node>: NodeVM {
     let nid: NID
 
-    @Published var state: Loading<any NodeState<N>> = .idle
+    var state: Loading<any NodeState<N>> = .idle
 
     struct State: NodeState {
         fileprivate let node: N
@@ -137,7 +137,7 @@ import Combine
 
                 logDebug("finished fetching data")
 
-                if await self.task == nil {
+                if self.task == nil {
                     await semaphore?.signal()
                 }
             }

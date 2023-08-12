@@ -8,20 +8,13 @@
 import Combine
 import Foundation
 
-class AnyTransitionVM<N_: Node>: TransitionVM {
+@Observable class AnyTransitionVM<N_: Node>: TransitionVM {
     typealias N = N_
 
     init<VM: TransitionVM<N>>(erasing underlying: VM) {
         self.underlying = underlying
-        self.underlyingChangeSubscription = underlying
-            .objectWillChange
-            .receive(on: RunLoop.main)
-            .sink { [weak self] _ in
-                self?.objectWillChange.send()
-            }
     }
 
-    private var underlyingChangeSubscription: AnyCancellable?
     private var underlying: any TransitionVM<N_>
 
     var direction: Direction { underlying.direction }
