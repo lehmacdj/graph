@@ -35,21 +35,29 @@ struct ZoomableView<Content: View>: View {
     @State private var angle: Angle = .zero
 
     // handle scaleAnchor & rotateAnchor to make scaling and rotating better
-    @GestureState private var gestureScale: CGFloat = 1.0
+    struct ScaleInfo {
+        let scale: CGFloat
+        let anchor: UnitPoint
+    }
+    @GestureState private var currentScaleInfo: ScaleInfo?
     var magnificationGesture: some Gesture {
         MagnifyGesture(minimumScaleDelta: 0.01 * scale)
-            .updating($gestureScale) { value, gestureState, _ in
-                gestureState = value.magnification
+            .updating($currentScaleInfo) { value, gestureState, _ in
+                gestureState = ScaleInfo(scale: value.magnification, anchor: value.startAnchor)
             }
             .onEnded { value in scale *= value.magnification }
     }
 
-    let minimumRotation = Angle.radians(2 * .pi * 0.01)
-    @GestureState private var gestureAngle: Angle = .zero
+    let minimumRotation = Angle.radians(2 * .pi * 0.02)
+    struct RotationInfo {
+        let angle: Angle
+        let anchor: UnitPoint
+    }
+    @GestureState private var currentRotationInfo: RotationInfo?
     private var rotationGesture: some Gesture {
         RotateGesture(minimumAngleDelta: minimumRotation)
-            .updating($gestureAngle) { value, gestureState, _ in
-                gestureState = value.rotation
+            .updating($currentRotationInfo) { value, gestureState, _ in
+                gestureState = RotationInfo(angle: value.rotation, anchor: value.startAnchor)
             }
             .onEnded { value in
                 angle += value.rotation
@@ -99,9 +107,18 @@ struct ZoomableView<Content: View>: View {
                     .anchorPreference(key: ContentSizePreference.self, value: .bounds) {
                         outerGeometry[$0].size
                     }
-                    .modifier(_RotationEffect(angle: gestureAngle).ignoredByLayout())
+                    .modifyIfLet(currentRotationInfo) { rotationInfo in
+                        _RotationEffect(angle: rotationInfo.angle, anchor: rotationInfo.anchor).ignoredByLayout()
+                    }
                     .rotationEffect(angle)
-                    .modifier(_ScaleEffect(scale: CGSize(square: scale * gestureScale)).ignoredByLayout())
+                    .modifier(_ScaleEffect(scale: CGSize(square: scale)).ignoredByLayout())
+                    .modifyIfLet(currentScaleInfo) { scaleInfo in
+                        _ScaleEffect(
+                            scale: CGSize(square: scaleInfo.scale),
+                            anchor: scaleInfo.anchor
+                        )
+                        .ignoredByLayout()
+                    }
                     .offset(contentCenter - (outerGeometry.size / 2).vector)
             }
             .onPreferenceChange(ContentSizePreference.self) {
@@ -113,8 +130,8 @@ struct ZoomableView<Content: View>: View {
                 }
             }
             // it seems like the magnify gesture on it's own breaks when simultaneous with the rotation gesture; maybe worth trying to use SimultaneousGesture explicitly in order to resolve the conflict somehow
-            //            .gesture(rotationGesture)
-            .gesture(magnificationGesture)
+            .gesture(rotationGesture)
+            .simultaneousGesture(magnificationGesture)
             .gesture(doubleTapGesture(outerGeometry.size))
         }
     }
@@ -145,7 +162,7 @@ struct ZoomableView_Previews: PreviewProvider {
     static var previews: some View {
         ZoomableView {
             Rectangle().fill(Gradient(colors: [.red, .blue]))
-                .frame(width: 100, height: 2000)
+                .frame(width: 100, height: 500)
         }
         .ignoresSafeArea()
     }

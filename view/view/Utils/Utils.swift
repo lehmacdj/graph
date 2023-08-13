@@ -9,6 +9,7 @@
 // periphery:ignore:all
 
 import Foundation
+import SwiftUI
 
 /// Log level to use when logging traces via log function
 let logLevel = LogLevel.verbose
@@ -60,4 +61,15 @@ func mutate<T>(_ value: T, mutator: (inout T) -> ()) -> T {
     var value = value
     mutator(&value)
     return value
+}
+
+extension View {
+    @ViewBuilder
+    func modifyIfLet<T>(_ value: T?, modifier: (T) -> some ViewModifier) -> some View {
+        if let value {
+            self.modifier(modifier(value))
+        } else {
+            self
+        }
+    }
 }
