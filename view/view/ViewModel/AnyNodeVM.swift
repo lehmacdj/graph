@@ -19,7 +19,6 @@ import Foundation
 
     var state: Loading<any NodeState<N_>> {
         get { underlying.state }
-        set { underlying.state = newValue }
     }
 
     var nid: NID {
@@ -28,6 +27,10 @@ import Foundation
 
     func load() async {
         await underlying.load()
+    }
+
+    func reload() async {
+        await underlying.reload()
     }
 }
 

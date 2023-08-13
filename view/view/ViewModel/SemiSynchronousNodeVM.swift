@@ -125,4 +125,6 @@ class SemiSynchronousNodeVM<N: Node>: NodeVM {
 
         logDebug("about to return")
     }
+
+    func reload() async {}
 }

@@ -66,7 +66,7 @@ struct NodeView: View {
                 Text("Node has data with unknown kind")
             }
         } else {
-            links(state)
+            links(state).refreshable { await vm.reload() }
         }
     }
 

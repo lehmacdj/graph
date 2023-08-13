@@ -39,7 +39,8 @@ protocol NodeVM<N>: Observable {
 
     var nid: NID { get }
 
-    var state: Loading<any NodeState<N>> { get set }
+    var state: Loading<any NodeState<N>> { get }
 
     func load() async
+    func reload() async
 }

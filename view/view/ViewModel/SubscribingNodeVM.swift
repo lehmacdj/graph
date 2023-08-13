@@ -61,6 +61,10 @@ import Combine
         logInfo("starting to initialize state")
 
         state = .loading
+        await forceLoad()
+    }
+
+    private func forceLoad() async {
         let node: N
         do {
             node = try await manager[nid]
@@ -73,7 +77,7 @@ import Combine
         logInfo("fetched initial node state")
 
         let semaphore = Semaphor(initialCount: 0)
-        let task = Task.detached { [weak self, weak semaphore] in
+        let task = Task { [weak self, weak semaphore] in
             guard let self else { return }
 
             for await _ in node.metaPublisher.values {
@@ -144,5 +148,10 @@ import Combine
         }
         await semaphore.wait()
         self.task = task
+    }
+
+    func reload() async {
+        logInfo("force reloading \(nid)")
+        await forceLoad()
     }
 }
