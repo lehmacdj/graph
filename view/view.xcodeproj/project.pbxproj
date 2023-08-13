@@ -52,13 +52,13 @@
 		0375E7C82782C06000FB6548 /* SafariView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0375E7C72782C06000FB6548 /* SafariView.swift */; };
 		038C93012A3954BF0059C8D6 /* UbiquitousFile.swift in Sources */ = {isa = PBXBuildFile; fileRef = 038C93002A3954BF0059C8D6 /* UbiquitousFile.swift */; };
 		038C93032A397ECF0059C8D6 /* Errors.swift in Sources */ = {isa = PBXBuildFile; fileRef = 038C93022A397ECF0059C8D6 /* Errors.swift */; };
+		03A32F942A89684F00C6A30B /* AsyncButton in Frameworks */ = {isa = PBXBuildFile; productRef = 03A32F932A89684F00C6A30B /* AsyncButton */; };
 		03A934C02A3EBD930011DB8D /* Node.swift in Sources */ = {isa = PBXBuildFile; fileRef = 03A934BF2A3EBD930011DB8D /* Node.swift */; };
 		03A934C22A3EC10F0011DB8D /* DocumentNode.swift in Sources */ = {isa = PBXBuildFile; fileRef = 03A934C12A3EC10F0011DB8D /* DocumentNode.swift */; };
 		03A934C42A3F8AC20011DB8D /* DataDocument.swift in Sources */ = {isa = PBXBuildFile; fileRef = 03A934C32A3F8AC20011DB8D /* DataDocument.swift */; };
 		03C9CB3F2A7765BF007F29E7 /* AnyNodeVM.swift in Sources */ = {isa = PBXBuildFile; fileRef = 03C9CB3E2A7765BF007F29E7 /* AnyNodeVM.swift */; };
 		03C9CB412A7765C9007F29E7 /* AnyTransitionVM.swift in Sources */ = {isa = PBXBuildFile; fileRef = 03C9CB402A7765C9007F29E7 /* AnyTransitionVM.swift */; };
 		03D1D8DE28FB559B00E76F27 /* NodeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 03D1D8DD28FB559B00E76F27 /* NodeView.swift */; };
-		03DD60CF29D0C4C0005EC4A5 /* AsyncButton in Frameworks */ = {isa = PBXBuildFile; productRef = 03DD60CE29D0C4C0005EC4A5 /* AsyncButton */; };
 		03DD60D129D0C809005EC4A5 /* AsyncUI.swift in Sources */ = {isa = PBXBuildFile; fileRef = 03DD60D029D0C809005EC4A5 /* AsyncUI.swift */; };
 		03DD60D429D105C1005EC4A5 /* TransitionVM.swift in Sources */ = {isa = PBXBuildFile; fileRef = 03DD60D329D105C1005EC4A5 /* TransitionVM.swift */; };
 		03DD60D629D11E04005EC4A5 /* ErrorIndicator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 03DD60D529D11E04005EC4A5 /* ErrorIndicator.swift */; };
@@ -141,7 +141,7 @@
 				0326BF27292951D700ECA18F /* BitCollections in Frameworks */,
 				0326BF2D292951D700ECA18F /* HeapModule in Frameworks */,
 				0326BF2B292951D700ECA18F /* DequeModule in Frameworks */,
-				03DD60CF29D0C4C0005EC4A5 /* AsyncButton in Frameworks */,
+				03A32F942A89684F00C6A30B /* AsyncButton in Frameworks */,
 				033449D72999634000BBCCC4 /* AsyncAlgorithms in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -170,6 +170,7 @@
 				031367F52713FCF400E69F83 /* viewTests */,
 				031368002713FCF400E69F83 /* viewUITests */,
 				031367E02713FCF200E69F83 /* Products */,
+				03A32F922A89684F00C6A30B /* Frameworks */,
 			);
 			sourceTree = "<group>";
 		};
@@ -252,6 +253,13 @@
 			path = Utils;
 			sourceTree = "<group>";
 		};
+		03A32F922A89684F00C6A30B /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+			);
+			name = Frameworks;
+			sourceTree = "<group>";
+		};
 		03D1D8DF28FB564700E76F27 /* AppViews */ = {
 			isa = PBXGroup;
 			children = (
@@ -308,7 +316,7 @@
 				0326BF30292951D700ECA18F /* PersistentCollections */,
 				0326BF32292951D700ECA18F /* SortedCollections */,
 				033449D62999634000BBCCC4 /* AsyncAlgorithms */,
-				03DD60CE29D0C4C0005EC4A5 /* AsyncButton */,
+				03A32F932A89684F00C6A30B /* AsyncButton */,
 			);
 			productName = view;
 			productReference = 031367DF2713FCF200E69F83 /* view.app */;
@@ -388,7 +396,7 @@
 			packageReferences = (
 				0326BF25292951D700ECA18F /* XCRemoteSwiftPackageReference "swift-collections" */,
 				033449D52999634000BBCCC4 /* XCRemoteSwiftPackageReference "swift-async-algorithms" */,
-				03DD60CD29D0C4C0005EC4A5 /* XCRemoteSwiftPackageReference "swiftui-async-button" */,
+				03A32F912A89683900C6A30B /* XCRemoteSwiftPackageReference "swiftui-async-button" */,
 			);
 			productRefGroup = 031367E02713FCF200E69F83 /* Products */;
 			projectDirPath = "";
@@ -867,12 +875,12 @@
 				minimumVersion = 0.0.4;
 			};
 		};
-		03DD60CD29D0C4C0005EC4A5 /* XCRemoteSwiftPackageReference "swiftui-async-button" */ = {
+		03A32F912A89683900C6A30B /* XCRemoteSwiftPackageReference "swiftui-async-button" */ = {
 			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "https://github.com/lorenzofiamingo/swiftui-async-button";
+			repositoryURL = "https://github.com/lehmacdj/swiftui-async-button";
 			requirement = {
 				kind = upToNextMajorVersion;
-				minimumVersion = 1.0.0;
+				minimumVersion = 1.1.1;
 			};
 		};
 /* End XCRemoteSwiftPackageReference section */
@@ -918,9 +926,9 @@
 			package = 033449D52999634000BBCCC4 /* XCRemoteSwiftPackageReference "swift-async-algorithms" */;
 			productName = AsyncAlgorithms;
 		};
-		03DD60CE29D0C4C0005EC4A5 /* AsyncButton */ = {
+		03A32F932A89684F00C6A30B /* AsyncButton */ = {
 			isa = XCSwiftPackageProductDependency;
-			package = 03DD60CD29D0C4C0005EC4A5 /* XCRemoteSwiftPackageReference "swiftui-async-button" */;
+			package = 03A32F912A89683900C6A30B /* XCRemoteSwiftPackageReference "swiftui-async-button" */;
 			productName = AsyncButton;
 		};
 /* End XCSwiftPackageProductDependency section */

@@ -21,10 +21,10 @@
     {
       "identity" : "swiftui-async-button",
       "kind" : "remoteSourceControl",
-      "location" : "https://github.com/lorenzofiamingo/swiftui-async-button",
+      "location" : "https://github.com/lehmacdj/swiftui-async-button",
       "state" : {
-        "revision" : "9fe9ccddf59c7e4185aa978547fbb9d95236455e",
-        "version" : "1.1.0"
+        "revision" : "73c4e58e5d482d1f5ca274c399037983d3e1a5f7",
+        "version" : "1.1.1"
       }
     }
   ],
