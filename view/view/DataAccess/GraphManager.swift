@@ -62,13 +62,14 @@ actor GraphManager<N: Node> {
 
     subscript(id: NID) -> N {
         get async throws {
-            mapTableSize = internedNodes.count
             if let node = internedNodes.object(forKey: NSNumber(value: id)) {
+                mapTableSize = internedNodes.count
                 return node
             }
 
             let node = try await N(nid: id, root: self)
             internedNodes.setObject(node, forKey: NSNumber(value: id))
+            mapTableSize = internedNodes.count
             return node
         }
     }
