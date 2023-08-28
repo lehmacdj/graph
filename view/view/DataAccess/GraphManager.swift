@@ -5,6 +5,7 @@
 //  Created by Devin Lehmacher on 3/22/23.
 //
 
+import Combine
 import Foundation
 
 /// Represents the  represents the base directory for a graph.
@@ -54,8 +55,14 @@ actor GraphManager<N: Node> {
     // this cache so that we don't end up retaining nodes longer than we need to
     private var internedNodes = NSMapTable<NSNumber, N>(keyOptions: .copyIn, valueOptions: .weakMemory)
 
+    @Published private var mapTableSize = 0
+    public var mapTableSizePublisher: AnyPublisher<Int, Never> {
+        $mapTableSize.eraseToAnyPublisher()
+    }
+
     subscript(id: NID) -> N {
         get async throws {
+            mapTableSize = internedNodes.count
             if let node = internedNodes.object(forKey: NSNumber(value: id)) {
                 return node
             }

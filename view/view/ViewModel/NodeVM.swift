@@ -43,4 +43,6 @@ protocol NodeVM<N>: Observable {
 
     func load() async
     func reload() async
+
+    var inMemoryNodeCount: Int { get }
 }

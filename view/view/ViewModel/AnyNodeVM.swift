@@ -32,6 +32,10 @@ import Foundation
     func reload() async {
         await underlying.reload()
     }
+
+    var inMemoryNodeCount: Int {
+        underlying.inMemoryNodeCount
+    }
 }
 
 extension NodeVM {

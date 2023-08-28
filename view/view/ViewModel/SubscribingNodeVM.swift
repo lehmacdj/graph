@@ -51,11 +51,18 @@ import Combine
     }
 
     private var task: Task<Void, Never>?
+    private var inMemoryNodeCountSubscription: AnyCancellable?
 
     func load() async {
         guard case .idle = state else {
             logInfo("skipping initializing of state because already loading")
             return
+        }
+
+        logInfo("initializing debug info")
+
+        inMemoryNodeCountSubscription = await manager.mapTableSizePublisher.sink { [weak self] newValue in
+            self?.inMemoryNodeCount = newValue
         }
 
         logInfo("starting to initialize state")
@@ -154,4 +161,6 @@ import Combine
         logInfo("force reloading \(nid)")
         await forceLoad()
     }
+
+    var inMemoryNodeCount: Int = -1
 }

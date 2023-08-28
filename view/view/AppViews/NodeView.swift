@@ -150,6 +150,12 @@ struct NodeView: View {
             .task {
                 await vm.load()
             }
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Text("\(vm.inMemoryNodeCount)")
+                        .foregroundStyle(.orange)
+                }
+            }
     }
 }
 
