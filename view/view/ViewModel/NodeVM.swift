@@ -24,14 +24,6 @@ protocol NodeState<N> {
     var tags: Set<String> { get }
 
     var possibleTags: Set<String> { get }
-
-    func set(tags: Set<String>) async
-
-    func forceRemove() async
-
-    func toggleFavorite(child _: NID) async
-
-    func toggleWorse(child _: NID) async
 }
 
 protocol NodeVM<N>: Observable {
@@ -43,6 +35,14 @@ protocol NodeVM<N>: Observable {
 
     func load() async
     func reload() async
+
+    func set(tags: Set<String>) async throws
+
+    func forceRemove() async throws
+
+    func toggleFavorite(child _: NID) async throws
+
+    func toggleWorse(child _: NID) async throws
 
     var inMemoryNodeCount: Int { get }
 }

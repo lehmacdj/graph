@@ -53,6 +53,7 @@
 		038C93012A3954BF0059C8D6 /* UbiquitousFile.swift in Sources */ = {isa = PBXBuildFile; fileRef = 038C93002A3954BF0059C8D6 /* UbiquitousFile.swift */; };
 		038C93032A397ECF0059C8D6 /* Errors.swift in Sources */ = {isa = PBXBuildFile; fileRef = 038C93022A397ECF0059C8D6 /* Errors.swift */; };
 		03A32F942A89684F00C6A30B /* AsyncButton in Frameworks */ = {isa = PBXBuildFile; productRef = 03A32F932A89684F00C6A30B /* AsyncButton */; };
+		03A32F962AAD929000C6A30B /* WeakDictionary.swift in Sources */ = {isa = PBXBuildFile; fileRef = 03A32F952AAD929000C6A30B /* WeakDictionary.swift */; };
 		03A934C02A3EBD930011DB8D /* Node.swift in Sources */ = {isa = PBXBuildFile; fileRef = 03A934BF2A3EBD930011DB8D /* Node.swift */; };
 		03A934C22A3EC10F0011DB8D /* DocumentNode.swift in Sources */ = {isa = PBXBuildFile; fileRef = 03A934C12A3EC10F0011DB8D /* DocumentNode.swift */; };
 		03A934C42A3F8AC20011DB8D /* DataDocument.swift in Sources */ = {isa = PBXBuildFile; fileRef = 03A934C32A3F8AC20011DB8D /* DataDocument.swift */; };
@@ -115,6 +116,7 @@
 		0375E7C72782C06000FB6548 /* SafariView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SafariView.swift; sourceTree = "<group>"; };
 		038C93002A3954BF0059C8D6 /* UbiquitousFile.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UbiquitousFile.swift; sourceTree = "<group>"; };
 		038C93022A397ECF0059C8D6 /* Errors.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Errors.swift; sourceTree = "<group>"; };
+		03A32F952AAD929000C6A30B /* WeakDictionary.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WeakDictionary.swift; sourceTree = "<group>"; };
 		03A934BF2A3EBD930011DB8D /* Node.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Node.swift; sourceTree = "<group>"; };
 		03A934C12A3EC10F0011DB8D /* DocumentNode.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DocumentNode.swift; sourceTree = "<group>"; };
 		03A934C32A3F8AC20011DB8D /* DataDocument.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DataDocument.swift; sourceTree = "<group>"; };
@@ -196,6 +198,7 @@
 				031367E82713FCF400E69F83 /* Assets.xcassets */,
 				031367ED2713FCF400E69F83 /* Info.plist */,
 				031367EA2713FCF400E69F83 /* Preview Content */,
+				03A32F952AAD929000C6A30B /* WeakDictionary.swift */,
 			);
 			path = view;
 			sourceTree = "<group>";
@@ -366,7 +369,7 @@
 			attributes = {
 				BuildIndependentTargetsInParallel = YES;
 				LastSwiftUpdateCheck = 1250;
-				LastUpgradeCheck = 1430;
+				LastUpgradeCheck = 1500;
 				TargetAttributes = {
 					031367DE2713FCF200E69F83 = {
 						CreatedOnToolsVersion = 12.5.1;
@@ -475,6 +478,7 @@
 				031CE3F429DA8643001470BD /* Suspense.swift in Sources */,
 				03DD60D429D105C1005EC4A5 /* TransitionVM.swift in Sources */,
 				03136814271415FA00E69F83 /* Extensions.swift in Sources */,
+				03A32F962AAD929000C6A30B /* WeakDictionary.swift in Sources */,
 				03C9CB3F2A7765BF007F29E7 /* AnyNodeVM.swift in Sources */,
 				038C93012A3954BF0059C8D6 /* UbiquitousFile.swift in Sources */,
 				03A934C22A3EC10F0011DB8D /* DocumentNode.swift in Sources */,
@@ -565,6 +569,7 @@
 				DEBUG_INFORMATION_FORMAT = dwarf;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_TESTABILITY = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
 				GCC_C_LANGUAGE_STANDARD = gnu11;
 				GCC_DYNAMIC_NO_PIC = NO;
 				GCC_NO_COMMON_BLOCKS = YES;
@@ -628,6 +633,7 @@
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				ENABLE_NS_ASSERTIONS = NO;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
 				GCC_C_LANGUAGE_STANDARD = gnu11;
 				GCC_NO_COMMON_BLOCKS = YES;
 				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;

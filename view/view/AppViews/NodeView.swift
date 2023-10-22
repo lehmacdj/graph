@@ -84,11 +84,9 @@ struct NodeView: View {
                 .toolbar {
                     ToolbarItem(placement: .navigationBarTrailing) {
                         Menu {
-                            Button(
-                                "Force delete node",
-                                role: .destructive) {
-                                    showingForceDeleteNodeConfirmation = true
-                                }
+                            Button("Force delete node", role: .destructive) {
+                                showingForceDeleteNodeConfirmation = true
+                            }
                             // TODO: "smart" actions that lists some common actions on nodes that can be done quickly
                             // e.g. apply specific tags
                         } label: {
@@ -101,10 +99,14 @@ struct NodeView: View {
                             // one approach might be to have a value in the graph saying if an operation is in progress, this could be passed as an environment value and controls could use it to disable themselves
                             // of course this requires us to trust ourselves to remember to disable all relevant controls
                             // plus this makes controls somewhat less reusable, and wouldn't work if we threw a random Button in the mix somewhere
-                            if state.tags.contains("to-update") {
-                                await state.set(tags: state.tags.removing("to-update"))
-                            } else {
-                                await state.set(tags: state.tags.inserting("to-update"))
+                            do {
+                                if state.tags.contains("to-update") {
+                                    try await vm.set(tags: state.tags.removing("to-update"))
+                                } else {
+                                    try await vm.set(tags: state.tags.inserting("to-update"))
+                                }
+                            } catch {
+                                logError("error while setting tags: \(error)")
                             }
                         }
                     }
@@ -124,7 +126,11 @@ struct NodeView: View {
                         initial: state.tags,
                         options: [String](state.possibleTags).sorted(),
                         commit: { newTags in
-                            await state.set(tags: newTags)
+                            do {
+                                try await vm.set(tags: newTags)
+                            } catch {
+                                logError("failed to set tags: \(error)")
+                            }
                             showingTags = false
                         },
                         cancel: { showingTags = false })
@@ -135,7 +141,11 @@ struct NodeView: View {
                     actions: {
                         AsyncButton("Delete", role: .destructive) {
                             // TODO: make state a state machine that transitions to a deleted state
-                            await state.forceRemove()
+                            do {
+                                try await vm.forceRemove()
+                            } catch {
+                                logError("error while trying to force remove node: \(error)")
+                            }
                         }
                     },
                     message: {

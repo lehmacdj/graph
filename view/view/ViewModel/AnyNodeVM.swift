@@ -33,6 +33,22 @@ import Foundation
         await underlying.reload()
     }
 
+    func set(tags: Set<String>) async throws {
+        try await underlying.set(tags: tags)
+    }
+    
+    func forceRemove() async throws {
+        try await underlying.forceRemove()
+    }
+    
+    func toggleFavorite(child nid: NID) async throws {
+        try await underlying.toggleFavorite(child: nid)
+    }
+    
+    func toggleWorse(child _: NID) async throws {
+        try await underlying.toggleWorse(child: nid)
+    }
+
     var inMemoryNodeCount: Int {
         underlying.inMemoryNodeCount
     }

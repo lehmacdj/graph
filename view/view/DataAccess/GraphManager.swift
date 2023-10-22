@@ -53,7 +53,8 @@ actor GraphManager<N: Node> {
 
     // need to use NSMapTable here because it supports weak references which is important for
     // this cache so that we don't end up retaining nodes longer than we need to
-    private var internedNodes = NSMapTable<NSNumber, N>(keyOptions: .copyIn, valueOptions: .weakMemory)
+    // apparently NSMapTable has bugs making it almost unusable: http://cocoamine.net/blog/2013/12/13/nsmaptable-and-zeroing-weak-references/
+    private var internedNodes = WeakDictionary<NID, N>()
 
     @Published private var mapTableSize = 0
     public var mapTableSizePublisher: AnyPublisher<Int, Never> {
@@ -62,13 +63,13 @@ actor GraphManager<N: Node> {
 
     subscript(id: NID) -> N {
         get async throws {
-            if let node = internedNodes.object(forKey: NSNumber(value: id)) {
+            if let node = internedNodes[id] {
                 mapTableSize = internedNodes.count
                 return node
             }
 
             let node = try await N(nid: id, root: self)
-            internedNodes.setObject(node, forKey: NSNumber(value: id))
+            internedNodes[id] = node
             mapTableSize = internedNodes.count
             return node
         }
@@ -197,6 +198,15 @@ actor GraphManager<N: Node> {
             startNode.meta = startMeta
             endNode.meta = endMeta
         }
+    }
+
+    func forceRemove(nid: NID) async {
+        guard let node = try? await self[nid] else {
+            logWarn("tried to force remove a node that we couldn't access")
+            return
+        }
+
+        await forceRemove(node: node)
     }
 
     func forceRemove(node: N) async {

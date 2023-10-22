@@ -15,11 +15,17 @@ import SwiftUI
     var thumbnail: Loading<ThumbnailValue> = .idle
     var isFavorite: Bool
     var isWorse: Bool
+    // this retains the child node once loaded; thus we must weaken it if we're going to store a reference to it to avoid trying to store the entire graph in memory; it should be possible to completely avoid storing this most likely
     var destination: Loading<AnyNodeVM<N>> = .idle
+
+    enum State {
+        
+    }
 
     private let manager: GraphManager<N>
 
     /// link to parent node, should always be retained because the transition is only ever presented as a part of a node
+    /// NOTE: this assumption will break if I implement navigation that allows you to traverse the graph other than through child links
     private weak var parent: SubscribingNodeVM<N>!
 
     private let source: N
@@ -79,22 +85,24 @@ import SwiftUI
     }
 
     func weaken() {
-//        destinationNode = nil
+        destinationNode = nil
     }
 
     func toggleFavorite() async {
-        guard case .loaded(let state) = parent.state else {
-            return
+        do {
+            try await parent.toggleFavorite(child: destinationNid)
+        } catch {
+            logError("failed to toggle favorite: \(error)")
         }
-        await state.toggleFavorite(child: destinationNid)
         isFavorite.toggle()
     }
 
     func toggleWorse() async {
-        guard case .loaded(let state) = parent.state else {
-            return
+        do {
+            try await parent.toggleWorse(child: destinationNid)
+        } catch {
+            logError("failed to toggle worse: \(error)")
         }
-        await state.toggleWorse(child: destinationNid)
         isWorse.toggle()
     }
 
