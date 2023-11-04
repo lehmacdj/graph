@@ -15,12 +15,11 @@ import SwiftUI
     var thumbnail: Loading<ThumbnailValue> = .idle
     var isFavorite: Bool
     var isWorse: Bool
-    // this retains the child node once loaded; thus we must weaken it if we're going to store a reference to it to avoid trying to store the entire graph in memory; it should be possible to completely avoid storing this most likely
-    var destination: Loading<AnyNodeVM<N>> = .idle
-
-    enum State {
-        
+    var destination: AnyNodeVM<N> {
+        SubscribingNodeVM(for: destinationNid, in: manager).eraseToAnyNodeVM()
     }
+
+    private var destinationNode: N? = nil
 
     private let manager: GraphManager<N>
 
@@ -29,9 +28,6 @@ import SwiftUI
     private weak var parent: SubscribingNodeVM<N>!
 
     private let source: N
-
-    /// The destination node if it's been acquired
-    private var destinationNode: N?
 
     init(
         parent: SubscribingNodeVM<N>,
@@ -52,28 +48,21 @@ import SwiftUI
         self.isWorse = isWorse
     }
 
-    func load() async {
-        guard case .idle = destination else {
-            return
-        }
-
-        self.thumbnail = .loading
-        self.destination = .loading
-
+    private func fetchDestinationNode() async {
         let destinationNode: N
         do {
             destinationNode = try await manager[destinationNid]
+            self.destinationNode = destinationNode
+            logDebug("successfully fetched destinationNode \(destinationNid)")
         } catch {
             logError(error.localizedDescription)
             self.thumbnail = .failed(error)
-            self.destination = .failed(error)
-            self.destinationNode = nil
             return
         }
+    }
 
-        logDebug("successfully fetched destinationNode \(destinationNid)")
-        self.destination = .loaded(SubscribingNodeVM(for: destinationNid, in: manager).eraseToAnyNodeVM())
-        self.destinationNode = destinationNode
+    private func loadThumbnail() async {
+        guard let destinationNode else { return }
 
         if destinationNode.dataURL == nil {
             self.thumbnail = .loaded(.noThumbnail)
@@ -84,8 +73,36 @@ import SwiftUI
         }
     }
 
-    func weaken() {
-        destinationNode = nil
+    func subscribe() async {
+        await fetchDestinationNode()
+
+        switch thumbnail {
+        case .idle:
+            self.thumbnail = .loading
+            await loadThumbnail()
+        case .loading:
+            logError("subscribe should only be called once")
+            return
+        case .loaded:
+            logInfo("skipping loading because already loaded")
+            return
+        case .failed:
+            logInfo("skipping loaded because we failed to load before")
+        }
+
+        self.destinationNode = nil
+
+        do {
+            while true {
+                // TODO: we probably want to eventually update the thumbnail automatically here
+                // at the moment we don't have a great way of doing so, so we just spin so we can deallocate destinationNode when the transition goes out of scope
+                try await Task.sleep(for: .seconds(1))
+            }
+        } catch is CancellationError {
+            logDebug("cancelled transition: \(destinationNid)")
+        } catch {
+            logError("unexpected error: \(error)")
+        }
     }
 
     func toggleFavorite() async {
@@ -109,7 +126,7 @@ import SwiftUI
     func fetchThumbnail() async {
         do {
             logDebug("starting to fetch thumbnail")
-            let destinationNode = try destinationNode.unwrapped("destinationNode doesn't exist")
+            let destinationNode = try destinationNode.unwrapped("destinationNode was nil")
             let dataDocument = try await destinationNode.data.unwrapped("data's document initializer returned nil")
             if let image = UIImage(data: await dataDocument.data) {
                 self.thumbnail = .loaded(.thumbnail(.loaded(image)))
@@ -136,5 +153,11 @@ import SwiftUI
 extension SubscribingTransitionVM: Identifiable {
     var id: some Hashable {
         "\(transition)\(destinationNid)"
+    }
+}
+
+extension SubscribingTransitionVM: CustomDebugStringConvertible {
+    var debugDescription: String {
+        "\(parent?.nid.description ?? "some parent") -> \(destinationNid) via \(transition)"
     }
 }

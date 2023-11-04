@@ -157,9 +157,7 @@ struct NodeView: View {
     var body: some View {
         content
             .navigationTitle(Text("\(vm.nid)"))
-            .task {
-                await vm.load()
-            }
+            .task(vm.subscribe)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
                     Text("\(vm.inMemoryNodeCount)")

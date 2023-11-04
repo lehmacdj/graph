@@ -33,7 +33,8 @@ protocol NodeVM<N>: Observable {
 
     var state: Loading<any NodeState<N>> { get }
 
-    func load() async
+    @Sendable func subscribe() async
+
     func reload() async
 
     func set(tags: Set<String>) async throws

@@ -25,8 +25,8 @@ import Foundation
         get { underlying.nid }
     }
 
-    func load() async {
-        await underlying.load()
+    func subscribe() async {
+        await underlying.subscribe()
     }
 
     func reload() async {

@@ -21,9 +21,8 @@ import Foundation
 
     var destinationNid: NID { underlying.destinationNid }
 
-    var destination: Loading<AnyNodeVM<N_>> {
-        get { underlying.destination }
-        set { underlying.destination = newValue }
+    var destination: AnyNodeVM<N_> {
+        underlying.destination
     }
 
     var transition: String {
@@ -46,14 +45,10 @@ import Foundation
         set { underlying.isWorse = newValue }
     }
 
-    func load() async {
-        await underlying.load()
+    func subscribe() async {
+        await underlying.subscribe()
     }
-    
-    func weaken() {
-        underlying.weaken()
-    }
-    
+
     func toggleFavorite() async {
         await underlying.toggleFavorite()
     }

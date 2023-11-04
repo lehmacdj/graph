@@ -17,13 +17,14 @@ import Combine
         switch internalState {
         case .idle:
             return .idle
-        case .loadingActive:
+        case .loadingActive(state: nil, _):
             return .loading
+        case .loadingActive(state: .some(let state), _):
+            // even though we're internally loading this indicates that we were fully loaded before & thus we return the loaded information we already had
+            return .loaded(state)
         case .loadingInactive:
             return .loading
-        case .loadingFromLoadedInactive(let state, _, _):
-            return .loaded(state)
-        case .loadedActive(let state, _, _):
+        case .loadedActive(let state, _):
             return .loaded(state)
         case .loadedInactive(let state):
             return .loaded(state)
@@ -38,10 +39,12 @@ import Combine
 
     private enum InternalState {
         case idle
-        case loadingActive(task: Task<Void, any Error>, semaphore: Semaphor)
+        /// `loadingActive` captures a few substates all of which are valid
+        /// * the state is stored if we transitioned to loading from a loaded state so that we can still display it to the user
+        /// * the node is populated during the loading process and is expected to exist for the final stage (initial data fetch) of the loading process
+        case loadingActive(state: State?, node: N?)
         case loadingInactive
-        case loadingFromLoadedInactive(state: State, task: Task<Void, any Error>, semaphore: Semaphor)
-        case loadedActive(state: State, task: Task<Void, any Error>, node: N)
+        case loadedActive(state: State, node: N)
         case loadedInactive(state: State)
         case failed(error: Error)
     }
@@ -76,8 +79,6 @@ import Combine
                     self = .loadingActive
                 case .loadingInactive:
                     self = .loadingInactive
-                case .loadingFromLoadedInactive:
-                    self = .loadingFromLoadedInactive
                 case .loadedActive:
                     self = .loadedActive
                 case .loadedInactive:
@@ -104,9 +105,10 @@ import Combine
 
     func set(tags: Set<String>) async throws {
         switch internalState {
-        case .idle, .loadingActive, .loadingInactive, .loadingFromLoadedInactive, .loadedInactive, .failed:
+        case .idle, .loadingActive, .loadingInactive, .loadedInactive, .failed:
             throw invalidState(expected: .loadedActive)
-        case .loadedActive(_, _, let node):
+        case .loadedActive(_, let node):
+            // we could theoretically expand this to also cover the case when we're currently loading, but I don't think that solves any problems and just makes concurrency a little harder to reason about
             await node.set(tags: tags)
         }
     }
@@ -124,42 +126,59 @@ import Combine
     init(for nid: NID, in graph: GraphManager<N>) {
         self.nid = nid
         self.manager = graph
+        print("initialized \(nid) VM")
     }
 
     // TODO: move this stuff to a separate global VM for debug stats that we init at startup and store in the SwiftUI Environment
     var inMemoryNodeCount: Int = -1
     private var inMemoryNodeCountSubscription: AnyCancellable?
 
-    func load() async {
-        inMemoryNodeCountSubscription = await manager.mapTableSizePublisher.sink { [weak self] newValue in
-            self?.inMemoryNodeCount = newValue
+    /// Called when the NodeVM should subscribe to the underlying Node/filesystem events.
+    /// The task is cancelled when it the Node should be deallocated.
+    func subscribe() async {
+        inMemoryNodeCountSubscription = await manager.mapTableSizePublisher.assign(to: \.inMemoryNodeCount, on: self)
+        do {
+            while true {
+                try await beginUpdateState()
+                try Task.checkCancellation()
+            }
+        } catch is CancellationError {
+            logInfo("cancelled")
+        } catch {
+            logError("unexpected error thrown \(error)")
         }
 
         switch internalState {
-        case .idle:
+        case .loadingActive(state: nil, _):
             internalState = .loadingInactive
-            await loadState()
-        case .loadingActive:
-            // already in the process of loading
-            return
-        case .loadingInactive:
-            // we need to start a new task because the previous one was cancelled
-            await loadState()
-        case .loadingFromLoadedInactive:
-            // already in the process of loading
-            return
-        case .loadedActive(_, _, _):
-            // already loaded, don't need to do anything
-            return
-        case .loadedInactive(_):
-            await loadState()
-        case .failed(_):
-            // leave in failed state
-            return
+        case .loadingActive(let .some(state), _), .loadedActive(let state, _):
+            internalState = .loadedInactive(state: state)
+        case .idle, .loadingInactive, .loadedInactive, .failed:
+            // nothing to do, already in an okay state
+            break
         }
     }
 
-    private func loadState() async {
+    private func beginUpdateState() async throws {
+        switch internalState {
+        case .idle:
+            internalState = .loadingActive(state: nil, node: nil)
+        case .loadingInactive:
+            internalState = .loadingActive(state: nil, node: nil)
+        case .loadedInactive(let state):
+            internalState = .loadingActive(state: state, node: nil)
+        case .failed(_):
+            // we don't want to start loading failed nodes so that the error message doesn't get cleared
+            // we sleep for 1 second and then check the current state again, so that the VM can get unstuck if internalState gets set to something other than failed
+            try await Task.sleep(for: .seconds(1))
+            return
+        case .loadingActive, .loadedActive:
+            // it may eventually be desirable to allow preloading (i.e. SubscribingTransitionVM calls `preload` on its `NodeVM` when it creates it) to make load times faster, that might break this assumption
+            logError("this should be impossible; this should only be called from subscribe from .task on a View")
+            try await Task.sleep(for: .seconds(1))
+            return
+        }
+
         let node: N
         do {
             node = try await manager[nid]
@@ -169,152 +188,98 @@ import Combine
             return
         }
 
-        let startSemaphore = Semaphor(initialCount: 0)
-        let task = Task { [weak self, startSemaphore, node] in
-            // wait until the internalState has been set appropriately to avoid race conditions
-            await startSemaphore.wait()
-            for await _ in node.metaPublisher.values {
-                guard let self else { return }
-                try Task.checkCancellation()
+        guard case .loadingActive(let state, let existingNode) = internalState else {
+            return
+        }
 
-                // optimization opportunity: avoid using async for accessing some node properties, some of this data shouldn't require async, it's just a pure computation to get it from the node's metadata
-                async let favoritesAsync = node.favorites
-                async let worseAsync = node.worse
-                async let dataAsync = node.data
-                async let tagsAsync = node.tags
-                async let possibleTagsAsync = self.manager.tags?.tagOptions
-                let favoritesNode = await favoritesAsync
-                let worseNode = await worseAsync
-                let data = await dataAsync
-                let tags = await tagsAsync
-                let tagOptions = await possibleTagsAsync ?? Set()
+        guard existingNode == nil else {
+            fatalError("it shouldn't be possible for node to be non-nil there should only be a single Task running beginUpdateState")
+        }
 
-                logInfo("done fetching data from node")
-                try Task.checkCancellation()
+        internalState = .loadingActive(state: state, node: node)
 
-                var favorites = [NodeTransition]()
-                var normal = [NodeTransition]()
-                var worse = [NodeTransition]()
+        try await updateStateLoop()
+    }
 
-                let favoritesSet: Set<NID>? = favoritesNode.map { Set($0.outgoing.map { $0.nid }) }
-                let worseSet: Set<NID>? = worseNode.map { Set($0.outgoing.map { $0.nid }) }
+    private func updateStateLoop() async throws {
+        guard case .loadingActive(_, let .some(node)) = internalState else { return }
 
-                logInfo("creating children")
-                try Task.checkCancellation()
+        for await _ in node.metaPublisher.values {
+            try Task.checkCancellation()
 
-                for child in node.outgoing {
-                    if let favoritesSet, favoritesSet.contains(child.nid) {
-                        favorites.append(child)
-                    } else if let worseSet, worseSet.contains(child.nid) {
-                        worse.append(child)
-                    } else {
-                        normal.append(child)
-                    }
+            // optimization opportunity: avoid using async for accessing some node properties, some of this data shouldn't require async, it's just a pure computation to get it from the node's metadata
+            async let favoritesAsync = node.favorites
+            async let worseAsync = node.worse
+            async let dataAsync = node.data
+            async let tagsAsync = node.tags
+            async let possibleTagsAsync = self.manager.tags?.tagOptions
+            let favoritesNode = await favoritesAsync
+            let worseNode = await worseAsync
+            let data = await dataAsync
+            let tags = await tagsAsync
+            let tagOptions = await possibleTagsAsync ?? Set()
+
+            logInfo("done fetching data from node")
+            try Task.checkCancellation()
+
+            var favorites = [NodeTransition]()
+            var normal = [NodeTransition]()
+            var worse = [NodeTransition]()
+
+            let favoritesSet: Set<NID>? = favoritesNode.map { Set($0.outgoing.map { $0.nid }) }
+            let worseSet: Set<NID>? = worseNode.map { Set($0.outgoing.map { $0.nid }) }
+
+            logInfo("creating children")
+            try Task.checkCancellation()
+
+            for child in node.outgoing {
+                if let favoritesSet, favoritesSet.contains(child.nid) {
+                    favorites.append(child)
+                } else if let worseSet, worseSet.contains(child.nid) {
+                    worse.append(child)
+                } else {
+                    normal.append(child)
                 }
-
-                func mkTransitionVMs(_ transitions: [NodeTransition], inDirection direction: Direction, isFavorite: Bool, isWorse: Bool) -> [AnyTransitionVM<N>] {
-                    transitions.sorted().map {
-                        SubscribingTransitionVM(parent: self, source: node, transition: $0, direction: direction, manager: self.manager, isFavorite: isFavorite, isWorse: isWorse)
-                            .eraseToAnyTransitionVM()
-                    }
-                }
-
-                logInfo("about to create state")
-                try Task.checkCancellation()
-
-                let state = await State(
-                    data: data?.data,
-                    favoriteLinks: favoritesSet != nil ? mkTransitionVMs(favorites, inDirection: .forward, isFavorite: true, isWorse: false) : nil,
-                    links: mkTransitionVMs(normal, inDirection: .forward, isFavorite: false, isWorse: false),
-                    worseLinks: worseSet != nil ? mkTransitionVMs(worse, inDirection: .forward, isFavorite: false, isWorse: true) : nil,
-                    backlinks: mkTransitionVMs(node.incoming, inDirection: .backward, isFavorite: false, isWorse: false),
-                    tags: tags,
-                    possibleTags: tagOptions
-                )
-
-                Task { @MainActor [weak self] in
-                    guard let self else { return }
-                    try Task.checkCancellation()
-
-                    switch internalState {
-                    case .idle, .loadingInactive, .loadedInactive, .failed:
-                        // either the task should be cancelled thus would have thrown above or we should be in this state from below because we ensure that we don't start the enclosing task until after the internalState has been set
-                        fatalError("these states should be impossible (if this fails, it would probably be okay to switch this to just return though)")
-                    case .loadingActive(let task, let semaphore):
-                        internalState = .loadedActive(state: state, task: task, node: node)
-                        await semaphore.signal()
-                    case .loadedActive(_, let task, _):
-                        internalState = .loadedActive(state: state, task: task, node: node)
-                    case .loadingFromLoadedInactive(_, let task, let semaphore):
-                        internalState = .loadedActive(state: state, task: task, node: node)
-                        await semaphore.signal()
-                    }
-
-                    logInfo("updated state")
-                }
-
-                logWarn("exited for loop fetching data")
             }
+
+            func mkTransitionVMs(_ transitions: [NodeTransition], inDirection direction: Direction, isFavorite: Bool, isWorse: Bool) -> [AnyTransitionVM<N>] {
+                transitions.sorted().map {
+                    SubscribingTransitionVM(parent: self, source: node, transition: $0, direction: direction, manager: self.manager, isFavorite: isFavorite, isWorse: isWorse)
+                        .eraseToAnyTransitionVM()
+                }
+            }
+
+            logInfo("about to create state")
+            try Task.checkCancellation()
+
+            let state = await State(
+                data: data?.data,
+                favoriteLinks: favoritesSet != nil ? mkTransitionVMs(favorites, inDirection: .forward, isFavorite: true, isWorse: false) : nil,
+                links: mkTransitionVMs(normal, inDirection: .forward, isFavorite: false, isWorse: false),
+                worseLinks: worseSet != nil ? mkTransitionVMs(worse, inDirection: .forward, isFavorite: false, isWorse: true) : nil,
+                backlinks: mkTransitionVMs(node.incoming, inDirection: .backward, isFavorite: false, isWorse: false),
+                tags: tags,
+                possibleTags: tagOptions
+            )
+
+            try Task.checkCancellation()
+
+            switch internalState {
+            case .idle, .loadingInactive, .loadedInactive, .failed, .loadingActive(_, nil):
+                // return because we need to rerun beginUpdateState
+                return
+            case .loadingActive(_, node: let .some(node)):
+                internalState = .loadedActive(state: state, node: node)
+            case .loadedActive(_, node: let node):
+                internalState = .loadedActive(state: state, node: node)
+            }
+
+            logInfo("updated state")
         }
-        let semaphore = Semaphor(initialCount: 0)
-        switch internalState {
-        case .idle, .loadingActive, .loadedActive, .failed, .loadingFromLoadedInactive:
-            internalState = .failed(error: invalidState(expected: [.loadingInactive, .loadedInactive]))
-        case .loadingInactive:
-            internalState = .loadingActive(task: task, semaphore: semaphore)
-        case .loadedInactive(let state):
-            internalState = .loadingFromLoadedInactive(state: state, task: task, semaphore: semaphore)
-        }
-        await startSemaphore.signal()
-        await semaphore.wait()
     }
 
     func reload() async {
-        switch internalState {
-        case .idle, .loadedInactive, .failed:
-            internalState = .loadingInactive
-            await loadState()
-        case .loadingActive(let task, let semaphore):
-            task.cancel()
-            await semaphore.signal()
-            internalState = .loadingInactive
-            await loadState()
-        case .loadingInactive:
-            // we're already in the correct state
-            return
-        case .loadingFromLoadedInactive(_, let task, let semaphore):
-            task.cancel()
-            await semaphore.signal()
-            internalState = .loadingInactive
-            await loadState()
-        case .loadedActive(_, let task, _):
-            task.cancel()
-            internalState = .loadingInactive
-            await loadState()
-        }
-    }
-
-    func weaken() {
-        switch internalState {
-        case .idle:
-            return
-        case .loadingActive(let task, let semaphore):
-            task.cancel()
-            Task { await semaphore.signal() }
-            internalState = .loadingInactive
-        case .loadingInactive:
-            return
-        case .loadingFromLoadedInactive(let state, let task, let semaphore):
-            task.cancel()
-            Task { await semaphore.signal() }
-            internalState = .loadedInactive(state: state)
-        case .loadedActive(let state, let task, _):
-            task.cancel()
-            internalState = .loadedInactive(state: state)
-        case .loadedInactive(_):
-            return
-        case .failed(_):
-            return
-        }
+        internalState = .loadingInactive
+        // if subscribed, `updateStateLoop` will exit because of the unexpected state and `beginUpdateState` will rerun
     }
 }

@@ -75,10 +75,9 @@ struct TransitionView: View {
                         await vm.fetchThumbnail()
                     }
                 } else {
-                    Suspense(vm.destination) { destination in
-                        NavigationLink(destination: NodeView(of: destination)) {
-                            Text(vm.transition)
-                        }
+                    // somehow the VMs here are getting subscribed & then retaining the node beyond when we want it to be retained
+                    NavigationLink(destination: NodeView(of: vm.destination)) {
+                        Text(vm.transition)
                     }
                 }
             }
@@ -134,8 +133,7 @@ struct TransitionView: View {
                 .tint(.purple)
             }
         }
-        .task { await vm.load() }
-        .onDisappear { vm.weaken() }
+        .task(vm.subscribe)
     }
 }
 

@@ -38,11 +38,9 @@ protocol TransitionVM<N>: Observable, Identifiable {
 
     var isWorse: Bool { get set }
 
-    var destination: Loading<AnyNodeVM<N>> { get set }
+    var destination: AnyNodeVM<N> { get }
 
-    func load() async
-
-    func weaken()
+    @Sendable func subscribe() async
 
     func toggleFavorite() async
 
