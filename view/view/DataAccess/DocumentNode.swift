@@ -41,6 +41,16 @@ final class DocumentNode: UIDocument, GraphManagerNode {
         }
     }
 
+    deinit {
+        Task { [weak self] in
+            guard let self else {
+                logWarn("self was nil in deinit so close wasn't called")
+                return
+            }
+            await self.close()
+        }
+    }
+
     /// Initialized with initially invalid information, but we read before returning from the constructor so it's never invalid to an outside observer
     @Published var meta: NodeMeta = .init(id: -1, incoming: [:], outgoing: [:])
 

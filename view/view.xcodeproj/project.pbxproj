@@ -41,6 +41,7 @@
 		0326BF2F292951D700ECA18F /* OrderedCollections in Frameworks */ = {isa = PBXBuildFile; productRef = 0326BF2E292951D700ECA18F /* OrderedCollections */; };
 		0326BF31292951D700ECA18F /* PersistentCollections in Frameworks */ = {isa = PBXBuildFile; productRef = 0326BF30292951D700ECA18F /* PersistentCollections */; };
 		0326BF33292951D700ECA18F /* SortedCollections in Frameworks */ = {isa = PBXBuildFile; productRef = 0326BF32292951D700ECA18F /* SortedCollections */; };
+		0328339F2B00139100D1AA58 /* DirectoryObserver.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0328339E2B00139100D1AA58 /* DirectoryObserver.swift */; };
 		032959F229CAC31F00FDE138 /* GraphManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 032959F129CAC31F00FDE138 /* GraphManager.swift */; };
 		033449D42999602B00BBCCC4 /* Semaphor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 033449D32999602B00BBCCC4 /* Semaphor.swift */; };
 		033449D72999634000BBCCC4 /* AsyncAlgorithms in Frameworks */ = {isa = PBXBuildFile; productRef = 033449D62999634000BBCCC4 /* AsyncAlgorithms */; };
@@ -105,6 +106,7 @@
 		0313681527149ECE00E69F83 /* ZoomableScrollView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ZoomableScrollView.swift; sourceTree = "<group>"; };
 		031CE3F329DA8643001470BD /* Suspense.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Suspense.swift; sourceTree = "<group>"; };
 		031CE3F529E21CDF001470BD /* FillableSymbolToggle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FillableSymbolToggle.swift; sourceTree = "<group>"; };
+		0328339E2B00139100D1AA58 /* DirectoryObserver.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DirectoryObserver.swift; sourceTree = "<group>"; };
 		032959F129CAC31F00FDE138 /* GraphManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GraphManager.swift; sourceTree = "<group>"; };
 		033449D32999602B00BBCCC4 /* Semaphor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Semaphor.swift; sourceTree = "<group>"; };
 		0339C23D29010DA000345CB1 /* TransitionView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TransitionView.swift; sourceTree = "<group>"; };
@@ -252,6 +254,7 @@
 				038C93002A3954BF0059C8D6 /* UbiquitousFile.swift */,
 				038C93022A397ECF0059C8D6 /* Errors.swift */,
 				03DFE0AF2A642F2900370692 /* Geometry.swift */,
+				0328339E2B00139100D1AA58 /* DirectoryObserver.swift */,
 			);
 			path = Utils;
 			sourceTree = "<group>";
@@ -476,6 +479,7 @@
 				03DFE0B02A642F2900370692 /* Geometry.swift in Sources */,
 				0339C23E29010DA000345CB1 /* TransitionView.swift in Sources */,
 				031CE3F429DA8643001470BD /* Suspense.swift in Sources */,
+				0328339F2B00139100D1AA58 /* DirectoryObserver.swift in Sources */,
 				03DD60D429D105C1005EC4A5 /* TransitionVM.swift in Sources */,
 				03136814271415FA00E69F83 /* Extensions.swift in Sources */,
 				03A32F962AAD929000C6A30B /* WeakDictionary.swift in Sources */,

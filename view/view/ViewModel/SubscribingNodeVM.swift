@@ -126,7 +126,6 @@ import Combine
     init(for nid: NID, in graph: GraphManager<N>) {
         self.nid = nid
         self.manager = graph
-        print("initialized \(nid) VM")
     }
 
     // TODO: move this stuff to a separate global VM for debug stats that we init at startup and store in the SwiftUI Environment
@@ -136,7 +135,6 @@ import Combine
     /// Called when the NodeVM should subscribe to the underlying Node/filesystem events.
     /// The task is cancelled when it the Node should be deallocated.
     func subscribe() async {
-        inMemoryNodeCountSubscription = await manager.mapTableSizePublisher.assign(to: \.inMemoryNodeCount, on: self)
         do {
             while true {
                 try await beginUpdateState()
@@ -146,6 +144,7 @@ import Combine
             logInfo("cancelled")
         } catch {
             logError("unexpected error thrown \(error)")
+            internalState = .failed(error: error)
         }
 
         switch internalState {
@@ -158,6 +157,8 @@ import Combine
             break
         }
     }
+
+    struct DuplicateSubscription: LocalizedError, Codable {}
 
     private func beginUpdateState() async throws {
         switch internalState {
@@ -173,10 +174,8 @@ import Combine
             try await Task.sleep(for: .seconds(1))
             return
         case .loadingActive, .loadedActive:
-            // it may eventually be desirable to allow preloading (i.e. SubscribingTransitionVM calls `preload` on its `NodeVM` when it creates it) to make load times faster, that might break this assumption
-            logError("this should be impossible; this should only be called from subscribe from .task on a View")
-            try await Task.sleep(for: .seconds(1))
-            return
+            // Swift UI seems to call this multiple times so we need to be able to exit in this case
+            throw DuplicateSubscription()
         }
 
         let node: N

@@ -32,7 +32,7 @@ protocol TransitionVM<N>: Observable, Identifiable {
 
     var transition: String { get set }
 
-    var thumbnail: Loading<ThumbnailValue> { get set }
+    var thumbnail: Loading<ThumbnailValue> { get }
 
     var isFavorite: Bool { get set }
 

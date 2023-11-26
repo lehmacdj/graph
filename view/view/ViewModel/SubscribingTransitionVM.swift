@@ -12,14 +12,44 @@ import SwiftUI
     let direction: Direction
     let destinationNid: NID
     var transition: String
-    var thumbnail: Loading<ThumbnailValue> = .idle
+    var thumbnail: Loading<ThumbnailValue> {
+        switch internalState {
+        case .idle:
+            return .idle
+        case .loadingActive(thumbnail: nil, _):
+            return .loading
+        case .loadingActive(thumbnail: .some(let state), _):
+            // even though we're internally loading this indicates that we were fully loaded before & thus we return the loaded information we already had
+            return .loaded(state)
+        case .loadingInactive:
+            return .loading
+        case .loadedActive(let state, _):
+            return .loaded(state)
+        case .loadedInactive(let state):
+            return .loaded(state)
+        case .failed(let error):
+            return .failed(error)
+        }
+    }
     var isFavorite: Bool
     var isWorse: Bool
     var destination: AnyNodeVM<N> {
         SubscribingNodeVM(for: destinationNid, in: manager).eraseToAnyNodeVM()
     }
 
-    private var destinationNode: N? = nil
+    enum InternalState {
+        case idle
+        /// `loadingActive` captures a few substates all of which are valid
+        /// * transition could be non-nil if we were formerly loaded and thus have a value
+        /// * the node is populated during the loading process and is expected to exist for the final stage (initial data fetch) of the loading process
+        case loadingActive(thumbnail: ThumbnailValue?, destinationNode: N?)
+        case loadingInactive
+        case loadedActive(thumbnail: ThumbnailValue, destinationNode: N)
+        case loadedInactive(thumbnail: ThumbnailValue)
+        case failed(error: Error)
+    }
+
+    private var internalState: InternalState = .idle
 
     private let manager: GraphManager<N>
 
@@ -48,60 +78,122 @@ import SwiftUI
         self.isWorse = isWorse
     }
 
-    private func fetchDestinationNode() async {
+    struct DuplicateSubscription: LocalizedError, Codable {}
+
+    private func beginUpdateState() async throws {
+        switch internalState {
+        case .idle:
+            internalState = .loadingActive(thumbnail: nil, destinationNode: nil)
+        case .loadingInactive:
+            internalState = .loadingActive(thumbnail: nil, destinationNode: nil)
+        case .loadedInactive(let thumbnail):
+            internalState = .loadingActive(thumbnail: thumbnail, destinationNode: nil)
+        case .failed(_):
+            // we don't want to start loading failed nodes so that the error message doesn't get cleared
+            // we sleep for 1 second and then check the current state again, so that the VM can get unstuck if internalState gets set to something other than failed
+            try await Task.sleep(for: .seconds(1))
+            return
+        case .loadingActive, .loadedActive:
+            // Swift UI seems to call this multiple times so we need to be able to exit in this case
+            throw DuplicateSubscription()
+        }
+
         let destinationNode: N
         do {
             destinationNode = try await manager[destinationNid]
-            self.destinationNode = destinationNode
-            logDebug("successfully fetched destinationNode \(destinationNid)")
         } catch {
             logError(error.localizedDescription)
-            self.thumbnail = .failed(error)
+            internalState = .failed(error: error)
             return
         }
+
+        guard case .loadingActive(let thumbnail, let existingNode) = internalState else {
+            return
+        }
+
+        guard existingNode == nil else {
+            fatalError("it shouldn't be possible for the node to be non-nil; there should only be a single Task running beginUpdateState")
+        }
+
+        if let thumbnail {
+            internalState = .loadedActive(thumbnail: thumbnail, destinationNode: destinationNode)
+        } else {
+            if let dataURL = destinationNode.dataURL {
+                if destinationNode.dataRequiresDownload {
+                    internalState = .loadingActive(thumbnail: .cloudFile, destinationNode: destinationNode)
+                } else {
+                    do {
+                        if let image = UIImage(data: try await destinationNode.data.unwrapped("data should exist if URL exists").data) {
+                            guard case .loadingActive = internalState else {
+                                logInfo("unexpected, need to re-run beginUpdateState")
+                                return
+                            }
+                            internalState = .loadingActive(thumbnail: .thumbnail(.loaded(image)), destinationNode: destinationNode)
+                        } else {
+                            guard case .loadingActive = internalState else {
+                                logInfo("unexpected, need to re-run beginUpdateState")
+                                return
+                            }
+                            internalState = .loadingActive(thumbnail: .noThumbnail, destinationNode: destinationNode)
+                        }
+                    } catch {
+                        logWarn("an error occurred while loading a thumbnail \(error)")
+                        internalState = .failed(error: error)
+                        return
+                    }
+                }
+            }
+        }
+
+
+        try await updateStateLoop()
     }
 
-    private func loadThumbnail() async {
-        guard let destinationNode else { return }
+    private func updateStateLoop() async throws {
+        guard case .loadedActive(_, let destinationNode) = internalState else { return }
 
-        if destinationNode.dataURL == nil {
-            self.thumbnail = .loaded(.noThumbnail)
-        } else if destinationNode.dataRequiresDownload {
-            self.thumbnail = .loaded(.cloudFile)
-        } else {
-            await fetchThumbnail()
+        for await change in await manager.dataChanges(for: destinationNid).values {
+            switch change {
+            case .added, .changed:
+                if !destinationNode.dataRequiresDownload {
+                    await fetchThumbnail()
+                } else {
+                    // if we are in an inconsistent state we have to re-run beginUpdateState
+                    guard case .loadedActive = internalState else { return }
+                    internalState = .loadedActive(thumbnail: .cloudFile, destinationNode: destinationNode)
+                }
+            case .removed:
+                // if we are in an inconsistent state we have to re-run beginUpdateState
+                guard case .loadedActive = internalState else { return }
+                internalState = .loadedActive(thumbnail: .noThumbnail, destinationNode: destinationNode)
+            }
         }
     }
 
     func subscribe() async {
-        await fetchDestinationNode()
-
-        switch thumbnail {
-        case .idle:
-            self.thumbnail = .loading
-            await loadThumbnail()
-        case .loading:
-            logError("subscribe should only be called once")
-            return
-        case .loaded:
-            logInfo("skipping loading because already loaded")
-            return
-        case .failed:
-            logInfo("skipping loaded because we failed to load before")
-        }
-
-        self.destinationNode = nil
-
         do {
             while true {
-                // TODO: we probably want to eventually update the thumbnail automatically here
-                // at the moment we don't have a great way of doing so, so we just spin so we can deallocate destinationNode when the transition goes out of scope
-                try await Task.sleep(for: .seconds(1))
+                try await beginUpdateState()
+                try Task.checkCancellation()
             }
         } catch is CancellationError {
-            logDebug("cancelled transition: \(destinationNid)")
+            logInfo("cancelled transition \(transition) to \(destinationNid)")
+        } catch is DuplicateSubscription {
+            logInfo("duplicate subscription, exiting")
+            return
         } catch {
-            logError("unexpected error: \(error)")
+            logError("unexpected error thrown \(error)")
+            internalState = .failed(error: error)
+        }
+
+        switch internalState {
+        case .loadingActive(thumbnail: nil, destinationNode: _):
+            internalState = .loadingInactive
+        case .loadingActive(let .some(thumbnail), destinationNode: _), .loadedActive(let thumbnail, _):
+            internalState = .loadedInactive(thumbnail: thumbnail)
+        case .idle, .loadingInactive, .loadedInactive, .failed:
+            // nothing to do already in an okay state
+            break
         }
     }
 
@@ -124,19 +216,34 @@ import SwiftUI
     }
 
     func fetchThumbnail() async {
+        guard case .loadedActive(_, let destinationNode) = internalState else {
+            return
+        }
+
         do {
             logDebug("starting to fetch thumbnail")
-            let destinationNode = try destinationNode.unwrapped("destinationNode was nil")
             let dataDocument = try await destinationNode.data.unwrapped("data's document initializer returned nil")
             if let image = UIImage(data: await dataDocument.data) {
-                self.thumbnail = .loaded(.thumbnail(.loaded(image)))
+                guard case .loadedActive = internalState else {
+                    logWarn("internalState of transition \(transition) to \(destinationNid) has changed")
+                    return
+                }
+                internalState = .loadedActive(thumbnail: .thumbnail(.loaded(image)), destinationNode: destinationNode)
             } else {
-                self.thumbnail = .loaded(.noThumbnail)
+                guard case .loadedActive = internalState else {
+                    logWarn("internalState of transition \(transition) to \(destinationNid) has changed")
+                    return
+                }
+                internalState = .loadedActive(thumbnail: .noThumbnail, destinationNode: destinationNode)
             }
             logDebug("successfully loaded thumbnail")
         } catch {
+            guard case .loadedActive = internalState else {
+                logWarn("internalState of transition \(transition) to \(destinationNid) has changed")
+                return
+            }
             logError("failed to load thumbnail: \(error)")
-            self.thumbnail = .loaded(.thumbnail(.failed(error)))
+            internalState = .loadedActive(thumbnail: .thumbnail(.failed(error)), destinationNode: destinationNode)
         }
     }
 

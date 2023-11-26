@@ -32,7 +32,6 @@ import Foundation
 
     var thumbnail: Loading<ThumbnailValue> {
         get { underlying.thumbnail }
-        set { underlying.thumbnail = newValue }
     }
 
     var isFavorite: Bool {

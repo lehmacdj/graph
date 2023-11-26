@@ -15,6 +15,10 @@ actor GraphManager<N: Node> {
 
     var nextNodeId: NID
 
+    private var directoryObserver: DirectoryObserver?
+
+    private var _graphChanges: AnyPublisher<GraphChange, Never>?
+
     init?(dir: URL) async {
         basePath = dir
         nextNodeId = 1
@@ -41,6 +45,29 @@ actor GraphManager<N: Node> {
             logError("unable to fetch nextNodeId via origin node metadata")
             return nil
         }
+
+
+        let directoryObserver = DirectoryObserver(url: basePath)
+        let graphChanges: any Publisher<GraphChange, Never> = directoryObserver.changes.compactMap { [weak self] change in
+            switch (change, self?.changeType(for: change.url))  {
+            case (.added, .metadata(let nid)):
+                return .metadataAdded(nid)
+            case (.removed, .metadata(let nid)):
+                return .metadataRemoved(nid)
+            case (.changed, .metadata(let nid)):
+                return .metadataUpdated(nid)
+            case (.added, .data(let nid)):
+                return .dataAdded(nid)
+            case (.removed, .data(let nid)):
+                return .dataRemoved(nid)
+            case (.changed, .data(let nid)):
+                return .dataUpdated(nid)
+            default:
+                return nil
+            }
+        }
+        self.directoryObserver = directoryObserver
+        self._graphChanges = graphChanges.eraseToAnyPublisher()
     }
 
     nonisolated func metaPath(for nid: NID) -> URL {
@@ -51,27 +78,9 @@ actor GraphManager<N: Node> {
         basePath.appendingPathComponent(nid.dataPath)
     }
 
-    // need to use NSMapTable here because it supports weak references which is important for
-    // this cache so that we don't end up retaining nodes longer than we need to
-    // apparently NSMapTable has bugs making it almost unusable: http://cocoamine.net/blog/2013/12/13/nsmaptable-and-zeroing-weak-references/
-    private var internedNodes = WeakDictionary<NID, N>()
-
-    @Published private var mapTableSize = 0
-    public var mapTableSizePublisher: AnyPublisher<Int, Never> {
-        $mapTableSize.eraseToAnyPublisher()
-    }
-
     subscript(id: NID) -> N {
         get async throws {
-            if let node = internedNodes[id] {
-                mapTableSize = internedNodes.count
-                return node
-            }
-
-            let node = try await N(nid: id, root: self)
-            internedNodes[id] = node
-            mapTableSize = internedNodes.count
-            return node
+            return try await N(nid: id, root: self)
         }
     }
 
@@ -98,6 +107,58 @@ actor GraphManager<N: Node> {
             }
             return Tags(tagNode: tags, root: self)
         }
+    }
+
+    private enum ChangeType {
+        case metadata(NID)
+        case data(NID)
+    }
+
+    private nonisolated func changeType(for url: URL) -> ChangeType? {
+        let suffix = url.trimmingPath(prefix: basePath)
+
+        if let nid = suffix?.trimming(suffix: ".json") as? NID {
+            return .metadata(nid)
+        } else if let nid = suffix?.trimming(suffix: ".data") as? NID {
+            return .data(nid)
+        } else {
+            return nil
+        }
+    }
+
+    enum GraphChange {
+        case metadataRemoved(NID)
+        case metadataAdded(NID)
+        case metadataUpdated(NID)
+        case dataRemoved(NID)
+        case dataAdded(NID)
+        case dataUpdated(NID)
+    }
+
+    var graphChanges: AnyPublisher<GraphChange, Never> {
+        logError("graphChanges is nil unexpectedly, this should be impossible post initialization")
+        return _graphChanges!
+    }
+
+    enum DataChange {
+        case added(NID)
+        case changed(NID)
+        case removed(NID)
+    }
+
+    func dataChanges(for nid: NID) -> AnyPublisher<DataChange, Never> {
+        graphChanges.compactMap { change in
+            switch change {
+            case .dataAdded(let id) where id == nid:
+                return .added(id)
+            case .dataUpdated(let id) where id == nid:
+                return .changed(id)
+            case .dataRemoved(let id) where id == nid:
+                return .removed(id)
+            default:
+                return nil
+            }
+        }.eraseToAnyPublisher()
     }
 
     /// Creates a new node not connected to anything

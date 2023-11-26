@@ -73,3 +73,23 @@ extension View {
         }
     }
 }
+
+extension URL {
+    /// Return the remainder of the URL after removing the given prefix or nil if the prefix is not a prefix of this URL
+    func trimmingPath(prefix url: URL) -> String? {
+        guard self.absoluteString.starts(with: url.absoluteString) else {
+            return nil
+        }
+        return String(self.absoluteString.dropFirst(self.absoluteString.count))
+    }
+}
+
+extension String {
+    /// Trims the given string off the end of the string or returns nil if the string does not occur at the end of the string
+    func trimming(suffix: String) -> String? {
+        guard self.hasSuffix(suffix) else {
+            return nil
+        }
+        return String(self.dropLast(suffix.count))
+    }
+}
