@@ -16,9 +16,9 @@ import SwiftUI
         switch internalState {
         case .idle:
             return .idle
-        case .loadingActive(thumbnail: nil, _):
+        case .loadingActive(thumbnail: nil):
             return .loading
-        case .loadingActive(thumbnail: .some(let state), _):
+        case .loadingActive(thumbnail: .some(let state)):
             // even though we're internally loading this indicates that we were fully loaded before & thus we return the loaded information we already had
             return .loaded(state)
         case .loadingInactive:
@@ -42,7 +42,7 @@ import SwiftUI
         /// `loadingActive` captures a few substates all of which are valid
         /// * transition could be non-nil if we were formerly loaded and thus have a value
         /// * the node is populated during the loading process and is expected to exist for the final stage (initial data fetch) of the loading process
-        case loadingActive(thumbnail: ThumbnailValue?, destinationNode: N?)
+        case loadingActive(thumbnail: ThumbnailValue?)
         case loadingInactive
         case loadedActive(thumbnail: ThumbnailValue, destinationNode: N)
         case loadedInactive(thumbnail: ThumbnailValue)
@@ -83,11 +83,11 @@ import SwiftUI
     private func beginUpdateState() async throws {
         switch internalState {
         case .idle:
-            internalState = .loadingActive(thumbnail: nil, destinationNode: nil)
+            internalState = .loadingActive(thumbnail: nil)
         case .loadingInactive:
-            internalState = .loadingActive(thumbnail: nil, destinationNode: nil)
+            internalState = .loadingActive(thumbnail: nil)
         case .loadedInactive(let thumbnail):
-            internalState = .loadingActive(thumbnail: thumbnail, destinationNode: nil)
+            internalState = .loadingActive(thumbnail: thumbnail)
         case .failed(_):
             // we don't want to start loading failed nodes so that the error message doesn't get cleared
             // we sleep for 1 second and then check the current state again, so that the VM can get unstuck if internalState gets set to something other than failed
@@ -107,41 +107,22 @@ import SwiftUI
             return
         }
 
-        guard case .loadingActive(let thumbnail, let existingNode) = internalState else {
+        guard case .loadingActive(let thumbnail) = internalState else {
+            logWarn("state changed, need to re-begin loading state")
             return
-        }
-
-        guard existingNode == nil else {
-            fatalError("it shouldn't be possible for the node to be non-nil; there should only be a single Task running beginUpdateState")
         }
 
         if let thumbnail {
             internalState = .loadedActive(thumbnail: thumbnail, destinationNode: destinationNode)
         } else {
-            if let dataURL = destinationNode.dataURL {
+            if destinationNode.dataURL != nil {
                 if destinationNode.dataRequiresDownload {
-                    internalState = .loadingActive(thumbnail: .cloudFile, destinationNode: destinationNode)
+                    internalState = .loadedActive(thumbnail: .cloudFile, destinationNode: destinationNode)
                 } else {
-                    do {
-                        if let image = UIImage(data: try await destinationNode.data.unwrapped("data should exist if URL exists").data) {
-                            guard case .loadingActive = internalState else {
-                                logInfo("unexpected, need to re-run beginUpdateState")
-                                return
-                            }
-                            internalState = .loadingActive(thumbnail: .thumbnail(.loaded(image)), destinationNode: destinationNode)
-                        } else {
-                            guard case .loadingActive = internalState else {
-                                logInfo("unexpected, need to re-run beginUpdateState")
-                                return
-                            }
-                            internalState = .loadingActive(thumbnail: .noThumbnail, destinationNode: destinationNode)
-                        }
-                    } catch {
-                        logWarn("an error occurred while loading a thumbnail \(error)")
-                        internalState = .failed(error: error)
-                        return
-                    }
+                    internalState = .loadedActive(thumbnail: .thumbnail(.loading), destinationNode: destinationNode)
                 }
+            } else {
+                internalState = .loadedActive(thumbnail: .noThumbnail, destinationNode: destinationNode)
             }
         }
 
@@ -151,6 +132,16 @@ import SwiftUI
 
     private func updateStateLoop() async throws {
         guard case .loadedActive(_, let destinationNode) = internalState else { return }
+
+        // initial state update since manager.dataChanges doesn't send an initial value because it's a delta based publisher
+        if destinationNode.dataURL == nil {
+            internalState = .loadedActive(thumbnail: .noThumbnail, destinationNode: destinationNode)
+        }
+        else if !destinationNode.dataRequiresDownload {
+            await fetchThumbnail()
+        } else {
+            internalState = .loadedActive(thumbnail: .cloudFile, destinationNode: destinationNode)
+        }
 
         for await change in await manager.dataChanges(for: destinationNid).values {
             switch change {
@@ -187,9 +178,9 @@ import SwiftUI
         }
 
         switch internalState {
-        case .loadingActive(thumbnail: nil, destinationNode: _):
+        case .loadingActive(thumbnail: nil):
             internalState = .loadingInactive
-        case .loadingActive(let .some(thumbnail), destinationNode: _), .loadedActive(let thumbnail, _):
+        case .loadingActive(let .some(thumbnail)), .loadedActive(let thumbnail, _):
             internalState = .loadedInactive(thumbnail: thumbnail)
         case .idle, .loadingInactive, .loadedInactive, .failed:
             // nothing to do already in an okay state

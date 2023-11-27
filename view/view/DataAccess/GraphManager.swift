@@ -136,8 +136,10 @@ actor GraphManager<N: Node> {
     }
 
     var graphChanges: AnyPublisher<GraphChange, Never> {
-        logError("graphChanges is nil unexpectedly, this should be impossible post initialization")
-        return _graphChanges!
+        guard let _graphChanges else {
+            fatalError("graphChanges is nil unexpectedly, this should be impossible post initialization")
+        }
+        return _graphChanges
     }
 
     enum DataChange {
