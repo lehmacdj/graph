@@ -131,16 +131,10 @@ import SwiftUI
     }
 
     private func updateStateLoop() async throws {
-        guard case .loadedActive(_, let destinationNode) = internalState else { return }
+        guard case .loadedActive(let thumbnail, let destinationNode) = internalState else { return }
 
-        // initial state update since manager.dataChanges doesn't send an initial value because it's a delta based publisher
-        if destinationNode.dataURL == nil {
-            internalState = .loadedActive(thumbnail: .noThumbnail, destinationNode: destinationNode)
-        }
-        else if !destinationNode.dataRequiresDownload {
+        if case .thumbnail(.loading) = thumbnail {
             await fetchThumbnail()
-        } else {
-            internalState = .loadedActive(thumbnail: .cloudFile, destinationNode: destinationNode)
         }
 
         for await change in await manager.dataChanges(for: destinationNid).values {
