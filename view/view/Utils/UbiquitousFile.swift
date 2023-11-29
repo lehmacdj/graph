@@ -46,34 +46,13 @@ struct UbiquitousFileAttributes {
             return nil
         }
 
-        guard let isUbiquitous = values.isUbiquitousItem else {
-            fatalError("missing .isUbiquitousItem")
-        }
-        self.isUbiquitous = isUbiquitous
-
-        guard let isUploaded = values.ubiquitousItemIsUploaded else {
-            fatalError("missing .ubiquitousItemIsUploaded")
-        }
-        self.isUploaded = isUploaded
-        guard let isUploading = values.ubiquitousItemIsUploading else {
-            fatalError("missing .ubiquitousItemIsUploading")
-        }
-        self.isUploading = isUploading
+        self.isUbiquitous =  values.isUbiquitousItem ?? false
+        self.isUploaded = values.ubiquitousItemIsUploaded ?? false
+        self.isUploading = values.ubiquitousItemIsUploading ?? false
         self.uploadingError = values.ubiquitousItemUploadingError as Error?
-
-        guard let downloadingStatusValue = values.ubiquitousItemDownloadingStatus,
-            let downloadingStatus = DownloadingStatus(rawValue: downloadingStatusValue) else {
-            fatalError("missing or invalid .ubiquitousItemDownloadingStatus")
-        }
-        self.downloadingStatus = downloadingStatus
-        guard let downloadRequested = values.ubiquitousItemDownloadRequested else {
-            fatalError("missing .ubiquitousItemDownloadRequested")
-        }
-        self.downloadRequested = downloadRequested
-        guard let isDownloading = values.ubiquitousItemIsDownloading else {
-            fatalError("missing NSMetadataUbiquitousItemIsDownloadingKey")
-        }
-        self.isDownloading = isDownloading
+        self.downloadingStatus = DownloadingStatus(rawValue: values.ubiquitousItemDownloadingStatus ?? .current) ?? .current
+        self.downloadRequested = values.ubiquitousItemDownloadRequested ?? false
+        self.isDownloading = values.ubiquitousItemIsDownloading ?? false
         self.downloadingError = values.ubiquitousItemDownloadingError as Error?
     }
 
