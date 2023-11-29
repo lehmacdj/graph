@@ -1,0 +1,7 @@
+project: Nodal.xcodeproj
+schemes:
+- Nodal
+targets:
+- Nodal
+- NodalTests
+- NodalUITests

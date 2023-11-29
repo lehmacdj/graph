@@ -1,7 +1,0 @@
-project: view.xcodeproj
-schemes:
-- view
-targets:
-- view
-- viewTests
-- viewUITests
