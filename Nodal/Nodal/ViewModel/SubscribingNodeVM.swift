@@ -47,6 +47,17 @@ import Combine
         case loadedActive(state: State, node: N)
         case loadedInactive(state: State)
         case failed(error: Error)
+
+        var node: N? {
+            switch self {
+            case .idle, .loadingInactive, .loadedInactive, .failed:
+                return nil
+            case .loadingActive(_, let node):
+                return node
+            case .loadedActive(_, let node):
+                return node
+            }
+        }
     }
 
     struct State: NodeState {
@@ -135,13 +146,13 @@ import Combine
     /// Called when the NodeVM should subscribe to the underlying Node/filesystem events.
     /// The task is cancelled when it the Node should be deallocated.
     func subscribe() async {
+        logInfo("\(nid) starting")
         do {
             while true {
                 try await beginUpdateState()
                 try Task.checkCancellation()
             }
         } catch is CancellationError {
-            logInfo("cancelled")
         } catch {
             logError("unexpected error thrown \(error)")
             internalState = .failed(error: error)
@@ -156,6 +167,7 @@ import Combine
             // nothing to do, already in an okay state
             break
         }
+        logInfo("\(nid) done")
     }
 
     struct DuplicateSubscription: LocalizedError, Codable {}
@@ -251,8 +263,8 @@ import Combine
             logInfo("about to create state")
             try Task.checkCancellation()
 
-            let state = await State(
-                data: data?.data,
+            let state = State(
+                data: data,
                 favoriteLinks: favoritesSet != nil ? mkTransitionVMs(favorites, inDirection: .forward, isFavorite: true, isWorse: false) : nil,
                 links: mkTransitionVMs(normal, inDirection: .forward, isFavorite: false, isWorse: false),
                 worseLinks: worseSet != nil ? mkTransitionVMs(worse, inDirection: .forward, isFavorite: false, isWorse: true) : nil,

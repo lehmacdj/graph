@@ -44,7 +44,7 @@ import Foundation
         set { underlying.isWorse = newValue }
     }
 
-    func subscribe() async {
+    @Sendable func subscribe() async {
         await underlying.subscribe()
     }
 

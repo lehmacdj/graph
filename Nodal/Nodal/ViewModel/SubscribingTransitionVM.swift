@@ -47,6 +47,15 @@ import SwiftUI
         case loadedActive(thumbnail: ThumbnailValue, destinationNode: N)
         case loadedInactive(thumbnail: ThumbnailValue)
         case failed(error: Error)
+
+        var node: N? {
+            switch self {
+            case .idle, .loadingInactive, .loadingActive, .loadedInactive, .failed:
+                return nil
+            case .loadedActive(_, let node):
+                return node
+            }
+        }
     }
 
     private var internalState: InternalState = .idle
@@ -207,8 +216,8 @@ import SwiftUI
 
         do {
             logDebug("starting to fetch thumbnail")
-            let dataDocument = try await destinationNode.data.unwrapped("data's document initializer returned nil")
-            if let image = UIImage(data: await dataDocument.data) {
+            let data = try await destinationNode.data.unwrapped("doesn't have data")
+            if let image = UIImage(data: data) {
                 guard case .loadedActive = internalState else {
                     logWarn("internalState of transition \(transition) to \(destinationNid) has changed")
                     return

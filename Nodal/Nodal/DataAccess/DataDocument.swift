@@ -7,8 +7,8 @@
 
 import UIKit
 
-final class DataDocument<N: Node>: UIDocument {
-    init?(node: N) async {
+final class DataDocument: UIDocument {
+    init?<N: Node>(node: N) async {
         guard let dataURL = node.dataURL else {
             return nil
         }

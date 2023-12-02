@@ -7,66 +7,51 @@
 
 import Combine
 import UIKit
-import UniformTypeIdentifiers
 
-final class DocumentNode: UIDocument, GraphManagerNode {
-
-    // MARK: Node
-
+final class DocumentNode: GraphManagerNode {
     let nid: NID
     let manager: GraphManager<DocumentNode>
-
-    struct FailedToOpenDocument: LocalizedError, Codable {
-        let documentClosed: Bool
-        let inConflict: Bool
-        let savingError: Bool
-        let editingDisabled: Bool
-        let progressAvailable: Bool
-
-        init(documentState: UIDocument.State) {
-            documentClosed = documentState.contains(.closed)
-            inConflict = documentState.contains(.inConflict)
-            savingError = documentState.contains(.savingError)
-            editingDisabled = documentState.contains(.editingDisabled)
-            progressAvailable = documentState.contains(.progressAvailable)
-        }
-    }
 
     init(nid: NID, root: GraphManager<DocumentNode>) async throws {
         self.nid = nid
         self.manager = root
-        super.init(fileURL: manager.metaPath(for: nid))
-        guard await super.open() else {
-            throw FailedToOpenDocument(documentState: documentState)
-        }
+        self._metadataDocument = try await NodeMetadataDocument(metaURL: manager.metaPath(for: nid))
     }
 
     deinit {
-        Task { [weak self] in
-            guard let self else {
-                logWarn("self was nil in deinit so close wasn't called")
-                return
-            }
-            await self.close()
+        Task { [metadataDocument, _dataDocument] in
+            async let _ = metadataDocument.close()
+            async let _ = _dataDocument?.close()
+            // TODO: send notification that something went wrong when closing document through GraphManager
+            // then we can surface the error to the user
         }
     }
 
-    /// Initialized with initially invalid information, but we read before returning from the constructor so it's never invalid to an outside observer
-    @Published var meta: NodeMeta = .init(id: -1, incoming: [:], outgoing: [:])
+    // MARK: Metadata
+
+    private var _metadataDocument: NodeMetadataDocument?
+    private var metadataDocument: NodeMetadataDocument {
+        guard let _metadataDocument else {
+            fatalError("initialized in constructor")
+        }
+        return _metadataDocument
+    }
+
+
+    var meta: NodeMeta {
+        get {
+            metadataDocument.meta
+        }
+        set {
+            metadataDocument.meta = newValue
+        }
+    }
 
     var metaPublisher: AnyPublisher<NodeMeta, Never> {
-        $meta.eraseToAnyPublisher()
+        metadataDocument.metaPublisher
     }
 
-    subscript(transition: String) -> [DocumentNode] {
-        get async {
-            guard let ids = meta.outgoing[transition] else {
-                logDebug("didn't find transition \(transition) from node \(meta.id)")
-                return []
-            }
-            return await Array(ids.async.compactMap { [weak self] in try? await self?.manager[$0] })
-        }
-    }
+    // MARK: Data
 
     var dataURL: URL? {
         guard nid != NID.origin else {
@@ -107,9 +92,19 @@ final class DocumentNode: UIDocument, GraphManagerNode {
         }
     }
 
-    var data: DataDocument<DocumentNode>? {
+    private var _dataDocument: DataDocument?
+    private var dataDocument: DataDocument? {
         get async {
-            await DataDocument(node: self)
+            if _dataDocument == nil {
+                _dataDocument = await DataDocument(node: self)
+            }
+            return _dataDocument
+        }
+    }
+
+    var data: Data? {
+        get async {
+            await dataDocument?.data
         }
     }
 
@@ -123,29 +118,5 @@ final class DocumentNode: UIDocument, GraphManagerNode {
         } catch {
             logWarn("failed while removing a file")
         }
-    }
-
-    // MARK: UIDocument
-
-    struct InvalidFileType: LocalizedError, Codable {}
-
-    override func contents(forType typeName: String) throws -> Any {
-        guard typeName == UTType.json.identifier else {
-            throw InvalidFileType()
-        }
-        let encoder = JSONEncoder()
-        return try encoder.encode(meta)
-    }
-
-    struct ContentsIsNotData: LocalizedError, Codable {}
-
-    override func load(fromContents contents: Any, ofType typeName: String?) throws {
-        guard typeName == UTType.json.identifier else {
-            throw InvalidFileType()
-        }
-        guard let data = contents as? Data else {
-            throw ContentsIsNotData()
-        }
-        meta = try JSONDecoder().decode(NodeMeta.self, from: data)
     }
 }

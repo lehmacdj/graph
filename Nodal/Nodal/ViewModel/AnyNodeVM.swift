@@ -25,7 +25,7 @@ import Foundation
         get { underlying.nid }
     }
 
-    func subscribe() async {
+    @Sendable func subscribe() async {
         await underlying.subscribe()
     }
 

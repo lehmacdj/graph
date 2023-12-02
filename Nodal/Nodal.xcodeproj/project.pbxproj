@@ -26,8 +26,8 @@
 		031367E72713FCF200E69F83 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 031367E62713FCF200E69F83 /* ContentView.swift */; };
 		031367E92713FCF400E69F83 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 031367E82713FCF400E69F83 /* Assets.xcassets */; };
 		031367EC2713FCF400E69F83 /* Preview Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 031367EB2713FCF400E69F83 /* Preview Assets.xcassets */; };
-		031367F72713FCF400E69F83 /* NodalTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 031367F62713FCF400E69F83 /* viewTests.swift */; };
-		031368022713FCF400E69F83 /* NodalUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 031368012713FCF400E69F83 /* viewUITests.swift */; };
+		031367F72713FCF400E69F83 /* NodalTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 031367F62713FCF400E69F83 /* NodalTests.swift */; };
+		031368022713FCF400E69F83 /* NodalUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 031368012713FCF400E69F83 /* NodalUITests.swift */; };
 		031368102713FCFF00E69F83 /* GraphSerialization.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0313680F2713FCFF00E69F83 /* GraphSerialization.swift */; };
 		0313681227140A0900E69F83 /* Utils.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0313681127140A0900E69F83 /* Utils.swift */; };
 		03136814271415FA00E69F83 /* Extensions.swift in Sources */ = {isa = PBXBuildFile; fileRef = 03136813271415FA00E69F83 /* Extensions.swift */; };
@@ -50,6 +50,7 @@
 		03589E892A8096EC004AD75B /* Tags.swift in Sources */ = {isa = PBXBuildFile; fileRef = 03589E882A8096EC004AD75B /* Tags.swift */; };
 		03589E8B2A809F72004AD75B /* SubscribingNodeVM.swift in Sources */ = {isa = PBXBuildFile; fileRef = 03589E8A2A809F72004AD75B /* SubscribingNodeVM.swift */; };
 		03589E8F2A81EDE3004AD75B /* SubscribingTransitionVM.swift in Sources */ = {isa = PBXBuildFile; fileRef = 03589E8E2A81EDE3004AD75B /* SubscribingTransitionVM.swift */; };
+		0367FDCC2B1BBB4B00D4B3B3 /* NodeMetadataDocument.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0367FDCB2B1BBB4B00D4B3B3 /* NodeMetadataDocument.swift */; };
 		0375E7C82782C06000FB6548 /* SafariView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0375E7C72782C06000FB6548 /* SafariView.swift */; };
 		038C93012A3954BF0059C8D6 /* UbiquitousFile.swift in Sources */ = {isa = PBXBuildFile; fileRef = 038C93002A3954BF0059C8D6 /* UbiquitousFile.swift */; };
 		038C93032A397ECF0059C8D6 /* Errors.swift in Sources */ = {isa = PBXBuildFile; fileRef = 038C93022A397ECF0059C8D6 /* Errors.swift */; };
@@ -114,6 +115,7 @@
 		03589E882A8096EC004AD75B /* Tags.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Tags.swift; sourceTree = "<group>"; };
 		03589E8A2A809F72004AD75B /* SubscribingNodeVM.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SubscribingNodeVM.swift; sourceTree = "<group>"; };
 		03589E8E2A81EDE3004AD75B /* SubscribingTransitionVM.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SubscribingTransitionVM.swift; sourceTree = "<group>"; };
+		0367FDCB2B1BBB4B00D4B3B3 /* NodeMetadataDocument.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NodeMetadataDocument.swift; sourceTree = "<group>"; };
 		0368D1E829976B4C0026D9EE /* Nodal.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Nodal.entitlements; sourceTree = "<group>"; };
 		0375E7C72782C06000FB6548 /* SafariView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SafariView.swift; sourceTree = "<group>"; };
 		038C93002A3954BF0059C8D6 /* UbiquitousFile.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UbiquitousFile.swift; sourceTree = "<group>"; };
@@ -240,6 +242,7 @@
 				03A934C12A3EC10F0011DB8D /* DocumentNode.swift */,
 				03A934C32A3F8AC20011DB8D /* DataDocument.swift */,
 				03589E882A8096EC004AD75B /* Tags.swift */,
+				0367FDCB2B1BBB4B00D4B3B3 /* NodeMetadataDocument.swift */,
 			);
 			path = DataAccess;
 			sourceTree = "<group>";
@@ -487,6 +490,7 @@
 				038C93012A3954BF0059C8D6 /* UbiquitousFile.swift in Sources */,
 				03A934C22A3EC10F0011DB8D /* DocumentNode.swift in Sources */,
 				03589E8F2A81EDE3004AD75B /* SubscribingTransitionVM.swift in Sources */,
+				0367FDCC2B1BBB4B00D4B3B3 /* NodeMetadataDocument.swift in Sources */,
 				0313681627149ECE00E69F83 /* ZoomableScrollView.swift in Sources */,
 				03589E892A8096EC004AD75B /* Tags.swift in Sources */,
 				033449D42999602B00BBCCC4 /* Semaphor.swift in Sources */,
@@ -494,7 +498,7 @@
 				03589E8B2A809F72004AD75B /* SubscribingNodeVM.swift in Sources */,
 				03DD60D829D15891005EC4A5 /* NodeVM.swift in Sources */,
 				03D1D8DE28FB559B00E76F27 /* NodeView.swift in Sources */,
-				031367E32713FCF200E69F83 /* viewApp.swift in Sources */,
+				031367E32713FCF200E69F83 /* NodalApp.swift in Sources */,
 				0375E7C82782C06000FB6548 /* SafariView.swift in Sources */,
 				038C93032A397ECF0059C8D6 /* Errors.swift in Sources */,
 				031368102713FCFF00E69F83 /* GraphSerialization.swift in Sources */,

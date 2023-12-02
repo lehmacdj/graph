@@ -71,7 +71,7 @@ protocol Node: AnyObject, ObservableObject {
     /// display a thumbnail
     var dataRequiresDownload: Bool { get }
 
-    var data: DataDocument<Self>? { get async }
+    var data: Data? { get async }
 
     func deleteMetaAndData()
 }
