@@ -158,12 +158,6 @@ struct NodeView: View {
         content
             .navigationTitle(Text("\(vm.nid)"))
             .task(vm.subscribe)
-            .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    Text("\(vm.inMemoryNodeCount)")
-                        .foregroundStyle(.orange)
-                }
-            }
     }
 }
 

@@ -48,10 +48,6 @@ import Foundation
     func toggleWorse(child _: NID) async throws {
         try await underlying.toggleWorse(child: nid)
     }
-
-    var inMemoryNodeCount: Int {
-        underlying.inMemoryNodeCount
-    }
 }
 
 extension NodeVM {

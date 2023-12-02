@@ -44,6 +44,4 @@ protocol NodeVM<N>: Observable {
     func toggleFavorite(child _: NID) async throws
 
     func toggleWorse(child _: NID) async throws
-
-    var inMemoryNodeCount: Int { get }
 }
