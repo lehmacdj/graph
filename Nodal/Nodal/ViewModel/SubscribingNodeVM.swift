@@ -58,15 +58,45 @@ import Combine
                 return node
             }
         }
+
+        var validStateForUpdate: (State?, N)? {
+            switch self {
+            case .idle, .loadingInactive, .loadedInactive, .failed, .loadingActive(_, nil):
+                return nil
+            case .loadingActive(let state, let .some(node)):
+                return (state, node)
+            case .loadedActive(let state, let node):
+                return (state, node)
+            }
+        }
     }
 
     struct State: NodeState {
         var data: Data?
 
-        var favoriteLinks: [AnyTransitionVM<N>]?
-        var links: [AnyTransitionVM<N>]
-        var worseLinks: [AnyTransitionVM<N>]?
-        var backlinks: [AnyTransitionVM<N>]
+        /// Map from destination NID to the corresponding TransitionVM
+        var destinationVMs: [NodeTransition: AnyTransitionVM<N>]
+
+        var favoriteLinksTransitions: [NodeTransition]?
+        var linksTransitions: [NodeTransition]
+        var worseLinksTransitions: [NodeTransition]?
+        var backlinksTransitions: [NodeTransition]
+
+        var favoriteLinks: [AnyTransitionVM<N>]? {
+            favoriteLinksTransitions?.compactMap { destinationVMs[$0] }
+        }
+
+        var links: [AnyTransitionVM<N>] {
+            linksTransitions.compactMap { destinationVMs[$0] }
+        }
+
+        var worseLinks: [AnyTransitionVM<N>]? {
+            worseLinksTransitions?.compactMap { destinationVMs[$0] }
+        }
+
+        var backlinks: [AnyTransitionVM<N>] {
+            backlinksTransitions.compactMap { destinationVMs[$0] }
+        }
 
         var tags: Set<String>
         var possibleTags: Set<String>
@@ -263,27 +293,59 @@ import Combine
             logInfo("about to create state")
             try Task.checkCancellation()
 
+            guard let (previousState, node) = internalState.validStateForUpdate else {
+                // we need to rerun beginUpdateState because the state has drifted to an invalid one while doing IO
+                return
+            }
+
+            let favoriteLinks: [AnyTransitionVM<N>]? = favoritesSet != nil ? mkTransitionVMs(favorites, inDirection: .forward, isFavorite: true, isWorse: false) : nil
+            let links: [AnyTransitionVM<N>] = mkTransitionVMs(normal, inDirection: .forward, isFavorite: false, isWorse: false)
+            let worseLinks: [AnyTransitionVM<N>]? = worseSet != nil ? mkTransitionVMs(worse, inDirection: .forward, isFavorite: false, isWorse: true) : nil
+            let backlinks: [AnyTransitionVM<N>] = mkTransitionVMs(node.incoming, inDirection: .backward, isFavorite: false, isWorse: false)
+
+            let allDestinationVMs = (favoriteLinks ?? []) + links + (worseLinks ?? []) + backlinks
+            var newDestinationVMs = allDestinationVMs
+                .map { (NodeTransition(transition: $0.transition, nid: $0.destinationNid), $0) }
+                .to(Dictionary.init(uniqueKeysWithValues:))
+
+            if let previousState {
+                let newDestinationNids = newDestinationVMs.keys
+                // prefer a TransitionVM that we previously created if it exists
+                // NOTE: this potentially introduces a bug where the isFavorite/isWorse value could get out of sync
+                // this seems sufficiently unlikely that it's okay until it becomes a problem
+                newDestinationVMs = previousState
+                    .destinationVMs
+                    .filter { key, _ in newDestinationNids.contains(key) }
+                    .map { key, value in (key, value) }
+                    .to(Dictionary.init(uniqueKeysWithValues:))
+                    .merging(newDestinationVMs) { key1, _ in key1 }
+            }
+
+            let favoriteLinksTransitions = favoriteLinks?
+                .map { NodeTransition(transition: $0.transition, nid: $0.destinationNid) }
+                .to(Array.init)
+            let linksTransitions = links
+                .map { NodeTransition(transition: $0.transition, nid: $0.destinationNid) }
+                .to(Array.init)
+            let worseLinksTransitions = worseLinks?
+                .map { NodeTransition(transition: $0.transition, nid: $0.destinationNid) }
+                .to(Array.init)
+            let backlinksTransitions = backlinks
+                .map { NodeTransition(transition: $0.transition, nid: $0.destinationNid) }
+                .to(Array.init)
+
             let state = State(
                 data: data,
-                favoriteLinks: favoritesSet != nil ? mkTransitionVMs(favorites, inDirection: .forward, isFavorite: true, isWorse: false) : nil,
-                links: mkTransitionVMs(normal, inDirection: .forward, isFavorite: false, isWorse: false),
-                worseLinks: worseSet != nil ? mkTransitionVMs(worse, inDirection: .forward, isFavorite: false, isWorse: true) : nil,
-                backlinks: mkTransitionVMs(node.incoming, inDirection: .backward, isFavorite: false, isWorse: false),
+                destinationVMs: newDestinationVMs,
+                favoriteLinksTransitions: favoriteLinksTransitions,
+                linksTransitions: linksTransitions,
+                worseLinksTransitions: worseLinksTransitions,
+                backlinksTransitions: backlinksTransitions,
                 tags: tags,
                 possibleTags: tagOptions
             )
 
-            try Task.checkCancellation()
-
-            switch internalState {
-            case .idle, .loadingInactive, .loadedInactive, .failed, .loadingActive(_, nil):
-                // return because we need to rerun beginUpdateState
-                return
-            case .loadingActive(_, node: let .some(node)):
-                internalState = .loadedActive(state: state, node: node)
-            case .loadedActive(_, node: let node):
-                internalState = .loadedActive(state: state, node: node)
-            }
+            internalState = .loadedActive(state: state, node: node)
 
             logInfo("updated state")
         }

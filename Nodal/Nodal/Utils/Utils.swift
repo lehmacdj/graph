@@ -93,3 +93,10 @@ extension String {
         return String(self.dropLast(suffix.count))
     }
 }
+
+extension Sequence {
+    /// For constructing things with postfix notation, e.g. `[1, 2, 3].map { $0 * 2 }.to(Array.init)`
+    func to<T>(_ constructor: (Self) -> T) -> T {
+        constructor(self)
+    }
+}
