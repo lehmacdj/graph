@@ -11,7 +11,7 @@ where
 import Control.DeepSeq
 import Control.Monad.Fail (fail)
 import Data.Aeson
-import Data.Aeson.Encoding (text)
+import Data.Aeson.Types (toJSONKeyText)
 import Data.Bits
 import qualified Data.ByteString.Lazy as BS
 import Data.ByteString.Lazy.Base64.URL
@@ -102,10 +102,7 @@ instance ToJSON NID where
 instance FromJSON NID
 
 instance ToJSONKey NID where
-  toJSONKey = ToJSONKeyText f g
-    where
-      f = pack . show
-      g = text . pack . show
+  toJSONKey = toJSONKeyText tshow
 
 instance FromJSONKey NID where
   fromJSONKey = FromJSONKeyTextParser p

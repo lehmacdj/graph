@@ -5,20 +5,6 @@
 
 packages:
 - completed:
-    hackage: polysemy-plugin-0.3.0.0@sha256:22e7553d0fddb48d9484ba1c71d2ed825213fcb214866d9b502ee02bfb960cb4,3121
-    pantry-tree:
-      sha256: 8d0bbea846d4410b769687daa8595ff1349efd02c1ab528a857883388dd2db45
-      size: 1162
-  original:
-    hackage: polysemy-plugin-0.3.0.0
-- completed:
-    hackage: polysemy-1.5.0.0@sha256:7edb723e7f703fe273a40e43fe33f6e8f7659fe60759e8698def1481262d314d,6246
-    pantry-tree:
-      sha256: 7b7d379751f79f0e0e5afcdf3d8092e5b8e04515710f21f514aa8f29ce4835f4
-      size: 4438
-  original:
-    hackage: polysemy-1.5.0.0
-- completed:
     hackage: polysemy-readline-0.2.0.0@sha256:30633eaee828f967b9f653f5406e55671684ae1ec6c513e3f2de184a301dadd1,2106
     pantry-tree:
       sha256: 1c50c0a2fc5683c26680a1239423bf52644cef71316c6a317e4086f54c5b0fa9
@@ -26,40 +12,26 @@ packages:
   original:
     hackage: polysemy-readline-0.2.0.0
 - completed:
-    hackage: polysemy-zoo-0.7.0.2@sha256:64857606e456c4df033a79e41cef49059b23c98046b76aeadf990b08379dd6e9,3990
+    hackage: polysemy-zoo-0.8.2.0@sha256:bd8f802cb0402082053b3b0b97c8b551b071a14960e6b271a5b78be728b73a24,3952
     pantry-tree:
-      sha256: 61f759384ff7e6f22078e656a895f4947cb159a428606f8d9120d0b4f2bb8b1d
-      size: 2979
+      sha256: 6ba0b1b3b7390946be95267809be44377b2c15da2fae9904fa763f1cbfcb39fd
+      size: 2904
   original:
-    hackage: polysemy-zoo-0.7.0.2
+    hackage: polysemy-zoo-0.8.2.0
 - completed:
-    hackage: compact-0.2.0.0@sha256:9c5785bdc178ea6cf8f514ad35a78c64220e3cdb22216534e4cf496765551c7e,2345
+    hackage: compact-0.2.0.0@sha256:aa05cd5349f231a42e0b43259015cde3921b609917b695aed15aac44a7f468f4,2413
     pantry-tree:
-      sha256: 6f7da573fbcddc109e1521edc07f1b34d7506473a3930074453e829daf901d71
+      sha256: 7b176021d969b21a71427d689d14a7afde322f0eaf58a49709d12a2e29d6feb7
       size: 546
   original:
-    hackage: compact-0.2.0.0@sha256:9c5785bdc178ea6cf8f514ad35a78c64220e3cdb22216534e4cf496765551c7e,2345
+    hackage: compact-0.2.0.0
 - completed:
-    hackage: haskeline-0.8.2@sha256:354f240362c7d0991cfb1b2cce31454b57295d91e4167af1b4810918cd8b30b5,5825
+    hackage: haskeline-0.8.2.1@sha256:de3ea3ef41a19c9b04d4f4004d867fc286fca948db6aedb0bad32b99408abaee,6024
     pantry-tree:
-      sha256: 1ccd968a09cc4ade69d2881af035cb0de9209696ee53596d31ef30fef70fcbe2
+      sha256: d9e282839b89b15110727b68cdd0d9539897b86954a922fbcdfc2961775a936f
       size: 2955
   original:
-    hackage: haskeline-0.8.2
-- completed:
-    hackage: terminfo-0.4.1.5@sha256:9c6ed29fac9c860fa590ef0163e73bdfbeebd111fdfe4d1d2fea3063a3c5d21b,1658
-    pantry-tree:
-      sha256: 6d304054b8dcffd2be7b33940e3cef19e575fcbe0c0af9531579861d1ae9117e
-      size: 870
-  original:
-    hackage: terminfo-0.4.1.5
-- completed:
-    hackage: witherable-class-0.0.1@sha256:6ec78f157f715098eecc08dff177064abfc783ee2151a95f5aecff5c4c7d2d95,847
-    pantry-tree:
-      sha256: 8c51a5b96c972d52b999ec0537b56d78c64d76ede72310c7febd2253b692e83b
-      size: 275
-  original:
-    hackage: witherable-class-0.0.1@sha256:6ec78f157f715098eecc08dff177064abfc783ee2151a95f5aecff5c4c7d2d95,847
+    hackage: haskeline-0.8.2.1
 snapshots:
 - completed:
     sha256: abcc4a65c15c7c2313f1a87f01bfd4d910516e1930b99653eef1d2d006515916

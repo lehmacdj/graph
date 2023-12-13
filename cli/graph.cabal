@@ -1,10 +1,10 @@
 cabal-version: 1.12
 
--- This file has been generated from package.yaml by hpack version 0.35.1.
+-- This file has been generated from package.yaml by hpack version 0.35.2.
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 3e414e659d773a6bab642eda5532fd7a74f76c0b9417fe6bee5e621b033af51b
+-- hash: 5e774e5e1708c80f9f8e938e4ffd251eaf5dc6e72954b91a74ba41614345672e
 
 name:           graph
 version:        0.1.0.0
@@ -180,7 +180,6 @@ library
     , typed-process
     , unix
     , unliftio
-    , validation
     , witherable
     , wreq
     , xdg-basedir
@@ -278,7 +277,6 @@ executable dump-graph
     , typed-process
     , unix
     , unliftio
-    , validation
     , witherable
     , wreq
     , xdg-basedir
@@ -376,7 +374,6 @@ executable ge
     , typed-process
     , unix
     , unliftio
-    , validation
     , witherable
     , wreq
     , xdg-basedir
@@ -474,7 +471,6 @@ executable migration
     , typed-process
     , unix
     , unliftio
-    , validation
     , witherable
     , wreq
     , xdg-basedir
@@ -573,7 +569,6 @@ test-suite graph-test
     , typed-process
     , unix
     , unliftio
-    , validation
     , witherable
     , wreq
     , xdg-basedir

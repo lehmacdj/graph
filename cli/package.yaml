@@ -64,7 +64,6 @@ dependencies:
 - typed-process
 - unix
 - unliftio
-- validation
 - witherable
 - wreq
 - xdg-basedir

@@ -17,7 +17,7 @@
 #
 # resolver: ./custom-snapshot.yaml
 # resolver: https://example.com/snapshots/2018-01-01.yaml
-resolver: lts-18.14
+resolver: lts-21.24
 
 # User packages to be built.
 # Various formats can be used as shown in the example below.
@@ -38,16 +38,10 @@ packages:
 # using the same syntax as the packages field.
 # (e.g., acme-missiles-0.3)
 extra-deps:
-# - witherable-0.3.5@sha256:6590a15735b50ac14dcc138d4265ff1585d5f3e9d3047d5ebc5abf4cd5f50084,1476
-# - monoidal-containers-0.6.0.1@sha256:7d776942659eb4d70d8b8da5d734396374a6eda8b4622df9e61e26b24e9c8e40,2501
-- polysemy-plugin-0.3.0.0
-- polysemy-1.5.0.0
 - polysemy-readline-0.2.0.0
-- polysemy-zoo-0.7.0.2
-- compact-0.2.0.0@sha256:9c5785bdc178ea6cf8f514ad35a78c64220e3cdb22216534e4cf496765551c7e,2345
-- haskeline-0.8.2
-- terminfo-0.4.1.5 # needed to avoid bug judah/haskeline#162
-- witherable-class-0.0.1@sha256:6ec78f157f715098eecc08dff177064abfc783ee2151a95f5aecff5c4c7d2d95,847
+- polysemy-zoo-0.8.2.0
+- compact-0.2.0.0
+- haskeline-0.8.2.1
 
 # allow dependencies to be filled with newer things
 allow-newer: true
