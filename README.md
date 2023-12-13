@@ -6,7 +6,7 @@ This project is an attempt to construct a more expressive datastructure than a f
 # Subprojects
 
 ## cli
-Core is the original/cli implementation of the graph. It is implemented as a Haskell library, and comes with a few executables which allow editing graphs using a command line interface.
+The cli is the original implementation of the graph. It is implemented as a Haskell library, and comes with a few executables which allow editing graphs using a command line interface.
 
 ## Nodal
 This will be an implementation of an iOS graph that interops with the same graph format and displays it and has limited support for editing it. It is still under development.
