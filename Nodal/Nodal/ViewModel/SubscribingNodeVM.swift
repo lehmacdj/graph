@@ -71,11 +71,26 @@ import Combine
         }
     }
 
+    fileprivate struct TransitionKey: Hashable {
+        let transition: NodeTransition
+        let direction: Direction
+
+        init(_ transition: NodeTransition, direction: Direction) {
+            self.transition = transition
+            self.direction = direction
+        }
+
+        init(transition: String, destination: NID, direction: Direction) {
+            self.transition = NodeTransition(transition: transition, nid: destination)
+            self.direction = direction
+        }
+    }
+
     struct State: NodeState {
         var data: Data?
 
         /// Map from destination NID to the corresponding TransitionVM
-        var destinationVMs: [NodeTransition: AnyTransitionVM<N>]
+        fileprivate var destinationVMs: [TransitionKey: AnyTransitionVM<N>]
 
         var favoriteLinksTransitions: [NodeTransition]?
         var linksTransitions: [NodeTransition]
@@ -83,19 +98,19 @@ import Combine
         var backlinksTransitions: [NodeTransition]
 
         var favoriteLinks: [AnyTransitionVM<N>]? {
-            favoriteLinksTransitions?.compactMap { destinationVMs[$0] }
+            favoriteLinksTransitions?.compactMap { destinationVMs[TransitionKey($0, direction: .forward)] }
         }
 
         var links: [AnyTransitionVM<N>] {
-            linksTransitions.compactMap { destinationVMs[$0] }
+            linksTransitions.compactMap { destinationVMs[TransitionKey($0, direction: .forward)] }
         }
 
         var worseLinks: [AnyTransitionVM<N>]? {
-            worseLinksTransitions?.compactMap { destinationVMs[$0] }
+            worseLinksTransitions?.compactMap { destinationVMs[TransitionKey($0, direction: .forward)] }
         }
 
         var backlinks: [AnyTransitionVM<N>] {
-            backlinksTransitions.compactMap { destinationVMs[$0] }
+            backlinksTransitions.compactMap { destinationVMs[TransitionKey($0, direction: .backward)] }
         }
 
         var tags: Set<String>
@@ -305,7 +320,7 @@ import Combine
 
             let allDestinationVMs = (favoriteLinks ?? []) + links + (worseLinks ?? []) + backlinks
             var newDestinationVMs = allDestinationVMs
-                .map { (NodeTransition(transition: $0.transition, nid: $0.destinationNid), $0) }
+                .map { (TransitionKey(transition: $0.transition, destination: $0.destinationNid, direction: $0.direction), $0) }
                 .to(Dictionary.init(uniqueKeysWithValues:))
 
             if let previousState {
