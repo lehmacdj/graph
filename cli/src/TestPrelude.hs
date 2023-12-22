@@ -4,6 +4,7 @@ module TestPrelude
     withTempGraph,
     withEmptyTempGraph,
     representedByJson,
+    runTests,
   )
 where
 
@@ -16,6 +17,7 @@ import qualified System.Directory.Tree as DT
 import Test.Hspec.Expectations as X
 import Test.Tasty as X
 import Test.Tasty.HUnit as X
+import Test.Tasty.QuickCheck as X
 
 -- | initializes a graph that is either empty, or based on a template graph
 -- at the specified location
@@ -51,3 +53,7 @@ representedByJson x j =
     [ testCase "serializes" $ encode x `shouldBe` j,
       testCase "deserializes" $ eitherDecode j `shouldBe` Right x
     ]
+
+-- | Convenience export for running tests in GHCi with a more ergonomic name
+runTests :: TestTree -> IO ()
+runTests = defaultMain

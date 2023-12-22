@@ -75,6 +75,7 @@ dependencies:
 - tasty-hunit
 - tasty-discover
 - tasty-golden
+- tasty-quickcheck
 
 default-extensions:
 - BangPatterns

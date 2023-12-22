@@ -37,6 +37,7 @@ import Control.Lens as X (over, set, view, (&), (.~), (<&>), (^.))
 import Data.Aeson
 import Data.Coerce as X (Coercible, coerce)
 import Data.Generics.Labels
+import Data.List as X (iterate)
 import Data.List.NonEmpty as X (NonEmpty (..))
 import qualified Data.Set as Set
 import GHC.Generics as X (Generic, Rep)
@@ -165,3 +166,11 @@ twoElemList x x' xs = UnsafeTwoElemList (x : x' : xs)
 intoElems :: HasCallStack => TwoElemList a -> (a, NonEmpty a)
 intoElems (UnsafeTwoElemList (x : x' : xs)) = (x, x' :| xs)
 intoElems (UnsafeTwoElemList _) = error "intoElems: broken invariant"
+
+chunksOf :: Int -> [a] -> [[a]]
+chunksOf _ [] = []
+chunksOf n xs
+  | length xs < n = [xs]
+  | otherwise =
+    let (chunk, rest) = splitAt n xs
+     in chunk : chunksOf n rest

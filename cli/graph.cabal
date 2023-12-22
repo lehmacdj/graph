@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 5e774e5e1708c80f9f8e938e4ffd251eaf5dc6e72954b91a74ba41614345672e
+-- hash: 291ab687f65e6cc299d065fa8ce242e14e55b9723cac81f159e9c117d25d6d16
 
 name:           graph
 version:        0.1.0.0
@@ -173,6 +173,7 @@ library
     , tasty-discover
     , tasty-golden
     , tasty-hunit
+    , tasty-quickcheck
     , temporary
     , text
     , time
@@ -270,6 +271,7 @@ executable dump-graph
     , tasty-discover
     , tasty-golden
     , tasty-hunit
+    , tasty-quickcheck
     , temporary
     , text
     , time
@@ -367,6 +369,7 @@ executable ge
     , tasty-discover
     , tasty-golden
     , tasty-hunit
+    , tasty-quickcheck
     , temporary
     , text
     , time
@@ -464,6 +467,7 @@ executable migration
     , tasty-discover
     , tasty-golden
     , tasty-hunit
+    , tasty-quickcheck
     , temporary
     , text
     , time
@@ -562,6 +566,7 @@ test-suite graph-test
     , tasty-discover
     , tasty-golden
     , tasty-hunit
+    , tasty-quickcheck
     , temporary
     , text
     , time
