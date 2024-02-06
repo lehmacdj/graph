@@ -1,36 +1,41 @@
 module HistorySpec where
 
+import Graph.Types
 import History
 import TestPrelude
+
+history :: [Int] -> Int -> [Int] -> History
+history past now future =
+  History (smallNID <$> past) (smallNID now) (smallNID <$> future)
 
 test_addToHistory :: TestTree
 test_addToHistory =
   testGroup
     "add 0 to history"
-    [ ath 0 (History [1, 0] 2 []) (History [2, 1, 0] 0 []),
-      ath 0 (History [1, 0] 2 [0]) (History [2, 1, 0] 0 []),
-      ath 0 (History [1, 0] 2 [0, 4]) (History [2, 1, 0] 0 [4]),
-      ath 0 (History [1, 0] 2 [3]) (History [2, 1, 0] 0 [])
+    [ ath 0 (history [1, 0] 2 []) (history [2, 1, 0] 0 []),
+      ath 0 (history [1, 0] 2 [0]) (history [2, 1, 0] 0 []),
+      ath 0 (history [1, 0] 2 [0, 4]) (history [2, 1, 0] 0 [4]),
+      ath 0 (history [1, 0] 2 [3]) (history [2, 1, 0] 0 [])
     ]
   where
-    ath node history expected =
-      testCase name $ addToHistory node history @?= expected
+    ath node h expected =
+      testCase name $ addToHistory (smallNID node) h @?= expected
       where
-        name = show history
+        name = show h
 
 test_backInTime :: TestTree
 test_backInTime =
   testGroup
     "backInTime"
-    [ bt 0 (History [] 0 []) (0, History [] 0 []),
-      bt 2 (History [] 0 []) (0, History [] 0 []),
-      bt (-2) (History [] 0 []) (0, History [] 0 []),
-      bt 2 (History [1, 0] 2 []) (0, History [] 0 [1, 2]),
-      bt 2 (History [2, 1, 0] 3 []) (1, History [0] 1 [2, 3]),
-      bt (-1) (History [] 0 [1, 2]) (1, History [0] 1 [2])
+    [ bt 0 (history [] 0 []) (0, history [] 0 []),
+      bt 2 (history [] 0 []) (0, history [] 0 []),
+      bt (-2) (history [] 0 []) (0, history [] 0 []),
+      bt 2 (history [1, 0] 2 []) (0, history [] 0 [1, 2]),
+      bt 2 (history [2, 1, 0] 3 []) (1, history [0] 1 [2, 3]),
+      bt (-1) (history [] 0 [1, 2]) (1, history [0] 1 [2])
     ]
   where
-    bt n history expected =
-      testCase name $ backInTime n history @?= expected
+    bt n h expected =
+      testCase name $ backInTime n h @?= first smallNID expected
       where
-        name = show n ++ ", " ++ show history
+        name = show n ++ ", " ++ show h

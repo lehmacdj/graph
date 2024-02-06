@@ -2,14 +2,14 @@ module Graph.Types.NIDSpec where
 
 import Graph.Types.NID
 import TestPrelude
-import Text.Read
 
 test_readShowNid :: TestTree
 test_readShowNid =
   testGroup
     "readShowNid"
-    [ rs "zVjDcoKxrkuqtG1_VE0JF8_3zAIDpbm9",
-      rs "00jD-oKxr-uqtG10VE0JF8_3zAKDkbm9",
+    [ rs "xzLrHWAnSX6ABWmV1LYesTg8xuoC5KMj",
+      rs "R7lAAD962ORUUmtS91Gx0AAyIwQolv54",
+      rs "00lAAD962ORUUmtS91Gx0AAyIwQolv54",
       rs "00000000000000000000000000000000",
       rs "10000000000000000000000000000000",
       rs "00000000000000000000000000000001",
@@ -17,4 +17,4 @@ test_readShowNid =
       rs "g0000000000000000000000000000000"
     ]
   where
-    rs x = testCase x $ x @=? show (read x :: NID)
+    rs x = testCase x $ Just x @=? (show <$> (readMay x :: Maybe NID))

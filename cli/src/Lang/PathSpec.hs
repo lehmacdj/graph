@@ -7,14 +7,17 @@ import TestPrelude
 
 testGraph :: Graph String
 testGraph =
-  insertEdge (Edge 1 "c" 2)
-    . insertEdge (Edge 1 "b" 2)
-    . insertEdge (Edge 1 "b" 0)
-    . insertEdge (Edge 0 "a" 1)
-    . insertNode (emptyNode 2)
-    . insertNode (emptyNode 1)
-    . insertNode (emptyNode 0)
+  insertEdge (edge' 1 "c" 2)
+    . insertEdge (edge' 1 "b" 2)
+    . insertEdge (edge' 1 "b" 0)
+    . insertEdge (edge' 0 "a" 1)
+    . insertNode (emptyNode (smallNID 2))
+    . insertNode (emptyNode (smallNID 1))
+    . insertNode (emptyNode (smallNID 0))
     $ emptyGraph
+
+fromVia :: Int -> a -> DPathComponent a
+fromVia i = FromVia (smallNID i)
 
 test_path :: TestTree
 test_path =
@@ -27,10 +30,10 @@ test_path =
     resolvePath' = primed . resolvePath
     pathLit =
       Set.fromList
-        [ DPath 0 [FromVia 0 "a", FromVia 1 "b"] 0 [],
-          DPath 0 [FromVia 0 "a", FromVia 1 "b"] 2 []
+        [ DPath (smallNID 0) [fromVia 0 "a", fromVia 1 "b"] (smallNID 0) [],
+          DPath (smallNID 0) [fromVia 0 "a", fromVia 1 "b"] (smallNID 2) []
         ]
-        @=? resolvePath' (Literal "a" :/ Literal "b") 0 testGraph
+        @=? resolvePath' (Literal "a" :/ Literal "b") (smallNID 0) testGraph
     pathLitNondet =
-      Set.fromList [DPath 0 [FromVia 0 "a", FromVia 1 "c"] 2 []]
-        @=? resolvePath' (Literal "a" :/ Literal "c") 0 testGraph
+      Set.fromList [DPath (smallNID 0) [fromVia 0 "a", fromVia 1 "c"] (smallNID 2) []]
+        @=? resolvePath' (Literal "a" :/ Literal "c") (smallNID 0) testGraph

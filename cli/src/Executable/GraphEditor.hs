@@ -14,7 +14,8 @@ import Effect.Graph
 import Effect.NodeLocated
 import Effect.Time
 import Effect.Web
-import Graph.Serialize2 (doesNodeExist, initializeGraph, nextNodeId)
+import Graph.Serialize2 (doesNodeExist, initializeGraph)
+import Graph.Types
 import History
 import Interpreters
 import Lang.Command hiding (printTransitions)
@@ -85,20 +86,19 @@ graphDirInitialization graphDir options = do
     then
       if graphDirExists
         then
-          whenM (not <$> doesNodeExist graphDir 0) $
+          whenM (not <$> doesNodeExist graphDir nilNID) $
             initializeGraph graphDir
         else initializeGraph graphDir
     else do
       unless graphDirExists $
         error $ "graph in directory " ++ graphDir ++ " doesn't exist"
-      unlessM (doesNodeExist graphDir 0) $
+      unlessM (doesNodeExist graphDir nilNID) $
         error "couldn't find origin node in graph "
 
 main :: IO ()
 main = withOptions $ \options -> do
   let graphDir = view #_graphLocation options
   graphDirInitialization graphDir options
-  nextNid <- nextNodeId graphDir
-  env <- mfix (initEnv graphDir nextNid <=< defReplSettings)
+  env <- mfix (initEnv graphDir <=< defReplSettings)
   runMainEffectsIO env $
     maybe repl interpretCommand (view #_executeExpression options)

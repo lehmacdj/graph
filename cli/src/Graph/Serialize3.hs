@@ -25,7 +25,6 @@
 module Graph.Serialize3
   ( -- * accessing metadata about the graph
     getAllNodeIds,
-    nextNodeId,
 
     -- * accessing nodes
     serializeNode,
@@ -64,14 +63,6 @@ getAllNodeIds base = do
   let linkFiles = filter (".json" `isSuffixOf`) files
       nodes = mapMaybe (readMay . dropExtension) linkFiles
   pure nodes
-
--- | the next unused node id in the graph
-nextNodeId :: MonadIO m => FilePath -> m Int
-nextNodeId base = do
-  nids <- getAllNodeIds base
-  case maximum (Nothing `ncons` map Just nids) of
-    Nothing -> pure 0
-    Just x -> pure $ x + 1
 
 linksFile :: FilePath -> NID -> FilePath
 linksFile base nid = base </> (show nid ++ ".json")
@@ -134,7 +125,7 @@ writeGraph base g = liftIO $ do
 initializeGraph :: MonadIO m => FilePath -> m ()
 initializeGraph base = liftIO $ do
   createDirectoryIfMissing True base
-  serializeNode base (emptyNode 0)
+  serializeNode base (emptyNode nilNID)
 
 tryGetBinaryData :: FilePath -> NID -> IO (Maybe ByteString)
 tryGetBinaryData base nid = ioErrorToMaybe $ B.readFile $ nodeDataFile base nid

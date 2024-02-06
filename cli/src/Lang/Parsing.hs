@@ -3,7 +3,7 @@ module Lang.Parsing where
 import Control.Monad.Fail
 import Data.Char
 import Data.Void
-import Graph (NID)
+import Graph.Types
 import qualified Graph.Types.NID as BigNID
 import MyPrelude hiding (many, some, try)
 import Text.Megaparsec
@@ -42,22 +42,19 @@ stringLiteral = L.lexeme s $ char '"' >> manyTill L.charLiteral (char '"')
 transition :: Parser String
 transition = ident <|> stringLiteral
 
--- | chars allowed in base64url encoding
-base64Chars :: String
-base64Chars = ['a' .. 'z'] ++ ['A' .. 'Z'] ++ ['0' .. '9'] ++ "_-"
+-- | chars allowed in base 62 nids
+base62Chars :: String
+base62Chars = ['a' .. 'z'] ++ ['A' .. 'Z'] ++ ['0' .. '9']
 
-bigNID :: Parser BigNID.NID
-bigNID = L.lexeme s p
+nodeId :: Parser BigNID.NID
+nodeId = L.lexeme s p
   where
     p = do
-      chars <- replicateM 32 $ oneOf base64Chars :: Parser String
+      chars <- replicateM nidDigits $ oneOf base62Chars :: Parser String
       case readMay chars of
         Just nid -> pure nid
         Nothing ->
-          fail "couldn't parse NID; expected 32 length base64url encoded string"
-
-nodeId :: Parser NID
-nodeId = L.lexeme s L.decimal
+          fail "couldn't parse NID"
 
 positiveNumber :: Parser Int
 positiveNumber = L.lexeme s L.decimal

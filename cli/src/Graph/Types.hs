@@ -1,5 +1,6 @@
 module Graph.Types
   ( module Graph.Types,
+    module Graph.Types.NID,
   )
 where
 
@@ -8,15 +9,8 @@ import Control.Lens
 import Data.Aeson
 import qualified Data.Map as Map
 import GHC.Generics
+import Graph.Types.NID
 import MyPrelude
-
-type NID = Int
-
-nilNID :: NID
-nilNID = 0
-
-smallNID :: Int -> NID
-smallNID = id
 
 type TransitionValid t = (Show t, Eq t, Ord t)
 

@@ -158,11 +158,6 @@ insertNodes = listify insertNode
 nodesOf :: Graph t -> [Node t]
 nodesOf = toList . nodeMap
 
-nextFreeNodeId :: TransitionValid t => Graph t -> NID
-nextFreeNodeId g = case maximum (Nothing `ncons` fmap Just (nodesOf g)) of
-  Nothing -> 0
-  Just nid -> nidOf nid + 1
-
 emptyGraph :: Graph t
 emptyGraph = Graph mempty
 

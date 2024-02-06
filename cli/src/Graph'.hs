@@ -43,9 +43,6 @@ module Graph'
     -- * debug
     traceGraph,
     assertNodeInGraph,
-
-    -- * misc
-    nextFreeNodeId,
   )
 where
 
@@ -204,11 +201,6 @@ insertEmptyNodes = listify insertEmptyNode
 
 nodesOf :: Graph' -> [Node']
 nodesOf = toList . nodeMap'
-
-nextFreeNodeId :: Graph' -> NID
-nextFreeNodeId g = case maximum (Nothing `ncons` fmap Just (nodesOf g)) of
-  Nothing -> 0
-  Just nid -> nidOf nid + 1
 
 emptyGraph :: Graph'
 emptyGraph = Graph' mempty

@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 291ab687f65e6cc299d065fa8ce242e14e55b9723cac81f159e9c117d25d6d16
+-- hash: 74946d10e3ba1839ca50186c9caeef4aaf6b6f93a96b08ff333018047f98e45f
 
 name:           graph
 version:        0.1.0.0
@@ -61,7 +61,6 @@ library
       Graph.Serialize2
       Graph.Serialize3
       Graph.Types
-      Graph.Types.ConversionToNew
       Graph.Types.New
       Graph.Types.NID
       Graph.Types.NIDSpec

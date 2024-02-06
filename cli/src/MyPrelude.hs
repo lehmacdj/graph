@@ -44,6 +44,7 @@ import GHC.Generics as X (Generic, Rep)
 import GHC.Stack as X (HasCallStack)
 import Polysemy
 import Polysemy.Error
+import Polysemy.State
 import System.IO
 
 -- | natural transformation
@@ -174,3 +175,10 @@ chunksOf n xs
   | otherwise =
     let (chunk, rest) = splitAt n xs
      in chunk : chunksOf n rest
+
+embedStateful :: forall s r a. Member (State s) r => (s -> (a, s)) -> Sem r a
+embedStateful f = do
+  state <- get
+  let (result, newState) = f state
+  put newState
+  pure result

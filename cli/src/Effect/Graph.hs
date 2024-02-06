@@ -26,7 +26,6 @@ import Graph.Types.New
 import MyPrelude
 import Polysemy.Input
 import Polysemy.State
-import SpecialNodes
 import UserError
 
 -- | Effect for getting the filepath of the graph; useful for doing low level
@@ -258,16 +257,6 @@ runWriteGraphIO' dir = interpret $ \case
     liftIO $ S3.withSerializedNode dir (#referents %~ deleteSet (UnlabledEdge i o)) l
   SetData nid d -> liftIO $ S3.withSerializedNode dir (#associatedData' .~ d) nid
 
--- -- | fetch a string node representing the provided string, returning an
--- -- existing one if it already exists, and creating a new one otherwise
--- internString ::
---   Members [ReadGraph' NID, WriteGraph NID, Input SpecialNodes] r =>
---   String ->
---   Sem r NID
--- internString str = do
---   stringsNID <- getStringsNID
---   <- getNode'
-
 -- | Implements a graph where edges are labeled by strings via system
 -- extra strings that are generated are not cleaned up automatically by this,
 -- the strings stick around until they are gc-ed
@@ -277,8 +266,7 @@ runWriteStringGraph ::
     [ WriteGraph NID,
       Error UserError,
       Warn UserError,
-      Input IsDual,
-      Input SpecialNodes
+      Input IsDual
     ]
     r =>
   Sem (WriteGraph String : r) a ->

@@ -11,7 +11,6 @@
 module Graph.Serialize2
   ( -- * accessing metadata about the graph
     getAllNodeIds,
-    nextNodeId,
 
     -- * accessing nodes
     serializeNodeEx,
@@ -51,34 +50,11 @@ getAllNodeIds base = do
       nodes = mapMaybe (readMay . dropExtension) linkFiles
   pure nodes
 
--- | the next unused node id in the graph
--- we assume that all programs editing the graph, maintain a number in the origin node.
--- long term I'd still like to move to random ids, with a next pointer on nodes
--- to indiciate sequence that nodes were created in instead of the numeric indexes
--- I'm currently using for node ids
--- TODO: switch to random ids, and remove this kludge
-nextNodeId :: MonadIO m => FilePath -> m Int
-nextNodeId base = do
-  maybeNextNodeId <- readMay . decodeUtf8 <$> readFile (nodeDataFile base 0)
-  case maybeNextNodeId of
-    Just nextId -> pure nextId
-    -- fallback to the old method in case there are graphs that don't support this yet
-    Nothing -> do
-      nids <- getAllNodeIds base
-      let nextId = case maximum (Nothing `ncons` map Just nids) of
-            Nothing -> 1
-            Just x -> x + 1
-      writeFile (nodeDataFile base 0) (encodeUtf8 . tshow $ nextId)
-      pure nextId
-
 linksFile :: FilePath -> NID -> FilePath
 linksFile base nid = base </> (show nid ++ ".json")
 
 nodeDataFile :: FilePath -> NID -> FilePath
 nodeDataFile base nid = base </> (show nid ++ ".data")
-
--- TODO: rewrite using System.Directory.Tree
--- yields better error handling that isn't quite as sketchy
 
 serializeNodeEx ::
   (ToJSON (NodeDTO t), TransitionValid t) =>
@@ -157,7 +133,7 @@ doesNodeExist base nid = liftIO $ do
 initializeGraph :: MonadIO m => FilePath -> m ()
 initializeGraph base = liftIO $ do
   createDirectoryIfMissing True base
-  serializeNodeEx (Graph.emptyNode @String 0) base
+  serializeNodeEx (Graph.emptyNode @String nilNID) base
 
 removeNode :: MonadIO m => FilePath -> NID -> m ()
 removeNode base nid = do

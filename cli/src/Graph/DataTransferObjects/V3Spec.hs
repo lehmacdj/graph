@@ -6,10 +6,10 @@ import TestPrelude
 
 test_nodeDTO_backwardsCompat :: TestTree
 test_nodeDTO_backwardsCompat =
-  (NodeDTO (smallNID 0) (setFromList []) (setFromList []) (setFromList []))
-    `representedByJson` "{\"id\":0,\"incoming\":[],\"outgoing\":[],\"referents\":[]}"
+  NodeDTO (smallNID 0) (setFromList []) (setFromList []) (setFromList [])
+    `representedByJson` "{\"id\":\"00000000000000000000000000000000\",\"incoming\":[],\"outgoing\":[],\"referents\":[]}"
 
 test_connectDTO_backwardsCompat :: TestTree
 test_connectDTO_backwardsCompat =
   UnlabledEdgeDTO (smallNID 0) (smallNID 1)
-    `representedByJson` "{\"s\":0,\"t\":1}"
+    `representedByJson` "{\"s\":\"00000000000000000000000000000000\",\"t\":\"00000000000000000000000000000001\"}"

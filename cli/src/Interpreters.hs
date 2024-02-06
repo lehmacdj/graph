@@ -1,6 +1,3 @@
-{-# LANGUAGE GeneralizedNewtypeDeriving #-}
-{-# LANGUAGE TemplateHaskell #-}
-
 -- | Interpreters for running various large stacks of effects that it might
 -- make sense to use while using this library.
 module Interpreters where
@@ -19,7 +16,6 @@ import Effect.Util
 import Effect.Warn
 import Effect.Web
 import Graph
-import qualified Graph.Serialize2 as S2
 import History
 import MyPrelude hiding (Reader, ask)
 import Polysemy.Embed
@@ -31,12 +27,13 @@ import Polysemy.Readline
 import Polysemy.State
 import System.Console.Haskeline (InputT)
 import qualified System.Console.Haskeline as H
+import System.Random
 import UserError
 
 data Env = Env
   { _filePath :: IORef FilePath,
-    -- | next id that is unique within the current graph
-    _nextId :: IORef NID,
+    -- | random generator used for creating new node ids
+    _randomGen :: IORef StdGen,
     _history :: IORef History,
     _isDualized :: IORef IsDual,
     _replSettings :: H.Settings IO
@@ -45,14 +42,12 @@ data Env = Env
 
 initEnv ::
   FilePath ->
-  -- | the next node id to use for generating fresh nodes
-  NID ->
   H.Settings IO ->
   IO Env
-initEnv graphDir nid _replSettings =
+initEnv graphDir _replSettings =
   Env
     <$> newIORef graphDir
-    <*> newIORef nid
+    <*> (initStdGen >>= newIORef)
     <*> newIORef (History [] nilNID [])
     <*> newIORef (IsDual False)
     <*> pure _replSettings
@@ -119,7 +114,7 @@ runMainEffectsIOWithErrorHandling ::
   IO a
 runMainEffectsIOWithErrorHandling errorHandlingBehavior env v = do
   let handler =
-        runFreshNIDStateOriginNode
+        runFreshNIDRandom
           >>> applyInput2 (runWriteGraphDualizeableIO @String)
           >>> applyInput2 (runReadGraphDualizeableIO @String)
           >>> applyInput2 interpretEditorAsIOVimFSGraph
@@ -132,7 +127,7 @@ runMainEffectsIOWithErrorHandling errorHandlingBehavior env v = do
           >>> interpretTimeAsIO
           >>> runLocableHistoryState
           >>> runStateInputIORefOf @History #_history
-          >>> runStateInputIORefOf #_nextId
+          >>> runStateInputIORefOf #_randomGen
           >>> errorHandlingBehavior
           >>> runReadlineFinal
           >>> runFileTypeOracle
@@ -173,8 +168,8 @@ runReadWriteGraphIO dir =
     >>> printWarnings @UserError
     >>> printErrors
     >>> raiseUnder
-    >>> runFreshNIDState
-    >>> (\m -> S2.nextNodeId dir >>= \nextNID -> evalState nextNID m)
+    >>> runFreshNIDRandom
+    >>> (\m -> initStdGen >>= \stdGen -> evalState stdGen m)
     >>> runM
 
 runLocatedReadWriteGraphIO ::
