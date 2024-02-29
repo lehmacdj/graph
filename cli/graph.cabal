@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: e378991072622e4e13754ac30e8e86d489e7caef6e90fc5c0f04b84a94da87d0
+-- hash: fd61c7956be6e4a3678cdacc600dc4792ab39dd5abfce508526697345b158abf
 
 name:           graph
 version:        0.1.0.0
@@ -26,6 +26,7 @@ source-repository head
 
 library
   exposed-modules:
+      Base62
       Completion
       Effect.Console
       Effect.Editor

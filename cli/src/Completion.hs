@@ -1,11 +1,14 @@
 -- | Completion stuff for the interface
 module Completion where
 
+import Base62 (isBase62Char)
 import Control.Arrow
 import Control.Lens
 import Effect.Graph.Advanced
 import Effect.NodeLocated
 import Effect.Warn
+import Graph.Serialize2 (nodesWithPrefix)
+import Graph.Types.NID (nidDigits)
 import Interpreters
 import Lang.Parsing
 import Lang.Path
@@ -45,17 +48,20 @@ isUnusualTransition = not . all isIdentChar
 simpleCompletion' :: String -> Completion
 simpleCompletion' x = Completion x x False
 
+-- TODO: fix this so that it is possible to complete transitions that use
+-- special characters
+-- currently, when completing something like @Hello/world/"!|@ (with the cursor
+-- indicated by @|@, it isn't possible to complete a transition like @!!!@
+-- because we don't appear to generate any options. Probably the partial
+-- path parser needs to be improved to fix this.
 mkTransitionCompleter :: [String] -> String -> [Completion]
 mkTransitionCompleter xs x =
-  quotify $ filter check xs
+  mkCompleter (xs >>= validCompletions) x
   where
-    quotify z
-      | any isUnusualTransition z = map (simpleCompletion' . show) z
-      | otherwise = map simpleCompletion' z
-    check =
-      quoteUnusualTransition &&& id
-        >>> over both (x `isPrefixOf`)
-        >>> uncurry (||)
+    validCompletions z
+      | isUnusualTransition z = [show z]
+      | x `isPrefixOf` z = [z]
+      | otherwise = [show z, z]
 
 failCompletionWithOriginalInputOnErrorOrWarning ::
   Member (Embed IO) effs =>
@@ -89,7 +95,18 @@ completePath env (i, _) = case getPartialPath (takeRelevantFromEnd i) of
               toListOf (folded . #outgoing . folded . #transition) nts
         pure (fromMaybe i (stripPrefix (reverse end) i), mkCompleter octs end)
 
+completeNID :: Env -> (String, String) -> IO (String, [Completion])
+completeNID env (i, _) = do
+  let (reversedNidPrefix, scraps) = span isBase62Char . take (nidDigits + 1) $ i
+  case scraps of
+    '#' : _ -> do
+      base <- readIORef $ env ^. #_filePath
+      nids <- nodesWithPrefix base (reverse reversedNidPrefix)
+      pure (fromMaybe i (stripPrefix reversedNidPrefix i), map (simpleCompletion' . show) nids)
+    _ -> pure (i, [])
+
 completionFunction :: Env -> (String, String) -> IO (String, [Completion])
 completionFunction env =
   completeCommand
+    `fallbackCompletion` completeNID env
     `fallbackCompletion` completePath env

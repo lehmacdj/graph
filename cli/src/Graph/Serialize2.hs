@@ -22,12 +22,14 @@ module Graph.Serialize2
     removeNode,
     readGraph,
     initializeGraph,
+    nodesWithPrefix,
 
     -- * low level access to format information (to be used with caution)
     nodeDataFile,
   )
 where
 
+import Base62 (isBase62Char)
 import Control.Lens
 import Data.Aeson (FromJSON, ToJSON)
 import qualified Data.Aeson as Aeson
@@ -39,7 +41,8 @@ import Graph.Node (dataOf, nidOf)
 import Graph.Types
 import MyPrelude
 import System.Directory
-import System.FilePath (dropExtension)
+import System.FilePath (dropExtension, takeFileName)
+import qualified System.FilePath.Glob as Glob
 import UserError hiding (catch, throw)
 
 -- | all of the nodes accessible under a given path
@@ -163,6 +166,16 @@ readGraph base = do
   nids <- getAllNodeIds base
   nodes <- traverse (deserializeNode base) nids
   pure $ Graph.insertNodes <$> sequence nodes <*> pure Graph.emptyGraph
+
+-- | takes a base 62 prefix & returns all NIDs in the graph that start with
+-- that prefix
+nodesWithPrefix :: HasCallStack => FilePath -> String -> IO [NID]
+nodesWithPrefix base base62Prefix
+  | not $ all isBase62Char base62Prefix =
+    error "not a base62 character but it should be"
+  | otherwise = do
+    results <- Glob.globDir1 (Glob.compile (base62Prefix ++ "*.json")) base
+    pure $ unsafeNID . pack . takeWhile isBase62Char . takeFileName <$> results
 
 tryGetBinaryData :: FilePath -> NID -> IO (Maybe ByteString)
 tryGetBinaryData = (ioErrorToMaybe .) . (B.readFile .) . nodeDataFile

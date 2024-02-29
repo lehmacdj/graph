@@ -1,5 +1,4 @@
 {-# LANGUAGE DeriveGeneric #-}
-{-# LANGUAGE OverloadedLists #-}
 
 module Graph.Types.NID
   ( NID,
@@ -10,11 +9,11 @@ module Graph.Types.NID
   )
 where
 
+import Base62 (base62Chars, isBase62Char)
 import Control.DeepSeq
 import Control.Monad.Fail (fail)
 import Data.Aeson
 import Data.Aeson.Types (toJSONKeyText)
-import Data.Char (isAsciiLower, isAsciiUpper, isDigit)
 import GHC.Generics
 import MyPrelude
 import System.Random
@@ -45,7 +44,9 @@ newtype NID = UnsafeNID {textRep :: Text}
   deriving newtype (NFData)
 
 instance Uniform NID where
-  uniformM g = UnsafeNID . pack <$> replicateM nidDigits (uniformRM ('0', 'z') g)
+  uniformM g =
+    UnsafeNID . pack
+      <$> replicateM nidDigits ((base62Chars `indexEx`) <$> uniformRM (0, 61) g)
 
 -- | zero NID which represents the origin
 nilNID :: NID
@@ -63,8 +64,6 @@ smallNID = UnsafeNID . pack . reverse . go nidDigits . (`rem` (62 ^ nidDigits))
       | otherwise =
         base62Chars `indexEx` (n `rem` 62) :
         go (digitsLeft - 1) (n `quot` 62)
-    base62Chars :: Vector Char
-    base62Chars = ['0' .. '9'] <> ['A' .. 'Z'] <> ['a' .. 'z']
 
 instance Show NID where
   show = unpack . textRep
@@ -73,8 +72,6 @@ instance Read NID where
   readsPrec _ x
     | all isBase62Char x && length x == nidDigits = [(UnsafeNID (pack x), "")]
     | otherwise = []
-    where
-      isBase62Char c = isDigit c || isAsciiUpper c || isAsciiLower c
 
 instance ToJSON NID where
   toEncoding = toEncoding . (id :: Text -> Text) . textRep
@@ -101,4 +98,6 @@ instance FromJSONKey NID where
 -- it violates random generation of ids (which is important for avoiding
 -- collisions)
 unsafeNID :: HasCallStack => Text -> NID
-unsafeNID = fromMaybe (error "doesn't meet precondition") . readMay
+unsafeNID t =
+  fromMaybe (error $ show t <> " doesn't meet precondition") $
+    readMay t

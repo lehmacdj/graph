@@ -68,9 +68,9 @@ dependencies:
 - wreq
 - xdg-basedir
 - xml-conduit
+- Glob
 # below are test dependencies which are collapsed into main dependencies due to
 # God module structure
-- Glob
 - tasty
 - tasty-hunit
 - tasty-discover
