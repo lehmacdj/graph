@@ -49,7 +49,7 @@ addDirectories ::
 addDirectories dt' root = do
   let go dt nid = case dt of
         File fn cs -> do
-          nid' <- importData root cs
+          nid' <- importData cs
           -- TODO: possibly add handling of filename extensions, to categorize
           insertEdge (Edge nid fn nid')
         Dir fn [] -> do

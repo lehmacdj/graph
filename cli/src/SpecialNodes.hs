@@ -9,7 +9,7 @@ module SpecialNodes
     tagsNID,
     importDatesNID,
     fileHashesNID,
-    importURLsNID,
+    importUrlsNID,
 
     -- * Full info for special nodes
     SpecialNodeInfo (..),
@@ -18,7 +18,7 @@ module SpecialNodes
     tagsInfo,
     importDatesInfo,
     fileHashesInfo,
-    importURLsInfo,
+    importUrlsInfo,
   )
 where
 
@@ -34,8 +34,8 @@ systemNodeNID = unsafeNID "0daCJjMrQe"
 tagsNID :: NID
 tagsNID = unsafeNID "pbYxBO6fzB"
 
-importURLsNID :: NID
-importURLsNID = unsafeNID "a0fVkm0kR7"
+importUrlsNID :: NID
+importUrlsNID = unsafeNID "a0fVkm0kR7"
 
 importDatesNID :: NID
 importDatesNID = unsafeNID "S00KkOYoVp"
@@ -63,5 +63,5 @@ importDatesInfo = SpecialNodeInfo importDatesNID "import-dates"
 fileHashesInfo :: SpecialNodeInfo
 fileHashesInfo = SpecialNodeInfo fileHashesNID "file-hashes"
 
-importURLsInfo :: SpecialNodeInfo
-importURLsInfo = SpecialNodeInfo importURLsNID "import-urls"
+importUrlsInfo :: SpecialNodeInfo
+importUrlsInfo = SpecialNodeInfo importUrlsNID "import-urls"

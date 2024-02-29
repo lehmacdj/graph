@@ -259,11 +259,11 @@ interpretCommand = \case
     changeLocation nilNID
   ImportUrl uri -> do
     guardDangerousDualizedOperation
-    nid <- subsumeUserError (importUrl nilNID uri)
+    nid <- subsumeUserError (importUrl uri)
     changeLocation nid
   AddText text -> do
     guardDangerousDualizedOperation
-    nid <- subsumeUserError (importData nilNID (encodeUtf8 text))
+    nid <- subsumeUserError (importData (encodeUtf8 text))
     changeLocation nid
   Debug -> do
     echo "current node:"

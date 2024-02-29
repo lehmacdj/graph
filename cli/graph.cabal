@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 74946d10e3ba1839ca50186c9caeef4aaf6b6f93a96b08ff333018047f98e45f
+-- hash: e378991072622e4e13754ac30e8e86d489e7caef6e90fc5c0f04b84a94da87d0
 
 name:           graph
 version:        0.1.0.0
@@ -46,7 +46,6 @@ library
       Effect.Web
       Executable.DumpGraph
       Executable.GraphEditor
-      Executable.Migration
       Extensibility
       Graph
       Graph'
@@ -60,6 +59,7 @@ library
       Graph.Node'
       Graph.Serialize2
       Graph.Serialize3
+      Graph.Time
       Graph.Types
       Graph.Types.New
       Graph.Types.NID
@@ -290,104 +290,6 @@ executable ge
       Paths_graph
   hs-source-dirs:
       app/ge
-  default-extensions:
-      BangPatterns
-      BlockArguments
-      ConstraintKinds
-      DataKinds
-      DeriveAnyClass
-      DeriveFoldable
-      DeriveFunctor
-      DeriveGeneric
-      DeriveTraversable
-      DerivingStrategies
-      DerivingVia
-      DisambiguateRecordFields
-      DuplicateRecordFields
-      FlexibleContexts
-      GADTs
-      GeneralizedNewtypeDeriving
-      LambdaCase
-      NamedFieldPuns
-      NoImplicitPrelude
-      OverloadedLabels
-      OverloadedStrings
-      PatternSynonyms
-      PolyKinds
-      RankNTypes
-      RecordWildCards
-      ScopedTypeVariables
-      StandaloneDeriving
-      StrictData
-      TupleSections
-      TypeApplications
-      TypeFamilies
-      TypeOperators
-      ViewPatterns
-  ghc-options: -Wall -fplugin=Polysemy.Plugin -flate-specialise -fspecialise-aggressively -threaded -rtsopts -with-rtsopts=-N
-  build-depends:
-      Glob
-    , SHA
-    , aeson
-    , attoparsec
-    , base >=4.7 && <5
-    , base64
-    , base64-bytestring
-    , bytestring
-    , classy-prelude
-    , conduit
-    , conduit-extra
-    , containers
-    , deepseq
-    , directory
-    , directory-tree
-    , exceptions
-    , filepath
-    , foreign-store
-    , free
-    , generic-lens
-    , graph
-    , haskeline
-    , hspec-expectations
-    , html-conduit
-    , http-conduit
-    , http-types
-    , lens
-    , megaparsec
-    , mono-traversable
-    , mtl
-    , optparse-applicative
-    , parser-combinators
-    , polysemy
-    , polysemy-plugin
-    , polysemy-readline
-    , polysemy-zoo
-    , random
-    , random-shuffle
-    , tasty
-    , tasty-discover
-    , tasty-golden
-    , tasty-hunit
-    , tasty-quickcheck
-    , temporary
-    , text
-    , time
-    , transformers
-    , typed-process
-    , unix
-    , unliftio
-    , witherable
-    , wreq
-    , xdg-basedir
-    , xml-conduit
-  default-language: Haskell2010
-
-executable migration
-  main-is: Main.hs
-  other-modules:
-      Paths_graph
-  hs-source-dirs:
-      app/migration
   default-extensions:
       BangPatterns
       BlockArguments

@@ -7,14 +7,14 @@ test_readShowNid :: TestTree
 test_readShowNid =
   testGroup
     "readShowNid"
-    [ rs "xzLrHWAnSX6ABWmV1LYesTg8xuoC5KMj",
-      rs "R7lAAD962ORUUmtS91Gx0AAyIwQolv54",
-      rs "00lAAD962ORUUmtS91Gx0AAyIwQolv54",
-      rs "00000000000000000000000000000000",
-      rs "10000000000000000000000000000000",
-      rs "00000000000000000000000000000001",
-      rs "0000000000000000000000000000000g",
-      rs "g0000000000000000000000000000000"
+    [ rs "sTg8xuoC5KMj",
+      rs "0AAyIwQolv54",
+      rs "0AAyIwQolv54",
+      rs "000000000000",
+      rs "100000000000",
+      rs "000000000001",
+      rs "00000000000g",
+      rs "g00000000000"
     ]
   where
     rs x = testCase x $ Just x @=? (show <$> (readMay x :: Maybe NID))

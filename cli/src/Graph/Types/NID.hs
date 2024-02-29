@@ -22,11 +22,11 @@ import System.Random.Stateful (Uniform (..), uniformRM)
 import Text.Read
 
 -- | The number of letter digits in a NID
--- * My notes use 10 which is probably sufficient unless I start generating nodes programmatically
+-- * My notes use 10 which is probably as long as there are <1 million nodes generated
 -- * YouTube uses 12 which is probably enough if I use a DB that can detect collisions and fail non-silently
 -- * 32 is enough for all intents and purposes including distributed universal paperclip building AI
 nidDigits :: Int
-nidDigits = 32 -- there isn't a great reason to keep this small as long as we implement completion for partial NIDs
+nidDigits = 12
 
 -- | NIDs base 62 strings of some length. Currently this number is at 10, but
 -- I'm somewhat stupidly making the implementation generic in case I want to
