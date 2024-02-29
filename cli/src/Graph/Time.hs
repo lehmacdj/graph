@@ -5,7 +5,6 @@ import Effect.FreshNID
 import Effect.Graph
 import Effect.Graph.Advanced
 import Effect.Time
-import Graph.Types
 import MyPrelude
 import Polysemy.Error
 import Polysemy.State
@@ -45,6 +44,11 @@ taggingFreshNodesWithTime action = evalState @(Set NID) mempty $ do
           modify @(Set NID) $ Set.insert newNID
           pure newNID
   result <- interceptor (raise action)
+  -- though you could achieve the same effect of all of the nodes having the
+  -- same time by using `collapsingTimeToInstant` that would require mutating
+  -- the graph during the interceptor & would lead to weird ordering problems
+  -- where for example the node created `importData` might be created before
+  -- it compares with the hash of the data.
   timeStrings <- timeToDateStrings <$> currentTime
   newNIDs <- get @(Set NID)
   traverse_ (transitionsViaManyTo importDatesNID timeStrings) newNIDs

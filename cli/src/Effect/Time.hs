@@ -23,3 +23,12 @@ interpretTimeAsIO ::
   Sem (GetTime : effs) ~> Sem effs
 interpretTimeAsIO = interpret $ \case
   CurrentTime -> liftIO getCurrentTime
+
+collapsingTimeToInstant ::
+  (Member GetTime effs) =>
+  Sem effs a ->
+  Sem effs a
+collapsingTimeToInstant action = do
+  instant <- currentTime
+  let interceptor = intercept $ \CurrentTime -> pure instant
+  interceptor action
