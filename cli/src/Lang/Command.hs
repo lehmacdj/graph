@@ -34,6 +34,7 @@ import qualified Extensibility
 import GHC.Generics
 import Graph (Connect (..), Edge (..), dataOf, nilNID, outgoingConnectsOf)
 import qualified Graph.Serialize2 as S2
+import Graph.Time (taggingFreshNodesWithTime)
 import History
 import Lang.Path
 import MyPrelude hiding (throwString)
@@ -182,12 +183,12 @@ interpretCommand = \case
   Dualize -> dualize
   Make p -> do
     nid <- currentLocation
-    subsumeUserError $ mkPath nid p >> pure ()
+    subsumeUserError . taggingFreshNodesWithTime . void $ mkPath nid p
   Merge p -> do
     nid <- currentLocation
     nids <- subsumeUserError (resolvePathSuccesses nid p)
     whenNonNull (setToList nids) $
-      \xs -> subsumeUserError (mergeNodes @String xs) >> pure ()
+      \xs -> (subsumeUserError . void) (mergeNodes @String xs)
   Remove p -> do
     nid <- currentLocation
     subsumeUserError $ delPath nid p
@@ -199,25 +200,25 @@ interpretCommand = \case
     nid <- currentLocation
     let err = singleErr "clone"
     nid' <- the' err =<< subsumeUserError (resolvePathSuccesses nid p)
-    nid'' <- subsumeUserError (cloneNode @String nid')
+    nid'' <- (subsumeUserError . taggingFreshNodesWithTime) (cloneNode @String nid')
     cnid <- currentLocation
     insertEdge $ Edge cnid t nid''
   Query p t -> do
     nid <- currentLocation
     nids <- subsumeUserError (resolvePathSuccesses nid p)
-    nnid <- subsumeUserError (nid `transitionsFreshVia` t)
+    nnid <- (subsumeUserError . taggingFreshNodesWithTime) (nid `transitionsFreshVia` t)
     _ <- subsumeUserError (mergeNodes @String (nnid `ncons` toList nids))
     pure ()
   Tag p q -> do
     nid <- currentLocation
     let err = singleErr "the last argument of tag"
     target <- the' err =<< subsumeUserError (resolvePathSuccesses nid q)
-    nnids <- subsumeUserError (mkPath nid (p :/ Literal ""))
+    nnids <- (subsumeUserError . taggingFreshNodesWithTime) (mkPath nid (p :/ Literal ""))
     _ <- subsumeUserError (mergeNodes @String (target `ncons` toList nnids))
     pure ()
   Text t s -> do
     nid <- currentLocation
-    vNid <- the' (error "only creating one path") =<< subsumeUserError (mkPath nid (Literal t))
+    vNid <- the' (error "only creating one path") =<< (subsumeUserError . taggingFreshNodesWithTime) (mkPath nid (Literal t))
     setData vNid (Just (encodeUtf8 (fromString s)))
   Describe d -> interpretCommand (Text "description" d)
   At p c -> do
@@ -324,7 +325,7 @@ interpretCommand = \case
     nids <- subsumeUserError (resolvePathSuccesses currentNid (Literal t))
     newNid <-
       the' (error "only creating one path")
-        =<< subsumeUserError (mkPath currentNid (Literal t))
+        =<< (subsumeUserError . taggingFreshNodesWithTime) (mkPath currentNid (Literal t))
     for_ nids $ \nid -> do
       deleteEdge (Edge currentNid t nid)
       insertEdge (Edge newNid "" nid)

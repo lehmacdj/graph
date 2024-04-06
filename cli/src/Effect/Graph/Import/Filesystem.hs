@@ -17,6 +17,7 @@ import Effect.Graph.Advanced
 import Effect.Graph.Import.ByteString
 import Effect.Time
 import Graph hiding (insertEdge)
+import Graph.Time (taggingFreshNodesWithTime)
 import MyPrelude
 import System.Directory.Tree hiding (readDirectory)
 import UserError
@@ -53,10 +54,10 @@ addDirectories dt' root = do
           -- TODO: possibly add handling of filename extensions, to categorize
           insertEdge (Edge nid fn nid')
         Dir fn [] -> do
-          _ <- nid `transitionsVia` fn
+          _ <- taggingFreshNodesWithTime $ nid `transitionsVia` fn
           pure ()
         Dir fn (x : xs) -> do
-          nid' <- nid `transitionsVia` fn
+          nid' <- taggingFreshNodesWithTime $ nid `transitionsVia` fn
           -- dfs down x
           go x nid'
           -- then continue evaluating at this point
