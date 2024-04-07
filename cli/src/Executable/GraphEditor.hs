@@ -24,6 +24,7 @@ import MyPrelude
 import Options
 import Polysemy.Readline
 import Polysemy.State
+import SpecialNodes.Init (createSpecialNodes)
 import qualified System.Console.Haskeline as H
 import System.Directory (createDirectoryIfMissing, doesDirectoryExist)
 import System.Environment.XDG.BaseDir (getUserDataDir)
@@ -100,5 +101,6 @@ main = withOptions $ \options -> do
   let graphDir = view #_graphLocation options
   graphDirInitialization graphDir options
   env <- mfix (initEnv graphDir <=< defReplSettings)
-  runMainEffectsIO env $
+  runMainEffectsIO env do
+    createSpecialNodes
     maybe repl interpretCommand (view #_executeExpression options)

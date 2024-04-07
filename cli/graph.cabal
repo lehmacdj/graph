@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: fd61c7956be6e4a3678cdacc600dc4792ab39dd5abfce508526697345b158abf
+-- hash: 9b809aea5b6ae5bbc6e4c4b9350c261456f25f69a6ed66a6ca395002b5c66d18
 
 name:           graph
 version:        0.1.0.0
@@ -86,6 +86,7 @@ library
       Singleton
       Spec
       SpecialNodes
+      SpecialNodes.Init
       System.Directory.Clone
       System.IO.Term.BinarySerialize
       System.IO.Term.Image
