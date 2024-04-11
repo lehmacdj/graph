@@ -19,8 +19,8 @@ final class DocumentNode: GraphManagerNode {
     }
 
     deinit {
-        Task { [metadataDocument, _dataDocument] in
-            async let _ = metadataDocument.close()
+        Task { [_metadataDocument, _dataDocument] in
+            async let _ = _metadataDocument?.close()
             async let _ = _dataDocument?.close()
             // TODO: send notification that something went wrong when closing document through GraphManager
             // then we can surface the error to the user

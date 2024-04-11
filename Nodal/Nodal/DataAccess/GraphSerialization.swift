@@ -8,31 +8,104 @@
 import Combine
 import Foundation
 
-typealias NID = Int
-extension NID {
-    static let origin: NID = 0
-    static let tags: NID = 1
+public let nidDigits = 12
+
+extension Character {
+    var isBase62Digit: Bool {
+        isASCII && (isLetter || isNumber)
+    }
 }
 
-struct NodeTransition: Identifiable, Comparable, Hashable {
+struct NID: Equatable, Hashable {
+    let representation: String
+
+    init?(representation: String) {
+        guard representation.count == nidDigits && representation.allSatisfy({$0.isBase62Digit}) else {
+            return nil
+        }
+        self.representation = representation
+    }
+}
+
+extension NID: Encodable, Decodable {
+    public init(from decoder: Decoder) throws {
+        let representation = try String(from: decoder)
+        if let nid = NID(representation: representation) {
+            self = nid
+        } else {
+            throw DecodingError.dataCorrupted(
+                .init(
+                    codingPath: decoder.codingPath,
+                    debugDescription: "Invalid NID representation: \(representation)"
+                )
+            )
+        }
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        try representation.encode(to: encoder)
+    }
+}
+
+extension NID {
+    private static let base62Characters = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+
+    static func random() -> NID {
+        let randomString = String((0..<nidDigits).map { _ in base62Characters.randomElement()! })
+        return NID(representation: randomString)!
+    }
+}
+
+enum SpecialNode: String, CaseIterable {
+    case origin
+    case systemNode = "system-node"
+    case tags
+    case importUrls = "import-urls"
+    case importDates = "import-dates"
+    case fileHashes = "file-hashes"
+
+    var nid: NID {
+        // we statically know that all of these match the representation, thus they won't crash
+        switch self {
+        case .origin: NID(representation: "000000000000")!
+        case .systemNode: NID(representation: "0daCJjMrQel8")!
+        case .tags: NID(representation: "pbYxBO6fzBQV")!
+        case .importUrls: NID(representation: "a0fVkm0kR7KE")!
+        case .importDates: NID(representation: "S00KkOYoVpFu")!
+        case .fileHashes: NID(representation: "AhQufiPzgyRf")!
+        }
+    }
+}
+
+extension NID {
+    static let origin: NID = SpecialNode.origin.nid
+    static let systemNode: NID = SpecialNode.systemNode.nid
+    static let tags: NID = SpecialNode.tags.nid
+    static let importUrls: NID = SpecialNode.importUrls.nid
+    static let importDates: NID = SpecialNode.importDates.nid
+    static let fileHashes: NID = SpecialNode.fileHashes.nid
+}
+
+extension NID: CustomStringConvertible {
+    var description: String {
+        return "#\(representation)"
+    }
+}
+
+struct NodeTransition: Identifiable, Hashable {
     let transition: String
     let nid: NID
 
     var id: some Hashable {
         return "\(transition)\(nid)"
     }
-
-    static func < (lhs: NodeTransition, rhs: NodeTransition) -> Bool {
-        return lhs.transition < rhs.transition
-        || lhs.transition == rhs.transition && lhs.nid < rhs.nid
-    }
 }
 
 /// Eventually this will replace Node, and nodes will always monitor the filesystem.
 
 extension NID {
-    var metaPath: String { return "\(self).json" }
-    var dataPath: String { return "\(self).data" }
+    var metaPath: String { return "\(representation).json" }
+    var dataPath: String { return "\(representation).data" }
 }
 
 struct NodeMeta {

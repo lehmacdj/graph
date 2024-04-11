@@ -34,7 +34,7 @@ final class NodeMetadataDocument: UIDocument {
     }
 
     /// Initialized with initially invalid information, but we read before returning from the constructor so it's never invalid to an outside observer
-    @Published var meta: NodeMeta = .init(id: -1, incoming: [:], outgoing: [:])
+    @Published var meta: NodeMeta = .init(id: .origin, incoming: [:], outgoing: [:])
 
     var metaPublisher: AnyPublisher<NodeMeta, Never> {
         $meta.eraseToAnyPublisher()

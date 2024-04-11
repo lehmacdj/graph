@@ -8,7 +8,7 @@
 import Combine
 import Foundation
 
-@Observable class AnyTransitionVM<N_: Node>: TransitionVM {
+@Observable final class AnyTransitionVM<N_: Node>: TransitionVM, Sendable {
     typealias N = N_
 
     init<VM: TransitionVM<N>>(erasing underlying: VM) {

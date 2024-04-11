@@ -13,15 +13,12 @@ import Foundation
 actor GraphManager<N: Node> {
     let basePath: URL
 
-    var nextNodeId: NID
-
     private var directoryObserver: DirectoryObserver?
 
     private var _graphChanges: AnyPublisher<GraphChange, Never>?
 
     init?(dir: URL) async {
         basePath = dir
-        nextNodeId = 1
         let origin = await UbiquitousFile(at: metaPath(for: NID.origin))
         do {
             try await origin.download()
@@ -33,19 +30,6 @@ actor GraphManager<N: Node> {
             logWarn("couldn't access origin node metadata file")
             return nil
         }
-
-        let originData = await UbiquitousFile(at: dataPath(for: NID.origin))
-        do {
-            let data = try await originData.read()
-            let string = try String(data: data, encoding: .utf8)
-                .unwrapped("failed to parse origin node metadata as UTF8 string")
-            self.nextNodeId = try Int(string)
-                .unwrapped("failed to parse origin node metadata as nextNodeId")
-        } catch {
-            logError("unable to fetch nextNodeId via origin node metadata")
-            return nil
-        }
-
 
         let directoryObserver = DirectoryObserver(url: basePath)
         let graphChanges: any Publisher<GraphChange, Never> = directoryObserver.changes.compactMap { [weak self] change in
@@ -165,7 +149,7 @@ actor GraphManager<N: Node> {
 
     /// Creates a new node not connected to anything
     func createNewNode() async -> N {
-        let newNodeId = nextNodeId
+        let newNodeId = NID.random()
         let newMeta = NodeMeta(id: newNodeId, incoming: [:], outgoing: [:])
         guard let data: Data = try? JSONEncoder().encode(newMeta) else {
             logError("failed to encode JSON for NodeMeta")
@@ -178,13 +162,6 @@ actor GraphManager<N: Node> {
         guard let node = try? await self[newNodeId] else {
             logError("couldn't access newly created node")
             fatalError("couldn't create a node")
-        }
-        nextNodeId = nextNodeId + 1
-        do {
-            try Data(String(nextNodeId).utf8).write(to: dataPath(for: NID.origin))
-        } catch {
-            logError("failed to update nextNodeId")
-            fatalError("failed to update nextNodeId")
         }
         return node
     }

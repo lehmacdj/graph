@@ -26,7 +26,7 @@ protocol NodeState<N> {
     var possibleTags: Set<String> { get }
 }
 
-protocol NodeVM<N>: Observable {
+protocol NodeVM<N>: Sendable, Observable {
     associatedtype N: Node
 
     var nid: NID { get }
