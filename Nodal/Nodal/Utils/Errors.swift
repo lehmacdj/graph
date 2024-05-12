@@ -37,3 +37,8 @@ extension Optional {
         }
     }
 }
+
+struct CouldNotCreateFile: LocalizedError, Codable {
+    let path: URL
+}
+

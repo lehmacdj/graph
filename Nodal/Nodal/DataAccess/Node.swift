@@ -46,21 +46,21 @@ protocol Node: AnyObject, ObservableObject {
     var favorites: Self? { get async }
 
     /// Get the favorites node creating a new child if it does not
-    func favorites() async -> Self
+    func favorites() async throws -> Self
 
     func isFavorite(child: NID) async -> Bool
 
-    func toggleFavorite(child: NID) async
+    func toggleFavorite(child: NID) async throws
 
     /// Get the worse node if it exists
     var worse: Self? { get async }
 
     /// Get the worse node creating a new child if it does not
-    func worse() async -> Self
+    func worse() async throws -> Self
 
     func isWorse(child: NID) async -> Bool
 
-    func toggleWorse(child: NID) async
+    func toggleWorse(child: NID) async throws
 
     // MARK: managing node associated data
 
@@ -179,8 +179,8 @@ extension GraphManagerNode {
             removing: oldTags.subtracting(newTags))
     }
 
-    func createNewChild(via transition: String) async -> Self {
-        let node = await manager.createNewNode()
+    func createNewChild(via transition: String) async throws -> Self {
+        let node = try await manager.createNewNode()
         await manager.addLink(from: self, to: node, via: transition)
         return node
     }
@@ -191,12 +191,12 @@ extension GraphManagerNode {
         }
     }
 
-    func favorites() async -> Self {
+    func favorites() async throws -> Self {
         if let favorites = await favorites {
             return favorites
         }
 
-        return await createNewChild(via: "favorites")
+        return try await createNewChild(via: "favorites")
     }
 
     var worse: Self? {
@@ -205,18 +205,18 @@ extension GraphManagerNode {
         }
     }
 
-    func worse() async -> Self {
+    func worse() async throws -> Self {
         if let worse = await worse {
             return worse
         }
 
-        return await createNewChild(via: "worse")
+        return try await createNewChild(via: "worse")
     }
 
 }
 
 extension GraphManagerNode where ObjectWillChangePublisher == ObservableObjectPublisher {
-    func toggleFavorite(child childNID: NID) async {
+    func toggleFavorite(child childNID: NID) async throws {
         if let favoriteLinks = await favorites?.links(to: childNID).nilIfEmpty() {
             if let favorites = await favorites {
                 // if favorites doesn't exist, no need to remove from favorites node either
@@ -229,12 +229,12 @@ extension GraphManagerNode where ObjectWillChangePublisher == ObservableObjectPu
             }
         } else {
             objectWillChange.send()
-            await manager.addLink(from: await favorites(), to: childNID, via: "")
+            await manager.addLink(from: try await favorites(), to: childNID, via: "")
             logInfo("successfully favorited node")
         }
     }
 
-    func toggleWorse(child childNID: NID) async {
+    func toggleWorse(child childNID: NID) async throws {
         if let worseLinks = await worse?.links(to: childNID).nilIfEmpty() {
             if let worse = await worse {
                 objectWillChange.send()
@@ -246,7 +246,7 @@ extension GraphManagerNode where ObjectWillChangePublisher == ObservableObjectPu
             }
         } else {
             objectWillChange.send()
-            await manager.addLink(from: await worse(), to: childNID, via: "")
+            await manager.addLink(from: try await worse(), to: childNID, via: "")
             logInfo("successfully worsened node")
         }
     }

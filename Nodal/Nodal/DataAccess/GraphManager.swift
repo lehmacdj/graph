@@ -8,6 +8,8 @@
 import Combine
 import Foundation
 
+struct SpecialNodeDoesNotExist: LocalizedError {}
+
 /// Represents the  represents the base directory for a graph.
 /// Offers a flyweight mechanism for retrieving Node model objects that represent nodes in the graph.
 actor GraphManager<N: Node> {
@@ -17,20 +19,13 @@ actor GraphManager<N: Node> {
 
     private var _graphChanges: AnyPublisher<GraphChange, Never>?
 
-    init?(dir: URL) async {
-        basePath = dir
-        let origin = await UbiquitousFile(at: metaPath(for: NID.origin))
-        do {
-            try await origin.download()
-        } catch {
-            logWarn("got an error while downloading origin node: \(error)")
-            return nil
+    private func initSpecialNodes() async throws {
+        for node in SpecialNode.allCases where (try? await self[node.nid]) == nil {
+            let _ = try await createNode(withNid: node.nid)
         }
-        guard await origin.exists else {
-            logWarn("couldn't access origin node metadata file")
-            return nil
-        }
+    }
 
+    private func initDirectoryObserverAndGraphChanges() {
         let directoryObserver = DirectoryObserver(url: basePath)
         let graphChanges: any Publisher<GraphChange, Never> = directoryObserver.changes.compactMap { [weak self] change in
             switch (change, self?.changeType(for: change.url))  {
@@ -52,6 +47,12 @@ actor GraphManager<N: Node> {
         }
         self.directoryObserver = directoryObserver
         self._graphChanges = graphChanges.eraseToAnyPublisher()
+    }
+
+    init(dir: URL) async throws {
+        basePath = dir
+        try await initSpecialNodes()
+        initDirectoryObserverAndGraphChanges()
     }
 
     nonisolated func metaPath(for nid: NID) -> URL {
@@ -147,23 +148,18 @@ actor GraphManager<N: Node> {
         }.eraseToAnyPublisher()
     }
 
+    func createNode(withNid nid: NID) async throws -> N {
+        let newMeta = NodeMeta(id: nid, incoming: [:], outgoing: [:])
+        let data: Data = try JSONEncoder().encode(newMeta)
+        guard FileManager.default.createFile(atPath: metaPath(for: nid).path, contents: data) else {
+            throw CouldNotCreateFile(path: metaPath(for: nid))
+        }
+        return try await self[nid]
+    }
+
     /// Creates a new node not connected to anything
-    func createNewNode() async -> N {
-        let newNodeId = NID.random()
-        let newMeta = NodeMeta(id: newNodeId, incoming: [:], outgoing: [:])
-        guard let data: Data = try? JSONEncoder().encode(newMeta) else {
-            logError("failed to encode JSON for NodeMeta")
-            fatalError("couldn't create a node")
-        }
-        guard FileManager.default.createFile(atPath: metaPath(for: newNodeId).path, contents: data) else {
-            logError("failed to create file for new node")
-            fatalError("failed to create a file")
-        }
-        guard let node = try? await self[newNodeId] else {
-            logError("couldn't access newly created node")
-            fatalError("couldn't create a node")
-        }
-        return node
+    func createNewNode() async throws -> N {
+        try await createNode(withNid: NID.random())
     }
 
     func addLink(from start: NID, to end: NID, via transition: String) async {

@@ -157,7 +157,7 @@ struct NodeView: View {
     var body: some View {
         content
             .navigationTitle(Text("\(vm.nid)"))
-            .task(vm.subscribe)
+            .task { await vm.subscribe() }
     }
 }
 

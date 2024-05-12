@@ -133,7 +133,7 @@ struct TransitionView: View {
                 .tint(.purple)
             }
         }
-        .task(vm.subscribe)
+        .task { await vm.subscribe() }
     }
 }
 

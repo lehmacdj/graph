@@ -41,7 +41,7 @@ struct ContentView: View {
         }
         .task(id: fileUrl) {
             graphAndRoot = .loading
-            guard let graphManager = await GraphManager<DefaultNode>(dir: fileUrl) else {
+            guard let graphManager = try? await GraphManager<DefaultNode>(dir: fileUrl) else {
                 graphAndRoot = .loaded(nil)
                 return
             }

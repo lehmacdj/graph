@@ -8,7 +8,7 @@
 import Combine
 import Foundation
 
-@Observable final class AnyTransitionVM<N_: Node>: TransitionVM, Sendable {
+@Observable final class AnyTransitionVM<N_: Node>: TransitionVM {
     typealias N = N_
 
     init<VM: TransitionVM<N>>(erasing underlying: VM) {
@@ -44,7 +44,7 @@ import Foundation
         set { underlying.isWorse = newValue }
     }
 
-    @Sendable func subscribe() async {
+    func subscribe() async {
         await underlying.subscribe()
     }
 

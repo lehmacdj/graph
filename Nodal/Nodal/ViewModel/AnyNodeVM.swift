@@ -8,7 +8,7 @@
 import Combine
 import Foundation
 
-@Observable final class AnyNodeVM<N_: Node>: NodeVM, Sendable {
+@Observable final class AnyNodeVM<N_: Node>: NodeVM {
     typealias N = N_
 
     init<VM: NodeVM<N>>(erasing underlying: VM) {
@@ -25,7 +25,7 @@ import Foundation
         get { underlying.nid }
     }
 
-    @Sendable func subscribe() async {
+    func subscribe() async {
         await underlying.subscribe()
     }
 

@@ -26,14 +26,14 @@ protocol NodeState<N> {
     var possibleTags: Set<String> { get }
 }
 
-protocol NodeVM<N>: Sendable, Observable {
+protocol NodeVM<N>: Observable {
     associatedtype N: Node
 
     var nid: NID { get }
 
     var state: Loading<any NodeState<N>> { get }
 
-    @Sendable func subscribe() async
+    func subscribe() async
 
     func reload() async
 
