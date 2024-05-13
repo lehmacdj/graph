@@ -75,3 +75,51 @@ extension Int: Identifiable {
         self
     }
 }
+
+infix operator **: MultiplicationPrecedence
+
+public extension Int {
+    func raised(to power: Int) -> Int {
+        guard power >= 0 else {
+            assert(power >= 0, "Exponent must be non-negative.")
+            return 1 // Optional: handle negative exponents as per your use case
+        }
+
+        var result = 1
+        var base = self
+        var exp = power
+
+        while exp > 0 {
+            if exp % 2 == 1 {
+                result *= base
+            }
+            exp /= 2
+            base *= base
+        }
+
+        return result
+    }
+
+    static func ** (base: Int, power: Int) -> Int {
+        return base.raised(to: power)
+    }
+
+    func rounded(toPowerOf10 powerOf10: Int) -> Int {
+        assert(powerOf10 >= 0, "Power of 10 must be non-negative.")
+
+        let multiplier = 10 ** powerOf10
+        if multiplier == 0 { return self }  // Handle potential overflow for very large powerOf10
+
+        let halfMultiplier = multiplier / 2
+        if self >= 0 {
+            return ((self + halfMultiplier) / multiplier) * multiplier
+        } else {
+            return ((self - halfMultiplier) / multiplier) * multiplier
+        }
+    }
+}
+
+extension Calendar {
+    static var iso8601 = Calendar(identifier: .iso8601)
+}
+

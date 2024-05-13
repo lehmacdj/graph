@@ -34,6 +34,7 @@
 		0313681627149ECE00E69F83 /* ZoomableScrollView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0313681527149ECE00E69F83 /* ZoomableScrollView.swift */; };
 		031CE3F429DA8643001470BD /* Suspense.swift in Sources */ = {isa = PBXBuildFile; fileRef = 031CE3F329DA8643001470BD /* Suspense.swift */; };
 		031CE3F629E21CDF001470BD /* FillableSymbolToggle.swift in Sources */ = {isa = PBXBuildFile; fileRef = 031CE3F529E21CDF001470BD /* FillableSymbolToggle.swift */; };
+		03223C972BF17A8F0041673D /* GraphTimestamp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 03223C962BF17A8F0041673D /* GraphTimestamp.swift */; };
 		0326BF27292951D700ECA18F /* BitCollections in Frameworks */ = {isa = PBXBuildFile; productRef = 0326BF26292951D700ECA18F /* BitCollections */; };
 		0326BF29292951D700ECA18F /* Collections in Frameworks */ = {isa = PBXBuildFile; productRef = 0326BF28292951D700ECA18F /* Collections */; };
 		0326BF2B292951D700ECA18F /* DequeModule in Frameworks */ = {isa = PBXBuildFile; productRef = 0326BF2A292951D700ECA18F /* DequeModule */; };
@@ -107,6 +108,7 @@
 		0313681527149ECE00E69F83 /* ZoomableScrollView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ZoomableScrollView.swift; sourceTree = "<group>"; };
 		031CE3F329DA8643001470BD /* Suspense.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Suspense.swift; sourceTree = "<group>"; };
 		031CE3F529E21CDF001470BD /* FillableSymbolToggle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FillableSymbolToggle.swift; sourceTree = "<group>"; };
+		03223C962BF17A8F0041673D /* GraphTimestamp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GraphTimestamp.swift; sourceTree = "<group>"; };
 		0328339E2B00139100D1AA58 /* DirectoryObserver.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DirectoryObserver.swift; sourceTree = "<group>"; };
 		032959F129CAC31F00FDE138 /* GraphManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GraphManager.swift; sourceTree = "<group>"; };
 		033449D32999602B00BBCCC4 /* Semaphor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Semaphor.swift; sourceTree = "<group>"; };
@@ -193,6 +195,7 @@
 		031367E12713FCF200E69F83 /* Nodal */ = {
 			isa = PBXGroup;
 			children = (
+				03223C952BF17A7B0041673D /* GraphInternalModels */,
 				03DD60D229D105B2005EC4A5 /* ViewModel */,
 				032959EE29CA997A00FDE138 /* Utils */,
 				032959ED29CA996000FDE138 /* DataAccess */,
@@ -231,6 +234,14 @@
 				031368032713FCF400E69F83 /* Info.plist */,
 			);
 			path = NodalUITests;
+			sourceTree = "<group>";
+		};
+		03223C952BF17A7B0041673D /* GraphInternalModels */ = {
+			isa = PBXGroup;
+			children = (
+				03223C962BF17A8F0041673D /* GraphTimestamp.swift */,
+			);
+			path = GraphInternalModels;
 			sourceTree = "<group>";
 		};
 		032959ED29CA996000FDE138 /* DataAccess */ = {
@@ -487,6 +498,7 @@
 				03136814271415FA00E69F83 /* Extensions.swift in Sources */,
 				03A32F962AAD929000C6A30B /* WeakDictionary.swift in Sources */,
 				03C9CB3F2A7765BF007F29E7 /* AnyNodeVM.swift in Sources */,
+				03223C972BF17A8F0041673D /* GraphTimestamp.swift in Sources */,
 				038C93012A3954BF0059C8D6 /* UbiquitousFile.swift in Sources */,
 				03A934C22A3EC10F0011DB8D /* DocumentNode.swift in Sources */,
 				03589E8F2A81EDE3004AD75B /* SubscribingTransitionVM.swift in Sources */,
