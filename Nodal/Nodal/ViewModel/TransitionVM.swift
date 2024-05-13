@@ -34,6 +34,8 @@ protocol TransitionVM<N>: Observable, Identifiable {
 
     var thumbnail: Loading<ThumbnailValue> { get }
 
+    var timestamp: Loading<Date?> { get }
+
     var isFavorite: Bool { get set }
 
     var isWorse: Bool { get set }

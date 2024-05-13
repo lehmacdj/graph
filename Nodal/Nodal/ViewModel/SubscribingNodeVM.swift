@@ -299,7 +299,7 @@ import Combine
             }
 
             func mkTransitionVMs(_ transitions: [NodeTransition], inDirection direction: Direction, isFavorite: Bool, isWorse: Bool) -> [AnyTransitionVM<N>] {
-                transitions.sorted(on: {"\($0.transition)\($0.nid)"}).map {
+                transitions.map {
                     SubscribingTransitionVM(parent: self, source: node, transition: $0, direction: direction, manager: self.manager, isFavorite: isFavorite, isWorse: isWorse)
                         .eraseToAnyTransitionVM()
                 }

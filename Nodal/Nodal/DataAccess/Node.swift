@@ -74,6 +74,8 @@ protocol Node: AnyObject, ObservableObject {
     var data: Data? { get async }
 
     func deleteMetaAndData()
+
+    var mostRecentTimestamp: Date? { get async }
 }
 
 protocol GraphManagerNode: Node {

@@ -23,12 +23,28 @@ import SwiftUI
             return .loaded(state)
         case .loadingInactive:
             return .loading
-        case .loadedActive(let state, _):
+        case .loadedActive(let state, _, _):
             return .loaded(state)
-        case .loadedInactive(let state):
+        case .loadedInactive(let state, _):
             return .loaded(state)
         case .failed(let error):
             return .failed(error)
+        }
+    }
+    var timestamp: Loading<Date?> {
+        switch internalState {
+        case .idle:
+            return .idle
+        case .loadingActive:
+            return .loading
+        case .loadingInactive:
+            return .loading
+        case .loadedActive(_, let timestamp, _):
+            return .loaded(timestamp)
+        case .loadedInactive(_, let timestamp):
+            return .loaded(timestamp)
+        case .failed:
+            return .idle
         }
     }
     var isFavorite: Bool
@@ -44,15 +60,15 @@ import SwiftUI
         /// * the node is populated during the loading process and is expected to exist for the final stage (initial data fetch) of the loading process
         case loadingActive(thumbnail: ThumbnailValue?)
         case loadingInactive
-        case loadedActive(thumbnail: ThumbnailValue, destinationNode: N)
-        case loadedInactive(thumbnail: ThumbnailValue)
+        case loadedActive(thumbnail: ThumbnailValue, destinationTimestamp: Date?, destinationNode: N)
+        case loadedInactive(thumbnail: ThumbnailValue, destinationTimestamp: Date?)
         case failed(error: Error)
 
         var node: N? {
             switch self {
             case .idle, .loadingInactive, .loadingActive, .loadedInactive, .failed:
                 return nil
-            case .loadedActive(_, let node):
+            case .loadedActive(_, _, let node):
                 return node
             }
         }
@@ -95,7 +111,7 @@ import SwiftUI
             internalState = .loadingActive(thumbnail: nil)
         case .loadingInactive:
             internalState = .loadingActive(thumbnail: nil)
-        case .loadedInactive(let thumbnail):
+        case .loadedInactive(let thumbnail, _):
             internalState = .loadingActive(thumbnail: thumbnail)
         case .failed(_):
             // we don't want to start loading failed nodes so that the error message doesn't get cleared
@@ -108,8 +124,10 @@ import SwiftUI
         }
 
         let destinationNode: N
+        let destinationTimestamp: Date?
         do {
             destinationNode = try await manager[destinationNid]
+            destinationTimestamp = await destinationNode.mostRecentTimestamp
         } catch {
             logError(error.localizedDescription)
             internalState = .failed(error: error)
@@ -122,16 +140,32 @@ import SwiftUI
         }
 
         if let thumbnail {
-            internalState = .loadedActive(thumbnail: thumbnail, destinationNode: destinationNode)
+            internalState = .loadedActive(
+                thumbnail: thumbnail,
+                destinationTimestamp: destinationTimestamp,
+                destinationNode: destinationNode
+            )
         } else {
             if destinationNode.dataURL != nil {
                 if destinationNode.dataRequiresDownload {
-                    internalState = .loadedActive(thumbnail: .cloudFile, destinationNode: destinationNode)
+                    internalState = .loadedActive(
+                        thumbnail: .cloudFile,
+                        destinationTimestamp: destinationTimestamp,
+                        destinationNode: destinationNode
+                    )
                 } else {
-                    internalState = .loadedActive(thumbnail: .thumbnail(.loading), destinationNode: destinationNode)
+                    internalState = .loadedActive(
+                        thumbnail: .thumbnail(.loading),
+                        destinationTimestamp: destinationTimestamp,
+                        destinationNode: destinationNode
+                    )
                 }
             } else {
-                internalState = .loadedActive(thumbnail: .noThumbnail, destinationNode: destinationNode)
+                internalState = .loadedActive(
+                    thumbnail: .noThumbnail,
+                    destinationTimestamp: destinationTimestamp,
+                    destinationNode: destinationNode
+                )
             }
         }
 
@@ -140,7 +174,7 @@ import SwiftUI
     }
 
     private func updateStateLoop() async throws {
-        guard case .loadedActive(let thumbnail, let destinationNode) = internalState else { return }
+        guard case .loadedActive(let thumbnail, let destinationTimestamp, let destinationNode) = internalState else { return }
 
         if case .thumbnail(.loading) = thumbnail {
             await fetchThumbnail()
@@ -154,12 +188,20 @@ import SwiftUI
                 } else {
                     // if we are in an inconsistent state we have to re-run beginUpdateState
                     guard case .loadedActive = internalState else { return }
-                    internalState = .loadedActive(thumbnail: .cloudFile, destinationNode: destinationNode)
+                    internalState = .loadedActive(
+                        thumbnail: .cloudFile,
+                        destinationTimestamp: destinationTimestamp,
+                        destinationNode: destinationNode
+                    )
                 }
             case .removed:
                 // if we are in an inconsistent state we have to re-run beginUpdateState
                 guard case .loadedActive = internalState else { return }
-                internalState = .loadedActive(thumbnail: .noThumbnail, destinationNode: destinationNode)
+                internalState = .loadedActive(
+                    thumbnail: .noThumbnail,
+                    destinationTimestamp: destinationTimestamp,
+                    destinationNode: destinationNode
+                )
             }
         }
     }
@@ -183,8 +225,10 @@ import SwiftUI
         switch internalState {
         case .loadingActive(thumbnail: nil):
             internalState = .loadingInactive
-        case .loadingActive(let .some(thumbnail)), .loadedActive(let thumbnail, _):
-            internalState = .loadedInactive(thumbnail: thumbnail)
+        case .loadingActive(let .some(thumbnail)):
+            internalState = .loadedInactive(thumbnail: thumbnail, destinationTimestamp: nil)
+        case .loadedActive(let thumbnail, let destinationTimestamp, _):
+            internalState = .loadedInactive(thumbnail: thumbnail, destinationTimestamp: destinationTimestamp)
         case .idle, .loadingInactive, .loadedInactive, .failed:
             // nothing to do already in an okay state
             break
@@ -210,7 +254,7 @@ import SwiftUI
     }
 
     func fetchThumbnail() async {
-        guard case .loadedActive(_, let destinationNode) = internalState else {
+        guard case .loadedActive(_, let destinationTimestamp, let destinationNode) = internalState else {
             return
         }
 
@@ -222,13 +266,13 @@ import SwiftUI
                     logWarn("internalState of transition \(transition) to \(destinationNid) has changed")
                     return
                 }
-                internalState = .loadedActive(thumbnail: .thumbnail(.loaded(image)), destinationNode: destinationNode)
+                internalState = .loadedActive(thumbnail: .thumbnail(.loaded(image)), destinationTimestamp: destinationTimestamp, destinationNode: destinationNode)
             } else {
                 guard case .loadedActive = internalState else {
                     logWarn("internalState of transition \(transition) to \(destinationNid) has changed")
                     return
                 }
-                internalState = .loadedActive(thumbnail: .noThumbnail, destinationNode: destinationNode)
+                internalState = .loadedActive(thumbnail: .noThumbnail, destinationTimestamp: destinationTimestamp, destinationNode: destinationNode)
             }
             logDebug("successfully loaded thumbnail")
         } catch {
@@ -237,7 +281,7 @@ import SwiftUI
                 return
             }
             logError("failed to load thumbnail: \(error)")
-            internalState = .loadedActive(thumbnail: .thumbnail(.failed(error)), destinationNode: destinationNode)
+            internalState = .loadedActive(thumbnail: .thumbnail(.failed(error)), destinationTimestamp: destinationTimestamp, destinationNode: destinationNode)
         }
     }
 

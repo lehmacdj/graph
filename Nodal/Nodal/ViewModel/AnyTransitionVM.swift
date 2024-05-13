@@ -34,6 +34,10 @@ import Foundation
         get { underlying.thumbnail }
     }
 
+    var timestamp: Loading<Date?> {
+        get { underlying.timestamp }
+    }
+
     var isFavorite: Bool {
         get { underlying.isFavorite }
         set { underlying.isFavorite = newValue }

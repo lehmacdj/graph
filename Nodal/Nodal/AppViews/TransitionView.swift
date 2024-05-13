@@ -61,6 +61,26 @@ struct TransitionView: View {
         }
     }
 
+    @ViewBuilder
+    var timestamp: some View {
+        let dateFormatter = {
+            let formatter = DateFormatter()
+            formatter.dateStyle = .medium
+            formatter.timeStyle = .medium
+            formatter.locale = Locale.current
+            return formatter
+        }()
+        Suspense(vm.timestamp) { timestamp in
+            if let timestamp {
+                Text(dateFormatter.string(from: timestamp))
+            } else {
+                EmptyView()
+            }
+        } placeholder: {
+            Text(dateFormatter.string(from: Date.distantPast)).redacted(reason: .placeholder)
+        }
+    }
+
     var body: some View {
         HStack {
             thumbnail
@@ -77,7 +97,11 @@ struct TransitionView: View {
                 } else {
                     // somehow the VMs here are getting subscribed & then retaining the node beyond when we want it to be retained
                     NavigationLink(destination: NodeView(of: vm.destination)) {
-                        Text(vm.transition)
+                        BottomOrnament {
+                            Text(vm.transition)
+                        } ornament: {
+                            timestamp
+                        }
                     }
                 }
             }
