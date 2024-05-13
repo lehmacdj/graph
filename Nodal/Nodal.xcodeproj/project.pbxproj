@@ -208,7 +208,6 @@
 				031367E82713FCF400E69F83 /* Assets.xcassets */,
 				031367ED2713FCF400E69F83 /* Info.plist */,
 				031367EA2713FCF400E69F83 /* Preview Content */,
-				03A32F952AAD929000C6A30B /* WeakDictionary.swift */,
 			);
 			path = Nodal;
 			sourceTree = "<group>";
@@ -264,6 +263,7 @@
 		032959EE29CA997A00FDE138 /* Utils */ = {
 			isa = PBXGroup;
 			children = (
+				03A32F952AAD929000C6A30B /* WeakDictionary.swift */,
 				033449D32999602B00BBCCC4 /* Semaphor.swift */,
 				0313681127140A0900E69F83 /* Utils.swift */,
 				03136813271415FA00E69F83 /* Extensions.swift */,
