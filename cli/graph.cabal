@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 9b809aea5b6ae5bbc6e4c4b9350c261456f25f69a6ed66a6ca395002b5c66d18
+-- hash: 5487357538681fba960e369828d06d2fc005bde9081edcfdf830c60bd6d916e7
 
 name:           graph
 version:        0.1.0.0
@@ -28,6 +28,7 @@ library
   exposed-modules:
       Base62
       Completion
+      Data.Set.Ordered.Orphans
       Effect.Console
       Effect.Editor
       Effect.Filesystem
@@ -163,6 +164,7 @@ library
     , mono-traversable
     , mtl
     , optparse-applicative
+    , ordered-containers
     , parser-combinators
     , polysemy
     , polysemy-plugin
@@ -261,6 +263,7 @@ executable dump-graph
     , mono-traversable
     , mtl
     , optparse-applicative
+    , ordered-containers
     , parser-combinators
     , polysemy
     , polysemy-plugin
@@ -359,6 +362,7 @@ executable ge
     , mono-traversable
     , mtl
     , optparse-applicative
+    , ordered-containers
     , parser-combinators
     , polysemy
     , polysemy-plugin
@@ -458,6 +462,7 @@ test-suite graph-test
     , mono-traversable
     , mtl
     , optparse-applicative
+    , ordered-containers
     , parser-combinators
     , polysemy
     , polysemy-plugin

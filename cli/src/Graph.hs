@@ -54,7 +54,8 @@ nodeLookup i g = fromMaybe err . lookup i . nodeMap $ g
         "expected to find " ++ show i ++ " in the Graph\n"
           ++ MD.showTree (nodeMap g)
 
--- | Utility function for constructing a primed version of a function operating on ids instead of
+-- | Utility function for constructing a primed version of a function operating
+-- on ids instead of nodes
 primed ::
   TransitionValid t =>
   (Node t -> Graph t -> a) ->

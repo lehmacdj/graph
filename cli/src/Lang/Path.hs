@@ -13,6 +13,8 @@ module Lang.Path where
 import Control.Lens hiding (pre, unsnoc)
 import Data.List (intersectBy)
 import qualified Data.Set as Set
+import Data.Set.Ordered (OSet)
+import qualified Data.Set.Ordered as OSet
 import Effect.FreshNID
 import Effect.Graph
 import Effect.Graph.Advanced
@@ -152,35 +154,39 @@ resolvePathSuccesses nid = \case
   p :+ q -> union <$> resolvePathSuccesses nid p <*> resolvePathSuccesses nid q
   p :& q -> intersect <$> resolvePathSuccesses nid p <*> resolvePathSuccesses nid q
 
--- | TODO: refactor so I don't need Error Missing. Currently it is used only
+-- | General reducer over graph directed by a path.
+-- * Traverses the graph in an order based on the syntactic structure of the
+--   path.
+-- * Interprets missing nodes as empty sets.
+-- TODO: refactor so I don't need Error Missing. Currently it is used only
 -- for the initial node in case it does not exist
-resolvePathSuccessesDetail ::
+resolvePathSuccessesDetail' ::
   forall t effs.
   (Members [ReadGraph t, Error Missing] effs, TransitionValid t) =>
   NID ->
   Path t ->
-  Sem effs (Set (DPath t))
-resolvePathSuccessesDetail nid = \case
-  One -> pure $ Set.singleton (DPath nid [] nid [])
-  Zero -> pure Set.empty
+  Sem effs (OSet (DPath t))
+resolvePathSuccessesDetail' nid = \case
+  One -> pure $ OSet.singleton (DPath nid [] nid [])
+  Zero -> pure OSet.empty
   Absolute nid' ->
     getNode nid' <&> \case
-      Nothing -> Set.empty
-      Just _ -> Set.singleton $ DPath nid' [] nid' []
+      Nothing -> OSet.empty
+      Just _ -> OSet.singleton $ DPath nid' [] nid' []
   Wild ->
-    getNodeSem nid <&> \n -> Set.fromList $ do
+    getNodeSem nid <&> \n -> OSet.fromList $ do
       Connect t nid' <- toList $ outgoingConnectsOf n
       pure $ DPath nid [nidOf n `FromVia` t] nid' []
   Literal t ->
     getNodeSem nid <&> \n ->
       case matchConnect t (outgoingConnectsOf n) of
-        [] -> Set.singleton (DPath nid [] nid [t])
-        ms -> Set.fromList (DPath nid [nidOf n `FromVia` t] <$> ms <*> pure [])
+        [] -> OSet.singleton (DPath nid [] nid [t])
+        ms -> OSet.fromList (DPath nid [nidOf n `FromVia` t] <$> ms <*> pure [])
   p1 :/ p2 -> do
-    r1 <- toList <$> resolvePathSuccessesDetail nid p1
-    fmap setFromList . (`concatMapM` r1) $ \case
+    r1 <- toList <$> resolvePathSuccessesDetail' nid p1
+    fmap OSet.fromList . (`concatMapM` r1) $ \case
       DPath start pre nid' [] -> do
-        r2 <- toList <$> resolvePathSuccessesDetail nid' p2
+        r2 <- toList <$> resolvePathSuccessesDetail' nid' p2
         forM r2 $ \case
           DPath mid pre' nid'' post'
             | mid /= nid' -> error "midpoint of `/` path is wrong"
@@ -190,15 +196,23 @@ resolvePathSuccessesDetail nid = \case
         -- path components will also fail, thus we treat them as such
         let r2 = toList . assertListifiedRelativePath $ listifyNewPath p2
         forM r2 $ \post' -> pure $ DPath nid pre nid' (post ++ post')
-  p1 :+ p2 -> union <$> p1r <*> p2r
+  p1 :+ p2 -> (OSet.|<>) <$> p1r <*> p2r
     where
-      p1r = resolvePathSuccessesDetail nid p1
-      p2r = resolvePathSuccessesDetail nid p2
-  p1 :& p2 -> setFromList <$> (intersect' <$> p1r <*> p2r)
+      p1r = resolvePathSuccessesDetail' nid p1
+      p2r = resolvePathSuccessesDetail' nid p2
+  p1 :& p2 -> OSet.fromList <$> (intersect' <$> p1r <*> p2r)
     where
       intersect' = intersectBy ((==) `on` endPoint)
-      p1r = toList <$> resolvePathSuccessesDetail nid p1
-      p2r = toList <$> resolvePathSuccessesDetail nid p2
+      p1r = toList <$> resolvePathSuccessesDetail' nid p1
+      p2r = toList <$> resolvePathSuccessesDetail' nid p2
+
+resolvePathSuccessesDetail ::
+  forall t effs.
+  (Members [ReadGraph t, Error Missing] effs, TransitionValid t) =>
+  NID ->
+  Path t ->
+  Sem effs (Set (DPath t))
+resolvePathSuccessesDetail nid p = resolvePathSuccessesDetail' nid p <&> OSet.toSet
 
 -- | Assert that the result of listifyNewPath is relative. This should be the
 -- case if the input path was relative.
@@ -360,7 +374,7 @@ resolvePath ::
   Path t ->
   Node t ->
   Graph t ->
-  Set (DPath t)
+  OSet (DPath t)
 resolvePath p n g =
   nodeConsistentWithGraph g n `seq` fromMaybe (error "node is from graph") (resolvePathInConcreteGraph (nidOf n) p g)
 
@@ -370,9 +384,9 @@ resolvePathInConcreteGraph ::
   NID ->
   Path t ->
   Graph t ->
-  Maybe (Set (DPath t))
+  Maybe (OSet (DPath t))
 resolvePathInConcreteGraph nid p g =
-  resolvePathSuccessesDetail nid p
+  resolvePathSuccessesDetail' nid p
     & runReadGraphState @t
     & evalState g
     & runError

@@ -40,6 +40,7 @@ import Data.Generics.Labels
 import Data.List as X (iterate)
 import Data.List.NonEmpty as X (NonEmpty (..))
 import qualified Data.Set as Set
+import Data.Set.Ordered.Orphans as X ()
 import GHC.Generics as X (Generic, Rep)
 import GHC.Stack as X (HasCallStack)
 import Polysemy

@@ -49,6 +49,7 @@ dependencies:
 - mono-traversable
 - mtl
 - optparse-applicative
+- ordered-containers
 - parser-combinators
 - polysemy
 - polysemy-plugin
