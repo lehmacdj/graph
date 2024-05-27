@@ -187,8 +187,9 @@ interpretCommand = \case
   Merge p -> do
     nid <- currentLocation
     nids <- subsumeUserError (resolvePathSuccessesDetail' nid p)
-    whenNonNull (mapMaybe successfulDPathEndpoint $ toList nids) $
-      \xs -> (subsumeUserError . void) (mergeNodes @String xs)
+    whenNonNull (mapMaybe successfulDPathEndpoint $ toList nids) $ \xs -> do
+      nid' <- subsumeUserError (mergeNodes @String xs)
+      changeLocation nid'
   Remove p -> do
     nid <- currentLocation
     subsumeUserError $ delPath nid p
