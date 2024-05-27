@@ -132,6 +132,11 @@ isValidPath = \case
 isFullyRelativePath :: TransitionValid t => Path t -> Bool
 isFullyRelativePath = all (isNothing . fst) . setToList . listifyNewPath
 
+-- | A deterministic path is successful if it ends at a node in the graph
+successfulDPathEndpoint :: DPath t -> Maybe NID
+successfulDPathEndpoint (DPath _ _ nid []) = Just nid
+successfulDPathEndpoint _ = Nothing
+
 resolvePathSuccesses ::
   forall t effs.
   (Members [ReadGraph t, Error Missing] effs, TransitionValid t) =>

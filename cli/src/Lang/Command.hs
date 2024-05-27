@@ -186,8 +186,8 @@ interpretCommand = \case
     subsumeUserError . taggingFreshNodesWithTime . void $ mkPath nid p
   Merge p -> do
     nid <- currentLocation
-    nids <- subsumeUserError (resolvePathSuccesses nid p)
-    whenNonNull (setToList nids) $
+    nids <- subsumeUserError (resolvePathSuccessesDetail' nid p)
+    whenNonNull (mapMaybe successfulDPathEndpoint $ toList nids) $
       \xs -> (subsumeUserError . void) (mergeNodes @String xs)
   Remove p -> do
     nid <- currentLocation
