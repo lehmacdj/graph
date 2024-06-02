@@ -6,6 +6,15 @@ import random
 import string
 import sys
 
+# Predefined ID mappings
+predefined_id_map = {
+    76: 'AhQufiPzgyRf',
+    1: 'pbYxBO6fzBQV',
+    881: 'a0fVkm0kR7KE',
+    9780: 'S00KkOYoVpFu',
+    0: '000000000000'
+}
+
 # Function to generate a random alphanumeric ID of length 12
 def generate_random_id(length=12):
     characters = string.ascii_letters + string.digits
@@ -14,7 +23,7 @@ def generate_random_id(length=12):
 # Load and update JSON files in the directory
 def process_json_files(directory):
     # Dictionary to map old IDs to new IDs
-    id_map = {}
+    id_map = predefined_id_map.copy()
 
     # Read all JSON files to create the ID map
     for filename in os.listdir(directory):
@@ -70,12 +79,17 @@ def process_json_files(directory):
             with open(file_path, 'w') as file:
                 json.dump(updated_data, file, indent=4)
 
-    # Rename the files with new IDs
+    # Rename the JSON and corresponding .data files with new IDs
     for old_id, new_id in id_map.items():
-        old_filename = os.path.join(directory, f'{old_id}.json')
-        new_filename = os.path.join(directory, f'{new_id}.json')
-        if os.path.exists(old_filename):
-            os.rename(old_filename, new_filename)
+        old_json_filename = os.path.join(directory, f'{old_id}.json')
+        new_json_filename = os.path.join(directory, f'{new_id}.json')
+        old_data_filename = os.path.join(directory, f'{old_id}.data')
+        new_data_filename = os.path.join(directory, f'{new_id}.data')
+
+        if os.path.exists(old_json_filename):
+            os.rename(old_json_filename, new_json_filename)
+        if os.path.exists(old_data_filename):
+            os.rename(old_data_filename, new_data_filename)
 
 # Check if the directory path is provided as a command line argument
 if len(sys.argv) != 2:
