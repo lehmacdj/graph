@@ -14,8 +14,11 @@ import Effect.NodeLocated
 import Effect.Warn
 import Extensibility
 import Graph.Types
+import Lang.Command (singleErr)
+import Lang.Path
 import MyPrelude
 import Polysemy.Error
+import Singleton
 import UserError
 
 main :: IO ()
@@ -33,5 +36,8 @@ prog ::
     r =>
   Sem r ()
 prog = do
-  nid <- currentLocation
+  locNid <- currentLocation
+  nid <-
+    the' (singleErr "cat")
+      =<< subsumeUserError (resolvePathSuccesses locNid (Literal "data"))
   setData nid Nothing

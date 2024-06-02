@@ -1,9 +1,8 @@
 {-# LANGUAGE DataKinds #-}
-{-# LANGUAGE NoImplicitPrelude #-}
 {-# LANGUAGE OverloadedLabels #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TypeApplications #-}
-
+{-# LANGUAGE NoImplicitPrelude #-}
 {-# OPTIONS_GHC -fplugin=Polysemy.Plugin #-}
 
 module Main where
@@ -16,8 +15,11 @@ import Effect.NodeLocated
 import Effect.Warn
 import Extensibility
 import Graph.Types
+import Lang.Command (singleErr)
+import Lang.Path
 import MyPrelude
 import Polysemy.Error
+import Singleton
 import UserError
 
 main :: IO ()
@@ -35,8 +37,11 @@ prog ::
     r =>
   Sem r ()
 prog = do
-  nid <- currentLocation
+  locNid <- currentLocation
+  nid <-
+    the' (singleErr "cat")
+      =<< subsumeUserError (resolvePathSuccesses locNid (Literal "data"))
   n <- subsumeUserError $ getNodeSem nid
   case n ^. #associatedData of
-    Nothing -> say "no node data"
+    Nothing -> say "node 'data' has no data"
     Just x -> embed $ B.putStr x
