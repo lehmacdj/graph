@@ -50,13 +50,14 @@ defaultMain action = do
           ++ "was this called without using runScript?"
 
 -- | Base resolver, this should always be equal to the resolver in stack.yaml
--- for maximum compatibility.
+-- for for the commit below for maximum compatibility.
 baseResolver :: Text
-baseResolver = "lts-18.14"
+baseResolver = "lts-21.24"
 
--- | Commit to fetch from github when running executable
+-- | Commit to fetch from github when running executable, see this link for API
+-- https://github.com/lehmacdj/graph/blob/db615d800a71c769528aaadd6feed5a9984d9535
 commit :: Text
-commit = "e93f97eeb1ac95c30eee4787d2ccb7b7626017fc"
+commit = "db615d800a71c769528aaadd6feed5a9984d9535"
 
 -- | Contents of the snapshot that is used when calling an executable script.
 -- TODO: clean this up so that it is more testable that this is in good shape
@@ -65,15 +66,9 @@ snapshotContents :: Text
 snapshotContents =
   "resolver: " ++ baseResolver ++ "\n"
     ++ "packages:\n"
-    ++ "- github: lehmacdj/graph\n"
-    ++ ("  commit: " ++ commit ++ "\n")
-    ++ "  subdirs:\n"
-    ++ "    - core/\n"
-    ++ "- polysemy-plugin-0.3.0.0\n"
-    ++ "- polysemy-1.5.0.0\n"
+    ++ ("- url: https://github.com/lehmacdj/graph/releases/download/graph-cli-" ++ commit ++ "/graph-" ++ commit ++ ".tar.gz\n")
     ++ "- polysemy-readline-0.2.0.0@sha256:30633eaee828f967b9f653f5406e55671684ae1ec6c513e3f2de184a301dadd1,2106\n"
-    ++ "- polysemy-zoo-0.7.0.2@sha256:64857606e456c4df033a79e41cef49059b23c98046b76aeadf990b08379dd6e9,3990\n"
-    ++ "- witherable-class-0.0.1@sha256:6ec78f157f715098eecc08dff177064abfc783ee2151a95f5aecff5c4c7d2d95,847\n"
+    ++ "- polysemy-zoo-0.8.2.0@sha256:bd8f802cb0402082053b3b0b97c8b551b071a14960e6b271a5b78be728b73a24,3952\n"
     ++ "- compact-0.2.0.0@sha256:75ef98cb51201b4a0d6de95cbbb62be6237c092a3d594737346c70c5d56c2380,2413\n"
 
 -- | Dependencies used when running a script. These all need to be available in
