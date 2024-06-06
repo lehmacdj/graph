@@ -30,13 +30,20 @@ def process_json_files(directory):
         if filename.endswith('.json'):
             file_path = os.path.join(directory, filename)
 
-            file_id = int(filename.split('.')[0])
+            raw_file_id = filename.split('.')[0]
+            if raw_file_id == '000000000000':
+                continue
+            try:
+                file_id = int(raw_file_id)
+            except ValueError:
+                print(f"Invalid file ID: {raw_file_id}")
+                continue
             with open(file_path, 'r') as file:
                 data = json.load(file)
             data_id = None
             if 'id' in data and isinstance(data['id'], int):
-                old_id = data['id']
-            assert(data_id == file_id)
+                data_id = data['id']
+            assert data_id == file_id, f"ID mismatch: {data_id} != {filename}"
             old_id = data_id
 
             if old_id not in id_map:
@@ -50,11 +57,11 @@ def process_json_files(directory):
                 if key == 'id' and value in id_map:
                     new_data[key] = id_map[value]
                 elif key in ['incoming', 'outgoing'] and isinstance(value, list):
+                    for item in value:
+                        if item['n'] not in id_map:
+                            raise ValueError(f"Invalid ID: {item['n']}")
                     new_data[key] = [
                             {'t': item['t'], 'n': id_map[item['n']]}
-                            if item['n']
-                            in id_map
-                            else Error(f"invalid id {item['n']}")
                             for item in value
                     ]
                 else:

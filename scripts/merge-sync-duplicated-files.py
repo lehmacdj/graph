@@ -42,7 +42,7 @@ def merge_json_files(directory):
                 with open(original_path, 'r') as f1, open(duplicate_path, 'r') as f2:
                     data1 = json.load(f1)
                     data2 = json.load(f2)
-                    assert(data1['id'] == data2['id'])
+                    assert data1['id'] == data2['id']
                     merged_data = {}
                     merged_data["id"] = data1["id"]
                     merged_data["incoming"] = dedup_dicts([v for v in data1["incoming"] + data2["incoming"]])
