@@ -25,24 +25,28 @@ def process_json_files(directory):
     # Dictionary to map old IDs to new IDs
     id_map = predefined_id_map.copy()
 
+    os.makedirs(os.path.join(directory, 'invalid'), exist_ok=True)
+
     # Read all JSON files to create the ID map
     for filename in os.listdir(directory):
         if filename.endswith('.json'):
             file_path = os.path.join(directory, filename)
 
             raw_file_id = filename.split('.')[0]
-            if raw_file_id == '000000000000':
-                continue
             try:
                 file_id = int(raw_file_id)
             except ValueError:
                 print(f"Invalid file ID: {raw_file_id}")
+                os.rename(file_path, os.path.join(directory, 'invalid', filename))
                 continue
             with open(file_path, 'r') as file:
                 data = json.load(file)
-            data_id = None
             if 'id' in data and isinstance(data['id'], int):
                 data_id = data['id']
+            else:
+                print(f"Invalid ID in file: {filename}")
+                os.rename(file_path, os.path.join(directory, 'invalid', filename))
+                continue
             assert data_id == file_id, f"ID mismatch: {data_id} != {filename}"
             old_id = data_id
 
@@ -54,15 +58,17 @@ def process_json_files(directory):
         if isinstance(data, dict):
             new_data = {}
             for key, value in data.items():
-                if key == 'id' and value in id_map:
-                    new_data[key] = id_map[value]
+                if key == 'id':
+                    if value in id_map:
+                        new_data[key] = id_map[value]
+                    else:
+                        print(f"ID not found in map: {value}")
+                        continue
                 elif key in ['incoming', 'outgoing'] and isinstance(value, list):
-                    for item in value:
-                        if item['n'] not in id_map:
-                            raise ValueError(f"Invalid ID: {item['n']}")
                     new_data[key] = [
                             {'t': item['t'], 'n': id_map[item['n']]}
                             for item in value
+                            if item['n'] in id_map
                     ]
                 else:
                     raise ValueError(f"Invalid key: {key}")
