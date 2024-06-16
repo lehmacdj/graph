@@ -80,7 +80,7 @@ extension URL {
         guard self.absoluteString.starts(with: url.absoluteString) else {
             return nil
         }
-        return String(self.absoluteString.dropFirst(self.absoluteString.count))
+        return String(self.absoluteString.dropFirst(url.absoluteString.count))
     }
 }
 

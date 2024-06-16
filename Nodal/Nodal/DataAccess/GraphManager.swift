@@ -102,9 +102,9 @@ actor GraphManager<N: Node> {
     private nonisolated func changeType(for url: URL) -> ChangeType? {
         let suffix = url.trimmingPath(prefix: basePath)
 
-        if let nid = suffix?.trimming(suffix: ".json") as? NID {
+        if let nid = suffix?.trimming(suffix: ".json").flatMap(NID.init(representation:)) {
             return .metadata(nid)
-        } else if let nid = suffix?.trimming(suffix: ".data") as? NID {
+        } else if let nid = suffix?.trimming(suffix: ".data").flatMap(NID.init(representation:)) {
             return .data(nid)
         } else {
             return nil
