@@ -9,3 +9,7 @@
 # files for xcode
 **/*.xcodeproj/xcuserdata/
 **/*.xcodeproj/project.xcworkspace/xcuserdata/
+
+# browser extension files
+**/node_modules/
+**/dist/
