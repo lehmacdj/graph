@@ -62,7 +62,7 @@ final class DocumentNode: GraphManagerNode {
         }
 
         let dataURL = manager.dataPath(for: nid)
-        guard !FileManager().fileExists(atPath: dataURL.absoluteString) else {
+        guard !FileManager().fileExists(atPath: dataURL.path) else {
             return dataURL
         }
 

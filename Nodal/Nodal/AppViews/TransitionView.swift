@@ -73,12 +73,11 @@ struct TransitionView: View {
         Suspense(vm.timestamp) { timestamp in
             if let timestamp {
                 Text(dateFormatter.string(from: timestamp))
+                    .font(.caption)
             } else {
                 EmptyView()
             }
-        } placeholder: {
-            Text(dateFormatter.string(from: Date.distantPast)).redacted(reason: .placeholder)
-        }
+        } 
     }
 
     var body: some View {
@@ -97,11 +96,14 @@ struct TransitionView: View {
                 } else {
                     // somehow the VMs here are getting subscribed & then retaining the node beyond when we want it to be retained
                     NavigationLink(destination: NodeView(of: vm.destination)) {
-                        BottomOrnament {
-                            Text(vm.transition)
-                        } ornament: {
-                            timestamp
-                        }
+                        Text(vm.transition)
+                            .overlay {
+                                GeometryReader { proxy in
+                                    timestamp
+                                        .fixedSize()
+                                        .offset(y: proxy.size.height)
+                                }
+                            }
                     }
                 }
             }

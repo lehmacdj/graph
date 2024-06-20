@@ -339,15 +339,19 @@ import Combine
             let favoriteLinksTransitions = favoriteLinks?
                 .map { NodeTransition(transition: $0.transition, nid: $0.destinationNid) }
                 .to(Array.init)
+                .sorted(on: \.transition)
             let linksTransitions = links
                 .map { NodeTransition(transition: $0.transition, nid: $0.destinationNid) }
                 .to(Array.init)
+                .sorted(on: \.transition)
             let worseLinksTransitions = worseLinks?
                 .map { NodeTransition(transition: $0.transition, nid: $0.destinationNid) }
                 .to(Array.init)
-            let backlinksTransitions = backlinks
+                .sorted(on: \.transition)
+           let backlinksTransitions = backlinks
                 .map { NodeTransition(transition: $0.transition, nid: $0.destinationNid) }
                 .to(Array.init)
+                .sorted(on: \.transition)
 
             let state = State(
                 data: data,
