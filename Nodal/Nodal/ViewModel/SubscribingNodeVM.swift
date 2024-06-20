@@ -336,22 +336,50 @@ import Combine
                     .merging(newDestinationVMs) { key1, _ in key1 }
             }
 
+            // This currently doesn't work even though we're using it because we don't reload the NodeVM when the timestamps are loaded in
+            // We need to update this so that NodeVM refreshes in response to updates in TransitionVM
+            func timestampTransitionComparison(_ t1: NodeTransition, _ t2: NodeTransition) -> Bool {
+                let t1Timestamp: Date
+                if let vm = newDestinationVMs[TransitionKey(t2, direction: .forward)],
+                   case .loaded(.some(let timestamp)) = vm.timestamp {
+                    t1Timestamp = timestamp
+                } else if let vm = newDestinationVMs[TransitionKey(t2, direction: .backward)],
+                          case .loaded(.some(let timestamp)) = vm.timestamp {
+                    t1Timestamp = timestamp
+                } else {
+                    t1Timestamp = .distantPast
+                }
+
+                let t2Timestamp: Date
+                if let vm = newDestinationVMs[TransitionKey(t2, direction: .forward)],
+                   case .loaded(.some(let timestamp)) = vm.timestamp {
+                    t2Timestamp = timestamp
+                } else if let vm = newDestinationVMs[TransitionKey(t2, direction: .backward)],
+                          case .loaded(.some(let timestamp)) = vm.timestamp {
+                    t2Timestamp = timestamp
+                } else {
+                    t2Timestamp = .distantPast
+                }
+
+                return t1Timestamp > t2Timestamp || t1Timestamp == t2Timestamp && t1.transition < t2.transition
+            }
+
             let favoriteLinksTransitions = favoriteLinks?
                 .map { NodeTransition(transition: $0.transition, nid: $0.destinationNid) }
                 .to(Array.init)
-                .sorted(on: \.transition)
+                .sorted(by: timestampTransitionComparison)
             let linksTransitions = links
                 .map { NodeTransition(transition: $0.transition, nid: $0.destinationNid) }
                 .to(Array.init)
-                .sorted(on: \.transition)
+                .sorted(by: timestampTransitionComparison)
             let worseLinksTransitions = worseLinks?
                 .map { NodeTransition(transition: $0.transition, nid: $0.destinationNid) }
                 .to(Array.init)
-                .sorted(on: \.transition)
+                .sorted(by: timestampTransitionComparison)
            let backlinksTransitions = backlinks
                 .map { NodeTransition(transition: $0.transition, nid: $0.destinationNid) }
                 .to(Array.init)
-                .sorted(on: \.transition)
+                .sorted(by: timestampTransitionComparison)
 
             let state = State(
                 data: data,
