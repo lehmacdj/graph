@@ -163,8 +163,9 @@ struct TransitionView: View {
     }
 }
 
-struct LinkForTransition_Previews: PreviewProvider {
-    static var previews: some View {
-        Text("preview not supported for LinkForTransition")
+#Preview {
+    List {
+        TransitionView(MockTransitionVM(to: .origin, transition: "asdf").eraseToAnyTransitionVM())
+        TransitionView(MockTransitionVM(to: .origin, transition: "Hello world!").eraseToAnyTransitionVM())
     }
 }

@@ -60,6 +60,9 @@
 		03A934C02A3EBD930011DB8D /* Node.swift in Sources */ = {isa = PBXBuildFile; fileRef = 03A934BF2A3EBD930011DB8D /* Node.swift */; };
 		03A934C22A3EC10F0011DB8D /* DocumentNode.swift in Sources */ = {isa = PBXBuildFile; fileRef = 03A934C12A3EC10F0011DB8D /* DocumentNode.swift */; };
 		03A934C42A3F8AC20011DB8D /* DataDocument.swift in Sources */ = {isa = PBXBuildFile; fileRef = 03A934C32A3F8AC20011DB8D /* DataDocument.swift */; };
+		03C84EA42C27734C00DB3869 /* MockNodeVM.swift in Sources */ = {isa = PBXBuildFile; fileRef = 03C84EA32C27734C00DB3869 /* MockNodeVM.swift */; };
+		03C84EA62C27735600DB3869 /* MockTransitionVM.swift in Sources */ = {isa = PBXBuildFile; fileRef = 03C84EA52C27735600DB3869 /* MockTransitionVM.swift */; };
+		03C84EA82C27784000DB3869 /* Base62.swift in Sources */ = {isa = PBXBuildFile; fileRef = 03C84EA72C27784000DB3869 /* Base62.swift */; };
 		03C9CB3F2A7765BF007F29E7 /* AnyNodeVM.swift in Sources */ = {isa = PBXBuildFile; fileRef = 03C9CB3E2A7765BF007F29E7 /* AnyNodeVM.swift */; };
 		03C9CB412A7765C9007F29E7 /* AnyTransitionVM.swift in Sources */ = {isa = PBXBuildFile; fileRef = 03C9CB402A7765C9007F29E7 /* AnyTransitionVM.swift */; };
 		03D1D8DE28FB559B00E76F27 /* NodeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 03D1D8DD28FB559B00E76F27 /* NodeView.swift */; };
@@ -126,6 +129,9 @@
 		03A934BF2A3EBD930011DB8D /* Node.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Node.swift; sourceTree = "<group>"; };
 		03A934C12A3EC10F0011DB8D /* DocumentNode.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DocumentNode.swift; sourceTree = "<group>"; };
 		03A934C32A3F8AC20011DB8D /* DataDocument.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DataDocument.swift; sourceTree = "<group>"; };
+		03C84EA32C27734C00DB3869 /* MockNodeVM.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MockNodeVM.swift; sourceTree = "<group>"; };
+		03C84EA52C27735600DB3869 /* MockTransitionVM.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MockTransitionVM.swift; sourceTree = "<group>"; };
+		03C84EA72C27784000DB3869 /* Base62.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Base62.swift; sourceTree = "<group>"; };
 		03C9CB3E2A7765BF007F29E7 /* AnyNodeVM.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnyNodeVM.swift; sourceTree = "<group>"; };
 		03C9CB402A7765C9007F29E7 /* AnyTransitionVM.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnyTransitionVM.swift; sourceTree = "<group>"; };
 		03D1D8DD28FB559B00E76F27 /* NodeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NodeView.swift; sourceTree = "<group>"; };
@@ -270,6 +276,7 @@
 				038C93022A397ECF0059C8D6 /* Errors.swift */,
 				03DFE0AF2A642F2900370692 /* Geometry.swift */,
 				0328339E2B00139100D1AA58 /* DirectoryObserver.swift */,
+				03C84EA72C27784000DB3869 /* Base62.swift */,
 			);
 			path = Utils;
 			sourceTree = "<group>";
@@ -315,6 +322,8 @@
 				03C9CB402A7765C9007F29E7 /* AnyTransitionVM.swift */,
 				03589E8A2A809F72004AD75B /* SubscribingNodeVM.swift */,
 				03589E8E2A81EDE3004AD75B /* SubscribingTransitionVM.swift */,
+				03C84EA32C27734C00DB3869 /* MockNodeVM.swift */,
+				03C84EA52C27735600DB3869 /* MockTransitionVM.swift */,
 			);
 			path = ViewModel;
 			sourceTree = "<group>";
@@ -492,6 +501,7 @@
 			files = (
 				031CE3F629E21CDF001470BD /* FillableSymbolToggle.swift in Sources */,
 				0313681227140A0900E69F83 /* Utils.swift in Sources */,
+				03C84EA42C27734C00DB3869 /* MockNodeVM.swift in Sources */,
 				032959F229CAC31F00FDE138 /* GraphManager.swift in Sources */,
 				03A934C02A3EBD930011DB8D /* Node.swift in Sources */,
 				030CD85829F62B6800C27442 /* FillableSymbol.swift in Sources */,
@@ -513,6 +523,7 @@
 				0367FDCC2B1BBB4B00D4B3B3 /* NodeMetadataDocument.swift in Sources */,
 				0313681627149ECE00E69F83 /* ZoomableScrollView.swift in Sources */,
 				03589E892A8096EC004AD75B /* Tags.swift in Sources */,
+				03C84EA82C27784000DB3869 /* Base62.swift in Sources */,
 				033449D42999602B00BBCCC4 /* Semaphor.swift in Sources */,
 				03A934C42A3F8AC20011DB8D /* DataDocument.swift in Sources */,
 				03589E8B2A809F72004AD75B /* SubscribingNodeVM.swift in Sources */,
@@ -524,6 +535,7 @@
 				031368102713FCFF00E69F83 /* GraphSerialization.swift in Sources */,
 				031367E72713FCF200E69F83 /* ContentView.swift in Sources */,
 				03DD60D629D11E04005EC4A5 /* ErrorIndicator.swift in Sources */,
+				03C84EA62C27735600DB3869 /* MockTransitionVM.swift in Sources */,
 				03EB93042A62158E0014BBF8 /* ZoomableView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

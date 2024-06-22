@@ -10,12 +10,6 @@ import Foundation
 
 public let nidDigits = 12
 
-extension Character {
-    var isBase62Digit: Bool {
-        isASCII && (isLetter || isNumber)
-    }
-}
-
 struct NID: Equatable, Hashable {
     let representation: String
 
@@ -24,6 +18,20 @@ struct NID: Equatable, Hashable {
             return nil
         }
         self.representation = representation
+    }
+
+    /// Fake NID constructed from an int. Only safe up to values of 62 ^ nidDigits, beyond that may return repeated results
+    init(fake input: Int) {
+        var remainder = input % (62 ^ nidDigits)
+        var representation = ""
+
+        while representation.count < nidDigits {
+            let ix = String.base62Digits.index(String.base62Digits.startIndex, offsetBy: remainder % 62)
+            let char = String.base62Digits[ix]
+            representation.append(String(char))
+        }
+
+        self.init(representation: representation)!
     }
 }
 
@@ -48,10 +56,8 @@ extension NID: Encodable, Decodable {
 }
 
 extension NID {
-    private static let base62Characters = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
-
     static func random() -> NID {
-        let randomString = String((0..<nidDigits).map { _ in base62Characters.randomElement()! })
+        let randomString = String((0..<nidDigits).map { _ in String.base62Digits.randomElement()! })
         return NID(representation: randomString)!
     }
 }
