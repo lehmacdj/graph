@@ -8,20 +8,18 @@
 import Combine
 import Foundation
 
-@Observable final class AnyTransitionVM<N_: Node>: TransitionVM {
-    typealias N = N_
-
-    init<VM: TransitionVM<N>>(erasing underlying: VM) {
+@Observable final class AnyTransitionVM: TransitionVM {
+    init(erasing underlying: any TransitionVM) {
         self.underlying = underlying
     }
 
-    private var underlying: any TransitionVM<N_>
+    private var underlying: any TransitionVM
 
     var direction: Direction { underlying.direction }
 
     var destinationNid: NID { underlying.destinationNid }
 
-    var destination: AnyNodeVM<N_> {
+    var destination: AnyNodeVM {
         underlying.destination
     }
 
@@ -74,7 +72,7 @@ import Foundation
 }
 
 extension TransitionVM {
-    func eraseToAnyTransitionVM() -> AnyTransitionVM<N> {
+    func eraseToAnyTransitionVM() -> AnyTransitionVM {
         AnyTransitionVM(erasing: self)
     }
 }

@@ -49,7 +49,7 @@ import SwiftUI
     }
     var isFavorite: Bool
     var isWorse: Bool
-    var destination: AnyNodeVM<N> {
+    var destination: AnyNodeVM {
         SubscribingNodeVM(for: destinationNid, in: manager).eraseToAnyNodeVM()
     }
 

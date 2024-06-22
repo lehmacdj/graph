@@ -13,7 +13,7 @@ import Combine
 @Observable final class SubscribingNodeVM<N: Node>: NodeVM {
     let nid: NID
 
-    var state: Loading<any NodeState<N>> {
+    var state: Loading<any NodeState> {
         switch internalState {
         case .idle:
             return .idle
@@ -90,26 +90,26 @@ import Combine
         var data: Data?
 
         /// Map from destination NID to the corresponding TransitionVM
-        fileprivate var destinationVMs: [TransitionKey: AnyTransitionVM<N>]
+        fileprivate var destinationVMs: [TransitionKey: AnyTransitionVM]
 
         var favoriteLinksTransitions: [NodeTransition]?
         var linksTransitions: [NodeTransition]
         var worseLinksTransitions: [NodeTransition]?
         var backlinksTransitions: [NodeTransition]
 
-        var favoriteLinks: [AnyTransitionVM<N>]? {
+        var favoriteLinks: [AnyTransitionVM]? {
             favoriteLinksTransitions?.compactMap { destinationVMs[TransitionKey($0, direction: .forward)] }
         }
 
-        var links: [AnyTransitionVM<N>] {
+        var links: [AnyTransitionVM] {
             linksTransitions.compactMap { destinationVMs[TransitionKey($0, direction: .forward)] }
         }
 
-        var worseLinks: [AnyTransitionVM<N>]? {
+        var worseLinks: [AnyTransitionVM]? {
             worseLinksTransitions?.compactMap { destinationVMs[TransitionKey($0, direction: .forward)] }
         }
 
-        var backlinks: [AnyTransitionVM<N>] {
+        var backlinks: [AnyTransitionVM] {
             backlinksTransitions.compactMap { destinationVMs[TransitionKey($0, direction: .backward)] }
         }
 
@@ -298,7 +298,7 @@ import Combine
                 }
             }
 
-            func mkTransitionVMs(_ transitions: [NodeTransition], inDirection direction: Direction, isFavorite: Bool, isWorse: Bool) -> [AnyTransitionVM<N>] {
+            func mkTransitionVMs(_ transitions: [NodeTransition], inDirection direction: Direction, isFavorite: Bool, isWorse: Bool) -> [AnyTransitionVM] {
                 transitions.map {
                     SubscribingTransitionVM(parent: self, source: node, transition: $0, direction: direction, manager: self.manager, isFavorite: isFavorite, isWorse: isWorse)
                         .eraseToAnyTransitionVM()
@@ -313,10 +313,10 @@ import Combine
                 return
             }
 
-            let favoriteLinks: [AnyTransitionVM<N>]? = favoritesSet != nil ? mkTransitionVMs(favorites, inDirection: .forward, isFavorite: true, isWorse: false) : nil
-            let links: [AnyTransitionVM<N>] = mkTransitionVMs(normal, inDirection: .forward, isFavorite: false, isWorse: false)
-            let worseLinks: [AnyTransitionVM<N>]? = worseSet != nil ? mkTransitionVMs(worse, inDirection: .forward, isFavorite: false, isWorse: true) : nil
-            let backlinks: [AnyTransitionVM<N>] = mkTransitionVMs(node.incoming, inDirection: .backward, isFavorite: false, isWorse: false)
+            let favoriteLinks: [AnyTransitionVM]? = favoritesSet != nil ? mkTransitionVMs(favorites, inDirection: .forward, isFavorite: true, isWorse: false) : nil
+            let links: [AnyTransitionVM] = mkTransitionVMs(normal, inDirection: .forward, isFavorite: false, isWorse: false)
+            let worseLinks: [AnyTransitionVM]? = worseSet != nil ? mkTransitionVMs(worse, inDirection: .forward, isFavorite: false, isWorse: true) : nil
+            let backlinks: [AnyTransitionVM] = mkTransitionVMs(node.incoming, inDirection: .backward, isFavorite: false, isWorse: false)
 
             let allDestinationVMs = (favoriteLinks ?? []) + links + (worseLinks ?? []) + backlinks
             var newDestinationVMs = allDestinationVMs

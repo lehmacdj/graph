@@ -23,9 +23,7 @@ enum ThumbnailValue {
     case thumbnail(Loading<UIImage>)
 }
 
-protocol TransitionVM<N>: Observable, Identifiable {
-    associatedtype N: Node
-
+protocol TransitionVM: Observable, Identifiable {
     var direction: Direction { get }
 
     var destinationNid: NID { get }
@@ -40,7 +38,7 @@ protocol TransitionVM<N>: Observable, Identifiable {
 
     var isWorse: Bool { get set }
 
-    var destination: AnyNodeVM<N> { get }
+    var destination: AnyNodeVM { get }
 
     func subscribe() async
 

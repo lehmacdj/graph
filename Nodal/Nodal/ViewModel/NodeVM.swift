@@ -8,30 +8,26 @@
 import Foundation
 import Observation
 
-protocol NodeState<N> {
-    associatedtype N: Node
-
+protocol NodeState {
     var data: Data? { get set }
 
-    var favoriteLinks: [AnyTransitionVM<N>]? { get }
+    var favoriteLinks: [AnyTransitionVM]? { get }
 
-    var links: [AnyTransitionVM<N>] { get }
+    var links: [AnyTransitionVM] { get }
 
-    var worseLinks: [AnyTransitionVM<N>]? { get }
+    var worseLinks: [AnyTransitionVM]? { get }
 
-    var backlinks: [AnyTransitionVM<N>] { get }
+    var backlinks: [AnyTransitionVM] { get }
 
     var tags: Set<String> { get }
 
     var possibleTags: Set<String> { get }
 }
 
-protocol NodeVM<N>: Observable {
-    associatedtype N: Node
-
+protocol NodeVM: Observable {
     var nid: NID { get }
 
-    var state: Loading<any NodeState<N>> { get }
+    var state: Loading<any NodeState> { get }
 
     func subscribe() async
 

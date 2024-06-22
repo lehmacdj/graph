@@ -8,16 +8,14 @@
 import Combine
 import Foundation
 
-@Observable final class AnyNodeVM<N_: Node>: NodeVM {
-    typealias N = N_
-
-    init<VM: NodeVM<N>>(erasing underlying: VM) {
+@Observable final class AnyNodeVM: NodeVM {
+    init(erasing underlying: NodeVM) {
         self.underlying = underlying
     }
 
-    private var underlying: any NodeVM<N_>
+    private var underlying: any NodeVM
 
-    var state: Loading<any NodeState<N_>> {
+    var state: Loading<any NodeState> {
         get { underlying.state }
     }
 
@@ -51,7 +49,7 @@ import Foundation
 }
 
 extension NodeVM {
-    func eraseToAnyNodeVM() -> AnyNodeVM<N> {
+    func eraseToAnyNodeVM() -> AnyNodeVM {
         return AnyNodeVM(erasing: self)
     }
 }

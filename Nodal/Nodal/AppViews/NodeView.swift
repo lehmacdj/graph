@@ -9,9 +9,9 @@ import SwiftUI
 import AsyncButton
 
 struct NodeView: View {
-    @State var vm: AnyNodeVM<DefaultNode>
+    @State var vm: AnyNodeVM
 
-    init(of node: AnyNodeVM<DefaultNode>) {
+    init(of node: AnyNodeVM) {
         _vm = State(wrappedValue: node)
     }
 
@@ -20,7 +20,7 @@ struct NodeView: View {
     @State var showingForceDeleteNodeConfirmation: Bool = false
 
     @ViewBuilder
-    func links(_ state: any NodeState<DefaultNode>) -> some View {
+    func links(_ state: any NodeState) -> some View {
         List {
             if let favorites = state.favoriteLinks {
                 Section("Favorites") {
@@ -53,7 +53,7 @@ struct NodeView: View {
     }
 
     @ViewBuilder
-    func loadedContent(_ state: any NodeState<DefaultNode>) -> some View {
+    func loadedContent(_ state: any NodeState) -> some View {
         if let data = state.data, !showingLinks {
             if let uiImage = UIImage(data: data) {
                 ImageView(uiImage: uiImage)
