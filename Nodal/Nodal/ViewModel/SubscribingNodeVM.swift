@@ -260,10 +260,11 @@ import Combine
     private func updateStateLoop() async throws {
         guard case .loadingActive(_, let .some(node)) = internalState else { return }
 
+        // maybe I can replace values here with an AsyncSequence that dynamically gets updated to include updates from AsyncSequences vended by the TransitionVMs, so that the NodeVM updates whenever any of its child TransitionVMs updates
+        // important to avoid a loop here, naively we might end up with a situation where a loop in the graph could lead to an infinite cascade of publishes leading to a stackoverflow or worse
         for await _ in node.metaPublisher.values {
             try Task.checkCancellation()
 
-            // optimization opportunity: avoid using async for accessing some node properties, some of this data shouldn't require async, it's just a pure computation to get it from the node's metadata
             async let favoritesAsync = node.favorites
             async let worseAsync = node.worse
             async let dataAsync = node.data
@@ -285,8 +286,8 @@ import Combine
             let favoritesSet: Set<NID>? = favoritesNode.map { Set($0.outgoing.map { $0.nid }) }
             let worseSet: Set<NID>? = worseNode.map { Set($0.outgoing.map { $0.nid }) }
 
-            logInfo("creating children")
             try Task.checkCancellation()
+            logInfo("creating children")
 
             for child in node.outgoing {
                 if let favoritesSet, favoritesSet.contains(child.nid) {
@@ -298,19 +299,19 @@ import Combine
                 }
             }
 
+            try Task.checkCancellation()
+            logInfo("about to create state")
+
+            guard let (previousState, node) = internalState.validStateForUpdate else {
+                // we need to rerun beginUpdateState because the state has drifted to an invalid one while doing IO
+                return
+            }
+
             func mkTransitionVMs(_ transitions: [NodeTransition], inDirection direction: Direction, isFavorite: Bool, isWorse: Bool) -> [AnyTransitionVM] {
                 transitions.map {
                     SubscribingTransitionVM(parent: self, source: node, transition: $0, direction: direction, manager: self.manager, isFavorite: isFavorite, isWorse: isWorse)
                         .eraseToAnyTransitionVM()
                 }
-            }
-
-            logInfo("about to create state")
-            try Task.checkCancellation()
-
-            guard let (previousState, node) = internalState.validStateForUpdate else {
-                // we need to rerun beginUpdateState because the state has drifted to an invalid one while doing IO
-                return
             }
 
             let favoriteLinks: [AnyTransitionVM]? = favoritesSet != nil ? mkTransitionVMs(favorites, inDirection: .forward, isFavorite: true, isWorse: false) : nil
