@@ -263,140 +263,146 @@ import Combine
         // maybe I can replace values here with an AsyncSequence that dynamically gets updated to include updates from AsyncSequences vended by the TransitionVMs, so that the NodeVM updates whenever any of its child TransitionVMs updates
         // important to avoid a loop here, naively we might end up with a situation where a loop in the graph could lead to an infinite cascade of publishes leading to a stackoverflow or worse
         for await _ in node.metaPublisher.values {
-            try Task.checkCancellation()
-
-            async let favoritesAsync = node.favorites
-            async let worseAsync = node.worse
-            async let dataAsync = node.data
-            async let tagsAsync = node.tags
-            async let possibleTagsAsync = self.manager.tags?.tagOptions
-            let favoritesNode = await favoritesAsync
-            let worseNode = await worseAsync
-            let data = await dataAsync
-            let tags = await tagsAsync
-            let tagOptions = await possibleTagsAsync ?? Set()
-
-            logInfo("done fetching data from node")
-            try Task.checkCancellation()
-
-            var favorites = [NodeTransition]()
-            var normal = [NodeTransition]()
-            var worse = [NodeTransition]()
-
-            let favoritesSet: Set<NID>? = favoritesNode.map { Set($0.outgoing.map { $0.nid }) }
-            let worseSet: Set<NID>? = worseNode.map { Set($0.outgoing.map { $0.nid }) }
-
-            try Task.checkCancellation()
-            logInfo("creating children")
-
-            for child in node.outgoing {
-                if let favoritesSet, favoritesSet.contains(child.nid) {
-                    favorites.append(child)
-                } else if let worseSet, worseSet.contains(child.nid) {
-                    worse.append(child)
-                } else {
-                    normal.append(child)
-                }
-            }
-
-            try Task.checkCancellation()
-            logInfo("about to create state")
-
-            guard let (previousState, node) = internalState.validStateForUpdate else {
-                // we need to rerun beginUpdateState because the state has drifted to an invalid one while doing IO
-                return
-            }
-
-            func mkTransitionVMs(_ transitions: [NodeTransition], inDirection direction: Direction, isFavorite: Bool, isWorse: Bool) -> [AnyTransitionVM] {
-                transitions.map {
-                    SubscribingTransitionVM(parent: self, source: node, transition: $0, direction: direction, manager: self.manager, isFavorite: isFavorite, isWorse: isWorse)
-                        .eraseToAnyTransitionVM()
-                }
-            }
-
-            let favoriteLinks: [AnyTransitionVM]? = favoritesSet != nil ? mkTransitionVMs(favorites, inDirection: .forward, isFavorite: true, isWorse: false) : nil
-            let links: [AnyTransitionVM] = mkTransitionVMs(normal, inDirection: .forward, isFavorite: false, isWorse: false)
-            let worseLinks: [AnyTransitionVM]? = worseSet != nil ? mkTransitionVMs(worse, inDirection: .forward, isFavorite: false, isWorse: true) : nil
-            let backlinks: [AnyTransitionVM] = mkTransitionVMs(node.incoming, inDirection: .backward, isFavorite: false, isWorse: false)
-
-            let allDestinationVMs = (favoriteLinks ?? []) + links + (worseLinks ?? []) + backlinks
-            var newDestinationVMs = allDestinationVMs
-                .map { (TransitionKey(transition: $0.transition, destination: $0.destinationNid, direction: $0.direction), $0) }
-                .to(Dictionary.init(uniqueKeysWithValues:))
-
-            if let previousState {
-                let newDestinationNids = newDestinationVMs.keys
-                // prefer a TransitionVM that we previously created if it exists
-                // NOTE: this potentially introduces a bug where the isFavorite/isWorse value could get out of sync
-                // this seems sufficiently unlikely that it's okay until it becomes a problem
-                newDestinationVMs = previousState
-                    .destinationVMs
-                    .filter { key, _ in newDestinationNids.contains(key) }
-                    .map { key, value in (key, value) }
-                    .to(Dictionary.init(uniqueKeysWithValues:))
-                    .merging(newDestinationVMs) { key1, _ in key1 }
-            }
-
-            // This currently doesn't work even though we're using it because we don't reload the NodeVM when the timestamps are loaded in
-            // We need to update this so that NodeVM refreshes in response to updates in TransitionVM
-            func timestampTransitionComparison(_ t1: NodeTransition, _ t2: NodeTransition) -> Bool {
-                let t1Timestamp: Date
-                if let vm = newDestinationVMs[TransitionKey(t2, direction: .forward)],
-                   case .loaded(.some(let timestamp)) = vm.timestamp {
-                    t1Timestamp = timestamp
-                } else if let vm = newDestinationVMs[TransitionKey(t2, direction: .backward)],
-                          case .loaded(.some(let timestamp)) = vm.timestamp {
-                    t1Timestamp = timestamp
-                } else {
-                    t1Timestamp = .distantPast
-                }
-
-                let t2Timestamp: Date
-                if let vm = newDestinationVMs[TransitionKey(t2, direction: .forward)],
-                   case .loaded(.some(let timestamp)) = vm.timestamp {
-                    t2Timestamp = timestamp
-                } else if let vm = newDestinationVMs[TransitionKey(t2, direction: .backward)],
-                          case .loaded(.some(let timestamp)) = vm.timestamp {
-                    t2Timestamp = timestamp
-                } else {
-                    t2Timestamp = .distantPast
-                }
-
-                return t1Timestamp > t2Timestamp || t1Timestamp == t2Timestamp && t1.transition < t2.transition
-            }
-
-            let favoriteLinksTransitions = favoriteLinks?
-                .map { NodeTransition(transition: $0.transition, nid: $0.destinationNid) }
-                .to(Array.init)
-                .sorted(by: timestampTransitionComparison)
-            let linksTransitions = links
-                .map { NodeTransition(transition: $0.transition, nid: $0.destinationNid) }
-                .to(Array.init)
-                .sorted(by: timestampTransitionComparison)
-            let worseLinksTransitions = worseLinks?
-                .map { NodeTransition(transition: $0.transition, nid: $0.destinationNid) }
-                .to(Array.init)
-                .sorted(by: timestampTransitionComparison)
-           let backlinksTransitions = backlinks
-                .map { NodeTransition(transition: $0.transition, nid: $0.destinationNid) }
-                .to(Array.init)
-                .sorted(by: timestampTransitionComparison)
-
-            let state = State(
-                data: data,
-                destinationVMs: newDestinationVMs,
-                favoriteLinksTransitions: favoriteLinksTransitions,
-                linksTransitions: linksTransitions,
-                worseLinksTransitions: worseLinksTransitions,
-                backlinksTransitions: backlinksTransitions,
-                tags: tags,
-                possibleTags: tagOptions
-            )
-
-            internalState = .loadedActive(state: state, node: node)
-
-            logInfo("updated state")
+            try await updateState()
         }
+    }
+
+    private func updateState() async throws {
+        guard case .loadingActive(_, let .some(node)) = internalState else { return }
+
+        try Task.checkCancellation()
+
+        async let favoritesAsync = node.favorites
+        async let worseAsync = node.worse
+        async let dataAsync = node.data
+        async let tagsAsync = node.tags
+        async let possibleTagsAsync = self.manager.tags?.tagOptions
+        let favoritesNode = await favoritesAsync
+        let worseNode = await worseAsync
+        let data = await dataAsync
+        let tags = await tagsAsync
+        let tagOptions = await possibleTagsAsync ?? Set()
+
+        logInfo("done fetching data from node")
+        try Task.checkCancellation()
+
+        var favorites = [NodeTransition]()
+        var normal = [NodeTransition]()
+        var worse = [NodeTransition]()
+
+        let favoritesSet: Set<NID>? = favoritesNode.map { Set($0.outgoing.map { $0.nid }) }
+        let worseSet: Set<NID>? = worseNode.map { Set($0.outgoing.map { $0.nid }) }
+
+        try Task.checkCancellation()
+        logInfo("creating children")
+
+        for child in node.outgoing {
+            if let favoritesSet, favoritesSet.contains(child.nid) {
+                favorites.append(child)
+            } else if let worseSet, worseSet.contains(child.nid) {
+                worse.append(child)
+            } else {
+                normal.append(child)
+            }
+        }
+
+        try Task.checkCancellation()
+        logInfo("about to create state")
+
+        guard let (previousState, node) = internalState.validStateForUpdate else {
+            // we need to rerun beginUpdateState because the state has drifted to an invalid one while doing IO
+            return
+        }
+
+        func mkTransitionVMs(_ transitions: [NodeTransition], inDirection direction: Direction, isFavorite: Bool, isWorse: Bool) -> [AnyTransitionVM] {
+            transitions.map {
+                SubscribingTransitionVM(parent: self, source: node, transition: $0, direction: direction, manager: self.manager, isFavorite: isFavorite, isWorse: isWorse)
+                    .eraseToAnyTransitionVM()
+            }
+        }
+
+        let favoriteLinks: [AnyTransitionVM]? = favoritesSet != nil ? mkTransitionVMs(favorites, inDirection: .forward, isFavorite: true, isWorse: false) : nil
+        let links: [AnyTransitionVM] = mkTransitionVMs(normal, inDirection: .forward, isFavorite: false, isWorse: false)
+        let worseLinks: [AnyTransitionVM]? = worseSet != nil ? mkTransitionVMs(worse, inDirection: .forward, isFavorite: false, isWorse: true) : nil
+        let backlinks: [AnyTransitionVM] = mkTransitionVMs(node.incoming, inDirection: .backward, isFavorite: false, isWorse: false)
+
+        let allDestinationVMs = (favoriteLinks ?? []) + links + (worseLinks ?? []) + backlinks
+        var newDestinationVMs = allDestinationVMs
+            .map { (TransitionKey(transition: $0.transition, destination: $0.destinationNid, direction: $0.direction), $0) }
+            .to(Dictionary.init(uniqueKeysWithValues:))
+
+        if let previousState {
+            let newDestinationNids = newDestinationVMs.keys
+            // prefer a TransitionVM that we previously created if it exists
+            // NOTE: this potentially introduces a bug where the isFavorite/isWorse value could get out of sync
+            // this seems sufficiently unlikely that it's okay until it becomes a problem
+            newDestinationVMs = previousState
+                .destinationVMs
+                .filter { key, _ in newDestinationNids.contains(key) }
+                .map { key, value in (key, value) }
+                .to(Dictionary.init(uniqueKeysWithValues:))
+                .merging(newDestinationVMs) { key1, _ in key1 }
+        }
+
+        // This currently doesn't work even though we're using it because we don't reload the NodeVM when the timestamps are loaded in
+        // We need to update this so that NodeVM refreshes in response to updates in TransitionVM
+        func timestampTransitionComparison(_ t1: NodeTransition, _ t2: NodeTransition) -> Bool {
+            let t1Timestamp: Date
+            if let vm = newDestinationVMs[TransitionKey(t2, direction: .forward)],
+               case .loaded(.some(let timestamp)) = vm.timestamp {
+                t1Timestamp = timestamp
+            } else if let vm = newDestinationVMs[TransitionKey(t2, direction: .backward)],
+                      case .loaded(.some(let timestamp)) = vm.timestamp {
+                t1Timestamp = timestamp
+            } else {
+                t1Timestamp = .distantPast
+            }
+
+            let t2Timestamp: Date
+            if let vm = newDestinationVMs[TransitionKey(t2, direction: .forward)],
+               case .loaded(.some(let timestamp)) = vm.timestamp {
+                t2Timestamp = timestamp
+            } else if let vm = newDestinationVMs[TransitionKey(t2, direction: .backward)],
+                      case .loaded(.some(let timestamp)) = vm.timestamp {
+                t2Timestamp = timestamp
+            } else {
+                t2Timestamp = .distantPast
+            }
+
+            return t1Timestamp > t2Timestamp || t1Timestamp == t2Timestamp && t1.transition < t2.transition
+        }
+
+        let favoriteLinksTransitions = favoriteLinks?
+            .map { NodeTransition(transition: $0.transition, nid: $0.destinationNid) }
+            .to(Array.init)
+            .sorted(by: timestampTransitionComparison)
+        let linksTransitions = links
+            .map { NodeTransition(transition: $0.transition, nid: $0.destinationNid) }
+            .to(Array.init)
+            .sorted(by: timestampTransitionComparison)
+        let worseLinksTransitions = worseLinks?
+            .map { NodeTransition(transition: $0.transition, nid: $0.destinationNid) }
+            .to(Array.init)
+            .sorted(by: timestampTransitionComparison)
+        let backlinksTransitions = backlinks
+            .map { NodeTransition(transition: $0.transition, nid: $0.destinationNid) }
+            .to(Array.init)
+            .sorted(by: timestampTransitionComparison)
+
+        let state = State(
+            data: data,
+            destinationVMs: newDestinationVMs,
+            favoriteLinksTransitions: favoriteLinksTransitions,
+            linksTransitions: linksTransitions,
+            worseLinksTransitions: worseLinksTransitions,
+            backlinksTransitions: backlinksTransitions,
+            tags: tags,
+            possibleTags: tagOptions
+        )
+
+        internalState = .loadedActive(state: state, node: node)
+
+        logInfo("updated state")
     }
 
     func reload() async {
