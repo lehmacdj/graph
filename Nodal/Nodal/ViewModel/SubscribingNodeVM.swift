@@ -277,7 +277,7 @@ import AsyncAlgorithms
 
         let channel = AsyncChannel(element: Void.self)
 
-        try await withThrowingTaskGroup(of: Void.self) { group in
+        try await withThrowingDiscardingTaskGroup { group in
             group.addTask {
                 for await _ in node.metaPublisher.values {
                     await channel.send(())
@@ -291,7 +291,7 @@ import AsyncAlgorithms
 
     private func updateState(
         _ channel: AsyncChannel<Void>,
-        _ group: inout ThrowingTaskGroup<Void, any Error>
+        _ group: inout ThrowingDiscardingTaskGroup<any Error>
     ) async throws {
         guard case .loadingActive(_, let .some(node)) = internalState else { return }
 
