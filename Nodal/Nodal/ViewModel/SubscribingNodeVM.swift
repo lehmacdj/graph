@@ -8,12 +8,13 @@
 import Foundation
 import Observation
 import Combine
+import AsyncAlgorithms
 
 
 @Observable final class SubscribingNodeVM<N: Node>: NodeVM {
     let nid: NID
 
-    var state: Loading<any NodeState> {
+    var state: Loading<NodeState> {
         switch internalState {
         case .idle:
             return .idle
@@ -21,13 +22,13 @@ import Combine
             return .loading
         case .loadingActive(state: .some(let state), _):
             // even though we're internally loading this indicates that we were fully loaded before & thus we return the loaded information we already had
-            return .loaded(state)
+            return .loaded(state.toNodeState())
         case .loadingInactive:
             return .loading
         case .loadedActive(let state, _):
-            return .loaded(state)
+            return .loaded(state.toNodeState())
         case .loadedInactive(let state):
-            return .loaded(state)
+            return .loaded(state.toNodeState())
         case .failed(let error):
             return .failed(error)
         }
@@ -86,35 +87,49 @@ import Combine
         }
     }
 
-    struct State: NodeState {
+    fileprivate struct State {
         var data: Data?
 
         /// Map from destination NID to the corresponding TransitionVM
-        fileprivate var destinationVMs: [TransitionKey: AnyTransitionVM]
+        var destinationVMs: [TransitionKey: SubscribingTransitionVM<N>]
+
+        var childNodeCancelSubjects: [NID: PassthroughSubject<(), Never>]
 
         var favoriteLinksTransitions: [NodeTransition]?
         var linksTransitions: [NodeTransition]
         var worseLinksTransitions: [NodeTransition]?
         var backlinksTransitions: [NodeTransition]
 
-        var favoriteLinks: [AnyTransitionVM]? {
+        var favoriteLinks: [SubscribingTransitionVM<N>]? {
             favoriteLinksTransitions?.compactMap { destinationVMs[TransitionKey($0, direction: .forward)] }
         }
 
-        var links: [AnyTransitionVM] {
+        var links: [SubscribingTransitionVM<N>] {
             linksTransitions.compactMap { destinationVMs[TransitionKey($0, direction: .forward)] }
         }
 
-        var worseLinks: [AnyTransitionVM]? {
+        var worseLinks: [SubscribingTransitionVM<N>]? {
             worseLinksTransitions?.compactMap { destinationVMs[TransitionKey($0, direction: .forward)] }
         }
 
-        var backlinks: [AnyTransitionVM] {
+        var backlinks: [SubscribingTransitionVM<N>] {
             backlinksTransitions.compactMap { destinationVMs[TransitionKey($0, direction: .backward)] }
         }
 
         var tags: Set<String>
         var possibleTags: Set<String>
+
+        func toNodeState() -> NodeState {
+            NodeState(
+                data: data,
+                favoriteLinks: favoriteLinks?.map { $0.eraseToAnyTransitionVM() },
+                links: links.map { $0.eraseToAnyTransitionVM() },
+                worseLinks: worseLinks?.map { $0.eraseToAnyTransitionVM() },
+                backlinks: backlinks.map { $0.eraseToAnyTransitionVM() },
+                tags: tags,
+                possibleTags: possibleTags
+            )
+        }
     }
 
     private struct InvalidOperationForState: LocalizedError, Codable {
@@ -260,14 +275,24 @@ import Combine
     private func updateStateLoop() async throws {
         guard case .loadingActive(_, let .some(node)) = internalState else { return }
 
-        // maybe I can replace values here with an AsyncSequence that dynamically gets updated to include updates from AsyncSequences vended by the TransitionVMs, so that the NodeVM updates whenever any of its child TransitionVMs updates
-        // important to avoid a loop here, naively we might end up with a situation where a loop in the graph could lead to an infinite cascade of publishes leading to a stackoverflow or worse
-        for await _ in node.metaPublisher.values {
-            try await updateState()
+        let channel = AsyncChannel(element: Void.self)
+
+        try await withThrowingTaskGroup(of: Void.self) { group in
+            group.addTask {
+                for await _ in node.metaPublisher.values {
+                    await channel.send(())
+                }
+            }
+            for await _ in channel {
+                try await updateState(channel, &group)
+            }
         }
     }
 
-    private func updateState() async throws {
+    private func updateState(
+        _ channel: AsyncChannel<Void>,
+        _ group: inout ThrowingTaskGroup<Void, any Error>
+    ) async throws {
         guard case .loadingActive(_, let .some(node)) = internalState else { return }
 
         try Task.checkCancellation()
@@ -314,28 +339,53 @@ import Combine
             return
         }
 
-        func mkTransitionVMs(_ transitions: [NodeTransition], inDirection direction: Direction, isFavorite: Bool, isWorse: Bool) -> [AnyTransitionVM] {
+        func mkTransitionVMs(_ transitions: [NodeTransition], inDirection direction: Direction, isFavorite: Bool, isWorse: Bool) -> [SubscribingTransitionVM<N>] {
             transitions.map {
                 SubscribingTransitionVM(parent: self, source: node, transition: $0, direction: direction, manager: self.manager, isFavorite: isFavorite, isWorse: isWorse)
-                    .eraseToAnyTransitionVM()
             }
         }
 
-        let favoriteLinks: [AnyTransitionVM]? = favoritesSet != nil ? mkTransitionVMs(favorites, inDirection: .forward, isFavorite: true, isWorse: false) : nil
-        let links: [AnyTransitionVM] = mkTransitionVMs(normal, inDirection: .forward, isFavorite: false, isWorse: false)
-        let worseLinks: [AnyTransitionVM]? = worseSet != nil ? mkTransitionVMs(worse, inDirection: .forward, isFavorite: false, isWorse: true) : nil
-        let backlinks: [AnyTransitionVM] = mkTransitionVMs(node.incoming, inDirection: .backward, isFavorite: false, isWorse: false)
+        let favoriteLinks = favoritesSet != nil ? mkTransitionVMs(favorites, inDirection: .forward, isFavorite: true, isWorse: false) : nil
+        let links = mkTransitionVMs(normal, inDirection: .forward, isFavorite: false, isWorse: false)
+        let worseLinks = worseSet != nil ? mkTransitionVMs(worse, inDirection: .forward, isFavorite: false, isWorse: true) : nil
+        let backlinks = mkTransitionVMs(node.incoming, inDirection: .backward, isFavorite: false, isWorse: false)
 
         let allDestinationVMs = (favoriteLinks ?? []) + links + (worseLinks ?? []) + backlinks
         var newDestinationVMs = allDestinationVMs
             .map { (TransitionKey(transition: $0.transition, destination: $0.destinationNid, direction: $0.direction), $0) }
             .to(Dictionary.init(uniqueKeysWithValues:))
-
+        var childNodeCancelSubjects = previousState?.childNodeCancelSubjects ?? [:]
         if let previousState {
-            let newDestinationNids = newDestinationVMs.keys
-            // prefer a TransitionVM that we previously created if it exists
+            for (nodeTransitionKey, newVM) in newDestinationVMs
+            where newVM.destinationNid != self.nid
+            && !childNodeCancelSubjects.keys.contains(nodeTransitionKey.transition.nid) {
+                let cancelSubject = PassthroughSubject<(), Never>()
+                childNodeCancelSubjects[nid] = cancelSubject
+                let publisher = newVM.updatedPublisher().prefix(untilOutputFrom: cancelSubject)
+                let _ = group.addTaskUnlessCancelled {
+                    for await _ in publisher.values {
+                        await channel.send(())
+                    }
+                    logDebug("publisher did finish so task can be cleaned up!")
+                }
+            }
+
+            let removedDestinationNids = previousState
+                .destinationVMs
+                .filter { key, _ in !newDestinationVMs.keys.contains(key) }
+                .map { key, value in key.transition.nid }
+                .to(Set.init)
+            for nid in removedDestinationNids {
+                assert(childNodeCancelSubjects[nid] != nil)
+                childNodeCancelSubjects[nid]?.send()
+                childNodeCancelSubjects.removeValue(forKey: nid)
+            }
+
+            // prefer a TransitionVM that we previously created if it exists to avoid recreating everything
             // NOTE: this potentially introduces a bug where the isFavorite/isWorse value could get out of sync
+            // because we keep the old value instead of the newly created value which might have been updated
             // this seems sufficiently unlikely that it's okay until it becomes a problem
+            let newDestinationNids = newDestinationVMs.keys
             newDestinationVMs = previousState
                 .destinationVMs
                 .filter { key, _ in newDestinationNids.contains(key) }
@@ -392,6 +442,7 @@ import Combine
         let state = State(
             data: data,
             destinationVMs: newDestinationVMs,
+            childNodeCancelSubjects: childNodeCancelSubjects,
             favoriteLinksTransitions: favoriteLinksTransitions,
             linksTransitions: linksTransitions,
             worseLinksTransitions: worseLinksTransitions,

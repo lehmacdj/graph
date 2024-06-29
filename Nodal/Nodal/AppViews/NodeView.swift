@@ -20,7 +20,7 @@ struct NodeView: View {
     @State var showingForceDeleteNodeConfirmation: Bool = false
 
     @ViewBuilder
-    func links(_ state: any NodeState) -> some View {
+    func links(_ state: NodeState) -> some View {
         List {
             if let favorites = state.favoriteLinks {
                 Section("Favorites") {
@@ -53,7 +53,7 @@ struct NodeView: View {
     }
 
     @ViewBuilder
-    func loadedContent(_ state: any NodeState) -> some View {
+    func loadedContent(_ state: NodeState) -> some View {
         if let data = state.data, !showingLinks {
             if let uiImage = UIImage(data: data) {
                 ImageView(uiImage: uiImage)

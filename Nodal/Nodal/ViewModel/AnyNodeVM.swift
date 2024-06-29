@@ -15,7 +15,7 @@ import Foundation
 
     private var underlying: any NodeVM
 
-    var state: Loading<any NodeState> {
+    var state: Loading<NodeState> {
         get { underlying.state }
     }
 

@@ -7,6 +7,7 @@
 
 import Foundation
 
+/// perhaps worth factoring out Error so that we can provide Equatable when Error + T conform to Equatable
 enum Loading<T> {
     case idle
     case loading
@@ -18,6 +19,21 @@ enum Loading<T> {
             return .loaded(try await value())
         } catch {
             return .failed(error)
+        }
+    }
+
+    static func equalityCheck(
+        loadedCheck: @escaping (T, T) -> Bool,
+        errorCheck: @escaping (Error, Error) -> Bool
+    ) -> (Loading<T>, Loading<T>) -> Bool {
+        { (lhs, rhs) in
+            switch (lhs, rhs) {
+            case (.idle, .idle): true
+            case (.loading, .loading): true
+            case (.loaded(let lhs), .loaded(let rhs)): loadedCheck(lhs, rhs)
+            case (.failed(let lhs), .failed(let rhs)): errorCheck(lhs, rhs)
+            default: false
+            }
         }
     }
 }

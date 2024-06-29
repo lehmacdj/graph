@@ -13,8 +13,22 @@ enum Direction {
     case backward
 }
 
-enum ThumbnailValue {
-
+enum ThumbnailValue: Equatable {
+    static func == (lhs: ThumbnailValue, rhs: ThumbnailValue) -> Bool {
+        switch (lhs, rhs) {
+        case (.noThumbnail, .noThumbnail):
+            true
+        case (.cloudFile, .cloudFile):
+            true
+        case (.thumbnail(let lhs), .thumbnail(let rhs)):
+            Loading.equalityCheck(
+                loadedCheck: { $0.isEqual($1) },
+                errorCheck: { $0.localizedDescription == $1.localizedDescription }
+            )(lhs, rhs)
+        default: false
+        }
+    }
+    
     case noThumbnail
 
     /// File isn't on device so we won't attempt to generate a thumbnail

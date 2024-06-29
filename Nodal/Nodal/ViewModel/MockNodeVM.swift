@@ -7,21 +7,11 @@
 
 import Foundation
 
-struct MockNodeState: NodeState {
-    var data: Data?
-    var favoriteLinks: [AnyTransitionVM]?
-    var links: [AnyTransitionVM]
-    var worseLinks: [AnyTransitionVM]?
-    var backlinks: [AnyTransitionVM]
-    var tags: Set<String>
-    var possibleTags: Set<String>
-}
-
 class MockNodeVM: NodeVM {
     let nid: NID
-    var state: Loading<any NodeState>
+    var state: Loading<NodeState>
 
-    init(nid: NID, state: Loading<any NodeState> = .loading) {
+    init(nid: NID, state: Loading<NodeState> = .loading) {
         self.nid = nid
         self.state = state
     }
@@ -39,7 +29,7 @@ class MockNodeVM: NodeVM {
         self.init(
             nid: nid,
             state: .loaded(
-                MockNodeState(
+                NodeState(
                     data: data,
                     favoriteLinks: favoriteLinks,
                     links: links,

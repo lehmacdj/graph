@@ -7,6 +7,8 @@
 
 import Foundation
 import SwiftUI
+import Combine
+import Observation
 
 @Observable class SubscribingTransitionVM<N: Node>: TransitionVM {
     let direction: Direction
@@ -53,7 +55,29 @@ import SwiftUI
         SubscribingNodeVM(for: destinationNid, in: manager).eraseToAnyNodeVM()
     }
 
-    enum InternalState {
+    enum InternalState: Equatable {
+        static func == (lhs: SubscribingTransitionVM<N>.InternalState, rhs: SubscribingTransitionVM<N>.InternalState) -> Bool {
+            switch (lhs, rhs) {
+            case (.idle, .idle):
+                true
+            case (.loadingActive(let lhs), .loadingActive(let rhs)):
+                lhs == rhs
+            case (.loadingInactive, .loadingInactive):
+                true
+            case (.loadedActive(let lhsThumbnail, let lhsDestinationTimestamp, let lhsDestinationNode),
+                  .loadedActive(let rhsThumbnail, let rhsDestinationTimestamp, let rhsDestinationNode)):
+                lhsThumbnail == rhsThumbnail && lhsDestinationTimestamp == rhsDestinationTimestamp
+                    && lhsDestinationNode.nid == rhsDestinationNode.nid
+            case (.loadedInactive(let lhsThumbnail, let lhsDestinationTimestamp),
+                  .loadedInactive(let rhsThumbnail, let rhsDestinationTimestamp)):
+                lhsThumbnail == rhsThumbnail && lhsDestinationTimestamp == rhsDestinationTimestamp
+            case (.failed(let lhsError), .failed(let rhsError)):
+                lhsError.localizedDescription == rhsError.localizedDescription
+            default:
+                false
+            }
+        }
+
         case idle
         /// `loadingActive` captures a few substates all of which are valid
         /// * transition could be non-nil if we were formerly loaded and thus have a value
@@ -74,7 +98,14 @@ import SwiftUI
         }
     }
 
-    private var internalState: InternalState = .idle
+    private var internalState: InternalState = .idle {
+        didSet {
+            _internalState = internalState
+        }
+    }
+    @ObservationIgnored
+    @Published
+    private var publishedInternalState: InternalState = .idle
 
     private let manager: GraphManager<N>
 
@@ -292,6 +323,14 @@ import SwiftUI
 
     func removeTransition() async {
         await manager.removeLink(from: source.nid, to: destinationNid, via: transition)
+    }
+
+    /// Publisher that publishes whenever the state of this VM changes
+    func updatedPublisher() -> AnyPublisher<Void, Never> {
+        $publishedInternalState
+            .removeDuplicates()
+            .map { _ in () }
+            .eraseToAnyPublisher()
     }
 }
 
