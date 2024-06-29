@@ -12,7 +12,7 @@ import Foundation
 import SwiftUI
 
 /// Log level to use when logging traces via log function
-let logLevel = LogLevel.verbose
+let logLevel = LogLevel.info
 
 /// Logging function to be abstracted out into a real logging framework later if that seems worth it
 func log(_ message: String, level: LogLevel = .info, file: String = #file, callingFunction: String = #function, line: Int = #line, column: Int = #column) {

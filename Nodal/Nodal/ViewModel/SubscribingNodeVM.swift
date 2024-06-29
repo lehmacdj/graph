@@ -25,7 +25,7 @@ import AsyncAlgorithms
             return .loaded(state.toNodeState())
         case .loadingInactive:
             return .loading
-        case .loadedActive(let state, _):
+        case .loadedActive(let state, _, _):
             return .loaded(state.toNodeState())
         case .loadedInactive(let state):
             return .loaded(state.toNodeState())
@@ -45,7 +45,7 @@ import AsyncAlgorithms
         /// * the node is populated during the loading process and is expected to exist for the final stage (initial data fetch) of the loading process
         case loadingActive(state: State?, node: N?)
         case loadingInactive
-        case loadedActive(state: State, node: N)
+        case loadedActive(state: State, node: N, childNodeCancelSubjects: [NID: PassthroughSubject<(), Never>])
         case loadedInactive(state: State)
         case failed(error: Error)
 
@@ -55,19 +55,19 @@ import AsyncAlgorithms
                 return nil
             case .loadingActive(_, let node):
                 return node
-            case .loadedActive(_, let node):
+            case .loadedActive(_, let node, _):
                 return node
             }
         }
 
-        var validStateForUpdate: (State?, N)? {
+        var validStateForUpdate: (State?, N, [NID: PassthroughSubject<(), Never>])? {
             switch self {
             case .idle, .loadingInactive, .loadedInactive, .failed, .loadingActive(_, nil):
                 return nil
             case .loadingActive(let state, let .some(node)):
-                return (state, node)
-            case .loadedActive(let state, let node):
-                return (state, node)
+                return (state, node, [:])
+            case .loadedActive(let state, let node, let childNodeCancelSubjects):
+                return (state, node, childNodeCancelSubjects)
             }
         }
     }
@@ -93,8 +93,6 @@ import AsyncAlgorithms
         /// Map from destination NID to the corresponding TransitionVM
         var destinationVMs: [TransitionKey: SubscribingTransitionVM<N>]
 
-        var childNodeCancelSubjects: [NID: PassthroughSubject<(), Never>]
-
         var favoriteLinksTransitions: [NodeTransition]?
         var linksTransitions: [NodeTransition]
         var worseLinksTransitions: [NodeTransition]?
@@ -119,6 +117,7 @@ import AsyncAlgorithms
         var tags: Set<String>
         var possibleTags: Set<String>
 
+        @MainActor
         func toNodeState() -> NodeState {
             NodeState(
                 data: data,
@@ -178,7 +177,7 @@ import AsyncAlgorithms
         switch internalState {
         case .idle, .loadingActive, .loadingInactive, .loadedInactive, .failed:
             throw invalidState(expected: .loadedActive)
-        case .loadedActive(_, let node):
+        case .loadedActive(_, let node, _):
             // we could theoretically expand this to also cover the case when we're currently loading, but I don't think that solves any problems and just makes concurrency a little harder to reason about
             await node.set(tags: tags)
         }
@@ -221,7 +220,12 @@ import AsyncAlgorithms
         switch internalState {
         case .loadingActive(state: nil, _):
             internalState = .loadingInactive
-        case .loadingActive(let .some(state), _), .loadedActive(let state, _):
+        case .loadingActive(let .some(state), _):
+            internalState = .loadedInactive(state: state)
+        case .loadedActive(let state, _, let childNodeCancelSubjects):
+            for (_, subject) in childNodeCancelSubjects {
+                subject.send()
+            }
             internalState = .loadedInactive(state: state)
         case .idle, .loadingInactive, .loadedInactive, .failed:
             // nothing to do, already in an okay state
@@ -308,7 +312,7 @@ import AsyncAlgorithms
         let tags = await tagsAsync
         let tagOptions = await possibleTagsAsync ?? Set()
 
-        logInfo("done fetching data from node")
+        logDebug("done fetching data from node")
         try Task.checkCancellation()
 
         var favorites = [NodeTransition]()
@@ -319,7 +323,7 @@ import AsyncAlgorithms
         let worseSet: Set<NID>? = worseNode.map { Set($0.outgoing.map { $0.nid }) }
 
         try Task.checkCancellation()
-        logInfo("creating children")
+        logDebug("creating children")
 
         for child in node.outgoing {
             if let favoritesSet, favoritesSet.contains(child.nid) {
@@ -332,9 +336,9 @@ import AsyncAlgorithms
         }
 
         try Task.checkCancellation()
-        logInfo("about to create state")
+        logDebug("about to create state")
 
-        guard let (previousState, node) = internalState.validStateForUpdate else {
+        guard let (previousState, node, childNodeCancelSubjects) = internalState.validStateForUpdate else {
             // we need to rerun beginUpdateState because the state has drifted to an invalid one while doing IO
             return
         }
@@ -354,13 +358,14 @@ import AsyncAlgorithms
         var newDestinationVMs = allDestinationVMs
             .map { (TransitionKey(transition: $0.transition, destination: $0.destinationNid, direction: $0.direction), $0) }
             .to(Dictionary.init(uniqueKeysWithValues:))
-        var childNodeCancelSubjects = previousState?.childNodeCancelSubjects ?? [:]
+        var newChildNodeCancelSubjects = childNodeCancelSubjects
         if let previousState {
             for (nodeTransitionKey, newVM) in newDestinationVMs
             where newVM.destinationNid != self.nid
-            && !childNodeCancelSubjects.keys.contains(nodeTransitionKey.transition.nid) {
+            && !newChildNodeCancelSubjects.keys.contains(nodeTransitionKey.transition.nid) {
+                assert(newChildNodeCancelSubjects[nodeTransitionKey.transition.nid] == nil)
                 let cancelSubject = PassthroughSubject<(), Never>()
-                childNodeCancelSubjects[nid] = cancelSubject
+                newChildNodeCancelSubjects[nodeTransitionKey.transition.nid] = cancelSubject
                 let publisher = newVM.updatedPublisher().prefix(untilOutputFrom: cancelSubject)
                 let _ = group.addTaskUnlessCancelled {
                     for await _ in publisher.values {
@@ -376,9 +381,9 @@ import AsyncAlgorithms
                 .map { key, value in key.transition.nid }
                 .to(Set.init)
             for nid in removedDestinationNids {
-                assert(childNodeCancelSubjects[nid] != nil)
-                childNodeCancelSubjects[nid]?.send()
-                childNodeCancelSubjects.removeValue(forKey: nid)
+                assert(newChildNodeCancelSubjects[nid] != nil)
+                newChildNodeCancelSubjects[nid]?.send()
+                newChildNodeCancelSubjects.removeValue(forKey: nid)
             }
 
             // prefer a TransitionVM that we previously created if it exists to avoid recreating everything
@@ -442,7 +447,6 @@ import AsyncAlgorithms
         let state = State(
             data: data,
             destinationVMs: newDestinationVMs,
-            childNodeCancelSubjects: childNodeCancelSubjects,
             favoriteLinksTransitions: favoriteLinksTransitions,
             linksTransitions: linksTransitions,
             worseLinksTransitions: worseLinksTransitions,
@@ -451,9 +455,9 @@ import AsyncAlgorithms
             possibleTags: tagOptions
         )
 
-        internalState = .loadedActive(state: state, node: node)
+        internalState = .loadedActive(state: state, node: node, childNodeCancelSubjects: newChildNodeCancelSubjects)
 
-        logInfo("updated state")
+        logInfo("\(nid) updated state")
     }
 
     func reload() async {

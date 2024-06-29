@@ -18,6 +18,7 @@ struct NodeState {
     let possibleTags: Set<String>
 }
 
+@MainActor
 protocol NodeVM: Observable {
     var nid: NID { get }
 
@@ -34,4 +35,29 @@ protocol NodeVM: Observable {
     func toggleFavorite(child _: NID) async throws
 
     func toggleWorse(child _: NID) async throws
+}
+
+/// Hacky struct for adopting NavigationStack
+struct NavToNode {
+    let nid: NID
+    let vm: AnyNodeVM
+}
+
+
+extension NavToNode: Equatable {
+    static func == (lhs: NavToNode, rhs: NavToNode) -> Bool {
+        lhs.nid == rhs.nid
+    }
+}
+
+extension NavToNode: Hashable {
+    func hash(into hasher: inout Hasher) {
+        nid.hash(into: &hasher)
+    }
+}
+
+extension NodeVM {
+    var nav: NavToNode {
+        NavToNode(nid: nid, vm: eraseToAnyNodeVM())
+    }
 }

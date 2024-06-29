@@ -37,6 +37,7 @@ enum ThumbnailValue: Equatable {
     case thumbnail(Loading<UIImage>)
 }
 
+@MainActor
 protocol TransitionVM: Observable, Identifiable {
     var direction: Direction { get }
 

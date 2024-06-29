@@ -31,6 +31,7 @@ struct LabelEditor: View {
     }
 }
 
+@MainActor
 struct TransitionView: View {
     @State var vm: AnyTransitionVM
     @State private var confirmingDelete: Bool = false
@@ -77,7 +78,9 @@ struct TransitionView: View {
             } else {
                 EmptyView()
             }
-        } 
+        } placeholder: {
+            EmptyView()
+        }
     }
 
     var body: some View {
@@ -95,7 +98,7 @@ struct TransitionView: View {
                     }
                 } else {
                     // somehow the VMs here are getting subscribed & then retaining the node beyond when we want it to be retained
-                    NavigationLink(destination: NodeView(of: vm.destination)) {
+                    NavigationLink(value: vm.destination.nav) {
                         Text(vm.transition)
                             .overlay {
                                 GeometryReader { proxy in

@@ -8,6 +8,7 @@
 import SwiftUI
 import AsyncButton
 
+@MainActor
 struct NodeView: View {
     @State var vm: AnyNodeVM
 

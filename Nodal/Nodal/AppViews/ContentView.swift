@@ -14,8 +14,10 @@ struct ContentView: View {
 
     @State private var graphAndRoot: Loading<(GraphManager<DefaultNode>, DefaultNode)?> = .loading
 
+    @State private var path: [NavToNode] = []
+
     var body: some View {
-        NavigationView {
+        NavigationStack(path: $path) {
             HStack {
                 switch graphAndRoot {
                 case .idle:
@@ -37,6 +39,9 @@ struct ContentView: View {
                         Text("Select graph")
                     }
                 }
+            }
+            .navigationDestination(for: NavToNode.self) { nav in
+                NodeView(of: nav.vm)
             }
         }
         .task(id: fileUrl) {

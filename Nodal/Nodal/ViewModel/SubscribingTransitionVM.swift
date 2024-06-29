@@ -51,8 +51,18 @@ import Observation
     }
     var isFavorite: Bool
     var isWorse: Bool
+
+    // this caching is probably unnecessary, but it makes debugging some stuff a little less noisy and shouldn't be harmful
+    @ObservationIgnored
+    private weak var _destination: AnyNodeVM?
     var destination: AnyNodeVM {
-        SubscribingNodeVM(for: destinationNid, in: manager).eraseToAnyNodeVM()
+        if let _destination {
+            return _destination
+        } else {
+            let destination = SubscribingNodeVM(for: destinationNid, in: manager).eraseToAnyNodeVM()
+            _destination = destination
+            return destination
+        }
     }
 
     enum InternalState: Equatable {
@@ -244,12 +254,12 @@ import Observation
                 try Task.checkCancellation()
             }
         } catch is CancellationError {
-            logInfo("cancelled transition \(transition) to \(destinationNid)")
+            logDebug("cancelled transition \(transition) to \(destinationNid)")
         } catch is DuplicateSubscription {
-            logInfo("duplicate subscription, exiting")
+            logInfo("\(parent.nid) \(transition) \(destinationNid) duplicate subscription, exiting")
             return
         } catch {
-            logError("unexpected error thrown \(error)")
+            logError("\(parent.nid) \(transition) \(destinationNid) unexpected error thrown \(error)")
             internalState = .failed(error: error)
         }
 
