@@ -74,7 +74,7 @@ extension GraphManagerNode {
     }
 }
 
-private struct GraphYearComponent: Codable {
+private struct GraphYearComponent: Codable, CustomDebugStringConvertible {
     let year: Int
 
     init(yearString: String) throws {
@@ -94,9 +94,13 @@ private struct GraphYearComponent: Codable {
         var container = encoder.singleValueContainer()
         try container.encode(String(format: "%04d", year))
     }
+
+    var debugDescription: String {
+        "\(year)"
+    }
 }
 
-private struct GraphMonthComponent: Codable {
+private struct GraphMonthComponent: Codable, CustomDebugStringConvertible {
     let month: Int
 
     init(monthString: String) throws {
@@ -116,9 +120,13 @@ private struct GraphMonthComponent: Codable {
         var container = encoder.singleValueContainer()
         try container.encode(String(format: "%02d", month))
     }
+
+    var debugDescription: String {
+        "\(month)"
+    }
 }
 
-private struct GraphDayComponent: Codable {
+private struct GraphDayComponent: Codable, CustomDebugStringConvertible {
     let day: Int
 
     init(dayString: String) throws {
@@ -138,9 +146,13 @@ private struct GraphDayComponent: Codable {
         var container = encoder.singleValueContainer()
         try container.encode(String(format: "%02d", day))
     }
+
+    var debugDescription: String {
+        "\(day)"
+    }
 }
 
-private struct GraphTimeComponent: Codable {
+private struct GraphTimeComponent: Codable, CustomDebugStringConvertible {
     let time: Date
 
     // Custom initializer accepting a string
@@ -165,6 +177,10 @@ private struct GraphTimeComponent: Codable {
         dateFormatter.dateFormat = "HH:mm:ss.SSSSSSSSS"
         let dateString = dateFormatter.string(from: time)
         try container.encode(dateString)
+    }
+
+    var debugDescription: String {
+        "\(time.formatted(date: .omitted, time: .complete))"
     }
 }
 

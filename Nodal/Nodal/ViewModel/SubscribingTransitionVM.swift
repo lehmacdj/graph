@@ -10,45 +10,14 @@ import SwiftUI
 import Combine
 import Observation
 
+// TODO: honestly this probably just needs a rewrite to manage it's state properly, but perhaps it's salvageable
+
 @Observable class SubscribingTransitionVM<N: Node>: TransitionVM {
     let direction: Direction
     let destinationNid: NID
     var transition: String
-    var thumbnail: Loading<ThumbnailValue> {
-        switch internalState {
-        case .idle:
-            return .idle
-        case .loadingActive(thumbnail: nil):
-            return .loading
-        case .loadingActive(thumbnail: .some(let state)):
-            // even though we're internally loading this indicates that we were fully loaded before & thus we return the loaded information we already had
-            return .loaded(state)
-        case .loadingInactive:
-            return .loading
-        case .loadedActive(let state, _, _):
-            return .loaded(state)
-        case .loadedInactive(let state, _):
-            return .loaded(state)
-        case .failed(let error):
-            return .failed(error)
-        }
-    }
-    var timestamp: Loading<Date?> {
-        switch internalState {
-        case .idle:
-            return .idle
-        case .loadingActive:
-            return .loading
-        case .loadingInactive:
-            return .loading
-        case .loadedActive(_, let timestamp, _):
-            return .loaded(timestamp)
-        case .loadedInactive(_, let timestamp):
-            return .loaded(timestamp)
-        case .failed:
-            return .idle
-        }
-    }
+    var thumbnail: Loading<ThumbnailValue> { internalState.thumbnail }
+    var timestamp: Loading<Date?> { internalState.destinationTimestamp }
     var isFavorite: Bool
     var isWorse: Bool
 
@@ -66,36 +35,14 @@ import Observation
     }
 
     enum InternalState: Equatable {
-        static func == (lhs: SubscribingTransitionVM<N>.InternalState, rhs: SubscribingTransitionVM<N>.InternalState) -> Bool {
-            switch (lhs, rhs) {
-            case (.idle, .idle):
-                true
-            case (.loadingActive(let lhs), .loadingActive(let rhs)):
-                lhs == rhs
-            case (.loadingInactive, .loadingInactive):
-                true
-            case (.loadedActive(let lhsThumbnail, let lhsDestinationTimestamp, let lhsDestinationNode),
-                  .loadedActive(let rhsThumbnail, let rhsDestinationTimestamp, let rhsDestinationNode)):
-                lhsThumbnail == rhsThumbnail && lhsDestinationTimestamp == rhsDestinationTimestamp
-                    && lhsDestinationNode.nid == rhsDestinationNode.nid
-            case (.loadedInactive(let lhsThumbnail, let lhsDestinationTimestamp),
-                  .loadedInactive(let rhsThumbnail, let rhsDestinationTimestamp)):
-                lhsThumbnail == rhsThumbnail && lhsDestinationTimestamp == rhsDestinationTimestamp
-            case (.failed(let lhsError), .failed(let rhsError)):
-                lhsError.localizedDescription == rhsError.localizedDescription
-            default:
-                false
-            }
-        }
-
         case idle
-        /// `loadingActive` captures a few substates all of which are valid
-        /// * transition could be non-nil if we were formerly loaded and thus have a value
-        /// * the node is populated during the loading process and is expected to exist for the final stage (initial data fetch) of the loading process
-        case loadingActive(thumbnail: ThumbnailValue?)
+        /// `loadingActive` keeps track of the thumbnail + destinationTimestamp because these might
+        /// be set from a previous load when transitioning from loadedInactive to loadingActive
+        /// Note that destinationTimestamp is ?? because it can be known to be nil or be unknown
+        case loadingActive(thumbnail: ThumbnailValue?, destinationTimestamp: Date??)
         case loadingInactive
         case loadedActive(thumbnail: ThumbnailValue, destinationTimestamp: Date?, destinationNode: N)
-        case loadedInactive(thumbnail: ThumbnailValue, destinationTimestamp: Date?)
+        case loadedInactive(thumbnail: ThumbnailValue?, destinationTimestamp: Date??)
         case failed(error: Error)
 
         var node: N? {
@@ -106,13 +53,81 @@ import Observation
                 return node
             }
         }
-    }
 
-    private var internalState: InternalState = .idle {
-        didSet {
-            _internalState = internalState
+        var thumbnail: Loading<ThumbnailValue> {
+            switch self {
+            case .idle, .loadedInactive(nil, _):
+                return .idle
+            case .loadingActive(thumbnail: nil, _):
+                return .loading
+            case .loadingActive(thumbnail: .some(let state), _):
+                // even though we're internally loading this indicates that we were fully loaded before & thus we return the loaded information we already had
+                return .loaded(state)
+            case .loadingInactive:
+                return .loading
+            case .loadedActive(let state, _, _):
+                return .loaded(state)
+            case .loadedInactive(let .some(state), _):
+                return .loaded(state)
+            case .failed(let error):
+                return .failed(error)
+            }
+        }
+
+        var destinationTimestamp: Loading<Date?> {
+            switch self {
+            case .loadingActive(_, let .some(timestamp)), .loadedInactive(_, let .some(timestamp)), .loadedActive(_, let timestamp, _):
+                return .loaded(timestamp)
+            case .loadingInactive, .loadingActive(_, .none):
+                return .loading
+            case .idle, .loadedInactive(_, destinationTimestamp: .none):
+                return .idle
+            case .failed(let error):
+                return .failed(error)
+            }
+        }
+
+        static func == (lhs: SubscribingTransitionVM<N>.InternalState, rhs: SubscribingTransitionVM<N>.InternalState) -> Bool {
+            switch (lhs, rhs) {
+            case (.idle, .idle):
+                true
+            case (.loadingActive(let lhsThumbnail, let lhsDestinationTimestamp),
+                  .loadingActive(let rhsThumbnail, let rhsDestinationTimestamp)):
+                lhsThumbnail == rhsThumbnail && lhsDestinationTimestamp == rhsDestinationTimestamp
+            case (.loadingInactive, .loadingInactive):
+                true
+            case (.loadedActive(let lhsThumbnail, let lhsDestinationTimestamp, let lhsDestinationNode),
+                  .loadedActive(let rhsThumbnail, let rhsDestinationTimestamp, let rhsDestinationNode)):
+                lhsThumbnail == rhsThumbnail && lhsDestinationTimestamp == rhsDestinationTimestamp
+                && lhsDestinationNode.nid == rhsDestinationNode.nid
+            case (.loadedInactive(let lhsThumbnail, let lhsDestinationTimestamp),
+                  .loadedInactive(let rhsThumbnail, let rhsDestinationTimestamp)):
+                lhsThumbnail == rhsThumbnail && lhsDestinationTimestamp == rhsDestinationTimestamp
+            case (.failed(let lhsError), .failed(let rhsError)):
+                lhsError.localizedDescription == rhsError.localizedDescription
+            default:
+                false
+            }
         }
     }
+
+    private var internalState: InternalState {
+        get { trackedInternalState }
+        set {
+            if internalState.destinationTimestamp.isLoaded && !newValue.destinationTimestamp.isLoaded {
+                print("going back to non-loaded!")
+            }
+            if case .loaded(.some(_)) = internalState.destinationTimestamp, case .loaded(.none) = newValue.destinationTimestamp {
+                if destinationNid == NID(representation: "bpfFPFMPgck2")! {
+                    print("particular node")
+                }
+                print("destination timestamp becoming nil")
+            }
+            trackedInternalState = newValue
+            publishedInternalState = newValue
+        }
+    }
+    private var trackedInternalState: InternalState = .idle
     @ObservationIgnored
     @Published
     private var publishedInternalState: InternalState = .idle
@@ -148,12 +163,10 @@ import Observation
 
     private func beginUpdateState() async throws {
         switch internalState {
-        case .idle:
-            internalState = .loadingActive(thumbnail: nil)
-        case .loadingInactive:
-            internalState = .loadingActive(thumbnail: nil)
-        case .loadedInactive(let thumbnail, _):
-            internalState = .loadingActive(thumbnail: thumbnail)
+        case .idle, .loadingInactive:
+            internalState = .loadingActive(thumbnail: nil, destinationTimestamp: nil)
+        case .loadedInactive(let thumbnail, let destinationTimestamp):
+            internalState = .loadingActive(thumbnail: thumbnail, destinationTimestamp: destinationTimestamp)
         case .failed(_):
             // we don't want to start loading failed nodes so that the error message doesn't get cleared
             // we sleep for 1 second and then check the current state again, so that the VM can get unstuck if internalState gets set to something other than failed
@@ -175,7 +188,8 @@ import Observation
             return
         }
 
-        guard case .loadingActive(let thumbnail) = internalState else {
+        try Task.checkCancellation()
+        guard case .loadingActive(let thumbnail, _) = internalState else {
             logWarn("state changed, need to re-begin loading state")
             return
         }
@@ -264,12 +278,15 @@ import Observation
         }
 
         switch internalState {
-        case .loadingActive(thumbnail: nil):
+        case .loadingActive(let .some(thumbnail), .some(let destinationTimestamp)), 
+             .loadedActive(let thumbnail, let destinationTimestamp, _):
+            internalState = .loadedInactive(thumbnail: thumbnail, destinationTimestamp: .some(destinationTimestamp))
+        case .loadingActive(thumbnail: .none, let .some(destinationTimestamp)):
+            internalState = .loadedInactive(thumbnail: .none, destinationTimestamp: .some(destinationTimestamp))
+        case .loadingActive(thumbnail: .none, destinationTimestamp: .none):
             internalState = .loadingInactive
-        case .loadingActive(let .some(thumbnail)):
-            internalState = .loadedInactive(thumbnail: thumbnail, destinationTimestamp: nil)
-        case .loadedActive(let thumbnail, let destinationTimestamp, _):
-            internalState = .loadedInactive(thumbnail: thumbnail, destinationTimestamp: destinationTimestamp)
+        case .loadingActive(let .some(thumbnail), destinationTimestamp: .none):
+            internalState = .loadedInactive(thumbnail: thumbnail, destinationTimestamp: .none)
         case .idle, .loadingInactive, .loadedInactive, .failed:
             // nothing to do already in an okay state
             break

@@ -217,6 +217,13 @@ import AsyncAlgorithms
             internalState = .failed(error: error)
         }
 
+        if case .loadedActive(let state, _, _) = internalState {
+            for vm in state.destinationVMs {
+                print(vm.value.timestamp)
+            }
+
+        }
+
         switch internalState {
         case .loadingActive(state: nil, _):
             internalState = .loadingInactive
@@ -279,22 +286,23 @@ import AsyncAlgorithms
     private func updateStateLoop() async throws {
         guard case .loadingActive(_, let .some(node)) = internalState else { return }
 
-        let channel = AsyncChannel(element: Void.self)
+        let channel = AsyncChannel(element: String.self)
 
         try await withThrowingDiscardingTaskGroup { group in
             group.addTask {
                 for await _ in node.metaPublisher.values {
-                    await channel.send(())
+                    await channel.send("metaPublisher")
                 }
             }
-            for await _ in channel {
+            for await source in channel {
+                logInfo("\(nid) updating state from \(source)")
                 try await updateState(channel, &group)
             }
         }
     }
 
     private func updateState(
-        _ channel: AsyncChannel<Void>,
+        _ channel: AsyncChannel<String>,
         _ group: inout ThrowingDiscardingTaskGroup<any Error>
     ) async throws {
         guard case .loadingActive(_, let .some(node)) = internalState else { return }
@@ -312,7 +320,7 @@ import AsyncAlgorithms
         let tags = await tagsAsync
         let tagOptions = await possibleTagsAsync ?? Set()
 
-        logDebug("done fetching data from node")
+        logDebug("\(nid) done fetching data from node")
         try Task.checkCancellation()
 
         var favorites = [NodeTransition]()
@@ -323,7 +331,7 @@ import AsyncAlgorithms
         let worseSet: Set<NID>? = worseNode.map { Set($0.outgoing.map { $0.nid }) }
 
         try Task.checkCancellation()
-        logDebug("creating children")
+        logDebug("\(nid) creating children")
 
         for child in node.outgoing {
             if let favoritesSet, favoritesSet.contains(child.nid) {
@@ -336,7 +344,7 @@ import AsyncAlgorithms
         }
 
         try Task.checkCancellation()
-        logDebug("about to create state")
+        logDebug("\(nid) about to create state")
 
         guard let (previousState, node, childNodeCancelSubjects) = internalState.validStateForUpdate else {
             // we need to rerun beginUpdateState because the state has drifted to an invalid one while doing IO
@@ -369,7 +377,7 @@ import AsyncAlgorithms
                 let publisher = newVM.updatedPublisher().prefix(untilOutputFrom: cancelSubject)
                 let _ = group.addTaskUnlessCancelled {
                     for await _ in publisher.values {
-                        await channel.send(())
+                        await channel.send("\(nodeTransitionKey.transition.nid)")
                     }
                     logDebug("publisher did finish so task can be cleaned up!")
                 }
@@ -390,23 +398,29 @@ import AsyncAlgorithms
             // NOTE: this potentially introduces a bug where the isFavorite/isWorse value could get out of sync
             // because we keep the old value instead of the newly created value which might have been updated
             // this seems sufficiently unlikely that it's okay until it becomes a problem
-            let newDestinationNids = newDestinationVMs.keys
             newDestinationVMs = previousState
                 .destinationVMs
-                .filter { key, _ in newDestinationNids.contains(key) }
+                .filter { key, _ in newDestinationVMs.keys.contains(key) }
                 .map { key, value in (key, value) }
                 .to(Dictionary.init(uniqueKeysWithValues:))
-                .merging(newDestinationVMs) { key1, _ in key1 }
+                .merging(newDestinationVMs) { oldVM, _ in oldVM }
+        }
+
+        if case .loadingActive(_, _) = internalState {
+            for vm in newDestinationVMs {
+                print(vm.value.timestamp)
+            }
+
         }
 
         // This currently doesn't work even though we're using it because we don't reload the NodeVM when the timestamps are loaded in
         // We need to update this so that NodeVM refreshes in response to updates in TransitionVM
         func timestampTransitionComparison(_ t1: NodeTransition, _ t2: NodeTransition) -> Bool {
             let t1Timestamp: Date
-            if let vm = newDestinationVMs[TransitionKey(t2, direction: .forward)],
+            if let vm = newDestinationVMs[TransitionKey(t1, direction: .forward)],
                case .loaded(.some(let timestamp)) = vm.timestamp {
                 t1Timestamp = timestamp
-            } else if let vm = newDestinationVMs[TransitionKey(t2, direction: .backward)],
+            } else if let vm = newDestinationVMs[TransitionKey(t1, direction: .backward)],
                       case .loaded(.some(let timestamp)) = vm.timestamp {
                 t1Timestamp = timestamp
             } else {

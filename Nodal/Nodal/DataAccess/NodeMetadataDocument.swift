@@ -34,10 +34,22 @@ final class NodeMetadataDocument: UIDocument {
     }
 
     /// Initialized with initially invalid information, but we read before returning from the constructor so it's never invalid to an outside observer
-    @Published var meta: NodeMeta = .init(id: .origin, incoming: [:], outgoing: [:])
+    @Published private var _meta: NodeMeta?
+    var meta: NodeMeta {
+        get {
+            guard let _meta else {
+                fatalError("initialized in init")
+            }
+            return _meta
+        }
+        set {
+            _meta = newValue
+        }
+    }
+
 
     var metaPublisher: AnyPublisher<NodeMeta, Never> {
-        $meta.eraseToAnyPublisher()
+        $_meta.compactMap { $0 }.eraseToAnyPublisher()
     }
 
     struct InvalidFileType: LocalizedError, Codable {}

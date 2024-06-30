@@ -14,6 +14,13 @@ enum Loading<T> {
     case loaded(T)
     case failed(Error)
 
+    var isLoaded: Bool {
+        switch self {
+        case .loaded: true
+        default: false
+        }
+    }
+
     static func done(_ value: () async throws -> T) async -> Loading<T> {
         do {
             return .loaded(try await value())
