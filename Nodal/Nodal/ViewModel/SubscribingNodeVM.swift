@@ -217,13 +217,6 @@ import AsyncAlgorithms
             internalState = .failed(error: error)
         }
 
-        if case .loadedActive(let state, _, _) = internalState {
-            for vm in state.destinationVMs {
-                print(vm.value.timestamp)
-            }
-
-        }
-
         switch internalState {
         case .loadingActive(state: nil, _):
             internalState = .loadingInactive
@@ -404,13 +397,6 @@ import AsyncAlgorithms
                 .map { key, value in (key, value) }
                 .to(Dictionary.init(uniqueKeysWithValues:))
                 .merging(newDestinationVMs) { oldVM, _ in oldVM }
-        }
-
-        if case .loadingActive(_, _) = internalState {
-            for vm in newDestinationVMs {
-                print(vm.value.timestamp)
-            }
-
         }
 
         // This currently doesn't work even though we're using it because we don't reload the NodeVM when the timestamps are loaded in

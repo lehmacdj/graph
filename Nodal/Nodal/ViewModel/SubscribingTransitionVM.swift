@@ -111,23 +111,11 @@ import Observation
         }
     }
 
-    private var internalState: InternalState {
-        get { trackedInternalState }
-        set {
-            if internalState.destinationTimestamp.isLoaded && !newValue.destinationTimestamp.isLoaded {
-                print("going back to non-loaded!")
-            }
-            if case .loaded(.some(_)) = internalState.destinationTimestamp, case .loaded(.none) = newValue.destinationTimestamp {
-                if destinationNid == NID(representation: "bpfFPFMPgck2")! {
-                    print("particular node")
-                }
-                print("destination timestamp becoming nil")
-            }
-            trackedInternalState = newValue
+    private var internalState: InternalState = .idle {
+        willSet {
             publishedInternalState = newValue
         }
     }
-    private var trackedInternalState: InternalState = .idle
     @ObservationIgnored
     @Published
     private var publishedInternalState: InternalState = .idle
