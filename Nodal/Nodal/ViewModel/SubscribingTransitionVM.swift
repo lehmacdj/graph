@@ -10,8 +10,6 @@ import SwiftUI
 import Combine
 import Observation
 
-// TODO: honestly this probably just needs a rewrite to manage it's state properly, but perhaps it's salvageable
-
 @Observable class SubscribingTransitionVM<N: Node>: TransitionVM {
     let direction: Direction
     let destinationNid: NID
@@ -56,19 +54,12 @@ import Observation
 
         var thumbnail: Loading<ThumbnailValue> {
             switch self {
-            case .idle, .loadedInactive(nil, _):
+            case .loadingActive(.some(let thumbnail), _), .loadedActive(let thumbnail, _, _), .loadedInactive(let .some(thumbnail), _):
+                return .loaded(thumbnail)
+            case .loadingActive(thumbnail: .none, _), .loadingInactive:
+                return .loading
+            case .idle, .loadedInactive(.none, _):
                 return .idle
-            case .loadingActive(thumbnail: nil, _):
-                return .loading
-            case .loadingActive(thumbnail: .some(let state), _):
-                // even though we're internally loading this indicates that we were fully loaded before & thus we return the loaded information we already had
-                return .loaded(state)
-            case .loadingInactive:
-                return .loading
-            case .loadedActive(let state, _, _):
-                return .loaded(state)
-            case .loadedInactive(let .some(state), _):
-                return .loaded(state)
             case .failed(let error):
                 return .failed(error)
             }

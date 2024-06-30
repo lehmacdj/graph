@@ -276,26 +276,37 @@ import AsyncAlgorithms
         try await updateStateLoop()
     }
 
+    private struct UpdateRequest {
+        let source: String
+        let timestamp: Date = .now
+    }
+
     private func updateStateLoop() async throws {
         guard case .loadingActive(_, let .some(node)) = internalState else { return }
 
-        let channel = AsyncChannel(element: String.self)
+        let channel = AsyncChannel(element: UpdateRequest.self)
 
         try await withThrowingDiscardingTaskGroup { group in
+            var lastUpdate = Date.now
             group.addTask {
                 for await _ in node.metaPublisher.values {
-                    await channel.send("metaPublisher")
+                    await channel.send(UpdateRequest(source: "metaPublisher"))
                 }
             }
-            for await source in channel {
-                logInfo("\(nid) updating state from \(source)")
-                try await updateState(channel, &group)
+            for await request in channel {
+                if request.timestamp > lastUpdate {
+                    logInfo("\(nid) updating state from \(request.source)")
+                    lastUpdate = .now
+                    try await updateState(channel, &group)
+                } else {
+                    logDebug("\(nid) skipping update because it is out of date")
+                }
             }
         }
     }
 
     private func updateState(
-        _ channel: AsyncChannel<String>,
+        _ channel: AsyncChannel<UpdateRequest>,
         _ group: inout ThrowingDiscardingTaskGroup<any Error>
     ) async throws {
         guard case .loadingActive(_, let .some(node)) = internalState else { return }
@@ -370,7 +381,7 @@ import AsyncAlgorithms
                 let publisher = newVM.updatedPublisher().prefix(untilOutputFrom: cancelSubject)
                 let _ = group.addTaskUnlessCancelled {
                     for await _ in publisher.values {
-                        await channel.send("\(nodeTransitionKey.transition.nid)")
+                        await channel.send(UpdateRequest(source: "\(nodeTransitionKey.transition.nid)"))
                     }
                     logDebug("publisher did finish so task can be cleaned up!")
                 }
