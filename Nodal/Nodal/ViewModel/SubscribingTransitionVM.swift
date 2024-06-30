@@ -102,14 +102,10 @@ import Observation
         }
     }
 
-    private var internalState: InternalState = .idle {
-        willSet {
-            publishedInternalState = newValue
-        }
-    }
+    private var internalState: InternalState = .idle
+
     @ObservationIgnored
-    @Published
-    private var publishedInternalState: InternalState = .idle
+    private var _updatedPublisher = PassthroughSubject<(), Never>()
 
     private let manager: GraphManager<N>
 
@@ -140,6 +136,37 @@ import Observation
 
     struct DuplicateSubscription: LocalizedError, Codable {}
 
+    func fetchTimestamp() async throws {
+        guard case .idle = timestamp else {
+            return
+        }
+
+        let node = try await manager[destinationNid]
+        let destinationTimestamp = await node.mostRecentTimestamp
+
+        try Task.checkCancellation()
+        guard case .idle = timestamp else {
+            return
+        }
+
+        switch internalState {
+        case .loadingActive(let thumbnail, .none):
+            internalState = .loadingActive(thumbnail: thumbnail, destinationTimestamp: .some(destinationTimestamp))
+        case .loadedInactive(let thumbnail, .none):
+            internalState = .loadedInactive(thumbnail: thumbnail, destinationTimestamp: .some(destinationTimestamp))
+        case .idle:
+            internalState = .loadedInactive(thumbnail: .none, destinationTimestamp: .some(destinationTimestamp))
+        case .loadingActive(_, .some(_)), .loadedActive, .loadedInactive(_, .some(_)):
+            // don't update when we already have a timestamp
+            break
+        case .failed(_), .loadingInactive:
+            // we either won't have a timestamp, or the timestamp is already going to be fetched
+            break
+        }
+
+        _updatedPublisher.send()
+    }
+
     private func beginUpdateState() async throws {
         switch internalState {
         case .idle, .loadingInactive:
@@ -168,6 +195,10 @@ import Observation
         }
 
         try Task.checkCancellation()
+        updateState(destinationTimestamp: destinationTimestamp, destinationNode: destinationNode)
+    }
+
+    private func updateState(destinationTimestamp: Date?, destinationNode: N) {
         guard case .loadingActive(let thumbnail, _) = internalState else {
             logWarn("state changed, need to re-begin loading state")
             return
@@ -203,8 +234,7 @@ import Observation
             }
         }
 
-
-        try await updateStateLoop()
+        _updatedPublisher.send()
     }
 
     private func updateStateLoop() async throws {
@@ -237,6 +267,8 @@ import Observation
                     destinationNode: destinationNode
                 )
             }
+
+            _updatedPublisher.send()
         }
     }
 
@@ -245,6 +277,7 @@ import Observation
             while true {
                 try await beginUpdateState()
                 try Task.checkCancellation()
+                try await updateStateLoop()
             }
         } catch is CancellationError {
             logDebug("cancelled transition \(transition) to \(destinationNid)")
@@ -256,8 +289,12 @@ import Observation
             internalState = .failed(error: error)
         }
 
+        transitionToInactive()
+    }
+
+    func transitionToInactive() {
         switch internalState {
-        case .loadingActive(let .some(thumbnail), .some(let destinationTimestamp)), 
+        case .loadingActive(let .some(thumbnail), .some(let destinationTimestamp)),
              .loadedActive(let thumbnail, let destinationTimestamp, _):
             internalState = .loadedInactive(thumbnail: thumbnail, destinationTimestamp: .some(destinationTimestamp))
         case .loadingActive(thumbnail: .none, let .some(destinationTimestamp)):
@@ -333,10 +370,7 @@ import Observation
 
     /// Publisher that publishes whenever the state of this VM changes
     func updatedPublisher() -> AnyPublisher<Void, Never> {
-        $publishedInternalState
-            .removeDuplicates()
-            .map { _ in () }
-            .eraseToAnyPublisher()
+        _updatedPublisher.share().eraseToAnyPublisher()
     }
 }
 

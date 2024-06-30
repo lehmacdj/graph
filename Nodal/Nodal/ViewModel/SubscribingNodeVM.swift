@@ -380,10 +380,11 @@ import AsyncAlgorithms
                 newChildNodeCancelSubjects[nodeTransitionKey.transition.nid] = cancelSubject
                 let publisher = newVM.updatedPublisher().prefix(untilOutputFrom: cancelSubject)
                 let _ = group.addTaskUnlessCancelled {
+                    logInfo("started task")
                     for await _ in publisher.values {
                         await channel.send(UpdateRequest(source: "\(nodeTransitionKey.transition.nid)"))
                     }
-                    logDebug("publisher did finish so task can be cleaned up!")
+                    logInfo("publisher did finish so task can be cleaned up!")
                 }
             }
 
@@ -469,6 +470,12 @@ import AsyncAlgorithms
         internalState = .loadedActive(state: state, node: node, childNodeCancelSubjects: newChildNodeCancelSubjects)
 
         logInfo("\(nid) updated state")
+
+        for vm in newDestinationVMs {
+            if case .idle = vm.value.timestamp {
+                try await vm.value.fetchTimestamp()
+            }
+        }
     }
 
     func reload() async {

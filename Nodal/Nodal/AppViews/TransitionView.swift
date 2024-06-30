@@ -97,7 +97,6 @@ struct TransitionView: View {
                         await vm.fetchThumbnail()
                     }
                 } else {
-                    // somehow the VMs here are getting subscribed & then retaining the node beyond when we want it to be retained
                     NavigationLink(value: vm.destination.nav) {
                         Text(vm.transition)
                             .overlay {
