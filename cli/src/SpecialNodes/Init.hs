@@ -21,3 +21,7 @@ createSpecialNodes = do
   insertEdge (Edge systemNodeNID "file-hashes" fileHashesNID)
   touchNode importUrlsNID
   insertEdge (Edge systemNodeNID "import-urls" importUrlsNID)
+  touchNode historicalSpecialNodesNID
+  insertEdge (Edge systemNodeNID "historical-special-nodes" historicalSpecialNodes)
+  touchNode sequenceIDsNID
+  insertEdge (Edge historicalSpecialNodes "sequence-ids" sequenceIDsNID)

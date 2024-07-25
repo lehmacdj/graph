@@ -69,6 +69,8 @@ enum SpecialNode: String, CaseIterable {
     case importUrls = "import-urls"
     case importDates = "import-dates"
     case fileHashes = "file-hashes"
+    case historicalSpecialNodes = "historical-special-nodes"
+    case sequenceIDs = "sequence-ids"
 
     var nid: NID {
         // we statically know that all of these match the representation, thus they won't crash
@@ -79,6 +81,8 @@ enum SpecialNode: String, CaseIterable {
         case .importUrls: NID(representation: "a0fVkm0kR7KE")!
         case .importDates: NID(representation: "S00KkOYoVpFu")!
         case .fileHashes: NID(representation: "AhQufiPzgyRf")!
+        case .historicalSpecialNodes: NID(representation: "3JJvxFUHGAA1")!
+        case .sequenceIDs: NID(representation: "VEfLhuTgZ88Z")!
         }
     }
 }

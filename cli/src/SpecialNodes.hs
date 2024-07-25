@@ -10,6 +10,8 @@ module SpecialNodes
     importDatesNID,
     fileHashesNID,
     importUrlsNID,
+    historicalSpecialNodesNID,
+    sequenceIDsNID,
 
     -- * Full info for special nodes
     SpecialNodeInfo (..),
@@ -19,6 +21,8 @@ module SpecialNodes
     importDatesInfo,
     fileHashesInfo,
     importUrlsInfo,
+    historicalSpecialNodesInfo,
+    sequenceIDsInfo,
   )
 where
 
@@ -43,6 +47,12 @@ importDatesNID = unsafeNID "S00KkOYoVpFu"
 fileHashesNID :: NID
 fileHashesNID = unsafeNID "AhQufiPzgyRf"
 
+historicalSpecialNodesNID :: NID
+historicalSpecialNodesNID = unsafeNID "3JJvxFUHGAA1"
+
+sequenceIDsNID :: NID
+sequenceIDsNID = unsafeNID "VEfLhuTgZ88Z"
+
 data SpecialNodeInfo = SpecialNodeInfo
   { specialNodeNID :: NID,
     specialNodeName :: Text
@@ -65,3 +75,9 @@ fileHashesInfo = SpecialNodeInfo fileHashesNID "file-hashes"
 
 importUrlsInfo :: SpecialNodeInfo
 importUrlsInfo = SpecialNodeInfo importUrlsNID "import-urls"
+
+historicalSpecialNodesInfo :: SpecialNodeInfo
+historicalSpecialNodesInfo = SpecialNodeInfo historicalSpecialNodes "historical-special-nodes"
+
+sequenceIDsInfo :: SpecialNodeInfo
+sequenceIDsInfo = SpecialNodeInfo sequenceIDsNID "sequence-ids"
