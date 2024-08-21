@@ -77,7 +77,7 @@ importUrlsInfo :: SpecialNodeInfo
 importUrlsInfo = SpecialNodeInfo importUrlsNID "import-urls"
 
 historicalSpecialNodesInfo :: SpecialNodeInfo
-historicalSpecialNodesInfo = SpecialNodeInfo historicalSpecialNodes "historical-special-nodes"
+historicalSpecialNodesInfo = SpecialNodeInfo historicalSpecialNodesNID "historical-special-nodes"
 
 sequenceIDsInfo :: SpecialNodeInfo
 sequenceIDsInfo = SpecialNodeInfo sequenceIDsNID "sequence-ids"
