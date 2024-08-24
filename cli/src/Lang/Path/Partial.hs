@@ -36,7 +36,7 @@ pPathSegment :: Parser (Path String)
 pPathSegment = pathTerm transition
 
 -- | a list of path segments that are interpreted as being separated by
--- concatenation, followed by a string that represents the last
+-- concatenation, followed by a string that represents a partial transition or something else
 data PartialPath
   = PartialPath [Path String] String
   | MissingSlash [Path String]
