@@ -13,7 +13,8 @@ test_takeRelevantFromEnd =
       takeRelevantFromEnd' "(a + b)/(e + (c + d)" "(a + b)/ (c + d)",
       takeRelevantFromEnd' "a & b/" " b/",
       takeRelevantFromEnd' "a & b/(a + b & c/(d + e" " b/ c/ e",
-      takeRelevantFromEnd' "#200 + #100/" " #100/"
+      takeRelevantFromEnd' "@200 + @100/" " @100/",
+      takeRelevantFromEnd' "#foo + #bar/" " #bar/"
     ]
   where
     takeRelevantFromEnd' i e = testCase i $ e @=? (takeRelevantFromEnd . reverse $ i)
