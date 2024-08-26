@@ -7,13 +7,15 @@ import Data.Functor
 import Lang.Parsing
 import Lang.Path
 import MyPrelude hiding (try)
+import SpecialNodes (tagsNID)
 import Text.Megaparsec (try, (<?>))
 import Text.Megaparsec.Char (char)
 
 pathTerm :: Parser t -> Parser (Path t)
 pathTerm pTransition =
-  try (Absolute <$> (char '#' *> nodeId))
-    <|> (symbol "#" $> One)
+  try (Absolute <$> (char '@' *> nodeId))
+    <|> try ((Absolute tagsNID :/) <$> (Literal <$> (char '#' *> pTransition)))
+    <|> (symbol "@" $> One)
     <|> (symbol "*" $> Wild)
     <|> (symbol "!" $> Zero)
     <|> (Literal <$> pTransition)
@@ -35,4 +37,21 @@ pPath pTransition = do
   guard (isValidPath path) <?> "valid path"
   pure path
 
--- TODO: write unit tests for parser
+test_pPath :: TestTree
+test_pPath =
+  testGroup
+    "pPath"
+    [ "#foo" `parsesTo` Absolute (NID tagsNID) :/ Literal "foo",
+      "@" `parsesTo` One,
+      "*" `parsesTo` Wild,
+      "!" `parsesTo` Zero,
+      "foo" `parsesTo` Literal "foo",
+      "foo/bar" `parsesTo` Literal "foo" :/ Literal "bar",
+      "foo / bar & baz" `parsesTo` Literal "foo" :/ Literal "bar" :& Literal "baz",
+      "foo/bar&baz+qux" `parsesTo` Literal "foo" :/ Literal "bar" :& Literal "baz" :+ Literal "qux",
+      "foo/bar&baz+qux/!" `parsesTo` Literal "foo" :/ Literal "bar" :& Literal "baz" :+ Literal "qux" :/ Zero,
+      "foo/bar&(baz+qux)" `parsesTo` Literal "foo" :/ Literal "bar" :& (Literal "baz" :+ Literal "qux"),
+      "foo/(bar&baz+qux)/!" `parsesTo` Literal "foo" :/ (Literal "bar" :& Literal "baz" :+ Literal "qux") :/ Zero
+    ]
+  where
+    parsesTo = testParserParses pPath
