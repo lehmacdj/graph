@@ -93,6 +93,14 @@ data Path t
     Path t :& Path t
   deriving (Show, Eq, Ord)
 
+-- make the operator precedence match how they are parsed
+
+infixl 7 :/
+
+infixl 5 :+
+
+infixl 6 :&
+
 isValidPath :: Path t -> Bool
 isValidPath = \case
   Absolute _ -> True

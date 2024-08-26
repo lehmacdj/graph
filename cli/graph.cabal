@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 5487357538681fba960e369828d06d2fc005bde9081edcfdf830c60bd6d916e7
+-- hash: c2cda98df279dad5b6593c6f5615014cdec3809084d533c0bd0cb21a9fda6272
 
 name:           graph
 version:        0.1.0.0
@@ -73,7 +73,6 @@ library
       Interpreters
       Lang.Command
       Lang.Command.Parse
-      Lang.Command.ParseSpec
       Lang.Parsing
       Lang.ParsingSpec
       Lang.Path
