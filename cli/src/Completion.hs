@@ -99,7 +99,7 @@ completeNID :: Env -> (String, String) -> IO (String, [Completion])
 completeNID env (i, _) = do
   let (reversedNidPrefix, scraps) = span isBase62Char . take (nidDigits + 1) $ i
   case scraps of
-    '#' : _ -> do
+    '@' : _ -> do
       base <- readIORef $ env ^. #_filePath
       nids <- nodesWithPrefix base (reverse reversedNidPrefix)
       pure (fromMaybe i (stripPrefix reversedNidPrefix i), map (simpleCompletion' . show) nids)
