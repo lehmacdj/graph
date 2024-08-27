@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: c2cda98df279dad5b6593c6f5615014cdec3809084d533c0bd0cb21a9fda6272
+-- hash: 92c586a5fdba0ee89d512c5222ee731830f933df2380075dc4b1b58e246c6d95
 
 name:           graph
 version:        0.1.0.0
@@ -78,7 +78,6 @@ library
       Lang.Path
       Lang.Path.Parse
       Lang.Path.Partial
-      Lang.Path.PartialSpec
       Lang.PathSpec
       MyPrelude
       Options
