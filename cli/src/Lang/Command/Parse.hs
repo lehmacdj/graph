@@ -180,7 +180,9 @@ test_parseCommand =
       -- regression test: this used to parse to t ouch hello-world; incorrectly
       -- not requiring a space between t and ouch
       parseFails "touch hello-world",
-      parseFails " t hello/world @;"
+      parseFails " t hello/world @;",
+      -- @ used to be # here; not failing could cause accidental misuse
+      parseFails "t hello/world #"
     ]
   where
     parsesTo string expected =

@@ -60,8 +60,11 @@ test_pPath =
       "foo/bar&baz+qux" `parsesTo` (Literal "foo" :/ Literal "bar" :& Literal "baz" :+ Literal "qux"),
       "foo/bar&baz+qux/!" `parsesTo` (Literal "foo" :/ Literal "bar" :& Literal "baz" :+ Literal "qux" :/ Zero),
       "foo/bar&(baz+qux)" `parsesTo` (Literal "foo" :/ Literal "bar" :& (Literal "baz" :+ Literal "qux")),
-      "foo/(bar&baz+qux)/!" `parsesTo` (Literal "foo" :/ (Literal "bar" :& Literal "baz" :+ Literal "qux") :/ Zero)
+      "foo/(bar&baz+qux)/!" `parsesTo` (Literal "foo" :/ (Literal "bar" :& Literal "baz" :+ Literal "qux") :/ Zero),
+      parseFails "foo/bar&",
+      parseFails "foo/bar&+qux"
     ]
   where
     parsesTo :: String -> Path String -> TestTree
     parsesTo input = testCase ("parse: " ++ show input) . testParserParses (pPath transition) input
+    parseFails input = testCase ("parse fails: " ++ show input) $ testParserFails (pPath transition) input
