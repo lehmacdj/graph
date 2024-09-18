@@ -26,6 +26,15 @@ getNodeSem nid =
     Nothing -> throwMissing nid
     Just n -> pure n
 
+getNodeDatalessSem ::
+  Members [ReadGraph t, Error Missing] effs =>
+  NID ->
+  Sem effs (Node t)
+getNodeDatalessSem nid =
+  getNodeDataless nid >>= \case
+    Nothing -> throwMissing nid
+    Just n -> pure n
+
 -- | Make it so that the node in the graph with nid = nidOf n, has supersets of
 -- in and out transitions present in n.
 -- Also sets the data to the data in n.

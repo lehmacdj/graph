@@ -98,7 +98,7 @@ checkConnectExists ::
   Connect t ->
   Sem effs ()
 checkConnectExists dir nid c = reportMissingNode @t $ do
-  n <- getNodeSem @t nid
+  n <- getNodeDatalessSem @t nid
   if has (dirToLens dir . folded . only c) n
     then pure ()
     else connectMissing dir nid c
@@ -113,7 +113,7 @@ checkNode ::
   Sem effs ()
 checkNode nid = reportMissingNode @t $ do
   -- every node needs to exist (error handled above)
-  n <- getNodeSem @t nid
+  n <- getNodeDatalessSem @t nid
   -- every outgoing edge needs to be present in the corresponding node as incoming
   traverseOf_
     (#outgoing . folded . to (swapConnect nid))

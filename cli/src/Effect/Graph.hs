@@ -35,6 +35,7 @@ data RawGraph m a where
 
 data ReadGraph t m a where
   GetNode :: NID -> ReadGraph t m (Maybe (Node t))
+  GetNodeDataless :: NID -> ReadGraph t m (Maybe (Node t))
   NodeManifest :: ReadGraph t m [NID]
 
 data ReadGraph' m a where
@@ -136,6 +137,14 @@ runReadGraphIODualizeable dir = reinterpret $ \case
         S2.deserializeNodeF @t @(Error UserError : Input IsDual : effs) dir nid
     dual <- input
     pure $ maybeN <&> ifDualized dual dualizeNode
+  GetNodeDataless nid -> do
+    maybeN <-
+      errorToNothing $
+        -- writing type level lists in your code is not fun :(
+        -- kids: be careful when you choose haskell
+        S2.deserializeNodeWithoutDataF @t @(Error UserError : Input IsDual : effs) dir nid
+    dual <- input
+    pure $ maybeN <&> ifDualized dual dualizeNode
   NodeManifest -> S2.getAllNodeIds dir
 
 runReadGraphIO' ::
@@ -185,6 +194,9 @@ runReadGraphState ::
   Sem effs a
 runReadGraphState = interpret $ \case
   GetNode nid -> G.maybeLookupNode <$> get <*> pure nid
+  GetNodeDataless nid ->
+    (#_Just . #associatedData .~ Nothing)
+      <$> (G.maybeLookupNode <$> get <*> pure nid)
   NodeManifest -> keys . G.nodeMap <$> get @(Graph t)
 
 runWriteGraphState ::
