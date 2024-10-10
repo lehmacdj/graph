@@ -20,6 +20,7 @@ sequence_ids_node = 'VEfLhuTgZ88Z'
 # Function to generate a random alphanumeric ID of length 12
 def generate_random_id(length=12):
     characters = string.ascii_letters + string.digits
+    assert len(characters) == 62, "Wrong characters for base 62"
     return ''.join(random.choice(characters) for _ in range(length))
 
 # Load and update JSON files in the directory
