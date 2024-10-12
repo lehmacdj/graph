@@ -76,6 +76,8 @@ def add_filetype_metadata(directory, nid, mimetype, extension, dry_run=True):
     extension_id = ensure_transition_from_node(directory, file_extensions_id, extension)
     add_link(directory, nid, '', mimetype_subtype_id)
     add_link(directory, nid, '', extension_id)
+    add_link(directory, mimetype_subtype_id, 'extension', extension_id)
+    add_link(directory, extension_id, 'mimetype', mimetype_subtype_id)
 
 def handle_unidentified_filetype(filepath):
     with open(filepath, 'rb') as file:
@@ -127,7 +129,7 @@ def get_file_extension(filepath):
         return None
 
 extension_lookup_table = {
-    'video/mp4': 'mp4',
+    'video/mp4': '.mp4',
 }
 
 def get_mimetype_and_extension(filepath):
