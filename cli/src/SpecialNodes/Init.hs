@@ -25,3 +25,7 @@ createSpecialNodes = do
   insertEdge (Edge systemNodeNID "historical-special-nodes" historicalSpecialNodesNID)
   touchNode sequenceIDsNID
   insertEdge (Edge historicalSpecialNodesNID "sequence-ids" sequenceIDsNID)
+  touchNode mimeTypesNID
+  insertEdge (Edge systemNodeNID "mime-types" mimeTypesNID)
+  touchNode fileExtensionsNID
+  insertEdge (Edge systemNodeNID "file-extensions" fileExtensionsNID)

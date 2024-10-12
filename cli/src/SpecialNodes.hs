@@ -12,6 +12,8 @@ module SpecialNodes
     importUrlsNID,
     historicalSpecialNodesNID,
     sequenceIDsNID,
+    fileExtensionsNID,
+    mimeTypesNID,
 
     -- * Full info for special nodes
     SpecialNodeInfo (..),
@@ -23,6 +25,8 @@ module SpecialNodes
     importUrlsInfo,
     historicalSpecialNodesInfo,
     sequenceIDsInfo,
+    fileExtensionsInfo,
+    mimeTypesInfo,
   )
 where
 
@@ -53,6 +57,12 @@ historicalSpecialNodesNID = unsafeNID "3JJvxFUHGAA1"
 sequenceIDsNID :: NID
 sequenceIDsNID = unsafeNID "VEfLhuTgZ88Z"
 
+fileExtensionsNID :: NID
+fileExtensionsNID = unsafeNID "zsBuPkn5mh8F"
+
+mimeTypesNID :: NID
+mimeTypesNID = unsafeNID "927u9Xyky2pC"
+
 data SpecialNodeInfo = SpecialNodeInfo
   { specialNodeNID :: NID,
     specialNodeName :: Text
@@ -81,3 +91,9 @@ historicalSpecialNodesInfo = SpecialNodeInfo historicalSpecialNodesNID "historic
 
 sequenceIDsInfo :: SpecialNodeInfo
 sequenceIDsInfo = SpecialNodeInfo sequenceIDsNID "sequence-ids"
+
+fileExtensionsInfo :: SpecialNodeInfo
+fileExtensionsInfo = SpecialNodeInfo fileExtensionsNID "file-extensions"
+
+mimeTypesInfo :: SpecialNodeInfo
+mimeTypesInfo = SpecialNodeInfo mimeTypesNID "mime-types"
