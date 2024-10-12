@@ -6,7 +6,6 @@ module TestPrelude
     representedByJson,
     runTests,
     connect,
-    unlabledEdge,
     edge,
     edge',
   )
@@ -15,7 +14,6 @@ where
 import Data.Aeson
 import Graph.Serialize2 (initializeGraph)
 import Graph.Types
-import Graph.Types.New (UnlabledEdge (..))
 import MyPrelude hiding (assert)
 import System.Directory (copyFile)
 import System.Directory.Tree (AnchoredDirTree ((:/)))
@@ -66,9 +64,6 @@ runTests = defaultMain
 
 connect :: Int -> Int -> Connect NID
 connect t n = Connect (smallNID t) (smallNID n)
-
-unlabledEdge :: Int -> Int -> UnlabledEdge
-unlabledEdge i o = UnlabledEdge (smallNID i) (smallNID o)
 
 edge :: Int -> Int -> Int -> Edge NID
 edge i t o = Edge (smallNID i) (smallNID t) (smallNID o)

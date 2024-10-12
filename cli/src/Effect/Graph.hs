@@ -18,11 +18,8 @@ import Effect.Util
 import Effect.Warn
 import qualified Graph as G
 import Graph.Node (dualizeNode)
-import qualified Graph.Node' as Graph'
 import qualified Graph.Serialize2 as S2
-import qualified Graph.Serialize3 as S3
 import Graph.Types
-import Graph.Types.New
 import MyPrelude
 import Polysemy.Input
 import Polysemy.State
@@ -38,13 +35,8 @@ data ReadGraph t m a where
   GetNodeDataless :: NID -> ReadGraph t m (Maybe (Node t))
   NodeManifest :: ReadGraph t m [NID]
 
-data ReadGraph' m a where
-  GetNode' :: NID -> ReadGraph' m (Maybe Node')
-  NodeManifest' :: ReadGraph' m [NID]
-
 makeSem ''RawGraph
 makeSem ''ReadGraph
-makeSem ''ReadGraph'
 
 newtype IsDual = IsDual {isDual :: Bool}
   deriving (Show, Eq, Ord)
@@ -147,20 +139,6 @@ runReadGraphIODualizeable dir = reinterpret $ \case
     pure $ maybeN <&> ifDualized dual dualizeNode
   NodeManifest -> S2.getAllNodeIds dir
 
-runReadGraphIO' ::
-  Members [Embed IO, Error UserError, Input IsDual] r =>
-  FilePath ->
-  Sem (ReadGraph' ': r) a ->
-  Sem r a
-runReadGraphIO' graphDir = interpret $ \case
-  GetNode' nid -> do
-    maybeN <-
-      runErrorMaybe . fromEitherSemVia AesonDeserialize . fromExceptionToUserError $
-        S3.deserializeNode graphDir nid
-    dual <- input
-    pure $ maybeN <&> ifDualized dual Graph'.dualizeNode
-  NodeManifest' -> S3.getAllNodeIds graphDir
-
 -- | Run a graph in IO with the ambient ability for the graph to be
 -- dualizeable.
 runReadGraphDualizeableIO ::
@@ -223,51 +201,6 @@ runWriteGraphIO ::
   FilePath ->
   Sem (WriteGraph t ': effs) ~> Sem effs
 runWriteGraphIO dir = runInputConst (IsDual False) . runWriteGraphIODualizeable dir
-
-runWriteGraphIO' ::
-  forall r a.
-  Members [Embed IO, Error UserError, Warn UserError, Input IsDual] r =>
-  FilePath ->
-  Sem (WriteGraph NID : r) a ->
-  Sem r a
-runWriteGraphIO' dir = interpret $ \case
-  TouchNode nid ->
-    whenM (not <$> S3.doesNodeExist dir nid) $
-      fromExceptionToUserError . S3.serializeNode dir $ Graph'.emptyNode nid
-  DeleteNode nid -> do
-    n <-
-      fromEitherSemVia AesonDeserialize . fromExceptionToUserError $
-        S3.deserializeNode dir nid
-    let del =
-          filterSet ((/= nid) . view #node)
-            . filterSet ((/= nid) . view #transition)
-        delByLabel =
-          filterSet ((/= nid) . view #source)
-            . filterSet ((/= nid) . view #sink)
-        delIn = over #incoming' del
-        delOut = over #outgoing' del
-        delRef = over #referents delByLabel
-        neighborsIn = #incoming' . folded . (#node <> #transition)
-        neighborsOut = #outgoing' . folded . (#node <> #transition)
-        neighborsRef = #referents . folded . (#sink <> #source)
-        neighbors = toSetOf (neighborsIn <> neighborsOut <> neighborsRef) n
-    liftIO $ for_ neighbors $ S3.withSerializedNode dir (delIn . delOut . delRef)
-    convertError @UserError . fromExceptionToUserError $ S2.removeNode dir nid
-  InsertEdge e -> do
-    dual <- input @IsDual
-    let (Edge i l o) = ifDualized dual G.dualizeEdge e
-    runWriteGraphIO' dir (touchNode i)
-    runWriteGraphIO' dir (touchNode o)
-    liftIO $ S3.withSerializedNode dir (#outgoing' %~ insertSet (Connect l o)) i
-    liftIO $ S3.withSerializedNode dir (#incoming' %~ insertSet (Connect l i)) o
-    liftIO $ S3.withSerializedNode dir (#referents %~ insertSet (UnlabledEdge i o)) l
-  DeleteEdge e -> do
-    dual <- input @IsDual
-    let (Edge i l o) = ifDualized dual G.dualizeEdge e
-    liftIO $ S3.withSerializedNode dir (#outgoing' %~ deleteSet (Connect l o)) i
-    liftIO $ S3.withSerializedNode dir (#incoming' %~ deleteSet (Connect l i)) o
-    liftIO $ S3.withSerializedNode dir (#referents %~ deleteSet (UnlabledEdge i o)) l
-  SetData nid d -> liftIO $ S3.withSerializedNode dir (#associatedData' .~ d) nid
 
 -- | Implements a graph where edges are labeled by strings via system
 -- extra strings that are generated are not cleaned up automatically by this,

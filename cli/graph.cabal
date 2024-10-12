@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 92c586a5fdba0ee89d512c5222ee731830f933df2380075dc4b1b58e246c6d95
+-- hash: b3e552e5437a7a94a18fd0796817962c437e144d367c2390dead36e073fc4375
 
 name:           graph
 version:        0.1.0.0
@@ -50,24 +50,17 @@ library
       Executable.GraphEditor
       Extensibility
       Graph
-      Graph'
       Graph.Connect
       Graph.DataTransferObjects
-      Graph.DataTransferObjects.V3
-      Graph.DataTransferObjects.V3Spec
       Graph.DataTransferObjectsSpec
       Graph.Edge
       Graph.Node
-      Graph.Node'
       Graph.Serialize2
-      Graph.Serialize3
       Graph.Time
       Graph.Types
-      Graph.Types.New
       Graph.Types.NID
       Graph.Types.NIDSpec
       GraphEditorGoldenSpec
-      GraphSpec
       History
       HistorySpec
       Interpreters
