@@ -3,7 +3,7 @@
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE ViewPatterns #-}
 
-module Effect.Graph.Check where
+module Graph.Check where
 
 import Control.Lens
 import Effect.Console

@@ -22,7 +22,7 @@ import Effect.Filesystem
 import Effect.FreshNID
 import Graph.Effect
 import Graph.Utils
-import Effect.Graph.Check
+import Graph.Check
 import Graph.Export.Filesystem (exportToDirectory)
 import Graph.Import.ByteString
 import Graph.Import.Filesystem
