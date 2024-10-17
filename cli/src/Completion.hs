@@ -8,7 +8,7 @@ import Effect.Graph.Advanced
 import Effect.NodeLocated
 import Effect.Warn
 import DAL.Serialization (nodesWithPrefix)
-import Graph.Types.NID (nidDigits)
+import Models.NID (nidDigits)
 import Interpreters
 import Lang.Parsing
 import Lang.Path

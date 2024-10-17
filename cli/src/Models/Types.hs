@@ -1,6 +1,6 @@
 module Models.Types
   ( module Models.Types,
-    module Graph.Types.NID,
+    module Models.NID,
   )
 where
 
@@ -9,7 +9,7 @@ import Control.Lens
 import Data.Aeson
 import qualified Data.Map as Map
 import GHC.Generics
-import Graph.Types.NID
+import Models.NID
 import MyPrelude
 
 type TransitionValid t = (Show t, Eq t, Ord t)

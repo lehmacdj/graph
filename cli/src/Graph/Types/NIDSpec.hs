@@ -1,6 +1,6 @@
 module Graph.Types.NIDSpec where
 
-import Graph.Types.NID
+import Models.NID
 import TestPrelude
 
 test_readShowNid :: TestTree

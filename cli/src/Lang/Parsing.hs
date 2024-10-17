@@ -4,7 +4,7 @@ import Control.Monad.Fail
 import Data.Char
 import Data.Void
 import Models.Types
-import qualified Graph.Types.NID as BigNID
+import qualified Models.NID as BigNID
 import MyPrelude hiding (many, some, try)
 import Text.Megaparsec
 import Text.Megaparsec.Char

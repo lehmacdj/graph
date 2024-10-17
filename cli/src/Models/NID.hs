@@ -1,6 +1,6 @@
 {-# LANGUAGE DeriveGeneric #-}
 
-module Graph.Types.NID
+module Models.NID
   ( NID,
     nilNID,
     smallNID,
