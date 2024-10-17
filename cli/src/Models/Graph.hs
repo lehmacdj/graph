@@ -1,7 +1,7 @@
 {-# LANGUAGE FlexibleContexts #-}
 
-module Graph
-  ( module Graph,
+module Models.Graph
+  ( module Models.Graph,
     module Graph.Types,
     module Graph.Edge,
     module Graph.Node,

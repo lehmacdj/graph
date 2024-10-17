@@ -35,7 +35,7 @@ import Data.Aeson (FromJSON, ToJSON)
 import qualified Data.Aeson as Aeson
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Lazy as BL
-import qualified Graph
+import qualified Models.Graph
 import Graph.DataTransferObjects
 import Graph.Node (dataOf, nidOf)
 import Graph.Types

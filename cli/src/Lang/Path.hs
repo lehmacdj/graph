@@ -18,7 +18,7 @@ import qualified Data.Set.Ordered as OSet
 import Effect.FreshNID
 import Effect.Graph
 import Effect.Graph.Advanced
-import Graph hiding (insertEdge)
+import Models.Graph hiding (insertEdge)
 import Graph.Connect
 import MyPrelude
 import Polysemy.State (evalState)

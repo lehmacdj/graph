@@ -10,7 +10,7 @@ where
 
 import Control.Arrow (left)
 import Control.Lens
-import Graph (NID)
+import Models.Graph (NID)
 import MyPrelude
 import Network.HTTP.Conduit (HttpException)
 import Polysemy.Error hiding (fromException, try)

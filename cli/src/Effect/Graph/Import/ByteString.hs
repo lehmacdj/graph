@@ -6,7 +6,7 @@ import Effect.Graph
 import Effect.Graph.Advanced
 import Effect.Time
 import Effect.Web
-import Graph (Edge (..))
+import Models.Graph (Edge (..))
 import Graph.Time
 import MyPrelude
 import SpecialNodes

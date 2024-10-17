@@ -10,7 +10,7 @@ module Effect.FreshNID
   )
 where
 
-import Graph (NID)
+import Models.Graph (NID)
 import MyPrelude
 import Polysemy.State
 import System.Random

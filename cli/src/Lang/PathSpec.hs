@@ -1,7 +1,7 @@
 module Lang.PathSpec where
 
 import qualified Data.Set.Ordered as OSet
-import Graph
+import Models.Graph
 import Lang.Path
 import TestPrelude
 

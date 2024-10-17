@@ -9,7 +9,7 @@ import Control.Lens
 import Effect.Console
 import Effect.Graph
 import Effect.Graph.Advanced
-import Graph hiding (insertEdge, insertNode, setData)
+import Models.Graph hiding (insertEdge, insertNode, setData)
 import MyPrelude
 import UserError
 

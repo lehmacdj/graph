@@ -2,7 +2,7 @@
 
 module Effect.Editor where
 
-import Graph (NID)
+import Models.Graph (NID)
 import Graph.Serialize2
 import MyPrelude
 import System.Directory

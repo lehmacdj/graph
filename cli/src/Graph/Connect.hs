@@ -3,7 +3,7 @@ module Graph.Connect where
 
 import Control.Lens (filtered)
 import Data.Set.Lens
-import Graph
+import Models.Graph
 import MyPrelude
 
 pairOfConnect :: Connect t -> (t, NID)

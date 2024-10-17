@@ -16,7 +16,7 @@ import Data.Aeson (FromJSON (..), ToJSON (..))
 import qualified Data.Set as Set
 import Effect.Util
 import Effect.Warn
-import qualified Graph as G
+import qualified Models.Graph as G
 import Graph.Node (dualizeNode)
 import qualified Graph.Serialize2 as S2
 import Graph.Types
