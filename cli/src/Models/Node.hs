@@ -1,4 +1,4 @@
-module Graph.Node where
+module Models.Node where
 
 import Control.Lens
 import qualified Data.Set as Set
