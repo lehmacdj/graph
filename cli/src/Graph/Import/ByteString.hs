@@ -2,14 +2,14 @@ module Graph.Import.ByteString where
 
 import Data.Digest.Pure.SHA
 import Effect.FreshNID
-import Graph.Effect
-import Graph.Utils
 import Effect.Time
 import Effect.Web
-import Models.Graph (Edge (..))
+import Graph.Effect
 import Graph.Time
+import Graph.Utils
+import Models.Graph (Edge (..))
 import MyPrelude
-import SpecialNodes
+import SystemNodes
 import UserError
 
 computeSHA :: ByteString -> String

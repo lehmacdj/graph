@@ -2,13 +2,13 @@ module Graph.Time where
 
 import qualified Data.Set as Set
 import Effect.FreshNID
+import Effect.Time
 import Graph.Effect
 import Graph.Utils
-import Effect.Time
 import MyPrelude
 import Polysemy.Error
 import Polysemy.State
-import SpecialNodes
+import SystemNodes
 import UserError
 
 timeToDateStrings :: UTCTime -> NonNull [String]

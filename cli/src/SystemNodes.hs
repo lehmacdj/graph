@@ -2,7 +2,7 @@
 
 -- | special nodes which the system requires for it to function completely.
 -- these are always fixed NIDs, their values are added directly to this file
-module SpecialNodes
+module SystemNodes
   ( -- * NID's of special nodes
     originNID,
     systemNodeNID,
@@ -10,20 +10,20 @@ module SpecialNodes
     importDatesNID,
     fileHashesNID,
     importUrlsNID,
-    historicalSpecialNodesNID,
+    historicalSystemNodesNID,
     sequenceIDsNID,
     fileExtensionsNID,
     mimeTypesNID,
 
     -- * Full info for special nodes
-    SpecialNodeInfo (..),
+    SystemNodeInfo (..),
     originInfo,
     systemNodeInfo,
     tagsInfo,
     importDatesInfo,
     fileHashesInfo,
     importUrlsInfo,
-    historicalSpecialNodesInfo,
+    historicalSystemNodesInfo,
     sequenceIDsInfo,
     fileExtensionsInfo,
     mimeTypesInfo,
@@ -51,8 +51,8 @@ importDatesNID = unsafeNID "S00KkOYoVpFu"
 fileHashesNID :: NID
 fileHashesNID = unsafeNID "AhQufiPzgyRf"
 
-historicalSpecialNodesNID :: NID
-historicalSpecialNodesNID = unsafeNID "3JJvxFUHGAA1"
+historicalSystemNodesNID :: NID
+historicalSystemNodesNID = unsafeNID "3JJvxFUHGAA1"
 
 sequenceIDsNID :: NID
 sequenceIDsNID = unsafeNID "VEfLhuTgZ88Z"
@@ -63,37 +63,37 @@ fileExtensionsNID = unsafeNID "zsBuPkn5mh8F"
 mimeTypesNID :: NID
 mimeTypesNID = unsafeNID "927u9Xyky2pC"
 
-data SpecialNodeInfo = SpecialNodeInfo
+data SystemNodeInfo = SystemNodeInfo
   { specialNodeNID :: NID,
     specialNodeName :: Text
   }
 
-originInfo :: SpecialNodeInfo
-originInfo = SpecialNodeInfo originNID "origin"
+originInfo :: SystemNodeInfo
+originInfo = SystemNodeInfo originNID "origin"
 
-systemNodeInfo :: SpecialNodeInfo
-systemNodeInfo = SpecialNodeInfo systemNodeNID "system-nodes"
+systemNodeInfo :: SystemNodeInfo
+systemNodeInfo = SystemNodeInfo systemNodeNID "system-nodes"
 
-tagsInfo :: SpecialNodeInfo
-tagsInfo = SpecialNodeInfo tagsNID "tags"
+tagsInfo :: SystemNodeInfo
+tagsInfo = SystemNodeInfo tagsNID "tags"
 
-importDatesInfo :: SpecialNodeInfo
-importDatesInfo = SpecialNodeInfo importDatesNID "import-dates"
+importDatesInfo :: SystemNodeInfo
+importDatesInfo = SystemNodeInfo importDatesNID "import-dates"
 
-fileHashesInfo :: SpecialNodeInfo
-fileHashesInfo = SpecialNodeInfo fileHashesNID "file-hashes"
+fileHashesInfo :: SystemNodeInfo
+fileHashesInfo = SystemNodeInfo fileHashesNID "file-hashes"
 
-importUrlsInfo :: SpecialNodeInfo
-importUrlsInfo = SpecialNodeInfo importUrlsNID "import-urls"
+importUrlsInfo :: SystemNodeInfo
+importUrlsInfo = SystemNodeInfo importUrlsNID "import-urls"
 
-historicalSpecialNodesInfo :: SpecialNodeInfo
-historicalSpecialNodesInfo = SpecialNodeInfo historicalSpecialNodesNID "historical-special-nodes"
+historicalSystemNodesInfo :: SystemNodeInfo
+historicalSystemNodesInfo = SystemNodeInfo historicalSystemNodesNID "historical-special-nodes"
 
-sequenceIDsInfo :: SpecialNodeInfo
-sequenceIDsInfo = SpecialNodeInfo sequenceIDsNID "sequence-ids"
+sequenceIDsInfo :: SystemNodeInfo
+sequenceIDsInfo = SystemNodeInfo sequenceIDsNID "sequence-ids"
 
-fileExtensionsInfo :: SpecialNodeInfo
-fileExtensionsInfo = SpecialNodeInfo fileExtensionsNID "file-extensions"
+fileExtensionsInfo :: SystemNodeInfo
+fileExtensionsInfo = SystemNodeInfo fileExtensionsNID "file-extensions"
 
-mimeTypesInfo :: SpecialNodeInfo
-mimeTypesInfo = SpecialNodeInfo mimeTypesNID "mime-types"
+mimeTypesInfo :: SystemNodeInfo
+mimeTypesInfo = SystemNodeInfo mimeTypesNID "mime-types"

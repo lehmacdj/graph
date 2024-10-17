@@ -13,7 +13,7 @@ import Lang.Parsing
 import Lang.ParsingSpec
 import Lang.Path
 import MyPrelude hiding (try)
-import SpecialNodes (tagsNID)
+import SystemNodes (tagsNID)
 import TestPrelude hiding (try)
 import Text.Megaparsec (try, (<?>))
 import Text.Megaparsec.Char (char)

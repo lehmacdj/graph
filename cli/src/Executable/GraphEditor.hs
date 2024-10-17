@@ -5,29 +5,29 @@ module Executable.GraphEditor where
 import Completion
 import Control.Lens hiding (index)
 import Control.Monad.Fix
+import DAL.Serialization (doesNodeExist, initializeGraph)
 import Effect.Console
 import Effect.Editor
 import Effect.FileTypeOracle
 import Effect.Filesystem
 import Effect.FreshNID
-import Graph.Effect
 import Effect.NodeLocated
 import Effect.Time
 import Effect.Web
-import DAL.Serialization (doesNodeExist, initializeGraph)
-import Models.Types
+import Graph.Effect
 import History
 import Interpreters
 import Lang.Command hiding (printTransitions)
 import Lang.Command.Parse
+import Models.Types
 import MyPrelude
 import Options
 import Polysemy.Readline
 import Polysemy.State
-import SpecialNodes.Init (createSpecialNodes)
 import qualified System.Console.Haskeline as H
 import System.Directory (createDirectoryIfMissing, doesDirectoryExist)
 import System.Environment.XDG.BaseDir (getUserDataDir)
+import SystemNodes.Init (createSpecialNodes)
 
 ioExceptionHandler :: IOError -> IO (Maybe a)
 ioExceptionHandler _ = pure Nothing
@@ -102,5 +102,5 @@ main = withOptions $ \options -> do
   graphDirInitialization graphDir options
   env <- mfix (initEnv graphDir <=< defReplSettings)
   runMainEffectsIO env do
-    createSpecialNodes
+    createSystemNodes
     maybe repl interpretCommand (view #_executeExpression options)

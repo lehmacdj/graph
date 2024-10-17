@@ -1,15 +1,15 @@
-module SpecialNodes.Init
-  ( createSpecialNodes,
+module SystemNodes.Init
+  ( createSystemNodes,
   )
 where
 
 import Graph.Effect
 import Models.Types
 import MyPrelude
-import SpecialNodes
+import SystemNodes
 
-createSpecialNodes :: HasGraph String effs => Sem effs ()
-createSpecialNodes = do
+createSystemNodes :: HasGraph String effs => Sem effs ()
+createSystemNodes = do
   touchNode systemNodeNID
   touchNode nilNID
   insertEdge (Edge systemNodeNID "origin" nilNID)
@@ -21,10 +21,10 @@ createSpecialNodes = do
   insertEdge (Edge systemNodeNID "file-hashes" fileHashesNID)
   touchNode importUrlsNID
   insertEdge (Edge systemNodeNID "import-urls" importUrlsNID)
-  touchNode historicalSpecialNodesNID
-  insertEdge (Edge systemNodeNID "historical-special-nodes" historicalSpecialNodesNID)
+  touchNode historicalSystemNodesNID
+  insertEdge (Edge systemNodeNID "historical-special-nodes" historicalSystemNodesNID)
   touchNode sequenceIDsNID
-  insertEdge (Edge historicalSpecialNodesNID "sequence-ids" sequenceIDsNID)
+  insertEdge (Edge historicalSystemNodesNID "sequence-ids" sequenceIDsNID)
   touchNode mimeTypesNID
   insertEdge (Edge systemNodeNID "mime-types" mimeTypesNID)
   touchNode fileExtensionsNID

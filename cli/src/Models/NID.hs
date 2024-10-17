@@ -94,7 +94,7 @@ instance FromJSONKey NID where
 
 -- | Unsafe method for constructing an NID from a string.
 -- While checked (crashes if not nidDigits long & uses characters outside of
--- A-Z a-z 0-9) this should still be avoided except for 'SpecialNodes' because
+-- A-Z a-z 0-9) this should still be avoided except for 'SystemNodes' because
 -- it violates random generation of ids (which is important for avoiding
 -- collisions)
 unsafeNID :: HasCallStack => Text -> NID
