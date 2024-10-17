@@ -3,7 +3,7 @@
 --
 -- CAUTION: Modifying this module, and the associated tests is a breaking
 -- change to the way we serialize graphs!
-module Graph.DataTransferObjects where
+module DAL.DTO where
 
 import Data.Aeson
 import Graph.Types

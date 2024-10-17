@@ -36,7 +36,7 @@ import qualified Data.Aeson as Aeson
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Lazy as BL
 import qualified Models.Graph
-import Graph.DataTransferObjects
+import DAL.DTO
 import Models.Node (dataOf, nidOf)
 import Graph.Types
 import MyPrelude

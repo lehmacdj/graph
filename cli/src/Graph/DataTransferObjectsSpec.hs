@@ -1,6 +1,6 @@
 module Graph.DataTransferObjectsSpec where
 
-import Graph.DataTransferObjects
+import DAL.DTO
 import Graph.Types
 import TestPrelude
 
