@@ -24,7 +24,7 @@ import Effect.Graph
 import Effect.Graph.Advanced
 import Effect.Graph.Check
 import Effect.Graph.Export.Filesystem (exportToDirectory)
-import Effect.Graph.Import.ByteString
+import Graph.Import.ByteString
 import Effect.Graph.Import.Filesystem
 import Effect.NodeLocated
 import Effect.Time

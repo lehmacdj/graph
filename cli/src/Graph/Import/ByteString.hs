@@ -1,4 +1,4 @@
-module Effect.Graph.Import.ByteString where
+module Graph.Import.ByteString where
 
 import Data.Digest.Pure.SHA
 import Effect.FreshNID

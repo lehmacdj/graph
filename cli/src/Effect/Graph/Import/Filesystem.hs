@@ -14,7 +14,7 @@ import Effect.Filesystem
 import Effect.FreshNID
 import Effect.Graph
 import Effect.Graph.Advanced
-import Effect.Graph.Import.ByteString
+import Graph.Import.ByteString
 import Effect.Time
 import Models.Graph hiding (insertEdge)
 import Graph.Time (taggingFreshNodesWithTime)
