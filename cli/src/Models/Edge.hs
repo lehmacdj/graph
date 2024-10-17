@@ -1,4 +1,4 @@
-module Graph.Edge where
+module Models.Edge where
 
 import Control.Lens
 import Graph.Types

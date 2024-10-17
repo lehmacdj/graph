@@ -3,7 +3,7 @@
 module Models.Graph
   ( module Models.Graph,
     module Graph.Types,
-    module Graph.Edge,
+    module Models.Edge,
     module Models.Node,
   )
 where
@@ -12,7 +12,7 @@ import Control.Lens
 import qualified Data.Map.Internal.Debug as MD
 import qualified Debug.Trace as Debug
 import GHC.Stack
-import Graph.Edge
+import Models.Edge
 import Models.Node
 import Graph.Types
 import MyPrelude
