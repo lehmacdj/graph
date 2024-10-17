@@ -13,7 +13,7 @@ import Effect.Console
 import Effect.Filesystem
 import Effect.FreshNID
 import Graph.Effect
-import Effect.Graph.Advanced
+import Graph.Utils
 import Graph.Import.ByteString
 import Effect.Time
 import Models.Graph hiding (insertEdge)

@@ -8,7 +8,7 @@ module Effect.Graph.Check where
 import Control.Lens
 import Effect.Console
 import Graph.Effect
-import Effect.Graph.Advanced
+import Graph.Utils
 import Models.Graph hiding (insertEdge, insertNode, setData)
 import MyPrelude
 import UserError

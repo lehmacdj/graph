@@ -4,7 +4,7 @@ module Completion where
 import Base62 (isBase62Char)
 import Control.Arrow
 import Control.Lens
-import Effect.Graph.Advanced
+import Graph.Utils
 import Effect.NodeLocated
 import Effect.Warn
 import DAL.Serialization (nodesWithPrefix)

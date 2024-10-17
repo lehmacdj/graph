@@ -1,7 +1,7 @@
 {-# LANGUAGE AllowAmbiguousTypes #-}
 {-# LANGUAGE LambdaCase #-}
 
-module Effect.Graph.Advanced where
+module Graph.Utils where
 
 import Control.Lens
 import Data.Monoid (First (First))

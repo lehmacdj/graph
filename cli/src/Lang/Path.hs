@@ -17,7 +17,7 @@ import Data.Set.Ordered (OSet)
 import qualified Data.Set.Ordered as OSet
 import Effect.FreshNID
 import Graph.Effect
-import Effect.Graph.Advanced
+import Graph.Utils
 import Models.Graph hiding (insertEdge)
 import Models.Connect
 import MyPrelude

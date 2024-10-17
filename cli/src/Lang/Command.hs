@@ -21,7 +21,7 @@ import Effect.FileTypeOracle
 import Effect.Filesystem
 import Effect.FreshNID
 import Graph.Effect
-import Effect.Graph.Advanced
+import Graph.Utils
 import Effect.Graph.Check
 import Effect.Graph.Export.Filesystem (exportToDirectory)
 import Graph.Import.ByteString

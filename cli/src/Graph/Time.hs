@@ -3,7 +3,7 @@ module Graph.Time where
 import qualified Data.Set as Set
 import Effect.FreshNID
 import Graph.Effect
-import Effect.Graph.Advanced
+import Graph.Utils
 import Effect.Time
 import MyPrelude
 import Polysemy.Error
