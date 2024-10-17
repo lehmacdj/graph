@@ -30,7 +30,7 @@ module SpecialNodes
   )
 where
 
-import Graph.Types
+import Models.Types
 import MyPrelude
 
 originNID :: NID

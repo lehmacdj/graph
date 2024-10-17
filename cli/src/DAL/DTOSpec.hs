@@ -1,7 +1,7 @@
 module DAL.DTOSpec where
 
 import DAL.DTO
-import Graph.Types
+import Models.Types
 import TestPrelude
 
 test_nodeDTO_backwardsCompat :: TestTree

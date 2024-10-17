@@ -2,7 +2,7 @@
 
 module Models.Graph
   ( module Models.Graph,
-    module Graph.Types,
+    module Models.Types,
     module Models.Edge,
     module Models.Node,
   )
@@ -14,7 +14,7 @@ import qualified Debug.Trace as Debug
 import GHC.Stack
 import Models.Edge
 import Models.Node
-import Graph.Types
+import Models.Types
 import MyPrelude
 
 -- | Utility function for converting lookups into actual node values with error

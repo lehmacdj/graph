@@ -13,7 +13,7 @@ where
 
 import Data.Aeson
 import DAL.Serialization (initializeGraph)
-import Graph.Types
+import Models.Types
 import MyPrelude hiding (assert)
 import System.Directory (copyFile)
 import System.Directory.Tree (AnchoredDirTree ((:/)))

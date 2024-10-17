@@ -1,5 +1,5 @@
-module Graph.Types
-  ( module Graph.Types,
+module Models.Types
+  ( module Models.Types,
     module Graph.Types.NID,
   )
 where

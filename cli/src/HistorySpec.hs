@@ -1,6 +1,6 @@
 module HistorySpec where
 
-import Graph.Types
+import Models.Types
 import History
 import TestPrelude
 

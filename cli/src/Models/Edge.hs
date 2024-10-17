@@ -1,7 +1,7 @@
 module Models.Edge where
 
 import Control.Lens
-import Graph.Types
+import Models.Types
 
 outConnect :: Edge t -> Connect t
 outConnect (Edge _ l t) = Connect l t

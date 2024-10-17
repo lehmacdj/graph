@@ -2,7 +2,7 @@ module Models.Node where
 
 import Control.Lens
 import qualified Data.Set as Set
-import Graph.Types
+import Models.Types
 import MyPrelude
 
 indegreeOf :: Node t -> Int

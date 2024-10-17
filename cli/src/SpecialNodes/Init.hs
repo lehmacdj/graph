@@ -4,7 +4,7 @@ module SpecialNodes.Init
 where
 
 import Effect.Graph
-import Graph.Types
+import Models.Types
 import MyPrelude
 import SpecialNodes
 

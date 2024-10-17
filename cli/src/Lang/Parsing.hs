@@ -3,7 +3,7 @@ module Lang.Parsing where
 import Control.Monad.Fail
 import Data.Char
 import Data.Void
-import Graph.Types
+import Models.Types
 import qualified Graph.Types.NID as BigNID
 import MyPrelude hiding (many, some, try)
 import Text.Megaparsec

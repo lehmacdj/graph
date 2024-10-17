@@ -38,7 +38,7 @@ import qualified Data.ByteString.Lazy as BL
 import qualified Models.Graph
 import DAL.DTO
 import Models.Node (dataOf, nidOf)
-import Graph.Types
+import Models.Types
 import MyPrelude
 import System.Directory
 import System.FilePath (dropExtension, takeFileName)

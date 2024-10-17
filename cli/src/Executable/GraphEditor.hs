@@ -15,7 +15,7 @@ import Effect.NodeLocated
 import Effect.Time
 import Effect.Web
 import DAL.Serialization (doesNodeExist, initializeGraph)
-import Graph.Types
+import Models.Types
 import History
 import Interpreters
 import Lang.Command hiding (printTransitions)

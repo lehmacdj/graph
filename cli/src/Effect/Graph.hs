@@ -19,7 +19,7 @@ import Effect.Warn
 import qualified Models.Graph as G
 import Models.Node (dualizeNode)
 import qualified DAL.Serialization as S2
-import Graph.Types
+import Models.Types
 import MyPrelude
 import Polysemy.Input
 import Polysemy.State

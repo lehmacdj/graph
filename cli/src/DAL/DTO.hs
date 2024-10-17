@@ -6,7 +6,7 @@
 module DAL.DTO where
 
 import Data.Aeson
-import Graph.Types
+import Models.Types
 import MyPrelude
 
 data NodeDTO t = NodeDTO
