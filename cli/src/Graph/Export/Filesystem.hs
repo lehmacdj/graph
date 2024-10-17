@@ -1,4 +1,4 @@
-module Effect.Graph.Export.Filesystem
+module Graph.Export.Filesystem
   ( exportToDirectory,
   )
 where
