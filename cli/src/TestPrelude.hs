@@ -12,7 +12,7 @@ module TestPrelude
 where
 
 import Data.Aeson
-import Graph.Serialize2 (initializeGraph)
+import DAL.Serialization (initializeGraph)
 import Graph.Types
 import MyPrelude hiding (assert)
 import System.Directory (copyFile)

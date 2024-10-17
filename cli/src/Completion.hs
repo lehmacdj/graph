@@ -7,7 +7,7 @@ import Control.Lens
 import Effect.Graph.Advanced
 import Effect.NodeLocated
 import Effect.Warn
-import Graph.Serialize2 (nodesWithPrefix)
+import DAL.Serialization (nodesWithPrefix)
 import Graph.Types.NID (nidDigits)
 import Interpreters
 import Lang.Parsing

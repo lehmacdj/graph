@@ -2,7 +2,7 @@
 -- GoldenTests for validation of the final graph.
 module Executable.DumpGraph (main) where
 
-import Graph.Serialize2
+import DAL.Serialization
 import Graph.Types
 import MyPrelude
 

@@ -9,7 +9,7 @@ import Effect.FileTypeOracle
 import Effect.Graph
 import Effect.Warn
 import Models.Graph
-import qualified Graph.Serialize2 as S2
+import qualified DAL.Serialization as S2
 import MyPrelude
 import Polysemy.Error
 import System.Directory (doesFileExist)

@@ -33,7 +33,7 @@ import Effect.Web
 import qualified Extensibility
 import GHC.Generics
 import Models.Graph (Connect (..), Edge (..), dataOf, nilNID, outgoingConnectsOf)
-import qualified Graph.Serialize2 as S2
+import qualified DAL.Serialization as S2
 import Graph.Time (taggingFreshNodesWithTime)
 import History
 import Lang.Path

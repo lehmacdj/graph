@@ -8,7 +8,7 @@
 --   nid.data where nid is the nid of the associated node.
 --   The auxilliary data is available from the console, and should be thought of
 --   as an unique edge to a file.
-module Graph.Serialize2
+module DAL.Serialization
   ( -- * accessing metadata about the graph
     getAllNodeIds,
 

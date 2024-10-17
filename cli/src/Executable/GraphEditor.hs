@@ -14,7 +14,7 @@ import Effect.Graph
 import Effect.NodeLocated
 import Effect.Time
 import Effect.Web
-import Graph.Serialize2 (doesNodeExist, initializeGraph)
+import DAL.Serialization (doesNodeExist, initializeGraph)
 import Graph.Types
 import History
 import Interpreters
