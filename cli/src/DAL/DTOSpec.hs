@@ -1,4 +1,4 @@
-module Graph.DataTransferObjectsSpec where
+module DAL.DTOSpec where
 
 import DAL.DTO
 import Graph.Types
