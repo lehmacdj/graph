@@ -31,12 +31,12 @@ where
 
 import Base62 (isBase62Char)
 import Control.Lens
+import DAL.DTO
 import Data.Aeson (FromJSON, ToJSON)
 import qualified Data.Aeson as Aeson
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Lazy as BL
-import qualified Models.Graph
-import DAL.DTO
+import qualified Models.Graph as Graph
 import Models.Node (dataOf, nidOf)
 import Models.Types
 import MyPrelude
