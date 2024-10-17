@@ -27,7 +27,7 @@ import Polysemy.State
 import qualified System.Console.Haskeline as H
 import System.Directory (createDirectoryIfMissing, doesDirectoryExist)
 import System.Environment.XDG.BaseDir (getUserDataDir)
-import SystemNodes.Init (createSpecialNodes)
+import Graph.SystemNodes.Init (createSpecialNodes)
 
 ioExceptionHandler :: IOError -> IO (Maybe a)
 ioExceptionHandler _ = pure Nothing

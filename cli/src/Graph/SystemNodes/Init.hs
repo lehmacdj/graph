@@ -1,4 +1,4 @@
-module SystemNodes.Init
+module Graph.SystemNodes.Init
   ( createSystemNodes,
   )
 where
