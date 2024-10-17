@@ -1,4 +1,4 @@
-module Graph.Types.NIDSpec where
+module Models.NIDSpec where
 
 import Models.NID
 import TestPrelude
