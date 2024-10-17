@@ -6,7 +6,7 @@ module Effect.Graph.Advanced where
 import Control.Lens
 import Data.Monoid (First (First))
 import Effect.FreshNID
-import Effect.Graph
+import Graph.Effect
 import Effect.NodeLocated
 import Models.Graph hiding (insertEdge, insertNode, setData)
 import Models.Connect

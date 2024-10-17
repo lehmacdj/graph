@@ -4,8 +4,8 @@
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE ViewPatterns #-}
 
-module Effect.Graph
-  ( module Effect.Graph,
+module Graph.Effect
+  ( module Graph.Effect,
     NID,
     Node,
   )

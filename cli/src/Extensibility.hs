@@ -9,7 +9,7 @@
 module Extensibility where
 
 import qualified Data.ByteString.Lazy as BL
-import Effect.Graph
+import Graph.Effect
 import Effect.NodeLocated
 import Effect.Warn
 import Interpreters (HasMainEffects, runLocatedReadWriteGraphIO)

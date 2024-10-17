@@ -9,7 +9,7 @@ import Effect.Editor
 import Effect.FileTypeOracle
 import Effect.Filesystem
 import Effect.FreshNID
-import Effect.Graph
+import Graph.Effect
 import Effect.NodeLocated
 import Effect.Time
 import Effect.Util

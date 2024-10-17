@@ -3,7 +3,7 @@ module SpecialNodes.Init
   )
 where
 
-import Effect.Graph
+import Graph.Effect
 import Models.Types
 import MyPrelude
 import SpecialNodes

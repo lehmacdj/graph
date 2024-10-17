@@ -20,7 +20,7 @@ import Effect.Editor
 import Effect.FileTypeOracle
 import Effect.Filesystem
 import Effect.FreshNID
-import Effect.Graph
+import Graph.Effect
 import Effect.Graph.Advanced
 import Effect.Graph.Check
 import Effect.Graph.Export.Filesystem (exportToDirectory)

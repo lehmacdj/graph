@@ -16,7 +16,7 @@ import qualified Data.Set as Set
 import Data.Set.Ordered (OSet)
 import qualified Data.Set.Ordered as OSet
 import Effect.FreshNID
-import Effect.Graph
+import Graph.Effect
 import Effect.Graph.Advanced
 import Models.Graph hiding (insertEdge)
 import Models.Connect

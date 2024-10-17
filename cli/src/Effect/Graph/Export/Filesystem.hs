@@ -6,7 +6,7 @@ where
 import Data.Tree (Tree)
 import qualified Data.Tree as T
 import Effect.FileTypeOracle
-import Effect.Graph
+import Graph.Effect
 import Effect.Warn
 import Models.Graph
 import qualified DAL.Serialization as S2

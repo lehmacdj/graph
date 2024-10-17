@@ -2,7 +2,7 @@ module Graph.Import.ByteString where
 
 import Data.Digest.Pure.SHA
 import Effect.FreshNID
-import Effect.Graph
+import Graph.Effect
 import Effect.Graph.Advanced
 import Effect.Time
 import Effect.Web

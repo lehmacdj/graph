@@ -2,7 +2,7 @@ module Graph.Time where
 
 import qualified Data.Set as Set
 import Effect.FreshNID
-import Effect.Graph
+import Graph.Effect
 import Effect.Graph.Advanced
 import Effect.Time
 import MyPrelude

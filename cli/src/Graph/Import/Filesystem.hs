@@ -12,7 +12,7 @@ import Data.Digest.Pure.SHA
 import Effect.Console
 import Effect.Filesystem
 import Effect.FreshNID
-import Effect.Graph
+import Graph.Effect
 import Effect.Graph.Advanced
 import Graph.Import.ByteString
 import Effect.Time
