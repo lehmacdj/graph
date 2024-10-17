@@ -6,7 +6,7 @@
 --   Each file is hashed and stored in a node: by-hash/{hash}.
 --   Other instances of files with that data are stored as a link to that node
 --   from their place in the directory tree.
-module Effect.Graph.Import.Filesystem where
+module Graph.Import.Filesystem where
 
 import Data.Digest.Pure.SHA
 import Effect.Console
