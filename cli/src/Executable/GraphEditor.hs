@@ -15,6 +15,7 @@ import Effect.NodeLocated
 import Effect.Time
 import Effect.Web
 import Graph.Effect
+import Graph.SystemNodes.Init (createSystemNodes)
 import History
 import Interpreters
 import Lang.Command hiding (printTransitions)
@@ -27,7 +28,6 @@ import Polysemy.State
 import qualified System.Console.Haskeline as H
 import System.Directory (createDirectoryIfMissing, doesDirectoryExist)
 import System.Environment.XDG.BaseDir (getUserDataDir)
-import Graph.SystemNodes.Init (createSpecialNodes)
 
 ioExceptionHandler :: IOError -> IO (Maybe a)
 ioExceptionHandler _ = pure Nothing
