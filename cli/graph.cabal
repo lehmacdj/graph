@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: b3e552e5437a7a94a18fd0796817962c437e144d367c2390dead36e073fc4375
+-- hash: 6e3a482c63ee428a77ef3cf0c535953f0d781cc3af7c660a728d8b30586dbbeb
 
 name:           graph
 version:        0.1.0.0
@@ -28,18 +28,15 @@ library
   exposed-modules:
       Base62
       Completion
+      DAL.DTO
+      DAL.DTOSpec
+      DAL.Serialization
       Data.Set.Ordered.Orphans
       Effect.Console
       Effect.Editor
       Effect.Filesystem
       Effect.FileTypeOracle
       Effect.FreshNID
-      Effect.Graph
-      Effect.Graph.Advanced
-      Effect.Graph.Check
-      Effect.Graph.Export.Filesystem
-      Effect.Graph.Import.ByteString
-      Effect.Graph.Import.Filesystem
       Effect.NodeLocated
       Effect.Time
       Effect.Util
@@ -49,17 +46,15 @@ library
       Executable.DumpGraph
       Executable.GraphEditor
       Extensibility
-      Graph
-      Graph.Connect
-      Graph.DataTransferObjects
-      Graph.DataTransferObjectsSpec
-      Graph.Edge
-      Graph.Node
-      Graph.Serialize2
+      Graph.Check
+      Graph.Effect
+      Graph.Export.Filesystem
+      Graph.Import.ByteString
+      Graph.Import.Filesystem
+      Graph.SystemNodes
+      Graph.SystemNodes.Init
       Graph.Time
-      Graph.Types
-      Graph.Types.NID
-      Graph.Types.NIDSpec
+      Graph.Utils
       GraphEditorGoldenSpec
       History
       HistorySpec
@@ -72,13 +67,18 @@ library
       Lang.Path.Parse
       Lang.Path.Partial
       Lang.PathSpec
+      Models.Connect
+      Models.Edge
+      Models.Graph
+      Models.NID
+      Models.NIDSpec
+      Models.Node
+      Models.Types
       MyPrelude
       Options
       Polysemy.MTL
       Singleton
       Spec
-      SpecialNodes
-      SpecialNodes.Init
       System.Directory.Clone
       System.IO.Term.BinarySerialize
       System.IO.Term.Image
