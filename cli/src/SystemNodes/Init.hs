@@ -6,7 +6,7 @@ where
 import Graph.Effect
 import Models.Types
 import MyPrelude
-import SystemNodes
+import Graph.SystemNodes
 
 createSystemNodes :: HasGraph String effs => Sem effs ()
 createSystemNodes = do

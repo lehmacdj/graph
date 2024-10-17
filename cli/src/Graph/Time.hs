@@ -8,7 +8,7 @@ import Graph.Utils
 import MyPrelude
 import Polysemy.Error
 import Polysemy.State
-import SystemNodes
+import Graph.SystemNodes
 import UserError
 
 timeToDateStrings :: UTCTime -> NonNull [String]

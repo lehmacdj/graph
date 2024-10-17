@@ -2,7 +2,7 @@
 
 -- | special nodes which the system requires for it to function completely.
 -- these are always fixed NIDs, their values are added directly to this file
-module SystemNodes
+module Graph.SystemNodes
   ( -- * NID's of special nodes
     originNID,
     systemNodeNID,

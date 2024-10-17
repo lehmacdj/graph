@@ -12,7 +12,7 @@ import Lang.Parsing
 import Lang.Path
 import Lang.Path.Parse
 import MyPrelude hiding (some, try)
-import SystemNodes (tagsNID)
+import Graph.SystemNodes (tagsNID)
 import TestPrelude hiding (some, try)
 import Text.Megaparsec
 

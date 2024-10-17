@@ -9,7 +9,7 @@ import Graph.Time
 import Graph.Utils
 import Models.Graph (Edge (..))
 import MyPrelude
-import SystemNodes
+import Graph.SystemNodes
 import UserError
 
 computeSHA :: ByteString -> String
