@@ -9,7 +9,7 @@ import Effect.FreshNID
 import Effect.Graph
 import Effect.NodeLocated
 import Models.Graph hiding (insertEdge, insertNode, setData)
-import Graph.Connect
+import Models.Connect
 import MyPrelude
 import UserError
 import Witherable

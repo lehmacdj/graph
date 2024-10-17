@@ -19,7 +19,7 @@ import Effect.FreshNID
 import Effect.Graph
 import Effect.Graph.Advanced
 import Models.Graph hiding (insertEdge)
-import Graph.Connect
+import Models.Connect
 import MyPrelude
 import Polysemy.State (evalState)
 import UserError
