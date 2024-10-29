@@ -1,4 +1,4 @@
-module History (History (..), singletonHistory, addToHistory, backInTime) where
+module Models.History (History (..), singletonHistory, addToHistory, backInTime) where
 
 import Models.Graph (NID)
 import MyPrelude

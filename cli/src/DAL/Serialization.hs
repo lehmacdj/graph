@@ -29,7 +29,6 @@ module DAL.Serialization
   )
 where
 
-import Base62 (isBase62Char)
 import Control.Lens
 import DAL.DTO
 import Data.Aeson (FromJSON, ToJSON)
@@ -44,6 +43,7 @@ import System.Directory
 import System.FilePath (dropExtension, takeFileName)
 import qualified System.FilePath.Glob as Glob
 import UserError hiding (catch, throw)
+import Utils.Base62 (isBase62Char)
 
 -- | all of the nodes accessible under a given path
 getAllNodeIds :: MonadIO m => FilePath -> m [NID]

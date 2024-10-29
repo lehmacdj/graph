@@ -1,6 +1,6 @@
 {-# LANGUAGE TemplateHaskell #-}
 
-module Options
+module Executable.GraphEditor.Options
   ( Options,
     withOptions,
   )

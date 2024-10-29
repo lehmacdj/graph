@@ -15,33 +15,33 @@
 module Lang.Command where
 
 import Control.Monad (zipWithM_)
+import qualified DAL.Serialization as S2
 import Effect.Console
 import Effect.Editor
 import Effect.FileTypeOracle
 import Effect.Filesystem
 import Effect.FreshNID
-import Graph.Effect
-import Graph.Utils
-import Graph.Check
-import Graph.Export.Filesystem (exportToDirectory)
-import Graph.Import.ByteString
-import Graph.Import.Filesystem
 import Effect.NodeLocated
 import Effect.Time
 import Effect.Warn
 import Effect.Web
-import qualified Extensibility
 import GHC.Generics
-import Models.Graph (Connect (..), Edge (..), dataOf, nilNID, outgoingConnectsOf)
-import qualified DAL.Serialization as S2
+import Graph.Check
+import Graph.Effect
+import Graph.Export.Filesystem (exportToDirectory)
+import Graph.Import.ByteString
+import Graph.Import.Filesystem
 import Graph.Time (taggingFreshNodesWithTime)
-import History
+import Graph.Utils
 import Lang.Path
+import Models.Graph (Connect (..), Edge (..), dataOf, nilNID, outgoingConnectsOf)
+import Models.History
 import MyPrelude hiding (throwString)
 import Polysemy.Readline
 import Polysemy.State
-import Singleton
 import UserError
+import qualified Utils.Extensibility as Extensibility
+import Utils.Singleton
 
 data Command
   = -- | cd

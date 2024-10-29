@@ -1,7 +1,7 @@
 {-# LANGUAGE ViewPatterns #-}
 
 -- | Functions for dealing with stuff that should be singletons
-module Singleton where
+module Utils.Singleton where
 
 import MyPrelude
 import UserError

@@ -1,6 +1,6 @@
 {-# LANGUAGE OverloadedLists #-}
 
-module Base62 (isBase62Char, base62Chars) where
+module Utils.Base62 (isBase62Char, base62Chars) where
 
 import Data.Char (isAsciiLower, isAsciiUpper, isDigit)
 import MyPrelude

@@ -9,7 +9,6 @@ module Models.NID
   )
 where
 
-import Base62 (base62Chars, isBase62Char)
 import Control.DeepSeq
 import Control.Monad.Fail (fail)
 import Data.Aeson
@@ -19,6 +18,7 @@ import MyPrelude
 import System.Random
 import System.Random.Stateful (Uniform (..), uniformRM)
 import Text.Read
+import Utils.Base62 (base62Chars, isBase62Char)
 
 -- | The number of letter digits in a NID
 -- * My notes use 10 which is probably as long as there are <1 million nodes generated

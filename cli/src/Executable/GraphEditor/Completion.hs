@@ -1,21 +1,21 @@
 -- | Completion stuff for the interface
-module Completion where
+module Executable.GraphEditor.Completion where
 
-import Base62 (isBase62Char)
 import Control.Arrow
 import Control.Lens
-import Graph.Utils
+import DAL.Serialization (nodesWithPrefix)
+import Effect.Interpreters
 import Effect.NodeLocated
 import Effect.Warn
-import DAL.Serialization (nodesWithPrefix)
-import Models.NID (nidDigits)
-import Interpreters
+import Graph.Utils
 import Lang.Parsing
 import Lang.Path
 import Lang.Path.Partial
+import Models.NID (nidDigits)
 import MyPrelude
 import System.Console.Haskeline
 import UserError
+import Utils.Base62 (isBase62Char)
 
 commands :: [String]
 commands = []

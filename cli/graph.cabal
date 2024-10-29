@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 6e3a482c63ee428a77ef3cf0c535953f0d781cc3af7c660a728d8b30586dbbeb
+-- hash: 0251a1eab8d6ff2f16db8b85897482c5bd2cf7fedb3b8ebae94f97f636797b2d
 
 name:           graph
 version:        0.1.0.0
@@ -26,8 +26,6 @@ source-repository head
 
 library
   exposed-modules:
-      Base62
-      Completion
       DAL.DTO
       DAL.DTOSpec
       DAL.Serialization
@@ -37,6 +35,7 @@ library
       Effect.Filesystem
       Effect.FileTypeOracle
       Effect.FreshNID
+      Effect.Interpreters
       Effect.NodeLocated
       Effect.Time
       Effect.Util
@@ -45,7 +44,9 @@ library
       Effect.Web
       Executable.DumpGraph
       Executable.GraphEditor
-      Extensibility
+      Executable.GraphEditor.Completion
+      Executable.GraphEditor.GoldenSpec
+      Executable.GraphEditor.Options
       Graph.Check
       Graph.Effect
       Graph.Export.Filesystem
@@ -55,10 +56,6 @@ library
       Graph.SystemNodes.Init
       Graph.Time
       Graph.Utils
-      GraphEditorGoldenSpec
-      History
-      HistorySpec
-      Interpreters
       Lang.Command
       Lang.Command.Parse
       Lang.Parsing
@@ -70,14 +67,14 @@ library
       Models.Connect
       Models.Edge
       Models.Graph
+      Models.History
+      Models.HistorySpec
       Models.NID
       Models.NIDSpec
       Models.Node
       Models.Types
       MyPrelude
-      Options
       Polysemy.MTL
-      Singleton
       Spec
       System.Directory.Clone
       System.IO.Term.BinarySerialize
@@ -85,6 +82,9 @@ library
       System.IO.Term.Image.Payload
       TestPrelude
       UserError
+      Utils.Base62
+      Utils.Extensibility
+      Utils.Singleton
   other-modules:
       Paths_graph
   hs-source-dirs:

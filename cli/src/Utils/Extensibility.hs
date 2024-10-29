@@ -6,13 +6,13 @@
 -- It is guaranteed that running a script defined with defaultMain will work,
 -- but otherwise the interface is undefined.
 -- TODO: tutorial on how to use this
-module Extensibility where
+module Utils.Extensibility where
 
 import qualified Data.ByteString.Lazy as BL
-import Graph.Effect
+import Effect.Interpreters (HasMainEffects, runLocatedReadWriteGraphIO)
 import Effect.NodeLocated
 import Effect.Warn
-import Interpreters (HasMainEffects, runLocatedReadWriteGraphIO)
+import Graph.Effect
 import MyPrelude
 import System.IO.Temp
 import System.Process.Typed

@@ -1,6 +1,6 @@
 {-# LANGUAGE OverloadedStrings #-}
 
-module GraphEditorGoldenSpec where
+module Executable.GraphEditor.GoldenSpec where
 
 import Data.Attoparsec.ByteString
 import qualified Data.ByteString as B

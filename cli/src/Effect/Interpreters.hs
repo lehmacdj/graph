@@ -1,6 +1,6 @@
 -- | Interpreters for running various large stacks of effects that it might
 -- make sense to use while using this library.
-module Interpreters where
+module Effect.Interpreters where
 
 import Control.Arrow ((>>>))
 import Control.Lens
@@ -16,7 +16,7 @@ import Effect.Util
 import Effect.Warn
 import Effect.Web
 import Models.Graph
-import History
+import Models.History
 import MyPrelude hiding (Reader, ask)
 import Polysemy.Embed
 import Polysemy.Error hiding (throw)

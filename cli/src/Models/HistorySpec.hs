@@ -1,7 +1,7 @@
-module HistorySpec where
+module Models.HistorySpec where
 
 import Models.Types
-import History
+import Models.History
 import TestPrelude
 
 history :: [Int] -> Int -> [Int] -> History

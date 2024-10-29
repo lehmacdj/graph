@@ -2,7 +2,7 @@
 
 module Executable.GraphEditor where
 
-import Completion
+import Executable.GraphEditor.Completion
 import Control.Lens hiding (index)
 import Control.Monad.Fix
 import DAL.Serialization (doesNodeExist, initializeGraph)
@@ -16,13 +16,13 @@ import Effect.Time
 import Effect.Web
 import Graph.Effect
 import Graph.SystemNodes.Init (createSystemNodes)
-import History
-import Interpreters
+import Models.History
+import Effect.Interpreters
 import Lang.Command hiding (printTransitions)
 import Lang.Command.Parse
 import Models.Types
 import MyPrelude
-import Options
+import Executable.GraphEditor.Options
 import Polysemy.Readline
 import Polysemy.State
 import qualified System.Console.Haskeline as H
