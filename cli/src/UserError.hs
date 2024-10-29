@@ -53,15 +53,6 @@ instance Semigroup UserError where
 throwString :: Member (Error UserError) effs => String -> Sem effs a
 throwString = throw . OtherError
 
-throwIfNothing ::
-  Member (Error UserError) effs =>
-  UserError ->
-  Maybe a ->
-  Sem effs a
-throwIfNothing _ (Just x) = pure x
-throwIfNothing err Nothing = throw err
-{-# DEPRECATED throwIfNothing "use note from Polysemy.Error instead" #-}
-
 throwLeft ::
   Member (Error UserError) effs =>
   Either UserError a ->
