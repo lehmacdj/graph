@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 0251a1eab8d6ff2f16db8b85897482c5bd2cf7fedb3b8ebae94f97f636797b2d
+-- hash: 08f54968fd2c8dca911ce6bb7c05a940df3a6d7074475a186075205fe5258518
 
 name:           graph
 version:        0.1.0.0
@@ -38,6 +38,7 @@ library
       Effect.Interpreters
       Effect.NodeLocated
       Effect.Time
+      Effect.UserError
       Effect.Util
       Effect.UtilSpec
       Effect.Warn
@@ -73,6 +74,7 @@ library
       Models.NIDSpec
       Models.Node
       Models.Types
+      Models.UserError
       MyPrelude
       Polysemy.MTL
       Spec
@@ -81,7 +83,6 @@ library
       System.IO.Term.Image
       System.IO.Term.Image.Payload
       TestPrelude
-      UserError
       Utils.Base62
       Utils.Extensibility
       Utils.Singleton

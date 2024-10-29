@@ -2,8 +2,8 @@
 
 module Effect.Warn where
 
+import Effect.UserError
 import MyPrelude
-import UserError
 
 data Warn e m r where
   Warn :: e -> Warn e m ()

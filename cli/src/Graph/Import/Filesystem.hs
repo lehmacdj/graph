@@ -12,15 +12,15 @@ import Data.Digest.Pure.SHA
 import Effect.Console
 import Effect.Filesystem
 import Effect.FreshNID
-import Graph.Effect
-import Graph.Utils
-import Graph.Import.ByteString
 import Effect.Time
-import Models.Graph hiding (insertEdge)
+import Effect.UserError
+import Graph.Effect
+import Graph.Import.ByteString
 import Graph.Time (taggingFreshNodesWithTime)
+import Graph.Utils
+import Models.Graph hiding (insertEdge)
 import MyPrelude
 import System.Directory.Tree hiding (readDirectory)
-import UserError
 
 computeSHA :: ByteString -> String
 computeSHA = showDigest . sha512 . fromStrict

@@ -16,13 +16,13 @@ import qualified Data.Set as Set
 import Data.Set.Ordered (OSet)
 import qualified Data.Set.Ordered as OSet
 import Effect.FreshNID
+import Effect.UserError
 import Graph.Effect
 import Graph.Utils
-import Models.Graph hiding (insertEdge)
 import Models.Connect
+import Models.Graph hiding (insertEdge)
 import MyPrelude
 import Polysemy.State (evalState)
-import UserError
 
 -- breadcrumb in a trail in the graph
 -- each piece denotes an edge from the specified via the transition

@@ -11,12 +11,12 @@ module Utils.Extensibility where
 import qualified Data.ByteString.Lazy as BL
 import Effect.Interpreters (HasMainEffects, runLocatedReadWriteGraphIO)
 import Effect.NodeLocated
+import Effect.UserError
 import Effect.Warn
 import Graph.Effect
 import MyPrelude
 import System.IO.Temp
 import System.Process.Typed
-import UserError
 
 -- | Provide a convenient interface for writing stack scripts that interface
 -- with the graph that can be run from the graph directory.

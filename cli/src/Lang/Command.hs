@@ -23,6 +23,7 @@ import Effect.Filesystem
 import Effect.FreshNID
 import Effect.NodeLocated
 import Effect.Time
+import Effect.UserError
 import Effect.Warn
 import Effect.Web
 import GHC.Generics
@@ -36,10 +37,9 @@ import Graph.Utils
 import Lang.Path
 import Models.Graph (Connect (..), Edge (..), dataOf, nilNID, outgoingConnectsOf)
 import Models.History
-import MyPrelude hiding (throwString)
+import MyPrelude
 import Polysemy.Readline
 import Polysemy.State
-import UserError
 import qualified Utils.Extensibility as Extensibility
 import Utils.Singleton
 

@@ -2,9 +2,9 @@
 
 module Effect.Filesystem where
 
+import Effect.UserError
 import MyPrelude
 import System.Directory.Tree
-import UserError
 
 -- | TODO: add effects for more things, make sure we can implement fileystem import
 data FileSystem m r where

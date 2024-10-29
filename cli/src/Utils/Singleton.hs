@@ -3,8 +3,8 @@
 -- | Functions for dealing with stuff that should be singletons
 module Utils.Singleton where
 
+import Effect.UserError
 import MyPrelude
-import UserError
 
 the' ::
   (MonoFoldable mono, Member (Error UserError) effs) =>

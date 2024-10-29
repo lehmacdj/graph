@@ -12,18 +12,18 @@ module Graph.Effect
 where
 
 import Control.Lens hiding (transform)
+import qualified DAL.Serialization as S2
 import Data.Aeson (FromJSON (..), ToJSON (..))
 import qualified Data.Set as Set
+import Effect.UserError
 import Effect.Util
 import Effect.Warn
 import qualified Models.Graph as G
 import Models.Node (dualizeNode)
-import qualified DAL.Serialization as S2
 import Models.Types
 import MyPrelude
 import Polysemy.Input
 import Polysemy.State
-import UserError
 
 -- | Effect for getting the filepath of the graph; useful for doing low level
 -- operations together with Graph.Serialize* modules.

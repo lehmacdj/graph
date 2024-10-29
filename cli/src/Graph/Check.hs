@@ -7,11 +7,11 @@ module Graph.Check where
 
 import Control.Lens
 import Effect.Console
+import Effect.UserError
 import Graph.Effect
 import Graph.Utils
 import Models.Graph hiding (insertEdge, insertNode, setData)
 import MyPrelude
-import UserError
 
 data Direction = In | Out
   deriving (Eq, Ord)

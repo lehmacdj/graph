@@ -35,6 +35,7 @@ import Data.Aeson (FromJSON, ToJSON)
 import qualified Data.Aeson as Aeson
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Lazy as BL
+import Effect.UserError hiding (catch, throw)
 import qualified Models.Graph as Graph
 import Models.Node (dataOf, nidOf)
 import Models.Types
@@ -42,7 +43,6 @@ import MyPrelude
 import System.Directory
 import System.FilePath (dropExtension, takeFileName)
 import qualified System.FilePath.Glob as Glob
-import UserError hiding (catch, throw)
 import Utils.Base62 (isBase62Char)
 
 -- | all of the nodes accessible under a given path

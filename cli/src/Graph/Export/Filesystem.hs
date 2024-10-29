@@ -16,7 +16,7 @@ import System.Directory (doesFileExist)
 import System.Directory.Clone (cloneFile)
 import qualified System.Directory.Tree as DT
 import System.FilePath (makeValid, splitFileName)
-import UserError
+import Effect.UserError
 
 -- | Like a DFS tree of the graph, but include duplciates unless they would form
 -- a cycle. Term Heterarchy comes from neuron zettelkasten

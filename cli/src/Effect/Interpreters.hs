@@ -9,17 +9,17 @@ import Effect.Editor
 import Effect.FileTypeOracle
 import Effect.Filesystem
 import Effect.FreshNID
-import Graph.Effect
 import Effect.NodeLocated
 import Effect.Time
+import Effect.UserError
 import Effect.Util
 import Effect.Warn
 import Effect.Web
+import Graph.Effect
 import Models.Graph
 import Models.History
 import MyPrelude hiding (Reader, ask)
 import Polysemy.Embed
-import Polysemy.Error hiding (throw)
 import Polysemy.Input
 import Polysemy.Output
 import Polysemy.Reader
@@ -28,7 +28,6 @@ import Polysemy.State
 import System.Console.Haskeline (InputT)
 import qualified System.Console.Haskeline as H
 import System.Random
-import UserError
 
 data Env = Env
   { _filePath :: IORef FilePath,
@@ -68,7 +67,7 @@ errorOnNoInput ::
   Sem (Error NoInputProvided : r) a ->
   Sem r a
 errorOnNoInput msg v =
-  v `handleError` \NoInputProvided -> UserError.throwString msg
+  v `handleError` \NoInputProvided -> throwString msg
 
 printingErrorsAndWarnings ::
   Member (Embed IO) effs =>

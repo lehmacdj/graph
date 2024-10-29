@@ -2,9 +2,9 @@
 
 module Effect.Web where
 
+import Effect.UserError
 import MyPrelude
 import Network.Wreq (defaults, getWith, responseBody)
-import UserError
 
 data Web m r where
   GetHttp :: String -> Web m ByteString

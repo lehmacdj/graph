@@ -6,12 +6,12 @@ module Graph.Utils where
 import Control.Lens
 import Data.Monoid (First (First))
 import Effect.FreshNID
-import Graph.Effect
 import Effect.NodeLocated
-import Models.Graph hiding (insertEdge, insertNode, setData)
+import Effect.UserError
+import Graph.Effect
 import Models.Connect
+import Models.Graph hiding (insertEdge, insertNode, setData)
 import MyPrelude
-import UserError
 import Witherable
 
 getNodes :: Member (ReadGraph t) effs => [NID] -> Sem effs [Node t]

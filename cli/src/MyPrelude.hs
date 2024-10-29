@@ -30,7 +30,7 @@ module MyPrelude
   )
 where
 
-import ClassyPrelude
+import ClassyPrelude hiding (throwString)
 import Control.DeepSeq
 import Control.Lens hiding (op)
 import Control.Lens as X (over, set, view, (&), (.~), (<&>), (^.))

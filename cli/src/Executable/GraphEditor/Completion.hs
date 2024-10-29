@@ -6,6 +6,7 @@ import Control.Lens
 import DAL.Serialization (nodesWithPrefix)
 import Effect.Interpreters
 import Effect.NodeLocated
+import Effect.UserError
 import Effect.Warn
 import Graph.Utils
 import Lang.Parsing
@@ -14,7 +15,6 @@ import Lang.Path.Partial
 import Models.NID (nidDigits)
 import MyPrelude
 import System.Console.Haskeline
-import UserError
 import Utils.Base62 (isBase62Char)
 
 commands :: [String]
