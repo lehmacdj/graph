@@ -37,7 +37,10 @@ pSectionHeader p =
   string "==========" *> p <* string "==========\n" <?> "section header"
 
 pBody :: Parser () -> Parser ByteString
-pBody end = concat <$> manyTill (takeWhileIncluding (not . nl)) end <?> "body"
+pBody end =
+  concat
+    <$> (manyTill (takeWhileIncluding (not . nl)) end <|> pure [])
+    <?> "body"
   where
     nl = (== 10)
 

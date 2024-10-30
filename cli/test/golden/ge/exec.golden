@@ -7,5 +7,24 @@ x cat
 x clear
 x cat
 ==========stdout==========
+g> g> g> Hello world!
+g> g> Hello world!
+Hello world!
+g> g> node 'data' has no data
+g> Goodbye!
 ==========stderr==========
 ==========graph-dump==========
+000000000000{in=[0daCJjMrQel8 via "origin"], out=[sKhj6pFWJeTE via "cat",chhDqMNOcpea via "clear",DDdx9cV3uMmr via "data",LsFFPRASSdT8 via "write"]}
+0daCJjMrQel8{in=[], out=[zsBuPkn5mh8F via "file-extensions",AhQufiPzgyRf via "file-hashes",3JJvxFUHGAA1 via "historical-special-nodes",S00KkOYoVpFu via "import-dates",a0fVkm0kR7KE via "import-urls",927u9Xyky2pC via "mime-types",000000000000 via "origin",pbYxBO6fzBQV via "tags"]}
+3JJvxFUHGAA1{in=[0daCJjMrQel8 via "historical-special-nodes"], out=[VEfLhuTgZ88Z via "sequence-ids"]}
+927u9Xyky2pC{in=[0daCJjMrQel8 via "mime-types"], out=[]}
+AhQufiPzgyRf{in=[0daCJjMrQel8 via "file-hashes"], out=[]}
+DDdx9cV3uMmr{in=[000000000000 via "data"], out=[]}
+LsFFPRASSdT8{in=[000000000000 via "write"], out=[]}
+S00KkOYoVpFu{in=[0daCJjMrQel8 via "import-dates"], out=[]}
+VEfLhuTgZ88Z{in=[3JJvxFUHGAA1 via "sequence-ids"], out=[]}
+a0fVkm0kR7KE{in=[0daCJjMrQel8 via "import-urls"], out=[]}
+chhDqMNOcpea{in=[000000000000 via "clear"], out=[]}
+pbYxBO6fzBQV{in=[0daCJjMrQel8 via "tags"], out=[]}
+sKhj6pFWJeTE{in=[000000000000 via "cat"], out=[]}
+zsBuPkn5mh8F{in=[0daCJjMrQel8 via "file-extensions"], out=[]}
