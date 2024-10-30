@@ -1,6 +1,6 @@
 {-# LANGUAGE OverloadedStrings #-}
 
-module Executable.GraphEditor.GoldenSpec (test_integration) where
+module Executable.GraphEditor.GoldenSpec where
 
 import Data.Attoparsec.ByteString
 import qualified Data.ByteString as B
@@ -26,17 +26,18 @@ pathForTemplate :: ByteString -> FilePath
 pathForTemplate = ("../examples" </>) . unpack . decodeUtf8
 
 pInputHeader :: Parser (Maybe ByteString)
-pInputHeader = do
+pInputHeader = (<?> "input header") $ do
   _ <- string "input"
   optional $ string "@example:" *> takeTill isEqualsSign
   where
     isEqualsSign = (== 61)
 
 pSectionHeader :: Parser a -> Parser a
-pSectionHeader p = string "==========" *> p <* string "==========\n"
+pSectionHeader p =
+  string "==========" *> p <* string "==========\n" <?> "section header"
 
 pBody :: Parser () -> Parser ByteString
-pBody end = concat <$> manyTill (takeTill nl) end
+pBody end = concat <$> manyTill (takeWhileIncluding (not . nl)) end <?> "body"
   where
     nl = (== 10)
 
@@ -44,10 +45,11 @@ pGoldenTest :: Parser GoldenTest
 pGoldenTest =
   GoldenTest
     <$> pSectionHeader pInputHeader
-    <*> pBody (pSectionHeader (void $ string "stdout"))
-    <*> pBody (pSectionHeader (void $ string "stderr"))
-    <*> pBody (pSectionHeader (void $ string "graph-dump"))
-    <*> pBody (pSectionHeader endOfInput)
+    <*> (pBody (pSectionHeader (void $ string "stdout")) <?> "input")
+    <*> (pBody (pSectionHeader (void $ string "stderr")) <?> "stdout")
+    <*> (pBody (pSectionHeader (void $ string "graph-dump")) <?> "stderr")
+    <*> (pBody (pSectionHeader endOfInput) <?> "graph-dump")
+    <?> "golden test"
 
 parseGoldenTest :: ByteString -> Either String GoldenTest
 parseGoldenTest = parseOnly pGoldenTest
