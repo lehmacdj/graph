@@ -1,24 +1,14 @@
+==========input==========
+mk a + b
+cd b
+mk c/d
+cd c/d
+mg @000000000000 + @
+nid
+cd @000000000000
+mg a + b/c/d
+cd a
+:d
 ==========stdout==========
-g> g> g> g> g> g> 000000000000
-g> g> g> g> current node:
-O8OhMSVtjevt{in=[w4VxcgSm0Js6 via "00:00:00.000000000000",w4VxcgSm0Js6 via "00:00:01.000000000000",O8OhMSVtjevt via "a",w4P7BSd8jU2v via "d",0daCJjMrQel8 via "origin"], out=[O8OhMSVtjevt via "a",Pqf7kGOdKJIr via "b"]}
-history:
-History {_past = [O8OhMSVtjevt,000000000000,000000000000,OBlFGnwL1N3D,Pqf7kGOdKJIr,000000000000], _now = O8OhMSVtjevt, _future = []}
-g> Goodbye!
 ==========stderr==========
 ==========graph-dump==========
-0daCJjMrQel8{in=[], out=[zsBuPkn5mh8F via "file-extensions",AhQufiPzgyRf via "file-hashes",3JJvxFUHGAA1 via "historical-special-nodes",S00KkOYoVpFu via "import-dates",a0fVkm0kR7KE via "import-urls",927u9Xyky2pC via "mime-types",O8OhMSVtjevt via "origin",pbYxBO6fzBQV via "tags"]}
-3JJvxFUHGAA1{in=[0daCJjMrQel8 via "historical-special-nodes"], out=[VEfLhuTgZ88Z via "sequence-ids"]}
-927u9Xyky2pC{in=[0daCJjMrQel8 via "mime-types"], out=[]}
-AhQufiPzgyRf{in=[0daCJjMrQel8 via "file-hashes"], out=[]}
-DQ1KCJgauHiV{in=[S00KkOYoVpFu via "1970"], out=[sYumkceKpoAh via "01"]}
-O8OhMSVtjevt{in=[w4VxcgSm0Js6 via "00:00:00.000000000000",w4VxcgSm0Js6 via "00:00:01.000000000000",O8OhMSVtjevt via "a",w4P7BSd8jU2v via "d",0daCJjMrQel8 via "origin"], out=[O8OhMSVtjevt via "a",Pqf7kGOdKJIr via "b"]}
-Pqf7kGOdKJIr{in=[w4VxcgSm0Js6 via "00:00:00.000000000000",O8OhMSVtjevt via "b"], out=[w4P7BSd8jU2v via "c"]}
-S00KkOYoVpFu{in=[0daCJjMrQel8 via "import-dates"], out=[DQ1KCJgauHiV via "1970"]}
-VEfLhuTgZ88Z{in=[3JJvxFUHGAA1 via "sequence-ids"], out=[]}
-a0fVkm0kR7KE{in=[0daCJjMrQel8 via "import-urls"], out=[]}
-pbYxBO6fzBQV{in=[0daCJjMrQel8 via "tags"], out=[]}
-sYumkceKpoAh{in=[DQ1KCJgauHiV via "01"], out=[w4VxcgSm0Js6 via "01"]}
-w4P7BSd8jU2v{in=[w4VxcgSm0Js6 via "00:00:01.000000000000",Pqf7kGOdKJIr via "c"], out=[O8OhMSVtjevt via "d"]}
-w4VxcgSm0Js6{in=[sYumkceKpoAh via "01"], out=[O8OhMSVtjevt via "00:00:00.000000000000",Pqf7kGOdKJIr via "00:00:00.000000000000",O8OhMSVtjevt via "00:00:01.000000000000",w4P7BSd8jU2v via "00:00:01.000000000000"]}
-zsBuPkn5mh8F{in=[0daCJjMrQel8 via "file-extensions"], out=[]}
