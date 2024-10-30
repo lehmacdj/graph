@@ -2,7 +2,6 @@
 
 module Executable.GraphEditor where
 
-import Executable.GraphEditor.Completion
 import Control.Lens hiding (index)
 import Control.Monad.Fix
 import DAL.Serialization (doesNodeExist, initializeGraph)
@@ -11,23 +10,25 @@ import Effect.Editor
 import Effect.FileTypeOracle
 import Effect.Filesystem
 import Effect.FreshNID
+import Effect.Interpreters
 import Effect.NodeLocated
 import Effect.Time
 import Effect.Web
+import Executable.GraphEditor.Completion
+import Executable.GraphEditor.Options
 import Graph.Effect
 import Graph.SystemNodes.Init (createSystemNodes)
-import Models.History
-import Effect.Interpreters
 import Lang.Command hiding (printTransitions)
 import Lang.Command.Parse
+import Models.History
 import Models.Types
 import MyPrelude
-import Executable.GraphEditor.Options
 import Polysemy.Readline
 import Polysemy.State
 import qualified System.Console.Haskeline as H
 import System.Directory (createDirectoryIfMissing, doesDirectoryExist)
 import System.Environment.XDG.BaseDir (getUserDataDir)
+import System.Random (initStdGen, mkStdGen)
 
 ioExceptionHandler :: IOError -> IO (Maybe a)
 ioExceptionHandler _ = pure Nothing
@@ -100,7 +101,18 @@ main :: IO ()
 main = withOptions $ \options -> do
   let graphDir = view #_graphLocation options
   graphDirInitialization graphDir options
-  env <- mfix (initEnv graphDir <=< defReplSettings)
-  runMainEffectsIO env do
+  nidGenerator <-
+    maybe initStdGen (pure . mkStdGen) $
+      options ^. #_testOnlyNidGenerationSeed
+  -- because we need the Env for the repl's completionFunction this is pretty
+  -- fancy and uses mfix to tie the knot; it would probably be a better idea to
+  -- break the cycle somehow to make this easier to reason about
+  env <- mfix (initEnv graphDir nidGenerator <=< defReplSettings)
+  let timeBehavior :: Member (Embed IO) effs => Sem (GetTime : effs) ~> Sem effs
+      timeBehavior
+        | options ^. #_testOnlyMonotonicIncreasingDeterministicTime =
+          interpretTimeAsMonotonicIncreasingUnixTime
+        | otherwise = interpretTimeAsIO
+  runMainEffectsIO printingErrorsAndWarnings timeBehavior env do
     createSystemNodes
     maybe repl interpretCommand (view #_executeExpression options)

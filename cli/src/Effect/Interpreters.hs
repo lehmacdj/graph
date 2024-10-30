@@ -41,12 +41,13 @@ data Env = Env
 
 initEnv ::
   FilePath ->
+  StdGen ->
   H.Settings IO ->
   IO Env
-initEnv graphDir _replSettings =
+initEnv graphDir nidGenerator _replSettings =
   Env
     <$> newIORef graphDir
-    <*> (initStdGen >>= newIORef)
+    <*> newIORef nidGenerator
     <*> newIORef (History [] nilNID [])
     <*> newIORef (IsDual False)
     <*> pure _replSettings
@@ -101,17 +102,18 @@ type HasMainEffects effs =
 -- | general function for interpreting the entire stack of effects in terms of real world things
 -- it takes a function that handles the errors, because that is necessary for
 -- this to have an arbitrary return type
-runMainEffectsIOWithErrorHandling ::
+runMainEffectsIO ::
   forall a.
   ( forall effs.
     Members [Input Env, Embed IO] effs =>
     Sem (Warn UserError : Error UserError : effs) a ->
     Sem effs a
   ) ->
+  (forall effs. (Member (Embed IO) effs) => Sem (GetTime : effs) ~> Sem effs) ->
   Env ->
   (forall effs. HasMainEffects effs => Sem effs a) ->
   IO a
-runMainEffectsIOWithErrorHandling errorHandlingBehavior env v = do
+runMainEffectsIO errorHandlingBehavior timeBehavior env v = do
   let handler =
         runFreshNIDRandom
           >>> applyInput2 (runWriteGraphDualizeableIO @String)
@@ -123,7 +125,7 @@ runMainEffectsIOWithErrorHandling errorHandlingBehavior env v = do
           >>> runFileSystemTreeIO
           >>> runStateInputIORefOf @IsDual #_isDualized
           >>> interpretConsoleIO
-          >>> interpretTimeAsIO
+          >>> timeBehavior
           >>> runLocableHistoryState
           >>> runStateInputIORefOf @History #_history
           >>> runStateInputIORefOf #_randomGen
@@ -138,15 +140,6 @@ runMainEffectsIOWithErrorHandling errorHandlingBehavior env v = do
           >>> runFinal
           >>> H.runInputT (_replSettings env)
   handler v
-
--- | The existential in the type here is necessary to allow an arbitrary order
--- to be picked here + to allow other effects (such as Error NoInputProvided)
--- to automatically be raised into the the list of effects but not others
-runMainEffectsIO ::
-  Env ->
-  (forall effs. HasMainEffects effs => Sem effs ()) ->
-  IO ()
-runMainEffectsIO = runMainEffectsIOWithErrorHandling printingErrorsAndWarnings
 
 -- | Less capable, but less demanding interpreter.
 runReadWriteGraphIO ::

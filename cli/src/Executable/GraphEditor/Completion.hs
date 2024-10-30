@@ -6,6 +6,7 @@ import Control.Lens
 import DAL.Serialization (nodesWithPrefix)
 import Effect.Interpreters
 import Effect.NodeLocated
+import Effect.Time
 import Effect.UserError
 import Effect.Warn
 import Graph.Utils
@@ -82,8 +83,9 @@ completePath env (i, _) = case getPartialPath (takeRelevantFromEnd i) of
   Nothing -> pure (i, [])
   Just (MissingSlash _) -> pure (i, [simpleCompletion "/"])
   Just (PartialPath pp end) ->
-    runMainEffectsIOWithErrorHandling
+    runMainEffectsIO
       (failCompletionWithOriginalInputOnErrorOrWarning i)
+      interpretTimeAsIO
       env
       $ do
         let p = foldr (:/) One pp

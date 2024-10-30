@@ -2,7 +2,9 @@
 
 module Effect.Time where
 
+import Data.Time.Clock.POSIX
 import MyPrelude
+import Polysemy.State
 
 data GetTime m r where
   CurrentTime :: GetTime m UTCTime
@@ -23,6 +25,12 @@ interpretTimeAsIO ::
   Sem (GetTime : effs) ~> Sem effs
 interpretTimeAsIO = interpret $ \case
   CurrentTime -> liftIO getCurrentTime
+
+interpretTimeAsMonotonicIncreasingUnixTime ::
+  Sem (GetTime : effs) a -> Sem effs a
+interpretTimeAsMonotonicIncreasingUnixTime x = evalState (0 :: Int) $
+  (`interpret` raiseUnder x) $ \case
+    CurrentTime -> posixSecondsToUTCTime . fromIntegral <$> get <* modify' (+ 1)
 
 collapsingTimeToInstant ::
   (Member GetTime effs) =>

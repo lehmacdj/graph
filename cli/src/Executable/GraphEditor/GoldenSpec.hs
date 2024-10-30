@@ -1,6 +1,6 @@
 {-# LANGUAGE OverloadedStrings #-}
 
-module Executable.GraphEditor.GoldenSpec where
+module Executable.GraphEditor.GoldenSpec (test_integration) where
 
 import Data.Attoparsec.ByteString
 import qualified Data.ByteString as B
@@ -10,59 +10,102 @@ import System.Process.Typed
 import Test.Tasty.Golden
 import TestPrelude
 
-data GraphEditorConfig = GraphEditorConfig
+data GoldenTest = GoldenTest
   { -- | Relative path (from the root of the project) to a graph to use as a
     -- template for the temporary graph that the test is run on.
-    template :: Maybe FilePath,
+    template :: Maybe ByteString,
     -- | input to be fed to @ge@ via stdin
-    input :: ByteString
+    input :: ByteString,
+    stdOut :: ByteString,
+    stdErr :: ByteString,
+    graphDump :: ByteString
   }
   deriving (Show)
 
-pTemplateDirective :: Parser FilePath
-pTemplateDirective =
-  ("examples" </>) . unpack . decodeUtf8
-    <$> (string "@from-example " *> takeTill nl <* anyWord8)
+pathForTemplate :: ByteString -> FilePath
+pathForTemplate = ("../examples" </>) . unpack . decodeUtf8
+
+pInputHeader :: Parser (Maybe ByteString)
+pInputHeader = do
+  _ <- string "input"
+  optional $ string "@example:" *> takeTill isEqualsSign
+  where
+    isEqualsSign = (== 61)
+
+pSectionHeader :: Parser a -> Parser a
+pSectionHeader p = string "==========" *> p <* string "==========\n"
+
+pBody :: Parser () -> Parser ByteString
+pBody end = concat <$> manyTill (takeTill nl) end
   where
     nl = (== 10)
 
-pGraphEditorConfig :: Parser GraphEditorConfig
-pGraphEditorConfig =
-  GraphEditorConfig
-    <$> optional pTemplateDirective
-    <*> takeByteString
+pGoldenTest :: Parser GoldenTest
+pGoldenTest =
+  GoldenTest
+    <$> pSectionHeader pInputHeader
+    <*> pBody (pSectionHeader (void $ string "stdout"))
+    <*> pBody (pSectionHeader (void $ string "stderr"))
+    <*> pBody (pSectionHeader (void $ string "graph-dump"))
+    <*> pBody (pSectionHeader endOfInput)
 
-parseGraphEditorConfig :: ByteString -> Either String GraphEditorConfig
-parseGraphEditorConfig = parseOnly pGraphEditorConfig
+parseGoldenTest :: ByteString -> Either String GoldenTest
+parseGoldenTest = parseOnly pGoldenTest
 
-combineOutErrDump :: LByteString -> LByteString -> LByteString -> LByteString
-combineOutErrDump out err dump =
-  "==========stdout==========\n"
-    <> out
-    <> "==========stderr==========\n"
-    <> err
-    <> "==========graph-dump==========\n"
-    <> dump
+sectionHeader :: ByteString -> LByteString
+sectionHeader name = "==========" <> fromStrict name <> "==========\n"
 
-runGraphEditor :: GraphEditorConfig -> IO LByteString
-runGraphEditor GraphEditorConfig {..} = withTempGraph template $ \tmpGraph -> do
-  (out, err) <-
-    readProcess_ $
-      proc "ge" [tmpGraph] & setStdin (byteStringInput (fromStrict input))
-  (dump, _) <- readProcess_ $ proc "dump-graph" [tmpGraph]
-  pure $ combineOutErrDump out err dump
+renderGoldenTest :: GoldenTest -> LByteString
+renderGoldenTest GoldenTest {..} =
+  concat
+    [ sectionHeader
+        ( maybe
+            "input"
+            ("input@example:" <>)
+            template
+        ),
+      fromStrict input,
+      sectionHeader "stdout",
+      fromStrict stdOut,
+      sectionHeader "stderr",
+      fromStrict stdErr,
+      sectionHeader "graph-dump",
+      fromStrict graphDump
+    ]
+
+-- | Runs `ge` with the input and produces a new `GoldenTest` containing the
+-- actual output produced by running it
+runGraphEditor :: GoldenTest -> IO GoldenTest
+runGraphEditor test@GoldenTest {..} =
+  withTempGraph (pathForTemplate <$> template) $ \tmpGraph -> do
+    (stdOut', stdErr') <-
+      readProcess_ $
+        proc
+          "ge"
+          [ "--test-only-nid-generation-seed",
+            "0",
+            "--test-only-monotonic-increasing-deterministic-time",
+            tmpGraph
+          ]
+          & setStdin (byteStringInput (fromStrict input))
+    (graphDump', _) <- readProcess_ $ proc "dump-graph" [tmpGraph]
+    pure $
+      test
+        { stdOut = toStrict stdOut',
+          stdErr = toStrict stdErr',
+          graphDump = toStrict graphDump'
+        }
 
 mkGoldenTest :: FilePath -> TestTree
 mkGoldenTest path =
   let testName = takeBaseName path
-      goldenPath = replaceExtension path "golden"
-   in goldenVsString testName goldenPath do
-        (B.readFile path <&> parseGraphEditorConfig) >>= \case
-          Right config -> runGraphEditor config
+   in goldenVsString testName path do
+        (B.readFile path <&> parseGoldenTest) >>= \case
+          Right goldenTest -> runGraphEditor goldenTest <&> renderGoldenTest
           Left err -> error $ "failed to parse golden input:\n" <> err
 
 inputFiles :: IO [FilePath]
-inputFiles = globDir1 (compile "**/*.gs") "test/golden/ge"
+inputFiles = globDir1 (compile "**/*.golden") "test/golden/ge"
 
-test_graphEditor_golden_integrationTests :: IO [TestTree]
-test_graphEditor_golden_integrationTests = map mkGoldenTest <$> inputFiles
+test_integration :: IO [TestTree]
+test_integration = map mkGoldenTest <$> inputFiles
