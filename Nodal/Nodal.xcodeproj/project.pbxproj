@@ -28,7 +28,6 @@
 		031367EC2713FCF400E69F83 /* Preview Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 031367EB2713FCF400E69F83 /* Preview Assets.xcassets */; };
 		031367F72713FCF400E69F83 /* NodalTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 031367F62713FCF400E69F83 /* NodalTests.swift */; };
 		031368022713FCF400E69F83 /* NodalUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 031368012713FCF400E69F83 /* NodalUITests.swift */; };
-		031368102713FCFF00E69F83 /* GraphSerialization.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0313680F2713FCFF00E69F83 /* GraphSerialization.swift */; };
 		0313681227140A0900E69F83 /* Utils.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0313681127140A0900E69F83 /* Utils.swift */; };
 		03136814271415FA00E69F83 /* Extensions.swift in Sources */ = {isa = PBXBuildFile; fileRef = 03136813271415FA00E69F83 /* Extensions.swift */; };
 		0313681627149ECE00E69F83 /* ZoomableScrollView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0313681527149ECE00E69F83 /* ZoomableScrollView.swift */; };
@@ -54,6 +53,12 @@
 		03A934C42A3F8AC20011DB8D /* DataDocument.swift in Sources */ = {isa = PBXBuildFile; fileRef = 03A934C32A3F8AC20011DB8D /* DataDocument.swift */; };
 		03ABF77F2CD6CB0F00738F76 /* Algorithms in Frameworks */ = {isa = PBXBuildFile; productRef = 03ABF77E2CD6CB0F00738F76 /* Algorithms */; };
 		03ABF7812CD6CB0F00738F76 /* AsyncAlgorithms in Frameworks */ = {isa = PBXBuildFile; productRef = 03ABF7802CD6CB0F00738F76 /* AsyncAlgorithms */; };
+		03ABF7862CD6D0A800738F76 /* NID.swift in Sources */ = {isa = PBXBuildFile; fileRef = 03ABF7852CD6D0A400738F76 /* NID.swift */; };
+		03ABF7882CD6D0B600738F76 /* NodeMeta.swift in Sources */ = {isa = PBXBuildFile; fileRef = 03ABF7872CD6D0B300738F76 /* NodeMeta.swift */; };
+		03ABF78A2CD6D0EB00738F76 /* NodeDTO.swift in Sources */ = {isa = PBXBuildFile; fileRef = 03ABF7892CD6D0E200738F76 /* NodeDTO.swift */; };
+		03ABF78C2CD6D0F000738F76 /* ConnectDTO.swift in Sources */ = {isa = PBXBuildFile; fileRef = 03ABF78B2CD6D0EE00738F76 /* ConnectDTO.swift */; };
+		03ABF78E2CD6D13C00738F76 /* NodeTransition.swift in Sources */ = {isa = PBXBuildFile; fileRef = 03ABF78D2CD6D13600738F76 /* NodeTransition.swift */; };
+		03ABF7902CD6D16A00738F76 /* SystemNodes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 03ABF78F2CD6D16500738F76 /* SystemNodes.swift */; };
 		03C84EA42C27734C00DB3869 /* MockNodeVM.swift in Sources */ = {isa = PBXBuildFile; fileRef = 03C84EA32C27734C00DB3869 /* MockNodeVM.swift */; };
 		03C84EA62C27735600DB3869 /* MockTransitionVM.swift in Sources */ = {isa = PBXBuildFile; fileRef = 03C84EA52C27735600DB3869 /* MockTransitionVM.swift */; };
 		03C84EA82C27784000DB3869 /* Base62.swift in Sources */ = {isa = PBXBuildFile; fileRef = 03C84EA72C27784000DB3869 /* Base62.swift */; };
@@ -99,7 +104,6 @@
 		031367FD2713FCF400E69F83 /* NodalUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = NodalUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		031368012713FCF400E69F83 /* NodalUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NodalUITests.swift; sourceTree = "<group>"; };
 		031368032713FCF400E69F83 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
-		0313680F2713FCFF00E69F83 /* GraphSerialization.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GraphSerialization.swift; sourceTree = "<group>"; };
 		0313681127140A0900E69F83 /* Utils.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Utils.swift; sourceTree = "<group>"; };
 		03136813271415FA00E69F83 /* Extensions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Extensions.swift; sourceTree = "<group>"; };
 		0313681527149ECE00E69F83 /* ZoomableScrollView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ZoomableScrollView.swift; sourceTree = "<group>"; };
@@ -123,6 +127,12 @@
 		03A934BF2A3EBD930011DB8D /* Node.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Node.swift; sourceTree = "<group>"; };
 		03A934C12A3EC10F0011DB8D /* DocumentNode.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DocumentNode.swift; sourceTree = "<group>"; };
 		03A934C32A3F8AC20011DB8D /* DataDocument.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DataDocument.swift; sourceTree = "<group>"; };
+		03ABF7852CD6D0A400738F76 /* NID.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NID.swift; sourceTree = "<group>"; };
+		03ABF7872CD6D0B300738F76 /* NodeMeta.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NodeMeta.swift; sourceTree = "<group>"; };
+		03ABF7892CD6D0E200738F76 /* NodeDTO.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NodeDTO.swift; sourceTree = "<group>"; };
+		03ABF78B2CD6D0EE00738F76 /* ConnectDTO.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConnectDTO.swift; sourceTree = "<group>"; };
+		03ABF78D2CD6D13600738F76 /* NodeTransition.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NodeTransition.swift; sourceTree = "<group>"; };
+		03ABF78F2CD6D16500738F76 /* SystemNodes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SystemNodes.swift; sourceTree = "<group>"; };
 		03C84EA32C27734C00DB3869 /* MockNodeVM.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MockNodeVM.swift; sourceTree = "<group>"; };
 		03C84EA52C27735600DB3869 /* MockTransitionVM.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MockTransitionVM.swift; sourceTree = "<group>"; };
 		03C84EA72C27784000DB3869 /* Base62.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Base62.swift; sourceTree = "<group>"; };
@@ -189,16 +199,18 @@
 		031367E12713FCF200E69F83 /* Nodal */ = {
 			isa = PBXGroup;
 			children = (
+				03ABF7822CD6D00C00738F76 /* Model */,
+				032959ED29CA996000FDE138 /* DataAccess */,
+				03ABF7832CD6D02400738F76 /* Repository */,
 				03223C952BF17A7B0041673D /* GraphInternalModels */,
 				03DD60D229D105B2005EC4A5 /* ViewModel */,
-				032959EE29CA997A00FDE138 /* Utils */,
-				032959ED29CA996000FDE138 /* DataAccess */,
-				0368D1E829976B4C0026D9EE /* Nodal.entitlements */,
-				0351022D2BF1B9A2000F3E1E /* Components */,
 				03D1D8DF28FB564700E76F27 /* AppViews */,
+				0351022D2BF1B9A2000F3E1E /* Components */,
+				032959EE29CA997A00FDE138 /* Utils */,
 				031367E22713FCF200E69F83 /* NodalApp.swift */,
 				031367E82713FCF400E69F83 /* Assets.xcassets */,
 				031367ED2713FCF400E69F83 /* Info.plist */,
+				0368D1E829976B4C0026D9EE /* Nodal.entitlements */,
 				031367EA2713FCF400E69F83 /* Preview Content */,
 			);
 			path = Nodal;
@@ -241,7 +253,6 @@
 		032959ED29CA996000FDE138 /* DataAccess */ = {
 			isa = PBXGroup;
 			children = (
-				0313680F2713FCFF00E69F83 /* GraphSerialization.swift */,
 				032959F129CAC31F00FDE138 /* GraphManager.swift */,
 				03A934BF2A3EBD930011DB8D /* Node.swift */,
 				03A934C12A3EC10F0011DB8D /* DocumentNode.swift */,
@@ -288,6 +299,26 @@
 			children = (
 			);
 			name = Frameworks;
+			sourceTree = "<group>";
+		};
+		03ABF7822CD6D00C00738F76 /* Model */ = {
+			isa = PBXGroup;
+			children = (
+				03ABF78F2CD6D16500738F76 /* SystemNodes.swift */,
+				03ABF78D2CD6D13600738F76 /* NodeTransition.swift */,
+				03ABF78B2CD6D0EE00738F76 /* ConnectDTO.swift */,
+				03ABF7892CD6D0E200738F76 /* NodeDTO.swift */,
+				03ABF7872CD6D0B300738F76 /* NodeMeta.swift */,
+				03ABF7852CD6D0A400738F76 /* NID.swift */,
+			);
+			path = Model;
+			sourceTree = "<group>";
+		};
+		03ABF7832CD6D02400738F76 /* Repository */ = {
+			isa = PBXGroup;
+			children = (
+			);
+			path = Repository;
 			sourceTree = "<group>";
 		};
 		03D1D8DF28FB564700E76F27 /* AppViews */ = {
@@ -484,6 +515,7 @@
 			files = (
 				031CE3F629E21CDF001470BD /* FillableSymbolToggle.swift in Sources */,
 				0313681227140A0900E69F83 /* Utils.swift in Sources */,
+				03ABF7862CD6D0A800738F76 /* NID.swift in Sources */,
 				03C84EA42C27734C00DB3869 /* MockNodeVM.swift in Sources */,
 				032959F229CAC31F00FDE138 /* GraphManager.swift in Sources */,
 				03A934C02A3EBD930011DB8D /* Node.swift in Sources */,
@@ -495,15 +527,18 @@
 				0339C23E29010DA000345CB1 /* TransitionView.swift in Sources */,
 				031CE3F429DA8643001470BD /* Suspense.swift in Sources */,
 				0328339F2B00139100D1AA58 /* DirectoryObserver.swift in Sources */,
+				03ABF7902CD6D16A00738F76 /* SystemNodes.swift in Sources */,
 				03DD60D429D105C1005EC4A5 /* TransitionVM.swift in Sources */,
 				03136814271415FA00E69F83 /* Extensions.swift in Sources */,
 				03A32F962AAD929000C6A30B /* WeakDictionary.swift in Sources */,
 				03C9CB3F2A7765BF007F29E7 /* AnyNodeVM.swift in Sources */,
 				03223C972BF17A8F0041673D /* GraphTimestamp.swift in Sources */,
 				038C93012A3954BF0059C8D6 /* UbiquitousFile.swift in Sources */,
+				03ABF78A2CD6D0EB00738F76 /* NodeDTO.swift in Sources */,
 				03A934C22A3EC10F0011DB8D /* DocumentNode.swift in Sources */,
 				03589E8F2A81EDE3004AD75B /* SubscribingTransitionVM.swift in Sources */,
 				0367FDCC2B1BBB4B00D4B3B3 /* NodeMetadataDocument.swift in Sources */,
+				03ABF78C2CD6D0F000738F76 /* ConnectDTO.swift in Sources */,
 				0313681627149ECE00E69F83 /* ZoomableScrollView.swift in Sources */,
 				03589E892A8096EC004AD75B /* Tags.swift in Sources */,
 				03C84EA82C27784000DB3869 /* Base62.swift in Sources */,
@@ -511,11 +546,12 @@
 				03A934C42A3F8AC20011DB8D /* DataDocument.swift in Sources */,
 				03589E8B2A809F72004AD75B /* SubscribingNodeVM.swift in Sources */,
 				03DD60D829D15891005EC4A5 /* NodeVM.swift in Sources */,
+				03ABF7882CD6D0B600738F76 /* NodeMeta.swift in Sources */,
 				03D1D8DE28FB559B00E76F27 /* NodeView.swift in Sources */,
 				031367E32713FCF200E69F83 /* NodalApp.swift in Sources */,
 				0375E7C82782C06000FB6548 /* SafariView.swift in Sources */,
+				03ABF78E2CD6D13C00738F76 /* NodeTransition.swift in Sources */,
 				038C93032A397ECF0059C8D6 /* Errors.swift in Sources */,
-				031368102713FCFF00E69F83 /* GraphSerialization.swift in Sources */,
 				031367E72713FCF200E69F83 /* ContentView.swift in Sources */,
 				03DD60D629D11E04005EC4A5 /* ErrorIndicator.swift in Sources */,
 				03C84EA62C27735600DB3869 /* MockTransitionVM.swift in Sources */,

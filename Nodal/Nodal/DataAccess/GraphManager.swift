@@ -19,8 +19,8 @@ actor GraphManager<N: Node> {
 
     private var _graphChanges: AnyPublisher<GraphChange, Never>?
 
-    private func initSpecialNodes() async throws {
-        for node in SpecialNode.allCases where (try? await self[node.nid]) == nil {
+    private func initSystemNodes() async throws {
+        for node in SystemNodes.allCases where (try? await self[node.nid]) == nil {
             let _ = try await createNode(withNid: node.nid)
         }
     }
@@ -51,7 +51,7 @@ actor GraphManager<N: Node> {
 
     init(dir: URL) async throws {
         basePath = dir
-        try await initSpecialNodes()
+        try await initSystemNodes()
         initDirectoryObserverAndGraphChanges()
     }
 
