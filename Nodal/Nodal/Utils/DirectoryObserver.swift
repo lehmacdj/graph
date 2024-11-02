@@ -23,13 +23,13 @@ class DirectoryObserver: NSObject, NSFilePresenter {
 
         // https://developer.apple.com/documentation/foundation/nsfilepresenter#1673868
         applicationBackgroundedSubscription = Task {
-            for await _ in await NotificationCenter.default.notifications(named: UIApplication.didEnterBackgroundNotification) {
+            for await _ in NotificationCenter.default.notifications(named: UIApplication.didEnterBackgroundNotification) {
                 stopObserving()
             }
             logInfo("subscription to notification center cancelled")
         }
         applicationBackgroundedSubscription = Task {
-            for await _ in await NotificationCenter.default.notifications(named: UIApplication.willEnterForegroundNotification) {
+            for await _ in NotificationCenter.default.notifications(named: UIApplication.willEnterForegroundNotification) {
                 startObserving()
             }
             logInfo("subscription to notification center cancelled")
