@@ -120,6 +120,6 @@ public extension Int {
 }
 
 extension Calendar {
-    static var iso8601 = Calendar(identifier: .iso8601)
+    static let iso8601 = Calendar(identifier: .iso8601)
 }
 
