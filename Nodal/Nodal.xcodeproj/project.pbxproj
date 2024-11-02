@@ -35,17 +35,9 @@
 		031CE3F429DA8643001470BD /* Suspense.swift in Sources */ = {isa = PBXBuildFile; fileRef = 031CE3F329DA8643001470BD /* Suspense.swift */; };
 		031CE3F629E21CDF001470BD /* FillableSymbolToggle.swift in Sources */ = {isa = PBXBuildFile; fileRef = 031CE3F529E21CDF001470BD /* FillableSymbolToggle.swift */; };
 		03223C972BF17A8F0041673D /* GraphTimestamp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 03223C962BF17A8F0041673D /* GraphTimestamp.swift */; };
-		0326BF27292951D700ECA18F /* BitCollections in Frameworks */ = {isa = PBXBuildFile; productRef = 0326BF26292951D700ECA18F /* BitCollections */; };
-		0326BF29292951D700ECA18F /* Collections in Frameworks */ = {isa = PBXBuildFile; productRef = 0326BF28292951D700ECA18F /* Collections */; };
-		0326BF2B292951D700ECA18F /* DequeModule in Frameworks */ = {isa = PBXBuildFile; productRef = 0326BF2A292951D700ECA18F /* DequeModule */; };
-		0326BF2D292951D700ECA18F /* HeapModule in Frameworks */ = {isa = PBXBuildFile; productRef = 0326BF2C292951D700ECA18F /* HeapModule */; };
-		0326BF2F292951D700ECA18F /* OrderedCollections in Frameworks */ = {isa = PBXBuildFile; productRef = 0326BF2E292951D700ECA18F /* OrderedCollections */; };
-		0326BF31292951D700ECA18F /* PersistentCollections in Frameworks */ = {isa = PBXBuildFile; productRef = 0326BF30292951D700ECA18F /* PersistentCollections */; };
-		0326BF33292951D700ECA18F /* SortedCollections in Frameworks */ = {isa = PBXBuildFile; productRef = 0326BF32292951D700ECA18F /* SortedCollections */; };
 		0328339F2B00139100D1AA58 /* DirectoryObserver.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0328339E2B00139100D1AA58 /* DirectoryObserver.swift */; };
 		032959F229CAC31F00FDE138 /* GraphManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 032959F129CAC31F00FDE138 /* GraphManager.swift */; };
 		033449D42999602B00BBCCC4 /* Semaphor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 033449D32999602B00BBCCC4 /* Semaphor.swift */; };
-		033449D72999634000BBCCC4 /* AsyncAlgorithms in Frameworks */ = {isa = PBXBuildFile; productRef = 033449D62999634000BBCCC4 /* AsyncAlgorithms */; };
 		0339C23E29010DA000345CB1 /* TransitionView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0339C23D29010DA000345CB1 /* TransitionView.swift */; };
 		035450022969D74100B5AAF6 /* FileSelectorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 035450012969D74100B5AAF6 /* FileSelectorView.swift */; };
 		03589E892A8096EC004AD75B /* Tags.swift in Sources */ = {isa = PBXBuildFile; fileRef = 03589E882A8096EC004AD75B /* Tags.swift */; };
@@ -60,6 +52,8 @@
 		03A934C02A3EBD930011DB8D /* Node.swift in Sources */ = {isa = PBXBuildFile; fileRef = 03A934BF2A3EBD930011DB8D /* Node.swift */; };
 		03A934C22A3EC10F0011DB8D /* DocumentNode.swift in Sources */ = {isa = PBXBuildFile; fileRef = 03A934C12A3EC10F0011DB8D /* DocumentNode.swift */; };
 		03A934C42A3F8AC20011DB8D /* DataDocument.swift in Sources */ = {isa = PBXBuildFile; fileRef = 03A934C32A3F8AC20011DB8D /* DataDocument.swift */; };
+		03ABF77F2CD6CB0F00738F76 /* Algorithms in Frameworks */ = {isa = PBXBuildFile; productRef = 03ABF77E2CD6CB0F00738F76 /* Algorithms */; };
+		03ABF7812CD6CB0F00738F76 /* AsyncAlgorithms in Frameworks */ = {isa = PBXBuildFile; productRef = 03ABF7802CD6CB0F00738F76 /* AsyncAlgorithms */; };
 		03C84EA42C27734C00DB3869 /* MockNodeVM.swift in Sources */ = {isa = PBXBuildFile; fileRef = 03C84EA32C27734C00DB3869 /* MockNodeVM.swift */; };
 		03C84EA62C27735600DB3869 /* MockTransitionVM.swift in Sources */ = {isa = PBXBuildFile; fileRef = 03C84EA52C27735600DB3869 /* MockTransitionVM.swift */; };
 		03C84EA82C27784000DB3869 /* Base62.swift in Sources */ = {isa = PBXBuildFile; fileRef = 03C84EA72C27784000DB3869 /* Base62.swift */; };
@@ -148,15 +142,9 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				0326BF2F292951D700ECA18F /* OrderedCollections in Frameworks */,
-				0326BF31292951D700ECA18F /* PersistentCollections in Frameworks */,
-				0326BF29292951D700ECA18F /* Collections in Frameworks */,
-				0326BF33292951D700ECA18F /* SortedCollections in Frameworks */,
-				0326BF27292951D700ECA18F /* BitCollections in Frameworks */,
-				0326BF2D292951D700ECA18F /* HeapModule in Frameworks */,
-				0326BF2B292951D700ECA18F /* DequeModule in Frameworks */,
+				03ABF77F2CD6CB0F00738F76 /* Algorithms in Frameworks */,
 				03A32F942A89684F00C6A30B /* AsyncButton in Frameworks */,
-				033449D72999634000BBCCC4 /* AsyncAlgorithms in Frameworks */,
+				03ABF7812CD6CB0F00738F76 /* AsyncAlgorithms in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -345,15 +333,9 @@
 			);
 			name = Nodal;
 			packageProductDependencies = (
-				0326BF26292951D700ECA18F /* BitCollections */,
-				0326BF28292951D700ECA18F /* Collections */,
-				0326BF2A292951D700ECA18F /* DequeModule */,
-				0326BF2C292951D700ECA18F /* HeapModule */,
-				0326BF2E292951D700ECA18F /* OrderedCollections */,
-				0326BF30292951D700ECA18F /* PersistentCollections */,
-				0326BF32292951D700ECA18F /* SortedCollections */,
-				033449D62999634000BBCCC4 /* AsyncAlgorithms */,
 				03A32F932A89684F00C6A30B /* AsyncButton */,
+				03ABF77E2CD6CB0F00738F76 /* Algorithms */,
+				03ABF7802CD6CB0F00738F76 /* AsyncAlgorithms */,
 			);
 			productName = Nodal;
 			productReference = 031367DF2713FCF200E69F83 /* Nodal.app */;
@@ -431,9 +413,10 @@
 			);
 			mainGroup = 031367D62713FCF200E69F83;
 			packageReferences = (
-				0326BF25292951D700ECA18F /* XCRemoteSwiftPackageReference "swift-collections" */,
-				033449D52999634000BBCCC4 /* XCRemoteSwiftPackageReference "swift-async-algorithms" */,
 				03A32F912A89683900C6A30B /* XCRemoteSwiftPackageReference "swiftui-async-button" */,
+				03ABF77B2CD6CA9600738F76 /* XCRemoteSwiftPackageReference "swift-algorithms" */,
+				03ABF77C2CD6CAA200738F76 /* XCRemoteSwiftPackageReference "swift-collections" */,
+				03ABF77D2CD6CAB800738F76 /* XCRemoteSwiftPackageReference "swift-async-algorithms" */,
 			);
 			productRefGroup = 031367E02713FCF200E69F83 /* Products */;
 			projectDirPath = "";
@@ -905,22 +888,6 @@
 /* End XCConfigurationList section */
 
 /* Begin XCRemoteSwiftPackageReference section */
-		0326BF25292951D700ECA18F /* XCRemoteSwiftPackageReference "swift-collections" */ = {
-			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "https://github.com/apple/swift-collections.git";
-			requirement = {
-				branch = main;
-				kind = branch;
-			};
-		};
-		033449D52999634000BBCCC4 /* XCRemoteSwiftPackageReference "swift-async-algorithms" */ = {
-			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "https://github.com/apple/swift-async-algorithms";
-			requirement = {
-				kind = upToNextMajorVersion;
-				minimumVersion = 0.0.4;
-			};
-		};
 		03A32F912A89683900C6A30B /* XCRemoteSwiftPackageReference "swiftui-async-button" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/lehmacdj/swiftui-async-button";
@@ -929,53 +896,47 @@
 				minimumVersion = 1.1.1;
 			};
 		};
+		03ABF77B2CD6CA9600738F76 /* XCRemoteSwiftPackageReference "swift-algorithms" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/apple/swift-algorithms.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 1.2.0;
+			};
+		};
+		03ABF77C2CD6CAA200738F76 /* XCRemoteSwiftPackageReference "swift-collections" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/apple/swift-collections.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 1.1.4;
+			};
+		};
+		03ABF77D2CD6CAB800738F76 /* XCRemoteSwiftPackageReference "swift-async-algorithms" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/apple/swift-async-algorithms.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 1.0.2;
+			};
+		};
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
-		0326BF26292951D700ECA18F /* BitCollections */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = 0326BF25292951D700ECA18F /* XCRemoteSwiftPackageReference "swift-collections" */;
-			productName = BitCollections;
-		};
-		0326BF28292951D700ECA18F /* Collections */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = 0326BF25292951D700ECA18F /* XCRemoteSwiftPackageReference "swift-collections" */;
-			productName = Collections;
-		};
-		0326BF2A292951D700ECA18F /* DequeModule */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = 0326BF25292951D700ECA18F /* XCRemoteSwiftPackageReference "swift-collections" */;
-			productName = DequeModule;
-		};
-		0326BF2C292951D700ECA18F /* HeapModule */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = 0326BF25292951D700ECA18F /* XCRemoteSwiftPackageReference "swift-collections" */;
-			productName = HeapModule;
-		};
-		0326BF2E292951D700ECA18F /* OrderedCollections */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = 0326BF25292951D700ECA18F /* XCRemoteSwiftPackageReference "swift-collections" */;
-			productName = OrderedCollections;
-		};
-		0326BF30292951D700ECA18F /* PersistentCollections */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = 0326BF25292951D700ECA18F /* XCRemoteSwiftPackageReference "swift-collections" */;
-			productName = PersistentCollections;
-		};
-		0326BF32292951D700ECA18F /* SortedCollections */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = 0326BF25292951D700ECA18F /* XCRemoteSwiftPackageReference "swift-collections" */;
-			productName = SortedCollections;
-		};
-		033449D62999634000BBCCC4 /* AsyncAlgorithms */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = 033449D52999634000BBCCC4 /* XCRemoteSwiftPackageReference "swift-async-algorithms" */;
-			productName = AsyncAlgorithms;
-		};
 		03A32F932A89684F00C6A30B /* AsyncButton */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = 03A32F912A89683900C6A30B /* XCRemoteSwiftPackageReference "swiftui-async-button" */;
 			productName = AsyncButton;
+		};
+		03ABF77E2CD6CB0F00738F76 /* Algorithms */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 03ABF77B2CD6CA9600738F76 /* XCRemoteSwiftPackageReference "swift-algorithms" */;
+			productName = Algorithms;
+		};
+		03ABF7802CD6CB0F00738F76 /* AsyncAlgorithms */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 03ABF77D2CD6CAB800738F76 /* XCRemoteSwiftPackageReference "swift-async-algorithms" */;
+			productName = AsyncAlgorithms;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

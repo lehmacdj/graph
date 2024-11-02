@@ -284,7 +284,7 @@ import AsyncAlgorithms
     private func updateStateLoop() async throws {
         guard case .loadingActive(_, let .some(node)) = internalState else { return }
 
-        let channel = AsyncChannel(element: UpdateRequest.self)
+        let channel = AsyncChannel<UpdateRequest>()
 
         try await withThrowingDiscardingTaskGroup { group in
             var lastUpdate = Date.now
