@@ -10,6 +10,15 @@ import Foundation
 
 struct SpecialNodeDoesNotExist: LocalizedError {}
 
+enum GraphChange {
+    case metadataRemoved(NID)
+    case metadataAdded(NID)
+    case metadataUpdated(NID)
+    case dataRemoved(NID)
+    case dataAdded(NID)
+    case dataUpdated(NID)
+}
+
 /// Represents the  represents the base directory for a graph.
 /// Offers a flyweight mechanism for retrieving Node model objects that represent nodes in the graph.
 actor GraphManager<N: Node> {
@@ -109,15 +118,6 @@ actor GraphManager<N: Node> {
         } else {
             return nil
         }
-    }
-
-    enum GraphChange {
-        case metadataRemoved(NID)
-        case metadataAdded(NID)
-        case metadataUpdated(NID)
-        case dataRemoved(NID)
-        case dataAdded(NID)
-        case dataUpdated(NID)
     }
 
     var graphChanges: AnyPublisher<GraphChange, Never> {
