@@ -11,11 +11,11 @@ import Foundation
 struct NoAugmentation {}
 
 extension NoAugmentation: Augmentation {
-    static func computeDependencies(forAugmenting id: NID, from node: NodeValue<Void>) -> [NID] {
+    static func computeDependentNodes(forAugmenting id: NID, from node: NodeValue<Void>) -> Set<NID> {
         []
     }
 
-    static func computeValue(forAugmenting id: NID, dependencies: [NID: NodeValue<() async -> Data>]) async -> NoAugmentation {
+    static func computeAugmentation(for id: NID, dependencies: [NID: NodeValue<AugmentationDataValue>]) -> NoAugmentation {
         return .init()
     }
 }

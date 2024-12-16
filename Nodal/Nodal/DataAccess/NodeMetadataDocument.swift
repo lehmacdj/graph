@@ -9,6 +9,7 @@ import Combine
 import UIKit
 import UniformTypeIdentifiers
 
+/// There should only be a maximum of one of these per
 final class NodeMetadataDocument: UIDocument {
     struct FailedToOpenDocument: LocalizedError, Codable {
         let documentClosed: Bool
@@ -28,7 +29,7 @@ final class NodeMetadataDocument: UIDocument {
 
     init(metaURL: URL) async throws {
         super.init(fileURL: metaURL)
-        guard await super.open() else {
+        guard await open() else {
             throw FailedToOpenDocument(documentState: documentState)
         }
     }
@@ -50,6 +51,10 @@ final class NodeMetadataDocument: UIDocument {
 
     var metaPublisher: AnyPublisher<NodeMeta, Never> {
         $_meta.compactMap { $0 }.eraseToAnyPublisher()
+    }
+
+    var metaUpdates: any AsyncSequence<NodeMeta, Never> {
+        metaPublisher.values
     }
 
     struct InvalidFileType: LocalizedError, Codable {}

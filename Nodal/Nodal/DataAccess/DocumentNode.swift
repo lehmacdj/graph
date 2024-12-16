@@ -71,7 +71,7 @@ final class DocumentNode: GraphManagerNode {
             if let isUbiquitousItem = attributes.isUbiquitousItem, isUbiquitousItem {
                 return dataURL
             } else {
-                // attributes.isUbiquitousItem is nil when the file does not exist
+                // attributes.isUbiquitousItem is typically only nil when the file does not exist
                 return nil
             }
         } catch {

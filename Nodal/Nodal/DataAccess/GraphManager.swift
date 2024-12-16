@@ -65,11 +65,11 @@ actor GraphManager<N: Node> {
     }
 
     nonisolated func metaPath(for nid: NID) -> URL {
-        basePath.appendingPathComponent(nid.metaPath)
+        basePath.appending(metaPathFor: nid)
     }
 
     nonisolated func dataPath(for nid: NID) -> URL {
-        basePath.appendingPathComponent(nid.dataPath)
+        basePath.appending(dataPathFor: nid)
     }
 
     subscript(id: NID) -> N {

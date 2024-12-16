@@ -45,6 +45,8 @@
 		0375E7C82782C06000FB6548 /* SafariView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0375E7C72782C06000FB6548 /* SafariView.swift */; };
 		038C93012A3954BF0059C8D6 /* UbiquitousFile.swift in Sources */ = {isa = PBXBuildFile; fileRef = 038C93002A3954BF0059C8D6 /* UbiquitousFile.swift */; };
 		038C93032A397ECF0059C8D6 /* Errors.swift in Sources */ = {isa = PBXBuildFile; fileRef = 038C93022A397ECF0059C8D6 /* Errors.swift */; };
+		039438F72D0F65810078EE32 /* FavoritesAugmentation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 039438F62D0F657D0078EE32 /* FavoritesAugmentation.swift */; };
+		039438F92D0F68360078EE32 /* DataValue.swift in Sources */ = {isa = PBXBuildFile; fileRef = 039438F82D0F68350078EE32 /* DataValue.swift */; };
 		03A32F942A89684F00C6A30B /* AsyncButton in Frameworks */ = {isa = PBXBuildFile; productRef = 03A32F932A89684F00C6A30B /* AsyncButton */; };
 		03A32F962AAD929000C6A30B /* WeakDictionary.swift in Sources */ = {isa = PBXBuildFile; fileRef = 03A32F952AAD929000C6A30B /* WeakDictionary.swift */; };
 		03A934C02A3EBD930011DB8D /* Node.swift in Sources */ = {isa = PBXBuildFile; fileRef = 03A934BF2A3EBD930011DB8D /* Node.swift */; };
@@ -59,11 +61,11 @@
 		03ABF78E2CD6D13C00738F76 /* NodeTransition.swift in Sources */ = {isa = PBXBuildFile; fileRef = 03ABF78D2CD6D13600738F76 /* NodeTransition.swift */; };
 		03ABF7902CD6D16A00738F76 /* SystemNodes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 03ABF78F2CD6D16500738F76 /* SystemNodes.swift */; };
 		03ABF7922CD6D37400738F76 /* GraphRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = 03ABF7912CD6D37100738F76 /* GraphRepository.swift */; };
-		03ABF7942CD6D37D00738F76 /* NodeHandle.swift in Sources */ = {isa = PBXBuildFile; fileRef = 03ABF7932CD6D37A00738F76 /* NodeHandle.swift */; };
 		03ABF7992CD9B6A600738F76 /* NodeValue.swift in Sources */ = {isa = PBXBuildFile; fileRef = 03ABF7982CD9B6A400738F76 /* NodeValue.swift */; };
 		03ABF79B2CD9B9F300738F76 /* Augmentation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 03ABF79A2CD9B9EF00738F76 /* Augmentation.swift */; };
 		03ABF79E2CD9C14500738F76 /* NoAugmentation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 03ABF79D2CD9C14200738F76 /* NoAugmentation.swift */; };
 		03ABF7A22CD9C1D700738F76 /* ProductionGraphRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = 03ABF7A12CD9C1D200738F76 /* ProductionGraphRepository.swift */; };
+		03ABF7A42CFC07D100738F76 /* URL+GraphPaths.swift in Sources */ = {isa = PBXBuildFile; fileRef = 03ABF7A32CFC07C600738F76 /* URL+GraphPaths.swift */; };
 		03C84EA42C27734C00DB3869 /* MockNodeVM.swift in Sources */ = {isa = PBXBuildFile; fileRef = 03C84EA32C27734C00DB3869 /* MockNodeVM.swift */; };
 		03C84EA62C27735600DB3869 /* MockTransitionVM.swift in Sources */ = {isa = PBXBuildFile; fileRef = 03C84EA52C27735600DB3869 /* MockTransitionVM.swift */; };
 		03C84EA82C27784000DB3869 /* Base62.swift in Sources */ = {isa = PBXBuildFile; fileRef = 03C84EA72C27784000DB3869 /* Base62.swift */; };
@@ -127,6 +129,8 @@
 		0375E7C72782C06000FB6548 /* SafariView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SafariView.swift; sourceTree = "<group>"; };
 		038C93002A3954BF0059C8D6 /* UbiquitousFile.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UbiquitousFile.swift; sourceTree = "<group>"; };
 		038C93022A397ECF0059C8D6 /* Errors.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Errors.swift; sourceTree = "<group>"; };
+		039438F62D0F657D0078EE32 /* FavoritesAugmentation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FavoritesAugmentation.swift; sourceTree = "<group>"; };
+		039438F82D0F68350078EE32 /* DataValue.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DataValue.swift; sourceTree = "<group>"; };
 		03A32F952AAD929000C6A30B /* WeakDictionary.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WeakDictionary.swift; sourceTree = "<group>"; };
 		03A934BF2A3EBD930011DB8D /* Node.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Node.swift; sourceTree = "<group>"; };
 		03A934C12A3EC10F0011DB8D /* DocumentNode.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DocumentNode.swift; sourceTree = "<group>"; };
@@ -138,11 +142,11 @@
 		03ABF78D2CD6D13600738F76 /* NodeTransition.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NodeTransition.swift; sourceTree = "<group>"; };
 		03ABF78F2CD6D16500738F76 /* SystemNodes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SystemNodes.swift; sourceTree = "<group>"; };
 		03ABF7912CD6D37100738F76 /* GraphRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GraphRepository.swift; sourceTree = "<group>"; };
-		03ABF7932CD6D37A00738F76 /* NodeHandle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NodeHandle.swift; sourceTree = "<group>"; };
 		03ABF7982CD9B6A400738F76 /* NodeValue.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NodeValue.swift; sourceTree = "<group>"; };
 		03ABF79A2CD9B9EF00738F76 /* Augmentation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Augmentation.swift; sourceTree = "<group>"; };
 		03ABF79D2CD9C14200738F76 /* NoAugmentation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NoAugmentation.swift; sourceTree = "<group>"; };
 		03ABF7A12CD9C1D200738F76 /* ProductionGraphRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProductionGraphRepository.swift; sourceTree = "<group>"; };
+		03ABF7A32CFC07C600738F76 /* URL+GraphPaths.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "URL+GraphPaths.swift"; sourceTree = "<group>"; };
 		03C84EA32C27734C00DB3869 /* MockNodeVM.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MockNodeVM.swift; sourceTree = "<group>"; };
 		03C84EA52C27735600DB3869 /* MockTransitionVM.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MockTransitionVM.swift; sourceTree = "<group>"; };
 		03C84EA72C27784000DB3869 /* Base62.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Base62.swift; sourceTree = "<group>"; };
@@ -276,6 +280,7 @@
 		032959EE29CA997A00FDE138 /* Utils */ = {
 			isa = PBXGroup;
 			children = (
+				03ABF7A32CFC07C600738F76 /* URL+GraphPaths.swift */,
 				03A32F952AAD929000C6A30B /* WeakDictionary.swift */,
 				0313681127140A0900E69F83 /* Utils.swift */,
 				03136813271415FA00E69F83 /* Extensions.swift */,
@@ -313,6 +318,7 @@
 		03ABF7822CD6D00C00738F76 /* Model */ = {
 			isa = PBXGroup;
 			children = (
+				039438F82D0F68350078EE32 /* DataValue.swift */,
 				03ABF79C2CD9C13B00738F76 /* Augmentation */,
 				03ABF7982CD9B6A400738F76 /* NodeValue.swift */,
 				03ABF78F2CD6D16500738F76 /* SystemNodes.swift */,
@@ -329,7 +335,6 @@
 			isa = PBXGroup;
 			children = (
 				03ABF7A12CD9C1D200738F76 /* ProductionGraphRepository.swift */,
-				03ABF7932CD6D37A00738F76 /* NodeHandle.swift */,
 				03ABF7912CD6D37100738F76 /* GraphRepository.swift */,
 			);
 			path = Repository;
@@ -338,6 +343,7 @@
 		03ABF79C2CD9C13B00738F76 /* Augmentation */ = {
 			isa = PBXGroup;
 			children = (
+				039438F62D0F657D0078EE32 /* FavoritesAugmentation.swift */,
 				03ABF79D2CD9C14200738F76 /* NoAugmentation.swift */,
 				03ABF79A2CD9B9EF00738F76 /* Augmentation.swift */,
 			);
@@ -545,14 +551,16 @@
 				03A934C02A3EBD930011DB8D /* Node.swift in Sources */,
 				030CD85829F62B6800C27442 /* FillableSymbol.swift in Sources */,
 				03C9CB412A7765C9007F29E7 /* AnyTransitionVM.swift in Sources */,
-				03ABF7942CD6D37D00738F76 /* NodeHandle.swift in Sources */,
 				035450022969D74100B5AAF6 /* FileSelectorView.swift in Sources */,
 				03DD60D129D0C809005EC4A5 /* AsyncUI.swift in Sources */,
 				03DFE0B02A642F2900370692 /* Geometry.swift in Sources */,
 				0339C23E29010DA000345CB1 /* TransitionView.swift in Sources */,
 				031CE3F429DA8643001470BD /* Suspense.swift in Sources */,
+				039438F92D0F68360078EE32 /* DataValue.swift in Sources */,
 				0328339F2B00139100D1AA58 /* DirectoryObserver.swift in Sources */,
+				039438F72D0F65810078EE32 /* FavoritesAugmentation.swift in Sources */,
 				03ABF7922CD6D37400738F76 /* GraphRepository.swift in Sources */,
+				03ABF7A42CFC07D100738F76 /* URL+GraphPaths.swift in Sources */,
 				03ABF7992CD9B6A600738F76 /* NodeValue.swift in Sources */,
 				03ABF7902CD6D16A00738F76 /* SystemNodes.swift in Sources */,
 				03DD60D429D105C1005EC4A5 /* TransitionVM.swift in Sources */,
