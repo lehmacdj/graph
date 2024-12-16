@@ -17,15 +17,17 @@ struct NID: Equatable, Hashable {
         self.representation = representation
     }
 
-    /// Fake NID constructed from an int. Only safe up to values of 62 ^ nidDigits, beyond that may return repeated results
+    /// Fake NID constructed from an int.
     init(fake input: Int) {
-        var remainder = input % (62 ^ nidDigits)
         var representation = ""
+        precondition(nidDigits < 11)
+        var remainder = input % pow(input, nidDigits)
 
         while representation.count < nidDigits {
             let ix = String.base62Digits.index(String.base62Digits.startIndex, offsetBy: remainder % 62)
             let char = String.base62Digits[ix]
             representation.append(String(char))
+            remainder /= 62
         }
 
         self.init(representation: representation)!
