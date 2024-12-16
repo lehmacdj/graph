@@ -129,6 +129,9 @@ actor ProductionGraphRepository: GraphRepository {
                         } receiveValue: { value in
                             continuation.yield(NodeValue(from: value))
                         }
+                    continuation.onTermination = { _ in
+                        cancellable.cancel()
+                    }
                 }
             }
         }
@@ -252,7 +255,7 @@ private extension ProductionGraphRepository {
             var metadataHandle: MetadataHandle?
 
             var completeDependencyDictValue: NodeValue<AugmentationDataValue>? {
-                guard let mostRecentValue, let mostRecentDataNeed else {
+                guard let mostRecentValue, let _ = mostRecentDataNeed else {
                     return nil
                 }
 

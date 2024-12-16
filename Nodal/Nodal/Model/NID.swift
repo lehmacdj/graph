@@ -21,7 +21,7 @@ struct NID: Equatable, Hashable {
     init(fake input: Int) {
         var representation = ""
         precondition(nidDigits < 11)
-        var remainder = input % pow(input, nidDigits)
+        var remainder = input % (62 ** nidDigits)
 
         while representation.count < nidDigits {
             let ix = String.base62Digits.index(String.base62Digits.startIndex, offsetBy: remainder % 62)

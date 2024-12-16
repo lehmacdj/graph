@@ -100,22 +100,3 @@ extension Sequence {
         constructor(self)
     }
 }
-
-func pow(_ base: Int, _ exponent: Int) -> Int {
-    precondition(exponent >= 0, "Exponent must be non-negative")
-
-    if exponent == 0 {
-        return 1
-    }
-
-    if exponent == 1 {
-        return base
-    }
-
-    let half = pow(base, exponent / 2)
-    if exponent % 2 == 0 {
-        return half * half
-    } else {
-        return half * half * base
-    }
-}

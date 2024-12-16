@@ -10,7 +10,7 @@
 
 import Foundation
 
-extension String: Identifiable {
+extension String: @retroactive Identifiable {
     public var id: String { self }
 }
 
@@ -55,7 +55,7 @@ extension Sequence {
     }
 }
 
-extension Array: Comparable where Array.Element: Comparable {
+extension Array: @retroactive Comparable where Array.Element: Comparable {
     public static func < (lhs: Array<Element>, rhs: Array<Element>) -> Bool {
         var i = 0
         while (i < lhs.count && i < rhs.count) {
@@ -70,7 +70,7 @@ extension Array: Comparable where Array.Element: Comparable {
     }
 }
 
-extension Int: Identifiable {
+extension Int: @retroactive Identifiable {
     public var id: some Hashable {
         self
     }
@@ -80,10 +80,7 @@ infix operator **: MultiplicationPrecedence
 
 public extension Int {
     func raised(to power: Int) -> Int {
-        guard power >= 0 else {
-            assert(power >= 0, "Exponent must be non-negative.")
-            return 1 // Optional: handle negative exponents as per your use case
-        }
+        precondition(power >= 0, "Exponent must be non-negative")
 
         var result = 1
         var base = self
