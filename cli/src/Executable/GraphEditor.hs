@@ -7,8 +7,8 @@ import Control.Monad.Fix
 import DAL.Serialization (doesNodeExist, initializeGraph)
 import Effect.Console
 import Effect.Editor
+import Effect.FileSystem
 import Effect.FileTypeOracle
-import Effect.Filesystem
 import Effect.FreshNID
 import Effect.Interpreters
 import Effect.NodeLocated
@@ -58,7 +58,7 @@ withDefaultQuitParser p s
 
 repl ::
   ( Members [Console, SetLocation, GetLocation, Dualizeable, Readline, Embed IO] effs,
-    Members [FileSystemTree, Web, FreshNID, GetTime, Editor, State History] effs,
+    Members [FileSystem, Web, FreshNID, GetTime, Editor, State History] effs,
     Members '[FileTypeOracle] effs,
     HasGraph String effs,
     -- TODO: these effects are bad and shouldn't be exposed; need to rewrite

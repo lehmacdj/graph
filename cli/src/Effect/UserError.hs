@@ -65,5 +65,8 @@ newtype Missing = Missing {unMissing :: NID}
 instance ToUserError Missing where
   toUserError (Missing nid) = MissingNode nid
 
+instance ToUserError IOException where
+  toUserError = IOFail
+
 throwMissing :: Member (Error Missing) effs => NID -> Sem effs a
 throwMissing = throw . Missing

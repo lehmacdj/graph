@@ -1,35 +1,29 @@
 {-# LANGUAGE TemplateHaskell #-}
 
-module Effect.Filesystem where
+module Effect.FileSystem where
 
 import Effect.UserError
 import MyPrelude
+import qualified System.Directory as Directory
 import System.Directory.Tree
 
--- | TODO: add effects for more things, make sure we can implement fileystem import
 data FileSystem m r where
-  ReadFileE :: FilePath -> FileSystem m ByteString
-  WriteFileE :: FilePath -> ByteString -> FileSystem m ()
+  ReadDirectory :: FilePath -> FileSystem m (DirTree ByteString)
+  WriteDirectory :: FilePath -> DirTree ByteString -> FileSystem m (DirTree ())
+  CanonicalizePath ::
+    -- | filepath to convert
+    FilePath ->
+    FileSystem m (Either IOError FilePath)
 
 makeSem ''FileSystem
 
-data FileSystemTree m r where
-  ReadDirectory :: FilePath -> FileSystemTree m (DirTree ByteString)
-  WriteDirectory :: FilePath -> DirTree ByteString -> FileSystemTree m (DirTree ())
-
-makeSem ''FileSystemTree
-
--- runFileSystemIO
---   :: (Member (Embed IO) effs, Member Throw effs)
---   => Sem (FileSystem : effs) ~> Sem effs
--- runFileSystemIO = interpret $ \case
---   ReadFile
-
-runFileSystemTreeIO ::
+runFileSystemIO ::
   (Member (Embed IO) effs, Member (Error UserError) effs) =>
-  Sem (FileSystemTree : effs) ~> Sem effs
-runFileSystemTreeIO = interpret $ \case
+  Sem (FileSystem : effs) ~> Sem effs
+runFileSystemIO = interpret $ \case
   ReadDirectory fp ->
     liftIO $ dirTree <$> readDirectoryWithL readFile fp
   WriteDirectory fp dt ->
     liftIO $ dirTree <$> writeDirectoryWith writeFile (fp :/ dt)
+  CanonicalizePath fp ->
+    liftIO . try . Directory.canonicalizePath $ fp

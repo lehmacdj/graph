@@ -18,8 +18,8 @@ import Control.Monad (zipWithM_)
 import qualified DAL.Serialization as S2
 import Effect.Console
 import Effect.Editor
+import Effect.FileSystem
 import Effect.FileTypeOracle
-import Effect.Filesystem
 import Effect.FreshNID
 import Effect.NodeLocated
 import Effect.Time
@@ -29,9 +29,9 @@ import Effect.Web
 import GHC.Generics
 import Graph.Check
 import Graph.Effect
-import Graph.Export.Filesystem (exportToDirectory)
+import Graph.Export.FileSystem (exportToDirectory)
 import Graph.Import.ByteString
-import Graph.Import.Filesystem
+import Graph.Import.FileSystem
 import Graph.Time (taggingFreshNodesWithTime)
 import Graph.Utils
 import Lang.Path
@@ -162,7 +162,7 @@ guardDangerousDualizedOperation = do
 
 interpretCommand ::
   ( Members [Console, Error UserError, SetLocation, GetLocation, Dualizeable] effs,
-    Members [FileSystemTree, Web, FreshNID, GetTime, Editor, State History] effs,
+    Members [FileSystem, Web, FreshNID, GetTime, Editor, State History] effs,
     Members [FileTypeOracle, Readline, Warn UserError] effs,
     -- TODO: remove this inclusion of RawGraph + Embed IO here; probably the
     -- best way to do this is to allow commands to be defined as @stack@
@@ -257,7 +257,8 @@ interpretCommand = \case
   -- layers of commands that can be handled at different levels
   Import fp -> do
     guardDangerousDualizedOperation
-    subsumeUserError $ importDirectory fp nilNID
+    fp' <- subsumeUserError @IOError . untry $ canonicalizePath fp
+    subsumeUserError $ importDirectory fp' nilNID
     changeLocation nilNID
   ImportUrl uri -> do
     guardDangerousDualizedOperation
@@ -314,7 +315,8 @@ interpretCommand = \case
     put @History history'
   Materialize fp -> do
     nid <- subsumeUserError @Missing currentLocation
-    exportToDirectory nid fp
+    fp' <- subsumeUserError @IOError . untry $ canonicalizePath fp
+    exportToDirectory nid fp'
   Exec p -> do
     nid <- currentLocation
     let err = singleErr "the argument to exec"

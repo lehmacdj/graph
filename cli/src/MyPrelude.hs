@@ -183,3 +183,9 @@ embedStateful f = do
   let (result, newState) = f state
   put newState
   pure result
+
+untry :: Sem r (Either e a) -> Sem (Error e : r) a
+untry x =
+  raise x >>= \case
+    Left e -> throw e
+    Right v -> pure v

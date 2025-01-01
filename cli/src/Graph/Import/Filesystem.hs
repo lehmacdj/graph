@@ -6,11 +6,11 @@
 --   Each file is hashed and stored in a node: by-hash/{hash}.
 --   Other instances of files with that data are stored as a link to that node
 --   from their place in the directory tree.
-module Graph.Import.Filesystem where
+module Graph.Import.FileSystem where
 
 import Data.Digest.Pure.SHA
 import Effect.Console
-import Effect.Filesystem
+import Effect.FileSystem
 import Effect.FreshNID
 import Effect.Time
 import Effect.UserError
@@ -26,7 +26,7 @@ computeSHA :: ByteString -> String
 computeSHA = showDigest . sha512 . fromStrict
 
 importDirectory ::
-  ( Members [GetTime, FreshNID, FileSystemTree, Console, Error Missing] effs,
+  ( Members [GetTime, FreshNID, FileSystem, Console, Error Missing] effs,
     HasGraph String effs
   ) =>
   FilePath ->

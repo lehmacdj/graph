@@ -3,8 +3,6 @@ cabal-version: 1.12
 -- This file has been generated from package.yaml by hpack version 0.35.2.
 --
 -- see: https://github.com/sol/hpack
---
--- hash: 08f54968fd2c8dca911ce6bb7c05a940df3a6d7074475a186075205fe5258518
 
 name:           graph
 version:        0.1.0.0
@@ -32,7 +30,7 @@ library
       Data.Set.Ordered.Orphans
       Effect.Console
       Effect.Editor
-      Effect.Filesystem
+      Effect.FileSystem
       Effect.FileTypeOracle
       Effect.FreshNID
       Effect.Interpreters
@@ -50,9 +48,9 @@ library
       Executable.GraphEditor.Options
       Graph.Check
       Graph.Effect
-      Graph.Export.Filesystem
+      Graph.Export.FileSystem
       Graph.Import.ByteString
-      Graph.Import.Filesystem
+      Graph.Import.FileSystem
       Graph.SystemNodes
       Graph.SystemNodes.Init
       Graph.Time

@@ -6,8 +6,8 @@ import Control.Arrow ((>>>))
 import Control.Lens
 import Effect.Console
 import Effect.Editor
+import Effect.FileSystem
 import Effect.FileTypeOracle
-import Effect.Filesystem
 import Effect.FreshNID
 import Effect.NodeLocated
 import Effect.Time
@@ -84,7 +84,7 @@ type HasMainEffects effs =
         GetLocation,
         FreshNID,
         Dualizeable,
-        FileSystemTree,
+        FileSystem,
         Web,
         Warn UserError,
         State History,
@@ -122,7 +122,7 @@ runMainEffectsIO errorHandlingBehavior timeBehavior env v = do
           >>> runRawGraphAsInput
           >>> contramapInputSem @FilePath (embed . readIORef . view #_filePath)
           >>> runWebIO
-          >>> runFileSystemTreeIO
+          >>> runFileSystemIO
           >>> runStateInputIORefOf @IsDual #_isDualized
           >>> interpretConsoleIO
           >>> timeBehavior

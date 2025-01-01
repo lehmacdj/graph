@@ -1,4 +1,4 @@
-module Graph.Export.Filesystem
+module Graph.Export.FileSystem
   ( exportToDirectory,
   )
 where
