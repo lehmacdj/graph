@@ -119,7 +119,7 @@ actor UbiquitousFile {
         NSFileCoordinator.addFilePresenter(self.filePresenter)
     }
 
-    struct FileNoLongerExists: Codable, LocalizedError {}
+    struct FileNoLongerExists: Error {}
 
     func download() async throws {
         if attributes?.downloadingStatus == .current {
@@ -151,7 +151,7 @@ actor UbiquitousFile {
         return try Data(contentsOf: url)
     }
 
-    struct TryingToWriteToNonCurrentFile: Codable, LocalizedError {}
+    struct TryingToWriteToNonCurrentFile: Error {}
 
     func write(_ data: Data) throws {
         guard attributes?.downloadingStatus == .current else {

@@ -11,7 +11,7 @@ import UniformTypeIdentifiers
 
 /// There should only be a maximum of one of these per
 final class NodeMetadataDocument: UIDocument {
-    struct FailedToOpenDocument: LocalizedError, Codable {
+    struct FailedToOpenDocument: Error {
         let documentClosed: Bool
         let inConflict: Bool
         let savingError: Bool
@@ -57,7 +57,7 @@ final class NodeMetadataDocument: UIDocument {
         metaPublisher.values
     }
 
-    struct InvalidFileType: LocalizedError, Codable {}
+    struct InvalidFileType: Error {}
 
     override func contents(forType typeName: String) throws -> Any {
         guard typeName == UTType.json.identifier else {
@@ -67,7 +67,7 @@ final class NodeMetadataDocument: UIDocument {
         return try encoder.encode(meta)
     }
 
-    struct ContentsIsNotData: LocalizedError, Codable {}
+    struct ContentsIsNotData: Error {}
 
     override func load(fromContents contents: Any, ofType typeName: String?) throws {
         guard typeName == UTType.json.identifier else {

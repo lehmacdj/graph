@@ -23,7 +23,7 @@ enum ThumbnailValue: Equatable {
         case (.thumbnail(let lhs), .thumbnail(let rhs)):
             Loading.equalityCheck(
                 loadedCheck: { $0.isEqual($1) },
-                errorCheck: { $0.localizedDescription == $1.localizedDescription }
+                errorCheck: { "\($0)" == "\($1)" }
             )(lhs, rhs)
         default: false
         }

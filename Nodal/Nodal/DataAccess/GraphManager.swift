@@ -8,7 +8,7 @@
 import Combine
 import Foundation
 
-struct SpecialNodeDoesNotExist: LocalizedError {}
+struct SpecialNodeDoesNotExist: Error {}
 
 enum GraphChange {
     case metadataRemoved(NID)

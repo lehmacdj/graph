@@ -37,6 +37,10 @@ func logError(_ message: String, file: String = #file, callingFunction: String =
     log(message, level: .error, file: file, callingFunction: callingFunction, line: line, column: column)
 }
 
+func logError(_ error: Error, file: String = #file, callingFunction: String = #function, line: Int = #line, column: Int = #column) {
+    logError("\(error)", file: file, callingFunction: callingFunction, line: line, column: column)
+}
+
 func trace<T>(_ val: T, level: LogLevel = .info, file: String = #file, callingFunction: String = #function, line: Int = #line, column: Int = #column) -> T {
     log(String(reflecting: val), level: .info, file: file, callingFunction: callingFunction, line: line, column: column)
     return val

@@ -55,6 +55,14 @@ extension Sequence {
     }
 }
 
+extension Sequence {
+    func unioned<T>() -> Set<T> where Self.Element == Set<T> {
+        var result = Set<T>()
+        self.forEach { result.formUnion($0) }
+        return result
+    }
+}
+
 extension Array: @retroactive Comparable where Array.Element: Comparable {
     public static func < (lhs: Array<Element>, rhs: Array<Element>) -> Bool {
         var i = 0
@@ -67,6 +75,17 @@ extension Array: @retroactive Comparable where Array.Element: Comparable {
             i += 1
         }
         return lhs.count > rhs.count
+    }
+}
+
+extension Array {
+    /// Converts `[T?]` into `[T]` by removing all `nil`s.
+    func compactedSameSize<T, E: Error>(elseThrow error: E) throws(E) -> [T] where Element == T? {
+        let compacted = self.compacted().to(Array<T>.init)
+        guard compacted.count == self.count else {
+            throw error
+        }
+        return compacted
     }
 }
 

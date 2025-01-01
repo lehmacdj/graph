@@ -95,7 +95,7 @@ import Observation
                   .loadedInactive(let rhsThumbnail, let rhsDestinationTimestamp)):
                 lhsThumbnail == rhsThumbnail && lhsDestinationTimestamp == rhsDestinationTimestamp
             case (.failed(let lhsError), .failed(let rhsError)):
-                lhsError.localizedDescription == rhsError.localizedDescription
+                "\(lhsError)" == "\(rhsError)"
             default:
                 false
             }
@@ -134,7 +134,7 @@ import Observation
         self.isWorse = isWorse
     }
 
-    struct DuplicateSubscription: LocalizedError, Codable {}
+    struct DuplicateSubscription: Error {}
 
     func fetchTimestamp() async throws {
         guard case .idle = timestamp else {
@@ -189,7 +189,7 @@ import Observation
             destinationNode = try await manager[destinationNid]
             destinationTimestamp = await destinationNode.mostRecentTimestamp
         } catch {
-            logError(error.localizedDescription)
+            logError(error)
             internalState = .failed(error: error)
             return
         }

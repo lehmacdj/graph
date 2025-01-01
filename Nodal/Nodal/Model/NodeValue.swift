@@ -9,16 +9,10 @@ struct NodeValue<Augmentation>: Identifiable {
     let id: NID
     let outgoing: [String:Set<NID>]
     let incoming: [String:Set<NID>]
-    let augmentation: Augmentation
 
-    func withAugmentation<NewAugmentation>(_ newAugmentation: NewAugmentation) -> NodeValue<NewAugmentation> {
-        NodeValue<NewAugmentation>(
-            id: id,
-            outgoing: outgoing,
-            incoming: incoming,
-            augmentation: newAugmentation
-        )
-    }
+    /// I don't think it is worth prioritizing because it is very boilerplate heavy but it is possible to support typed @dynamicMemberLookup via an approach similar to this:
+    /// https://developer.apple.com/documentation/foundation/attributedstringkey
+    let augmentation: Augmentation
 }
 
 extension NodeValue {
@@ -35,5 +29,34 @@ extension NodeValue {
 extension NodeValue<Void> {
     init(from metadata: NodeMeta) {
         self.init(from: metadata, augmentation: ())
+    }
+}
+
+extension NodeValue {
+    func withAugmentation<NewAugmentation>(_ newAugmentation: NewAugmentation) -> NodeValue<NewAugmentation> {
+        NodeValue<NewAugmentation>(
+            id: id,
+            outgoing: outgoing,
+            incoming: incoming,
+            augmentation: newAugmentation
+        )
+    }
+
+    func withoutAugmentation() -> NodeValue<Void> {
+        self.withAugmentation(())
+    }
+}
+
+extension NodeValue {
+    var outgoingTransitions: [NodeTransition] {
+        outgoing.flatMap { (transition, destinations) in
+            destinations.map { NodeTransition(transition: transition, nid: $0) }
+        }
+    }
+
+    var incomingTransitions: [NodeTransition] {
+        incoming.flatMap { (transition, sources) in
+            sources.map { NodeTransition(transition: transition, nid: $0) }
+        }
     }
 }

@@ -225,3 +225,60 @@ func makeDate(year: Int, month: Int, day: Int, time: Date) -> Date {
     assert(dateComponents.isValidDate)
     return dateComponents.date!
 }
+
+struct GraphTimestampBuilder {
+    private var time: GraphTimeComponent?
+    private var day: GraphDayComponent?
+    private var month: GraphMonthComponent?
+    private var year: GraphYearComponent?
+
+    func parseTime(from string: String) -> GraphTimestampBuilder? {
+        guard time == nil, let timeComponent = try? GraphTimeComponent(timeString: string) else {
+            logWarn("tried to parse time twice")
+            return nil
+        }
+        var result = self
+        result.time = timeComponent
+        return result
+    }
+
+    func parseDay(from string: String) -> GraphTimestampBuilder? {
+        guard day == nil, let dayComponent = try? GraphDayComponent(dayString: string) else {
+            logWarn("tried to parse day twice")
+            return nil
+        }
+        var result = self
+        result.day = dayComponent
+        return result
+    }
+
+    func parseMonth(from string: String) -> GraphTimestampBuilder? {
+        guard month == nil, let monthComponent = try? GraphMonthComponent(monthString: string) else {
+            logWarn("tried to parse month twice")
+            return nil
+        }
+        var result = self
+        result.month = monthComponent
+        return result
+    }
+
+    func parseYear(from string: String) -> GraphTimestampBuilder? {
+        guard year == nil, let yearComponent = try? GraphYearComponent(yearString: string) else {
+            logWarn("tried to parse year twice")
+            return nil
+        }
+        var result = self
+        result.year = yearComponent
+        return result
+    }
+
+    func build() -> Date? {
+        guard let year = year?.year,
+          let month = month?.month,
+          let day = day?.day,
+          let time = time?.time else {
+            return nil
+        }
+        return makeDate(year: year, month: month, day: day, time: time)
+    }
+}

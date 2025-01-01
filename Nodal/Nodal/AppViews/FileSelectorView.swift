@@ -89,8 +89,8 @@ struct FileSelectorView: View {
             }
 
             fileUrl = url
-        case .failure(let err):
-            logError(err.localizedDescription)
+        case .failure(let error):
+            logError(error)
             fileUrl = nil
             presentingFileImporter = true
         }

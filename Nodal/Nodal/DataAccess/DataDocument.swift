@@ -24,7 +24,7 @@ final class DataDocument: UIDocument {
         data
     }
 
-    struct ContentsIsNotData: LocalizedError, Codable {}
+    struct ContentsIsNotData: Error {}
 
     override func load(fromContents contents: Any, ofType typeName: String?) throws {
         guard let data = contents as? Data else {

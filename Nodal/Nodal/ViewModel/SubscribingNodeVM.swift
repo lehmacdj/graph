@@ -72,21 +72,6 @@ import AsyncAlgorithms
         }
     }
 
-    fileprivate struct TransitionKey: Hashable {
-        let transition: NodeTransition
-        let direction: Direction
-
-        init(_ transition: NodeTransition, direction: Direction) {
-            self.transition = transition
-            self.direction = direction
-        }
-
-        init(transition: String, destination: NID, direction: Direction) {
-            self.transition = NodeTransition(transition: transition, nid: destination)
-            self.direction = direction
-        }
-    }
-
     fileprivate struct State {
         var data: Data?
 
@@ -131,7 +116,7 @@ import AsyncAlgorithms
         }
     }
 
-    private struct InvalidOperationForState: LocalizedError, Codable {
+    private struct InvalidOperationForState: Error {
         enum StateDescription: String, Codable {
             case idle
             case loadingActive
@@ -234,7 +219,7 @@ import AsyncAlgorithms
         logInfo("\(nid) done")
     }
 
-    struct DuplicateSubscription: LocalizedError, Codable {}
+    struct DuplicateSubscription: Error {}
 
     private func beginUpdateState() async throws {
         switch internalState {
@@ -258,7 +243,7 @@ import AsyncAlgorithms
         do {
             node = try await manager[nid]
         } catch {
-            logError(error.localizedDescription)
+            logError(error)
             internalState = .failed(error: error)
             return
         }

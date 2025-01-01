@@ -10,7 +10,7 @@ import Combine
 import UIKit
 import AsyncAlgorithms
 
-actor ProductionGraphRepository: GraphRepository {
+actor FilesystemGraphRepository: GraphRepository {
     private let basePath: URL
 
     init(basePath: URL) {
@@ -30,11 +30,8 @@ actor ProductionGraphRepository: GraphRepository {
         return nid
     }
 
-    func updates<A: Augmentation>(
-        for nid: NID,
-        augmentedWith augmentation: A.Type
-    ) -> any AsyncSequence<NodeValue<A>, any Error> {
-        UpdatesSequence<A>(augmentedNid: nid, graphRepository: self)
+    func updates<T>(computeValue: @escaping ComputeValueClosure<T>) -> any AsyncSequence<T, any Error> {
+        NewUpdatesSequence<T>(graphRepository: self, computeValue: computeValue)
     }
 
     func deleteNode(withId id: NID) async {
@@ -99,14 +96,14 @@ actor ProductionGraphRepository: GraphRepository {
     }
 
     class MetadataHandle {
-        init(nid: NID, graphRepository: ProductionGraphRepository, metadataDocument: NodeMetadataDocument) {
+        init(nid: NID, graphRepository: FilesystemGraphRepository, metadataDocument: NodeMetadataDocument) {
             self.nid = nid
             self.graphRepository = graphRepository
             self.metadataDocument = metadataDocument
         }
 
         let nid: NID
-        let graphRepository: ProductionGraphRepository
+        let graphRepository: FilesystemGraphRepository
         let metadataDocument: NodeMetadataDocument
 
         deinit {
@@ -198,64 +195,68 @@ actor ProductionGraphRepository: GraphRepository {
 }
 
 /// AsyncSequence implementation for `updates`
-private extension ProductionGraphRepository {
+private extension FilesystemGraphRepository {
     /// Just a factory for `UpdatesIterator` which does all of the heavy lifting
-    struct UpdatesSequence<A: Augmentation>: AsyncSequence {
-        let augmentedNid: NID
+    struct NewUpdatesSequence<T>: AsyncSequence {
+        let graphRepository: FilesystemGraphRepository
 
-        let graphRepository: ProductionGraphRepository
+        let computeValue: ComputeValueClosure<T>
 
-        func makeAsyncIterator() -> UpdatesIterator<A> {
-            UpdatesIterator<A>(augmentedNid: augmentedNid, graphRepository: graphRepository)
+        func makeAsyncIterator() -> NewUpdatesIterator<T> {
+            NewUpdatesIterator<T>(graphRepository: graphRepository, computeValue: computeValue)
         }
     }
 
-    actor UpdatesIterator<A: Augmentation>: AsyncIteratorProtocol {
-        init(augmentedNid: NID, graphRepository: ProductionGraphRepository) {
-            self.augmentedNid = augmentedNid
-            self.graphRepositroy = graphRepository
-            self.dependencyEntries = [augmentedNid: DependencyEntry(
-                mostRecentValue: nil,
-                dependents: [augmentedNid]
-            )]
-            Task { [weak self] in
-                await withDiscardingTaskGroup { [weak self] group in
-                    while let self {
-                        await ensureSubscriptionsExist { [weak self] nodeValues in
-                            _ = group.addTaskUnlessCancelled { [weak self] in
-                                for await nodeValue in nodeValues {
-                                    await self?.updateValue(nodeValue)
-                                }
-                            }
-                        }
-                    }
-                    group.cancelAll()
+    actor NewUpdatesIterator<T>: AsyncIteratorProtocol {
+        typealias Element = T
+
+        let graphRepository: FilesystemGraphRepository
+        let computeValue: ComputeValueClosure<T>
+
+        init(
+            graphRepository: FilesystemGraphRepository,
+            computeValue: @escaping ComputeValueClosure<T>
+        ) {
+            self.graphRepository = graphRepository
+            self.computeValue = computeValue
+            Task { await subscriptionTask() }
+        }
+
+        func next() async throws -> T? {
+            while true {
+                while !dependencyEntriesAllComplete {
+                    await waitUntilSomethingUpdates()
+                }
+                do {
+                    let value = try computeValue(trackedGetDependency(_:dataNeed:))
+                    commitLargestNewRequests()
+                    return value
+                } catch .cacheMiss {
+                    clearLargestNewRequests()
+                    continue
                 }
             }
         }
 
-        private let augmentedNid: NID
-
-        private let graphRepositroy: ProductionGraphRepository
+        // MARK: dependency management
 
         private struct DependencyEntry {
-            var mostRecentValue: NodeValue<Void>?
+            /// Requested data need for this node
+            var dataNeed: AugmentationDataNeed
 
-            /// Data need computed from the `mostRecentValue` (if that has ever been done)
-            var mostRecentDataNeed: AugmentationDataNeed? = nil
-
-            /// Dependencies computed from the `mostRecentValue`
-            var mostRecentDependentNodes = Set<NID>()
-
-            /// The `NID`s of `NodeValue`s which dependended on this entry when calling `Augmentation.computeDependencies`
-            var dependents: Set<NID>
+            /// As we run computeValue we track the data need requested on its reruns
+            /// We use this to compute the maximum data need requested on the previous run which becomes the new data need
+            var largestNewRequest = Max<AugmentationDataNeed>()
 
             /// MetadataHandle if we have already fetched it from the ProductionGraphRepository
             /// We use this to subscribe to updates
             var metadataHandle: MetadataHandle?
 
-            var completeDependencyDictValue: NodeValue<AugmentationDataValue>? {
-                guard let mostRecentValue, let _ = mostRecentDataNeed else {
+            /// Cached value from the most recent update we received from the GraphRepository.
+            var mostRecentValue: NodeValue<Void>?
+
+            private func _completeValue(withDataNeed dataNeed: AugmentationDataNeed) -> NodeValue<AugmentationDataValue>? {
+                guard let mostRecentValue else {
                     return nil
                 }
 
@@ -263,114 +264,128 @@ private extension ProductionGraphRepository {
 
                 return mostRecentValue.withAugmentation(.dataNotChecked)
             }
+
+            var isValueComplete: Bool {
+                _completeValue(withDataNeed: dataNeed) != nil
+            }
+
+            mutating func completeValue(withDataNeed dataNeed: AugmentationDataNeed) -> NodeValue<AugmentationDataValue>? {
+                largestNewRequest.insert(dataNeed)
+                return completeValue(withDataNeed: dataNeed)
+            }
+        }
+
+        /// Cleans up dependency entries after an unsuccessful run
+        /// Pessimistically assumes that we may need the maximum requested by any previous failed run.
+        private func clearLargestNewRequests() {
+            dependencyEntries = dependencyEntries
+                .mapValues { entry in
+                    guard let newDataNeed = entry.largestNewRequest.max else {
+                        return entry
+                    }
+                    var entry = entry
+                    entry.dataNeed = max(entry.dataNeed, newDataNeed)
+                    entry.largestNewRequest.reset()
+                    return entry
+                }
+        }
+
+        /// Cleans up dependency entries to update dependency tracking based on the latest call that we made
+        /// This should be called whenever we successfully compute a value to commit the computed dependencies as a final set.
+        private func commitLargestNewRequests() {
+            dependencyEntries = dependencyEntries
+                .filter { (_, entry) in
+                    // if we didn't get a new request we no longer have a dependency on a given node
+                    entry.largestNewRequest.max != nil
+                }
+                .mapValues { entry in
+                    guard let newDataNeed = entry.largestNewRequest.max else {
+                        return entry
+                    }
+                    var entry = entry
+                    entry.dataNeed = newDataNeed
+                    entry.largestNewRequest.reset()
+                    return entry
+                }
         }
 
         /// If an entry is in this dictionary it is a dependency.
         private var dependencyEntries: [NID: DependencyEntry]
 
-        private let someValueUpdated = AsyncChannel<Void>()
+        private var dependencyEntriesAllComplete: Bool {
+            dependencyEntries.allSatisfy { $0.value.isValueComplete }
+        }
 
-        /// If dependency resolution is complete the array of dependency values.
-        private var completeDependencyDict: [NID: NodeValue<AugmentationDataValue>]? {
-            if dependencyEntries.allSatisfy({ $0.value.completeDependencyDictValue != nil }) {
-                dependencyEntries.mapValues { $0.completeDependencyDictValue! }
-            } else {
-                nil
+        private func trackedGetDependency(_ nid: NID, dataNeed: AugmentationDataNeed) throws(FetchDependencyError) -> NodeValue<AugmentationDataValue> {
+            guard var entry = dependencyEntries[nid] else {
+                // didn't know about this dependency before, save it in the cache
+                dependencyEntries[nid] = DependencyEntry(dataNeed: dataNeed)
+                throw FetchDependencyError.cacheMiss
+            }
+            defer { dependencyEntries[nid] = entry }
+
+            guard let value = entry.completeValue(withDataNeed: dataNeed) else {
+                // value is not up to date yet / is missing data
+                // just need to retry after waiting
+                throw FetchDependencyError.cacheMiss
             }
         }
 
-        private func updateValue(_ newValue: NodeValue<Void>) {
-            guard let entry = dependencyEntries[newValue.id] else {
-                // maybe possible if considering concurrency shenanigans?
-                logWarn("entry for node that is being updated doesn't exist")
-                return
-            }
+        // MARK: Handling subscriptions to node updates
 
-            let (dataNeed, dependentNodes) = A.computeDependencies(forAugmenting: augmentedNid, from: newValue)
-            for dependency in dependentNodes {
-                ensureDependency(from: newValue.id, to: dependency)
-            }
-
-            do {
-                let removedDependencies = entry.mostRecentDependentNodes.subtracting(dependentNodes)
-                for dependency in removedDependencies {
-                    removeDependency(from: newValue.id, to: dependency)
-                }
-            }
-
-            guard var entry = dependencyEntries[newValue.id] else {
-                // maybe possible if we removed a circular dependency?
-                logWarn("entry for node that is being updated doesn't exist")
-                return
-            }
-            entry.mostRecentDataNeed = dataNeed
-            entry.mostRecentValue = newValue
-            entry.mostRecentDependentNodes = dependentNodes
-            dependencyEntries[newValue.id] = entry
-            markSomethingAsUpdated()
-        }
-
-        private func ensureDependency(from nid: NID, to dependency: NID) {
-            if var entry = dependencyEntries[dependency] {
-                entry.dependents.insert(nid)
-                dependencyEntries[dependency] = entry
-            } else {
-                dependencyEntries[dependency] = DependencyEntry(
-                    mostRecentValue: nil,
-                    dependents: [nid]
-                )
-            }
-        }
-
-        /// Update the dependents field by removing a dependency
-        private func removeDependency(from nid: NID, to dependency: NID) {
-            logDebug("removing dependency from \(nid) to \(dependency)")
-            if var entry =
-                dependencyEntries[dependency] {
-                entry.dependents.remove(nid)
-                if entry.dependents.isEmpty {
-                    if let removedEntry = dependencyEntries.removeValue(forKey: dependency) {
-                        removedEntry.mostRecentDependentNodes.forEach { removeDependency(from: dependency, to: $0)}
+        private func subscriptionTask() async {
+            await withDiscardingTaskGroup { [weak self] group in
+                while let self {
+                    await ensureSubscriptionsExist { [weak self] nodeValues in
+                        _ = group.addTaskUnlessCancelled { [weak self] in
+                            for await nodeValue in nodeValues {
+                                await self?.updateValue(nodeValue)
+                            }
+                            logInfo("handle.nodeValues finished")
+                        }
                     }
-                } else {
-                    dependencyEntries[dependency] = entry
                 }
+                group.cancelAll()
             }
         }
 
         private func ensureSubscriptionsExist(spawnNewListener: (any AsyncSequence<NodeValue<Void>, Never>) async -> Void) async {
+            // TODO: this seems pretty sketchy in terms of the fact that it is hopping back/forth across actors
+            // would be nice to make this a little bit neater / safer / streamlined so that we can be sure that
+            // that we don't have re-entrancy problems with the way this is currently written
             for (nid, var entry) in dependencyEntries where entry.metadataHandle == nil {
                 do {
-                    let handle = try await graphRepositroy.getMetadataHandle(for: nid)
+                    let handle = try await graphRepository.getMetadataHandle(for: nid)
                     entry.metadataHandle = handle
                     dependencyEntries[nid] = entry
                     await spawnNewListener(await handle.nodeValues)
                 } catch {
-                    logError(error.localizedDescription)
+                    logError(error)
                 }
             }
         }
 
-        func next() async throws -> NodeValue<A>? {
-            while completeDependencyDict == nil {
-                await waitUntilSomethingUpdates()
-            }
-            guard let completeDependencyDict else {
-                fatalError("loop above ensured non-nil")
+        private func updateValue(_ newValue: NodeValue<Void>) {
+            guard var entry = dependencyEntries[newValue.id] else {
+                // maybe possible if considering concurrency shenanigans?
+                logWarn("trying to update entry for node that doesn't exist")
+                return
             }
 
-            let augmentation = A.computeAugmentation(for: augmentedNid, dependencies: completeDependencyDict)
-            return completeDependencyDict[augmentedNid]!.withAugmentation(augmentation)
+            entry.mostRecentValue = newValue
+            dependencyEntries[newValue.id] = entry
+            markSomethingAsUpdated()
         }
-
-        // MARK: way to wait on updates that affect completeDependencyDict
 
         private func markSomethingAsUpdated() {
             somethingUpdatedContinuation?.resume()
         }
 
+        /// Wait until a value is updated.
+        /// TODO: this probably wants to handle cancellation more gracefully
         private func waitUntilSomethingUpdates() async {
             assert(somethingUpdatedContinuation == nil)
+            assert(!dependencyEntriesAllComplete)
             await withCheckedContinuation { continuation in
                 somethingUpdatedContinuation = continuation
             }
@@ -378,6 +393,5 @@ private extension ProductionGraphRepository {
         }
 
         private var somethingUpdatedContinuation: CheckedContinuation<Void, Never>?
-
     }
 }

@@ -31,13 +31,13 @@ struct ErrorIndicator: View {
                 presentingAlert = false
             }
         } message: {
-            Text(error.localizedDescription)
+            Text("\(error)")
         }
     }
 }
 
 // periphery:ignore
-private struct TestError: LocalizedError {
+private struct TestError: Error {
     let code = "I am a error"
     let reason = "This is a test"
 }

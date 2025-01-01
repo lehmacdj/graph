@@ -7,15 +7,8 @@
 
 import Foundation
 
-/// A better default LocalizedError description for types that are codable
-extension LocalizedError where Self: Codable {
-    public var errorDescription: String? {
-        try? String(data: JSONEncoder().encode(self), encoding: .utf8)
-    }
-}
-
 extension Optional {
-    public struct OptionalNilError: Codable, LocalizedError {
+    public struct OptionalNilError: Error {
         let reason: String
         let file: String
         let callingFunction: String
@@ -38,7 +31,7 @@ extension Optional {
     }
 }
 
-struct CouldNotCreateFile: LocalizedError, Codable {
+struct CouldNotCreateFile: Error {
     let path: URL
 }
 
