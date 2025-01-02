@@ -30,7 +30,7 @@ extension NID {
     }
 
 
-    func computeNodeWithTimestamp(fetchDependency: FetchDependencyClosure) throws -> NodeValue<Date?> {
+    func computeNodeWithTimestamp(fetchDependency: FetchDependencyClosure) throws(FetchDependencyError) -> NodeValue<Date?> {
         let node = try fetchDependency(self, .dataNotNeeded)
 
         let candidateDays: [(GraphTimestampBuilder, NodeValue<AugmentationDataValue>)] = try parseAndFetch(

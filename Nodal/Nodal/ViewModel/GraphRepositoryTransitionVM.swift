@@ -35,7 +35,6 @@ final class GraphRepositoryTransitionVM: TransitionVM {
 
     func subscribe() async {
         async let _ = subscribeThumbnail()
-        async let _ = subscribeTimestamp()
     }
 
     // TODO: once I support data in GraphRepository
@@ -46,35 +45,6 @@ final class GraphRepositoryTransitionVM: TransitionVM {
 
     var timestamp: Loading<Date?> = .idle
     var isTimestampSubscribed = false
-
-    private func subscribeTimestamp() async {
-        guard !isTimestampSubscribed else {
-            logWarn("duplicate subscribe call")
-            return
-        }
-        isTimestampSubscribed = true
-        defer {
-            isTimestampSubscribed = false
-            switch timestamp {
-            case .loading: timestamp = .idle
-            default: break
-            }
-        }
-        switch thumbnail {
-        case .idle: thumbnail = .loading
-        case .failed: return
-        case .loaded, .loading: break
-        }
-
-        do {
-            for try await value in await graphRepository.updates(for: destinationNid, augmentedWith: TimestampAugmentation.self) {
-
-            }
-        } catch {
-            logError(error)
-            thumbnail = .failed(error)
-        }
-    }
 
     var requireThumbnail: Bool = false
 

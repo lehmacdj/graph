@@ -219,6 +219,7 @@ private extension FilesystemGraphRepository {
         ) {
             self.graphRepository = graphRepository
             self.computeValue = computeValue
+            self.dependencyEntries = [:]
             Task { await subscriptionTask() }
         }
 
@@ -271,7 +272,7 @@ private extension FilesystemGraphRepository {
 
             mutating func completeValue(withDataNeed dataNeed: AugmentationDataNeed) -> NodeValue<AugmentationDataValue>? {
                 largestNewRequest.insert(dataNeed)
-                return completeValue(withDataNeed: dataNeed)
+                return _completeValue(withDataNeed: dataNeed)
             }
         }
 
@@ -329,6 +330,7 @@ private extension FilesystemGraphRepository {
                 // just need to retry after waiting
                 throw FetchDependencyError.cacheMiss
             }
+            return value
         }
 
         // MARK: Handling subscriptions to node updates

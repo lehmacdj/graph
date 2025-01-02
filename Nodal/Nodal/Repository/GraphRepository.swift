@@ -15,6 +15,7 @@ enum FetchDependencyError: Error {
 }
 
 typealias FetchDependencyClosure = (NID, AugmentationDataNeed) throws(FetchDependencyError) -> NodeValue<AugmentationDataValue>
+
 typealias ComputeValueClosure<T> = (FetchDependencyClosure) throws(FetchDependencyError) -> T
 
 protocol GraphRepository: Actor {

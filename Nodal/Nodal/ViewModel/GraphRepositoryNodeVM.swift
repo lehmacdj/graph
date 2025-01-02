@@ -59,32 +59,60 @@ fileprivate struct NodeStateAugmentation {
 //        )
 //    }
 //}
-//
-//private extension NID {
-//    func computeNodeState(_ fetchDependency: FetchDependencyClosure) throws(FetchDependencyError) -> NodeValue<NodeStateAugmentation> {
-//        let node = fetchDependency(self, .dataNotNeeded)
-//        let favorites = (node.outgoing["favorites"] ?? [])
-//            .flatMap { dependencies[$0]!.outgoing.values }
-//            .unioned()
-//        let worse = (node.outgoing["worse"] ?? [])
-//            .flatMap { dependencies[$0]!.outgoing.values }
-//            .unioned()
-//        let links = node.outgoingTransitions
-//        let tags = dependencies[NID.tags]!.outgoing
-//            .filter { (key, value) in value.contains(id) }
-//            .keys
-//            .to(Set.init)
-//        return NodeStateAugmentation(
-//            data: nil, // TODO: update once I implement data support
-//            favoriteLinks: links.filter { favorites.contains($0.nid) },
-//            worseLinks: links.filter { worse.contains($0.nid) },
-//            backlinks: node.incomingTransitions,
-//            otherLinks: links.filter { !favorites.contains($0.nid) && !worse.contains($0.nid) },
-//            tags: tags,
-//            possibleTags: dependencies[NID.tags]!.outgoing.keys.to(Set.init)
-//        )
-//    }
-//}
+private extension NID {
+    func computeNodeForVM(_ fetchDependency: FetchDependencyClosure) throws(FetchDependencyError) -> NodeValue<NodeStateAugmentation> {
+        // avoid fetching data at first even though we unconditionally render it to start fetching metadata sooner
+        let node = try fetchDependency(self, .dataNotNeeded)
+
+        let favoritesNids = (node.outgoing["favorites"] ?? [])
+            // probably letting node render even if these aren't up to date/resolved is best
+            // if not, we could throw later after discovering as many dependencies as we can
+            .compactMap { try? fetchDependency($0, .dataNotNeeded) }
+            .flatMap { $0.outgoing.values }
+            .unioned()
+        let worseNids = (node.outgoing["worse"] ?? [])
+            // probably letting node render even if these aren't up to date/resolved is best
+            // if not, we could throw later after discovering as many dependencies as we can
+            .compactMap { try? fetchDependency($0, .dataNotNeeded) }
+            .flatMap { $0.outgoing.values }
+            .unioned()
+        let links = node
+            .outgoingTransitions
+            .map { transition in
+                let timestamped = try? transition.nid.computeNodeWithTimestamp(fetchDependency: fetchDependency)
+                return (transition, timestamped?.augmentation)
+            }
+        let backlinks = node
+            .incomingTransitions
+            .map { transition in
+                let timestamped = try? transition.nid.computeNodeWithTimestamp(fetchDependency: fetchDependency)
+                return (transition, timestamped?.augmentation)
+            }
+
+        let allTags = try fetchDependency(NID.tags, .dataNotNeeded)
+            .outgoing
+            .keys
+            .to(Set.init)
+        let tags = allTags.filter { node.outgoing[$0] != nil }
+
+        guard case .data(let data) = try fetchDependency(self, .needDataEvenIfRemote).augmentation else {
+            logWarn("bad match which fetching data dependency")
+            throw .missingDependencies
+        }
+
+        return node.withAugmentation(
+            NodeStateAugmentation(
+                data: data,
+                favoriteLinks: links.filter { favoritesNids.contains($0.0.nid) },
+                worseLinks: links.filter { worseNids.contains($0.0.nid) },
+                backlinks: backlinks,
+                otherLinks: links.filter { !favoritesNids.contains($0.0.nid) && !worseNids.contains($0.0.nid) },
+                tags: tags,
+                possibleTags: allTags
+            )
+        )
+    }
+}
 
 final class GraphRepositoryNodeVM: NodeVM {
     private let graphRepository: GraphRepository
@@ -119,17 +147,18 @@ final class GraphRepositoryNodeVM: NodeVM {
         }
 
         do {
-            for try await value in await graphRepository.updates(computeValue: nid.computeNodeState) { value in
+            let updatesSequence = await graphRepository.updates(computeValue: nid.computeNodeForVM)
+            for try await value in updatesSequence {
                 state = .loaded(NodeState(
                     data: value.augmentation.data,
                     favoriteLinks: value.augmentation.favoriteLinks
-                        .map { getTransitionVM(key: $0, configuredForSection: .favorites) },
+                        .map { getTransitionVM(key: $0.0, timestamp: $0.1, configuredForSection: .favorites) },
                     links: value.augmentation.otherLinks
-                        .map { getTransitionVM(key: $0, configuredForSection: .other) },
+                        .map { getTransitionVM(key: $0.0, timestamp: $0.1, configuredForSection: .other) },
                     worseLinks: value.augmentation.worseLinks
-                        .map { getTransitionVM(key: $0, configuredForSection: .worse) },
+                        .map { getTransitionVM(key: $0.0, timestamp: $0.1, configuredForSection: .worse) },
                     backlinks: value.augmentation.backlinks
-                        .map { getTransitionVM(key: $0, configuredForSection: .backlink) },
+                        .map { getTransitionVM(key: $0.0, timestamp: $0.1, configuredForSection: .backlink) },
                     tags: value.augmentation.tags,
                     possibleTags: value.augmentation.possibleTags
                 ))
@@ -166,6 +195,7 @@ final class GraphRepositoryNodeVM: NodeVM {
 
     private func getTransitionVM(
         key: NodeTransition,
+        timestamp: Date?,
         configuredForSection section: NodeSection
     ) -> AnyTransitionVM {
         // TODO: try axing the caching to see if GraphRepository is doing a sufficient job in caching things that are already loaded itself
