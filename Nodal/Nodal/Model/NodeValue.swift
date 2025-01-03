@@ -5,14 +5,18 @@
 //  Created by Devin Lehmacher on 11/4/24.
 //
 
+@dynamicMemberLookup
 struct NodeValue<Augmentation>: Identifiable {
     let id: NID
     let outgoing: [String:Set<NID>]
     let incoming: [String:Set<NID>]
 
-    /// I don't think it is worth prioritizing because it is very boilerplate heavy but it is possible to support typed @dynamicMemberLookup via an approach similar to this:
-    /// https://developer.apple.com/documentation/foundation/attributedstringkey
+    /// Generally prefer using fields of the augmentation direction. They are exposed via @dynamicMemberLookup
     let augmentation: Augmentation
+
+    subscript<T>(dynamicMember member: KeyPath<Augmentation, T>) -> T {
+        augmentation[keyPath: member]
+    }
 }
 
 extension NodeValue {
@@ -39,6 +43,15 @@ extension NodeValue {
             outgoing: outgoing,
             incoming: incoming,
             augmentation: newAugmentation
+        )
+    }
+
+    func mapAugmentation<NewAugmentation>(_ transform: (Augmentation) throws -> NewAugmentation) rethrows -> NodeValue<NewAugmentation> {
+        NodeValue<NewAugmentation>(
+            id: id,
+            outgoing: outgoing,
+            incoming: incoming,
+            augmentation: try transform(augmentation)
         )
     }
 

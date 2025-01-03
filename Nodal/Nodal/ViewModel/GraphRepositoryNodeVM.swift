@@ -6,114 +6,9 @@
 //
 
 import Foundation
+import AsyncAlgorithms
 
-fileprivate struct NodeStateAugmentation {
-    let data: Data?
-    let favoriteLinks: [(NodeTransition, Date?)]
-    let worseLinks: [(NodeTransition, Date?)]
-    let backlinks: [(NodeTransition, Date?)]
-    let otherLinks: [(NodeTransition, Date?)]
-    let tags: Set<String>
-    let possibleTags: Set<String>
-}
-
-//extension NodeStateAugmentation {
-//    static func computeDependentNodes(forAugmenting id: NID, from node: NodeValue<Void>) -> Set<NID> {
-//        guard id == node.id else {
-//            return []
-//        }
-//        let favorites = node.outgoing["favorites"] ?? []
-//        let worse = node.outgoing["worse"] ?? []
-//        return [[NID.tags], favorites, worse].unioned()
-//    }
-//
-//    static func computeDataNeed(forAugmenting id: NID, from node: NodeValue<Void>) -> AugmentationDataNeed {
-//        if node.id == id {
-//            .needDataEvenIfRemote
-//        } else {
-//            .dataNotNeeded
-//        }
-//    }
-//
-//    static func computeAugmentation(for id: NID, dependencies: [NID : NodeValue<AugmentationDataValue>]) -> NodeStateAugmentation {
-//        let node = dependencies[id]!
-//        let favorites = (node.outgoing["favorites"] ?? [])
-//            .flatMap { dependencies[$0]!.outgoing.values }
-//            .unioned()
-//        let worse = (node.outgoing["worse"] ?? [])
-//            .flatMap { dependencies[$0]!.outgoing.values }
-//            .unioned()
-//        let links = node.outgoingTransitions
-//        let tags = dependencies[NID.tags]!.outgoing
-//            .filter { (key, value) in value.contains(id) }
-//            .keys
-//            .to(Set.init)
-//        return NodeStateAugmentation(
-//            data: nil, // TODO: update once I implement data support
-//            favoriteLinks: links.filter { favorites.contains($0.nid) },
-//            worseLinks: links.filter { worse.contains($0.nid) },
-//            backlinks: node.incomingTransitions,
-//            otherLinks: links.filter { !favorites.contains($0.nid) && !worse.contains($0.nid) },
-//            tags: tags,
-//            possibleTags: dependencies[NID.tags]!.outgoing.keys.to(Set.init)
-//        )
-//    }
-//}
-private extension NID {
-    func computeNodeForVM(_ fetchDependency: FetchDependencyClosure) throws(FetchDependencyError) -> NodeValue<NodeStateAugmentation> {
-        // avoid fetching data at first even though we unconditionally render it to start fetching metadata sooner
-        let node = try fetchDependency(self, .dataNotNeeded)
-
-        let favoritesNids = (node.outgoing["favorites"] ?? [])
-            // probably letting node render even if these aren't up to date/resolved is best
-            // if not, we could throw later after discovering as many dependencies as we can
-            .compactMap { try? fetchDependency($0, .dataNotNeeded) }
-            .flatMap { $0.outgoing.values }
-            .unioned()
-        let worseNids = (node.outgoing["worse"] ?? [])
-            // probably letting node render even if these aren't up to date/resolved is best
-            // if not, we could throw later after discovering as many dependencies as we can
-            .compactMap { try? fetchDependency($0, .dataNotNeeded) }
-            .flatMap { $0.outgoing.values }
-            .unioned()
-        let links = node
-            .outgoingTransitions
-            .map { transition in
-                let timestamped = try? transition.nid.computeNodeWithTimestamp(fetchDependency: fetchDependency)
-                return (transition, timestamped?.augmentation)
-            }
-        let backlinks = node
-            .incomingTransitions
-            .map { transition in
-                let timestamped = try? transition.nid.computeNodeWithTimestamp(fetchDependency: fetchDependency)
-                return (transition, timestamped?.augmentation)
-            }
-
-        let allTags = try fetchDependency(NID.tags, .dataNotNeeded)
-            .outgoing
-            .keys
-            .to(Set.init)
-        let tags = allTags.filter { node.outgoing[$0] != nil }
-
-        guard case .data(let data) = try fetchDependency(self, .needDataEvenIfRemote).augmentation else {
-            logWarn("bad match which fetching data dependency")
-            throw .missingDependencies
-        }
-
-        return node.withAugmentation(
-            NodeStateAugmentation(
-                data: data,
-                favoriteLinks: links.filter { favoritesNids.contains($0.0.nid) },
-                worseLinks: links.filter { worseNids.contains($0.0.nid) },
-                backlinks: backlinks,
-                otherLinks: links.filter { !favoritesNids.contains($0.0.nid) && !worseNids.contains($0.0.nid) },
-                tags: tags,
-                possibleTags: allTags
-            )
-        )
-    }
-}
-
+@Observable
 final class GraphRepositoryNodeVM: NodeVM {
     private let graphRepository: GraphRepository
     let nid: NID
@@ -150,17 +45,17 @@ final class GraphRepositoryNodeVM: NodeVM {
             let updatesSequence = await graphRepository.updates(computeValue: nid.computeNodeForVM)
             for try await value in updatesSequence {
                 state = .loaded(NodeState(
-                    data: value.augmentation.data,
-                    favoriteLinks: value.augmentation.favoriteLinks
+                    data: value.data,
+                    favoriteLinks: value.favoriteLinks
                         .map { getTransitionVM(key: $0.0, timestamp: $0.1, configuredForSection: .favorites) },
-                    links: value.augmentation.otherLinks
+                    links: value.otherLinks
                         .map { getTransitionVM(key: $0.0, timestamp: $0.1, configuredForSection: .other) },
-                    worseLinks: value.augmentation.worseLinks
+                    worseLinks: value.worseLinks
                         .map { getTransitionVM(key: $0.0, timestamp: $0.1, configuredForSection: .worse) },
-                    backlinks: value.augmentation.backlinks
+                    backlinks: value.backlinks
                         .map { getTransitionVM(key: $0.0, timestamp: $0.1, configuredForSection: .backlink) },
-                    tags: value.augmentation.tags,
-                    possibleTags: value.augmentation.possibleTags
+                    tags: value.tags,
+                    possibleTags: value.possibleTags
                 ))
                 endTransitionVMsGeneration()
             }
@@ -195,17 +90,19 @@ final class GraphRepositoryNodeVM: NodeVM {
 
     private func getTransitionVM(
         key: NodeTransition,
-        timestamp: Date?,
+        timestamp: Loading<Date?>,
         configuredForSection section: NodeSection
     ) -> AnyTransitionVM {
         // TODO: try axing the caching to see if GraphRepository is doing a sufficient job in caching things that are already loaded itself
         if let vm = transitionVMsPrevious[TransitionKey(key, direction: section.direction)] {
             vm.configureForSection(section)
+            vm.timestamp = timestamp
             return vm.eraseToAnyTransitionVM()
         } else {
             let vm = GraphRepositoryTransitionVM(
                 graphRepository: graphRepository,
                 transition: key,
+                timestamp: timestamp,
                 configuredForSection: section
             )
             transitionVMs[TransitionKey(key, direction: section.direction)] = vm
@@ -228,3 +125,68 @@ final class GraphRepositoryNodeVM: NodeVM {
 
     func toggleWorse(child _: NID) async throws {}
 }
+
+fileprivate struct NodeStateAugmentation {
+    let data: Data?
+    let favoriteLinks: [(NodeTransition, Loading<Date?>)]
+    let worseLinks: [(NodeTransition, Loading<Date?>)]
+    let backlinks: [(NodeTransition, Loading<Date?>)]
+    let otherLinks: [(NodeTransition, Loading<Date?>)]
+    let tags: Set<String>
+    let possibleTags: Set<String>
+}
+
+private extension NID {
+    func computeNodeForVM(_ dependencyManager: DependencyManager) throws(FetchDependencyError) -> NodeValue<NodeStateAugmentation> {
+        // avoid fetching data at first even though we unconditionally render it to start fetching metadata sooner
+        let node = try dependencyManager.fetch(nid: self, dataNeed: .dataNotNeeded)
+
+        let favoritesNids = (node.outgoing["favorites"] ?? [])
+            // probably letting node render even if these aren't up to date/resolved is best
+            // if not, we could throw later after discovering as many dependencies as we can
+            .compactMap { try? dependencyManager.fetch(nid: $0, dataNeed: .dataNotNeeded) }
+            .flatMap { $0.outgoing.values }
+            .unioned()
+        let worseNids = (node.outgoing["worse"] ?? [])
+            // probably letting node render even if these aren't up to date/resolved is best
+            // if not, we could throw later after discovering as many dependencies as we can
+            .compactMap { try? dependencyManager.fetch(nid: $0, dataNeed: .dataNotNeeded) }
+            .flatMap { $0.outgoing.values }
+            .unioned()
+        let links = node
+            .outgoingTransitions
+            .map { transition in
+                let timestamped = try? transition.nid.computeNodeWithTimestamp(dependencyManager: dependencyManager)
+                return (transition, Loading.loading(timestamped.map { $0.timestamp }))
+            }
+        let backlinks = node
+            .incomingTransitions
+            .map { transition in
+                let timestamped = try? transition.nid.computeNodeWithTimestamp(dependencyManager: dependencyManager)
+                return (transition, Loading.loading(timestamped.map { $0.timestamp }))
+            }
+
+        let allTags = try dependencyManager.fetch(nid: NID.tags, dataNeed: .dataNotNeeded)
+            .outgoing
+            .keys
+            .to(Set.init)
+        let tags = allTags.filter { node.outgoing[$0] != nil }
+
+        let data = try dependencyManager
+            .fetch(nid: self, dataNeed: .needDataEvenIfRemote)
+            .data
+
+        return node.withAugmentation(
+            NodeStateAugmentation(
+                data: data,
+                favoriteLinks: links.filter { favoritesNids.contains($0.0.nid) },
+                worseLinks: links.filter { worseNids.contains($0.0.nid) },
+                backlinks: backlinks,
+                otherLinks: links.filter { !favoritesNids.contains($0.0.nid) && !worseNids.contains($0.0.nid) },
+                tags: tags,
+                possibleTags: allTags
+            )
+        )
+    }
+}
+

@@ -327,6 +327,10 @@ import Observation
         isWorse.toggle()
     }
 
+    func fetchThumbnail() {
+        Task { await fetchThumbnail() }
+    }
+
     func fetchThumbnail() async {
         guard case .loadedActive(_, let destinationTimestamp, let destinationNode) = internalState else {
             return

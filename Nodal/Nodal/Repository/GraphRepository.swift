@@ -5,6 +5,7 @@
 //  Created by Devin Lehmacher on 11/2/24.
 //
 
+import Foundation
 
 /// Error used by ``GraphRepository.updates``
 enum FetchDependencyError: Error {
@@ -14,9 +15,12 @@ enum FetchDependencyError: Error {
     case missingDependencies
 }
 
-typealias FetchDependencyClosure = (NID, AugmentationDataNeed) throws(FetchDependencyError) -> NodeValue<AugmentationDataValue>
+protocol DependencyManager {
+    func fetch<D: DataNeed>(nid: NID, dataNeed: D) throws(FetchDependencyError) -> NodeValue<D.Value>
+    func fetch(nid: NID, untypedDataNeed: UntypedDataNeed) throws(FetchDependencyError) -> NodeValue<UntypedDataValue>
+}
 
-typealias ComputeValueClosure<T> = (FetchDependencyClosure) throws(FetchDependencyError) -> T
+typealias ComputeValueClosure<T> = (DependencyManager) throws -> T
 
 protocol GraphRepository: Actor {
     /// Create a new node with a random NID returning the newly generated NID.
@@ -30,7 +34,7 @@ protocol GraphRepository: Actor {
     /// - It is `computeValue`'s implementor's responsibility to make sure that the dependencies are stable enough to capture all data from the graph that is actually depended on. If you only use values returned by the closure and don't store them externally to the closure, this should be achieved for free.
     ///
     /// The sequence attempts to handle errors internally (e.g. by retrying) but when mitigations fail may throw an `Error` that describes why the subscription failed. This may be the first returned result if something is really broken.
-    func updates<T>(computeValue: @escaping ComputeValueClosure<T>) -> any AsyncSequence<T, any Error>
+    func updates<T>(computeValue: @escaping ComputeValueClosure<T>) -> any AsyncSequence<T, Error>
 
     func deleteNode(withId id: NID) async throws
 

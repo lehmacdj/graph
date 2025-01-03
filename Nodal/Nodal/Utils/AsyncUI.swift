@@ -21,6 +21,14 @@ enum Loading<T> {
         }
     }
 
+    static func loading(_ value: T?) -> Loading<T> {
+        if let value {
+            .loaded(value)
+        } else {
+            .loading
+        }
+    }
+
     static func done(_ value: () async throws -> T) async -> Loading<T> {
         do {
             return .loaded(try await value())

@@ -233,8 +233,11 @@ struct GraphTimestampBuilder {
     private var year: GraphYearComponent?
 
     func parseTime(from string: String) -> GraphTimestampBuilder? {
-        guard time == nil, let timeComponent = try? GraphTimeComponent(timeString: string) else {
+        guard time == nil else {
             logWarn("tried to parse time twice")
+            return nil
+        }
+        guard let timeComponent = try? GraphTimeComponent(timeString: string) else {
             return nil
         }
         var result = self
@@ -243,8 +246,11 @@ struct GraphTimestampBuilder {
     }
 
     func parseDay(from string: String) -> GraphTimestampBuilder? {
-        guard day == nil, let dayComponent = try? GraphDayComponent(dayString: string) else {
+        guard day == nil else {
             logWarn("tried to parse day twice")
+            return nil
+        }
+        guard let dayComponent = try? GraphDayComponent(dayString: string) else {
             return nil
         }
         var result = self
@@ -253,8 +259,11 @@ struct GraphTimestampBuilder {
     }
 
     func parseMonth(from string: String) -> GraphTimestampBuilder? {
-        guard month == nil, let monthComponent = try? GraphMonthComponent(monthString: string) else {
+        guard month == nil else {
             logWarn("tried to parse month twice")
+            return nil
+        }
+        guard let monthComponent = try? GraphMonthComponent(monthString: string) else {
             return nil
         }
         var result = self
@@ -263,8 +272,11 @@ struct GraphTimestampBuilder {
     }
 
     func parseYear(from string: String) -> GraphTimestampBuilder? {
-        guard year == nil, let yearComponent = try? GraphYearComponent(yearString: string) else {
+        guard year == nil else {
             logWarn("tried to parse year twice")
+            return nil
+        }
+        guard let yearComponent = try? GraphYearComponent(yearString: string) else {
             return nil
         }
         var result = self

@@ -93,8 +93,8 @@ struct TransitionView: View {
                 }
             } else {
                 if case .loaded(.cloudFile) = vm.thumbnail {
-                    AsyncButton(vm.transition, role: .none) {
-                        await vm.fetchThumbnail()
+                    Button(vm.transition, role: .none) {
+                        vm.fetchThumbnail()
                     }
                 } else {
                     NavigationLink(value: vm.destination.nav) {

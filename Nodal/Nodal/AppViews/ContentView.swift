@@ -12,23 +12,21 @@ struct ContentView: View {
     let fileUrl: URL
     let doSelectFile: () -> ()
 
-    @State private var graphAndRoot: Loading<(GraphManager<DefaultNode>, DefaultNode)?> = .loading
+    @State private var graphRepository: Loading<GraphRepository> = .loading
 
     @State private var path: [NavToNode] = []
 
     var body: some View {
         NavigationStack(path: $path) {
             HStack {
-                switch graphAndRoot {
+                switch graphRepository {
                 case .idle:
                     Text("Idle")
                 case .loading:
                     Text("Loading...")
-                case .loaded(nil):
-                    Text("Couldn't read directory; invalid graph").foregroundColor(.red)
-                case .loaded(.some((let graph, let origin))):
-                    let nodeVM = SubscribingNodeVM(for: origin.nid, in: graph).eraseToAnyNodeVM()
-                    NodeView(of: nodeVM)
+                case .loaded(let graphRepository):
+                    let nodeVM = GraphRepositoryNodeVM(nid: NID.origin, graphRepository: graphRepository)
+                    NodeView(of: nodeVM.eraseToAnyNodeVM())
                 case .failed(let error):
                     ErrorIndicator(for: error)
                 }
@@ -45,79 +43,17 @@ struct ContentView: View {
             }
         }
         .task(id: fileUrl) {
-            graphAndRoot = .loading
-            guard let graphManager = try? await GraphManager<DefaultNode>(dir: fileUrl) else {
-                graphAndRoot = .loaded(nil)
-                return
+            graphRepository = .loading
+            do {
+                graphRepository = .loaded(try await FilesystemGraphRepository(basePath: fileUrl))
+            } catch is CancellationError {
+                graphRepository = .loading
+            } catch {
+                logError(error)
+                graphRepository = .failed(error)
             }
-            let origin = await graphManager.origin
-            graphAndRoot = .loaded((graphManager, origin))
         }
         .navigationViewStyle(StackNavigationViewStyle())
-    }
-}
-
-struct ImageView: View {
-    let uiImage: UIImage
-    @State var navigationVisible: Bool = false
-
-    var body: some View {
-        ZoomableView {
-            Image(uiImage: uiImage)
-        }
-        .overlay(navigationVisible ? ImageStats(uiImage: uiImage) : nil, alignment: .bottomTrailing)
-        .onTapGesture { navigationVisible = !navigationVisible }
-        .ignoresSafeArea(.all)
-        .navigationBarHidden(!navigationVisible)
-        .statusBar(hidden: !navigationVisible)
-    }
-}
-
-struct ImageStats: View {
-    let uiImage: UIImage
-
-    @ViewBuilder
-    var body: some View {
-        Text("\(Int(uiImage.size.width)) x \(Int(uiImage.size.height))")
-            .padding()
-            .background(.background, in: Capsule())
-            .opacity(0.7)
-    }
-}
-
-struct TagEditor: View {
-    init(initial: Set<String>, options: [String], commit: @escaping (Set<String>) async -> (), cancel: @escaping () async -> ()) {
-        self.actual = initial
-        self.options = options
-        self.commitAction = commit
-        self.cancelAction = cancel
-    }
-
-    @State var actual: Set<String>
-    let options: [String]
-    let commitAction: (Set<String>) async -> ()
-    let cancelAction: () async -> ()
-
-    @State var searchString: String = ""
-
-    var body: some View {
-        VStack {
-            List(options, selection: $actual) { tag in
-                Text(tag)
-            }
-            .environment(\.editMode, .constant(.active))
-            .searchable(text: $searchString, placement: .automatic, prompt: "Tag search ...")
-            HStack {
-                AsyncButton(action: cancelAction) {
-                    Text("Cancel")
-                }
-                AsyncButton(action: { await commitAction(actual)}) {
-                    Text("Commit")
-                }
-            }
-            .buttonStyle(.bordered)
-            .padding()
-        }
     }
 }
 

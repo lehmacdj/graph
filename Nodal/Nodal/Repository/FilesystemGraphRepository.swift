@@ -13,19 +13,48 @@ import AsyncAlgorithms
 actor FilesystemGraphRepository: GraphRepository {
     private let basePath: URL
 
-    init(basePath: URL) {
+    init(basePath: URL) async throws {
         self.basePath = basePath
+        try await initSystemNodes()
+    }
+
+    struct FailedToInitSystemNodes: Error {
+        let nodes: Set<NID>
+    }
+
+    private func initSystemNodes() async throws {
+        for node in SystemNodes.allCases {
+            _ = try await createNode(with: node.nid)
+        }
     }
 
     // MARK: GraphRepository
 
-    func createNewNode() async throws -> NID {
-        let nid = NID.random()
+    private func createNode(with nid: NID) async throws -> Bool {
         let newMeta = NodeMeta(id: nid, incoming: [:], outgoing: [:])
         let data: Data = try JSONEncoder().encode(newMeta)
         let metaPath = basePath.appending(metaPathFor: nid)
-        guard FileManager.default.createFile(atPath: metaPath.path, contents: data) else {
-            throw CouldNotCreateFile(path: metaPath)
+        do {
+            try data.write(to: metaPath, options: .withoutOverwriting)
+            return true
+        } catch {
+            let nsError = error as NSError
+            if nsError.domain == NSCocoaErrorDomain && nsError.code == NSFileWriteFileExistsError {
+                return false
+            } else {
+                throw error
+            }
+        }
+    }
+
+    struct NodeAlreadyExists: Error {
+        let nid: NID
+    }
+
+    func createNewNode() async throws -> NID {
+        let nid = NID.random()
+        guard try await createNode(with: nid) else {
+            throw NodeAlreadyExists(nid: nid)
         }
         return nid
     }
@@ -183,8 +212,9 @@ actor FilesystemGraphRepository: GraphRepository {
         metadataCache[nid]!.decrementReferenceCount()
 
         if metadataCache[nid]!.referenceCount! == 0 {
+            let document = metadataCache[nid]!.document!
             metadataCache[nid]! = .closing()
-            await metadataCache[nid]!.document!.close()
+            await document.close()
             guard case .closing(let waiters) = metadataCache[nid]! else {
                 fatalError("only one closing operation may happen at a time")
             }
@@ -220,59 +250,124 @@ private extension FilesystemGraphRepository {
             self.graphRepository = graphRepository
             self.computeValue = computeValue
             self.dependencyEntries = [:]
-            Task { await subscriptionTask() }
         }
 
         func next() async throws -> T? {
             while true {
-                while !dependencyEntriesAllComplete {
-                    await waitUntilSomethingUpdates()
+                while !dependencyEntriesAllComplete || !hasDependencyChangedSinceLastNextResult {
+                    await waitUntilSomethingChanges()
                 }
-                do {
-                    let value = try computeValue(trackedGetDependency(_:dataNeed:))
-                    commitLargestNewRequests()
+
+                // waitUntilSomethingChanges only works because all of this executes without any suspend points
+                if let value = computeNextValue() {
+                    hasDependencyChangedSinceLastNextResult = false
                     return value
-                } catch .cacheMiss {
-                    clearLargestNewRequests()
+                } else {
                     continue
                 }
+            }
+        }
+
+        private struct DM: DependencyManager {
+            let untypedGet: (NID, UntypedDataNeed) throws(FetchDependencyError) -> NodeValue<UntypedDataValue>
+
+            func fetch<D>(nid: NID, dataNeed: D) throws(FetchDependencyError) -> NodeValue<D.Value> where D : DataNeed {
+                let nodeValue = try untypedGet(nid, dataNeed.untyped)
+                guard let typedAugmentation = dataNeed.coerceValue(nodeValue.data) else {
+                    fatalError("type mismatch: wrong augmentation type for data need \(dataNeed.untyped)")
+                }
+                return nodeValue.withAugmentation(typedAugmentation)
+            }
+
+            func fetch(nid: NID, untypedDataNeed: UntypedDataNeed) throws(FetchDependencyError) -> NodeValue<UntypedDataValue> {
+                try untypedGet(nid, untypedDataNeed)
+            }
+        }
+
+        private func computeNextValue() -> T? {
+            do {
+                let value = try computeValue(DM(untypedGet: trackedGetDependency(_:dataNeed:)))
+                commitLargestNewRequests()
+                return value
+            } catch FetchDependencyError.cacheMiss {
+                clearLargestNewRequests()
+                return nil
+            } catch FetchDependencyError.missingDependencies {
+                clearLargestNewRequests()
+                return nil
+            } catch {
+                logWarn("non-standard error thrown from computeValue: \(error)")
+                clearLargestNewRequests()
+                return nil
             }
         }
 
         // MARK: dependency management
 
         private struct DependencyEntry {
+            init(nid: NID, dataNeed: UntypedDataNeed, graphRepository: FilesystemGraphRepository, iterator: NewUpdatesIterator<T>) {
+                self.dataNeed = dataNeed
+                let task = Task { [nid, graphRepository, weak iterator] in
+                    do {
+                        let handle = try await graphRepository.getMetadataHandle(for: nid)
+                        for await nodeValue in await handle.nodeValues {
+                            await iterator?.updateValue(nodeValue)
+                        }
+                        logInfo("handle.nodeValues finished")
+                    } catch {
+                        logError(error)
+                    }
+                }
+                self.updateValueTask = AnyCancellable { task.cancel() }
+            }
+
             /// Requested data need for this node
-            var dataNeed: AugmentationDataNeed
+            var dataNeed: UntypedDataNeed
 
             /// As we run computeValue we track the data need requested on its reruns
             /// We use this to compute the maximum data need requested on the previous run which becomes the new data need
-            var largestNewRequest = Max<AugmentationDataNeed>()
+            var largestNewRequest = Max<UntypedDataNeed>()
 
-            /// MetadataHandle if we have already fetched it from the ProductionGraphRepository
-            /// We use this to subscribe to updates
-            var metadataHandle: MetadataHandle?
+            /// AnyCancellable that cancels a task that calls ``updateValue`` when metadataHandle emits updates for the node
+            var updateValueTask: AnyCancellable
 
             /// Cached value from the most recent update we received from the GraphRepository.
             var mostRecentValue: NodeValue<Void>?
 
-            private func _completeValue(withDataNeed dataNeed: AugmentationDataNeed) -> NodeValue<AugmentationDataValue>? {
+            private func _completeValue(withDataNeed dataNeed: UntypedDataNeed) -> NodeValue<UntypedDataValue>? {
                 guard let mostRecentValue else {
                     return nil
                 }
 
-                // TODO: process/handle data
-
-                return mostRecentValue.withAugmentation(.dataNotChecked)
+                switch dataNeed {
+                case .dataNotNeeded:
+                    return mostRecentValue.withAugmentation(.dataNotChecked)
+                case .wantDataIfLocal:
+                    // TODO: populate
+                    return mostRecentValue.withAugmentation(.dataIfLocal(.noData))
+                case .needDataEvenIfRemote:
+                    // TODO: populate
+                    return mostRecentValue.withAugmentation(.data(nil))
+                }
             }
 
             var isValueComplete: Bool {
                 _completeValue(withDataNeed: dataNeed) != nil
             }
 
-            mutating func completeValue(withDataNeed dataNeed: AugmentationDataNeed) -> NodeValue<AugmentationDataValue>? {
+            mutating func completeValue(withDataNeed dataNeed: UntypedDataNeed) -> NodeValue<UntypedDataValue>? {
                 largestNewRequest.insert(dataNeed)
                 return _completeValue(withDataNeed: dataNeed)
+            }
+
+            func resetDataNeedRequest(merge: (_ old: UntypedDataNeed, _ newMax: UntypedDataNeed) -> UntypedDataNeed) -> DependencyEntry {
+                guard let newDataNeed = largestNewRequest.max else {
+                    return self
+                }
+                var mutable = self
+                mutable.dataNeed = max(mutable.dataNeed, newDataNeed)
+                mutable.largestNewRequest.reset()
+                return mutable
             }
         }
 
@@ -280,15 +375,7 @@ private extension FilesystemGraphRepository {
         /// Pessimistically assumes that we may need the maximum requested by any previous failed run.
         private func clearLargestNewRequests() {
             dependencyEntries = dependencyEntries
-                .mapValues { entry in
-                    guard let newDataNeed = entry.largestNewRequest.max else {
-                        return entry
-                    }
-                    var entry = entry
-                    entry.dataNeed = max(entry.dataNeed, newDataNeed)
-                    entry.largestNewRequest.reset()
-                    return entry
-                }
+                .mapValues { entry in entry.resetDataNeedRequest(merge: max) }
         }
 
         /// Cleans up dependency entries to update dependency tracking based on the latest call that we made
@@ -299,15 +386,7 @@ private extension FilesystemGraphRepository {
                     // if we didn't get a new request we no longer have a dependency on a given node
                     entry.largestNewRequest.max != nil
                 }
-                .mapValues { entry in
-                    guard let newDataNeed = entry.largestNewRequest.max else {
-                        return entry
-                    }
-                    var entry = entry
-                    entry.dataNeed = newDataNeed
-                    entry.largestNewRequest.reset()
-                    return entry
-                }
+                .mapValues { entry in entry.resetDataNeedRequest(merge: { $1 }) }
         }
 
         /// If an entry is in this dictionary it is a dependency.
@@ -317,10 +396,15 @@ private extension FilesystemGraphRepository {
             dependencyEntries.allSatisfy { $0.value.isValueComplete }
         }
 
-        private func trackedGetDependency(_ nid: NID, dataNeed: AugmentationDataNeed) throws(FetchDependencyError) -> NodeValue<AugmentationDataValue> {
+        private func trackedGetDependency(_ nid: NID, dataNeed: UntypedDataNeed) throws(FetchDependencyError) -> NodeValue<UntypedDataValue> {
             guard var entry = dependencyEntries[nid] else {
                 // didn't know about this dependency before, save it in the cache
-                dependencyEntries[nid] = DependencyEntry(dataNeed: dataNeed)
+                dependencyEntries[nid] = DependencyEntry(
+                    nid: nid,
+                    dataNeed: dataNeed,
+                    graphRepository: graphRepository,
+                    iterator: self
+                )
                 throw FetchDependencyError.cacheMiss
             }
             defer { dependencyEntries[nid] = entry }
@@ -333,61 +417,33 @@ private extension FilesystemGraphRepository {
             return value
         }
 
-        // MARK: Handling subscriptions to node updates
-
-        private func subscriptionTask() async {
-            await withDiscardingTaskGroup { [weak self] group in
-                while let self {
-                    await ensureSubscriptionsExist { [weak self] nodeValues in
-                        _ = group.addTaskUnlessCancelled { [weak self] in
-                            for await nodeValue in nodeValues {
-                                await self?.updateValue(nodeValue)
-                            }
-                            logInfo("handle.nodeValues finished")
-                        }
-                    }
-                }
-                group.cancelAll()
-            }
-        }
-
-        private func ensureSubscriptionsExist(spawnNewListener: (any AsyncSequence<NodeValue<Void>, Never>) async -> Void) async {
-            // TODO: this seems pretty sketchy in terms of the fact that it is hopping back/forth across actors
-            // would be nice to make this a little bit neater / safer / streamlined so that we can be sure that
-            // that we don't have re-entrancy problems with the way this is currently written
-            for (nid, var entry) in dependencyEntries where entry.metadataHandle == nil {
-                do {
-                    let handle = try await graphRepository.getMetadataHandle(for: nid)
-                    entry.metadataHandle = handle
-                    dependencyEntries[nid] = entry
-                    await spawnNewListener(await handle.nodeValues)
-                } catch {
-                    logError(error)
-                }
-            }
-        }
+        var hasDependencyChangedSinceLastNextResult = true
 
         private func updateValue(_ newValue: NodeValue<Void>) {
             guard var entry = dependencyEntries[newValue.id] else {
                 // maybe possible if considering concurrency shenanigans?
-                logWarn("trying to update entry for node that doesn't exist")
+                logError("trying to update entry for node that doesn't exist")
                 return
             }
 
             entry.mostRecentValue = newValue
             dependencyEntries[newValue.id] = entry
-            markSomethingAsUpdated()
+            markSomethingAsChanged()
         }
 
-        private func markSomethingAsUpdated() {
-            somethingUpdatedContinuation?.resume()
+        private func markSomethingAsChanged() {
+            hasDependencyChangedSinceLastNextResult = true
+            if let continuation = somethingUpdatedContinuation {
+                continuation.resume()
+                somethingUpdatedContinuation = nil
+            }
         }
 
-        /// Wait until a value is updated.
+        /// Wait until something changes
         /// TODO: this probably wants to handle cancellation more gracefully
-        private func waitUntilSomethingUpdates() async {
+        private func waitUntilSomethingChanges() async {
             assert(somethingUpdatedContinuation == nil)
-            assert(!dependencyEntriesAllComplete)
+            assert(!dependencyEntriesAllComplete || !hasDependencyChangedSinceLastNextResult)
             await withCheckedContinuation { continuation in
                 somethingUpdatedContinuation = continuation
             }

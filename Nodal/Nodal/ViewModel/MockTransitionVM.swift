@@ -41,7 +41,7 @@ class MockTransitionVM: TransitionVM {
     func subscribe() async {}
     func toggleFavorite() async {}
     func toggleWorse() async {}
-    func fetchThumbnail() async {}
+    func fetchThumbnail() {}
     func updateTransitionName(to newName: String) async {}
     func removeTransition() async {}
 }

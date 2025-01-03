@@ -61,7 +61,7 @@ protocol TransitionVM: Observable, Identifiable {
 
     func toggleWorse() async
 
-    func fetchThumbnail() async
+    func fetchThumbnail()
 
     func updateTransitionName(to newName: String) async
 

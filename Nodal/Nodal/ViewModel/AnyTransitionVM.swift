@@ -58,8 +58,8 @@ import Foundation
         await underlying.toggleWorse()
     }
 
-    func fetchThumbnail() async {
-        await underlying.fetchThumbnail()
+    func fetchThumbnail() {
+        underlying.fetchThumbnail()
     }
 
     func updateTransitionName(to newName: String) async {
