@@ -6,19 +6,39 @@
 //
 
 import UIKit
+import Combine
 
 final class DataDocument: UIDocument {
-    init?<N: Node>(node: N) async {
+    struct NoDataURL: Error {}
+
+    convenience init<N: Node>(node: N) async throws {
         guard let dataURL = node.dataURL else {
-            return nil
+            throw NoDataURL()
         }
+        try await self.init(dataURL: dataURL)
+    }
+
+    struct FailedToOpenDocument: Error {}
+
+    init(dataURL: URL) async throws {
         super.init(fileURL: dataURL)
         guard await super.open() else {
-            return nil
+            throw FailedToOpenDocument()
         }
     }
 
-    var data = Data()
+    var data = Data() {
+        willSet {
+            _dataPublisher.send(newValue)
+        }
+    }
+
+    var _dataPublisher = CurrentValueSubject<Data, Error>(Data())
+
+    // TODO: throw error when closing
+    var dataPublisher: AnyPublisher<Data, Error> {
+        _dataPublisher.eraseToAnyPublisher()
+    }
 
     override func contents(forType typeName: String) throws -> Any {
         data
@@ -31,5 +51,12 @@ final class DataDocument: UIDocument {
             throw ContentsIsNotData()
         }
         self.data = data
+    }
+
+    struct DocumentClosedError: Error {}
+
+    override func close() async -> Bool {
+        _dataPublisher.send(completion: .failure(DocumentClosedError()))
+        return await super.close()
     }
 }

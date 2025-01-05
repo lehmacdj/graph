@@ -35,6 +35,7 @@ final class NodeMetadataDocument: UIDocument {
     }
 
     /// Initialized with initially invalid information, but we read before returning from the constructor so it's never invalid to an outside observer
+    /// TODO: add error to publisher here too to account for scenarios involving node deletions
     @Published private var _meta: NodeMeta?
     var meta: NodeMeta {
         get {
@@ -51,10 +52,6 @@ final class NodeMetadataDocument: UIDocument {
 
     var metaPublisher: AnyPublisher<NodeMeta, Never> {
         $_meta.compactMap { $0 }.eraseToAnyPublisher()
-    }
-
-    var metaUpdates: any AsyncSequence<NodeMeta, Never> {
-        metaPublisher.values
     }
 
     struct InvalidFileType: Error {}

@@ -6,7 +6,7 @@
 //
 
 @dynamicMemberLookup
-struct NodeValue<Augmentation>: Identifiable {
+struct NodeValue<Augmentation: Sendable>: Identifiable, Sendable {
     let id: NID
     let outgoing: [String:Set<NID>]
     let incoming: [String:Set<NID>]

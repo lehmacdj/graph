@@ -7,6 +7,12 @@
 
 import Foundation
 
+enum DataAvailability {
+    case noData
+    case availableRemotely
+    case availableLocally
+}
+
 enum UntypedDataNeed: Comparable {
     case dataNotNeeded
     case wantDataIfLocal

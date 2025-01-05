@@ -15,6 +15,24 @@ actor FilesystemGraphRepository: GraphRepository {
 
     init(basePath: URL) async throws {
         self.basePath = basePath
+        metadataCache = ConcurrentCache(
+            create: { try await NodeMetadataDocument(metaURL: basePath.appending(metaPathFor: $0))},
+            destroy: { (nid, document) in
+                let result = await document.close()
+                if !result {
+                    logError("failed to save while closing meta document \(nid)")
+                }
+            }
+        )
+        dataDocumentCache = ConcurrentCache(
+            create: { try await DataDocument(dataURL: basePath.appending(dataPathFor: $0)) },
+            destroy: { (nid, document) in
+                let result = await document.close()
+                if !result {
+                    logError("failed to save while closing data document \(nid)")
+                }
+            }
+        )
         try await initSystemNodes()
     }
 
@@ -75,152 +93,74 @@ actor FilesystemGraphRepository: GraphRepository {
         logError("unimplemented")
     }
 
-    // MARK: Subscription management
+    // MARK: Primitive update sequences used by the custom AsyncSequence iterators we return
 
-    enum NodeCacheEntry<Document: UIDocument> {
-        /// If there are concurrent attempts to open a particular entry all but the first may have to wait for the first attempt to complete
-        case opening(waiters: [CheckedContinuation<Void, Never>] = [])
-        case live(referenceCount: Int, document: Document)
-        /// If there are concurrent attempts to open a particular entry all but the first may have to wait for the first attempt to complete
-        case closing(waiters: [CheckedContinuation<Void, Never>] = [])
+    private var metadataCache: ConcurrentCache<NID, NodeMetadataDocument>
 
-        var document: Document? {
-            switch self {
-            case .live(_, let document): document
-            case .opening, .closing: nil
-            }
-        }
-
-        var referenceCount: Int? {
-            switch self {
-            case .live(let referenceCount, _): referenceCount
-            case .closing, .opening: nil
-            }
-        }
-
-        mutating func decrementReferenceCount() {
-            guard case .live(let referenceCount, let document) = self else {
-                fatalError("can't change reference count if not live")
-            }
-            self = .live(referenceCount: referenceCount - 1, document: document)
-        }
-
-        mutating func incrementReferenceCount() {
-            guard case .live(let referenceCount, let document) = self else {
-                fatalError("can't change reference count if not live")
-            }
-            self = .live(referenceCount: referenceCount + 1, document: document)
-        }
-
-        mutating func addWaiter(_ continuation: CheckedContinuation<Void, Never>) {
-            switch self {
-            case .live:
-                fatalError("invalid to add a waiter when live")
-            case .opening(let waiters):
-                self = .opening(waiters: waiters + [continuation])
-            case .closing(let waiters):
-                self = .closing(waiters: waiters + [continuation])
-            }
-        }
+    private func getMetadataUpdates(for nid: NID) async throws -> (AnyCancellable, any AsyncSequence<NodeValue<Void>, Never>) {
+        let (cacheEntry, metadataDocument) = try await metadataCache.getOrCreate(nid)
+        let sequence = await metadataDocument
+            .metaPublisher
+            .values
+            .map { NodeValue(from: $0) }
+        return (cacheEntry, sequence)
     }
 
-    class MetadataHandle {
-        init(nid: NID, graphRepository: FilesystemGraphRepository, metadataDocument: NodeMetadataDocument) {
-            self.nid = nid
-            self.graphRepository = graphRepository
-            self.metadataDocument = metadataDocument
+    private func getDataAvailabilityUpdates(for nid: NID) async throws -> (AnyCancellable, any AsyncSequence<DataAvailability, Never>) {
+        let query = NSMetadataQuery()
+        let url = basePath.appending(dataPathFor: nid)
+        query.predicate = NSPredicate(
+            format: "%K == %@",
+            NSMetadataItemURLKey,
+            url as CVarArg
+        )
+        query.searchScopes = [basePath]
+        query.valueListAttributes = [NSMetadataUbiquitousItemDownloadingStatusKey]
+        let (stream, continuation) = AsyncStream<DataAvailability>.makeStream()
+        // we only access the query from .main so this is actually safe
+        struct UnsafeSendableWrapper: @unchecked Sendable {
+            let query: NSMetadataQuery
         }
-
-        let nid: NID
-        let graphRepository: FilesystemGraphRepository
-        let metadataDocument: NodeMetadataDocument
-
-        deinit {
-            Task { [graphRepository, nid] in
-                await graphRepository.removeMetadataReference(for: nid)
+        let wrappedQuery = UnsafeSendableWrapper(query: query)
+        let handleResult: @Sendable (Notification) -> Void = { _ in
+            wrappedQuery.query.disableUpdates()
+            guard let downloadStatus = wrappedQuery.query.valueLists[url.path()]?[0] as? String else {
+                continuation.yield(.noData)
+                return
             }
+            switch downloadStatus {
+            case NSMetadataUbiquitousItemDownloadingStatusCurrent:
+                continuation.yield(.availableLocally)
+            case NSMetadataUbiquitousItemDownloadingStatusDownloaded:
+                continuation.yield(.availableLocally)
+            case NSMetadataUbiquitousItemDownloadingStatusNotDownloaded:
+                continuation.yield(.availableRemotely)
+            default:
+                logWarn("invalid value \(downloadStatus) for NSMetadataQuery \(nid)")
+                return
+            }
+            wrappedQuery.query.enableUpdates()
+        }
+        let token1 = NotificationCenter.default.addObserver(forName: .NSMetadataQueryDidFinishGathering, object: query, queue: .main, using: handleResult)
+        let token2 = NotificationCenter.default.addObserver(forName: .NSMetadataQueryDidUpdate, object: query, queue: .main, using: handleResult)
+
+        let cancellable = AnyCancellable {
+            continuation.finish()
+            NotificationCenter.default.removeObserver(token1)
+            NotificationCenter.default.removeObserver(token2)
         }
 
-        var nodeValues: any AsyncSequence<NodeValue<Void>, Never> {
-            get async {
-                // I have some concerns about what happens if the metadata document is closed but we're still subscribed to this sequence, but it should be pretty obvious something is broken if that breaks something
-                let publisher = await metadataDocument.metaPublisher
-                return AsyncStream { continuation in
-                    let cancellable = publisher
-                        .sink { result in
-                            switch result {
-                            case .finished:
-                                continuation.finish()
-                            }
-                        } receiveValue: { value in
-                            continuation.yield(NodeValue(from: value))
-                        }
-                    continuation.onTermination = { _ in
-                        cancellable.cancel()
-                    }
-                }
-            }
-        }
+        return (cancellable, stream)
     }
 
-    private var metadataCache = [NID: NodeCacheEntry<NodeMetadataDocument>]()
+    private let dataDocumentCache: ConcurrentCache<NID, DataDocument>
 
-    private func getMetadataHandle(for nid: NID) async throws -> MetadataHandle {
-        // ensure we have a live cache entry
-        while true {
-            if case .live = metadataCache[nid] {
-                // leave the loop, then in the guard we will have a live cache entry
-                break
-            } else if var cacheEntry = metadataCache[nid] {
-                // wait for the closing or opening operation to complete then try again
-                await withCheckedContinuation { continuation in
-                    cacheEntry.addWaiter(continuation)
-                    metadataCache[nid] = cacheEntry
-                }
-            } else {
-                // initialize a new cache entry
-                metadataCache[nid] = .opening()
-                do {
-                    let document = try await NodeMetadataDocument(metaURL: basePath.appending(metaPathFor: nid))
-                    guard case .opening(let waiters) = metadataCache[nid] else {
-                        fatalError("only one opening operation can be active at a time")
-                    }
-                    waiters.forEach { $0.resume() }
-                    metadataCache[nid]! = .live(referenceCount: 0, document: document)
-                    // we probably could break/return here, but the logic is clearer if there
-                    // is only a single point where it is possible to break out of the loop
-                } catch {
-                    metadataCache.removeValue(forKey: nid)
-                    throw error
-                }
-            }
-        }
-
-        // safe because we checked above without suspend points in between
-        metadataCache[nid]!.incrementReferenceCount()
-
-        return MetadataHandle(nid: nid, graphRepository: self, metadataDocument: metadataCache[nid]!.document!)
-    }
-
-    private func removeMetadataReference(for nid: NID) async {
-        guard case .live = metadataCache[nid] else {
-            // we only return a MetadataHandle when .live and only transition out of that
-            // state in this method
-            fatalError("cache was manipulated improperly")
-        }
-
-        metadataCache[nid]!.decrementReferenceCount()
-
-        if metadataCache[nid]!.referenceCount! == 0 {
-            let document = metadataCache[nid]!.document!
-            metadataCache[nid]! = .closing()
-            await document.close()
-            guard case .closing(let waiters) = metadataCache[nid]! else {
-                fatalError("only one closing operation may happen at a time")
-            }
-            waiters.forEach { $0.resume() }
-            metadataCache.removeValue(forKey: nid)
-        }
+    private func getDataUpdates(for nid: NID) async throws -> (AnyCancellable, any AsyncSequence<Data, Error>) {
+        let (cacheEntry, dataDocument) = try await dataDocumentCache.getOrCreate(nid)
+        let sequence = await dataDocument
+            .dataPublisher
+            .values
+        return (cacheEntry, sequence)
     }
 }
 
@@ -309,8 +249,8 @@ private extension FilesystemGraphRepository {
                 self.dataNeed = dataNeed
                 let task = Task { [nid, graphRepository, weak iterator] in
                     do {
-                        let handle = try await graphRepository.getMetadataHandle(for: nid)
-                        for await nodeValue in await handle.nodeValues {
+                        let (_, updates) = try await graphRepository.getMetadataUpdates(for: nid)
+                        for await nodeValue in updates {
                             await iterator?.updateValue(nodeValue)
                         }
                         logInfo("handle.nodeValues finished")
@@ -425,9 +365,9 @@ private extension FilesystemGraphRepository {
                 logError("trying to update entry for node that doesn't exist")
                 return
             }
+            defer { dependencyEntries[newValue.id] = entry }
 
             entry.mostRecentValue = newValue
-            dependencyEntries[newValue.id] = entry
             markSomethingAsChanged()
         }
 

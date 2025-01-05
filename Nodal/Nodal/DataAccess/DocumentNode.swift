@@ -85,7 +85,7 @@ final class DocumentNode: GraphManagerNode {
             let dataURL = try dataURL.unwrapped("need data URL to know if data exists")
             let attributes = try dataURL.resourceValues(forKeys: [.ubiquitousItemDownloadingStatusKey])
             let downloadingStatus = try attributes.ubiquitousItemDownloadingStatus.unwrapped("we requested .ubiquitousItemDownloadingStatusKey")
-            return downloadingStatus != .current
+            return downloadingStatus != .current || downloadingStatus != .downloaded
         } catch {
             logWarn("failed to determine if file needs to be downloaded: \(error)")
             return false
@@ -96,7 +96,7 @@ final class DocumentNode: GraphManagerNode {
     private var dataDocument: DataDocument? {
         get async {
             if _dataDocument == nil {
-                _dataDocument = await DataDocument(node: self)
+                _dataDocument = try? await DataDocument(node: self)
             }
             return _dataDocument
         }
