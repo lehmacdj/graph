@@ -6,6 +6,7 @@
 //
 
 import Foundation
+import Combine
 
 enum FileAvailability {
     case noData
@@ -20,7 +21,6 @@ actor FileAvailabilityObserver {
 
     init(url: URL, refreshInterval: Duration = .milliseconds(500)) {
         self.url = url
-        let (updates, updatesContinuation) = AsyncStream<FileAvailability>.makeStream()
         Task { [weak self] in
             while !Task.isCancelled {
                 guard let self else { return }
@@ -31,8 +31,6 @@ actor FileAvailabilityObserver {
     }
 
     func updateAvailability() {
-        guard url.startAccessingSecurityScopedResource() else { return }
-        defer { url.stopAccessingSecurityScopedResource() }
         do {
             let resourceValues = try url.resourceValues(forKeys: [.ubiquitousItemDownloadingStatusKey])
             switch resourceValues.ubiquitousItemDownloadingStatus {
@@ -44,7 +42,8 @@ actor FileAvailabilityObserver {
                 availability = .availableLocally
             case .current:
                 availability = .availableLocally
-            case .some(_):
+            case .some(let status):
+                logError("unexpected download status \(status)")
             }
         } catch {
             logError(error)
@@ -60,7 +59,7 @@ actor FileAvailabilityObserver {
         updatesContinuations.removeValue(forKey: uuid)
     }
 
-    var updates: any AsyncSequence<FileAvailability, Never> {
+    var updates: any AsyncSequence<DataAvailability, Never> {
         let (updates, updatesContinuation) = AsyncStream<FileAvailability>.makeStream()
         let uuid = UUID()
         updatesContinuation.onTermination = { [weak self] _ in

@@ -16,13 +16,17 @@ actor FilesystemGraphRepository: GraphRepository {
     init(basePath: URL) async throws {
         self.basePath = basePath
         metadataCache = ConcurrentCache(
-            create: { try await NodeMetadataDocument(metaURL: basePath.appending(metaPathFor: $0))},
+            create: { try await NodeMetadataDocument(metaURL: basePath.appending(metaPathFor: $0)) },
             destroy: { (nid, document) in
                 let result = await document.close()
                 if !result {
                     logError("failed to save while closing meta document \(nid)")
                 }
             }
+        )
+        dataAvailabilityCache = ConcurrentCache(
+            create: { FileAvailabilityObserver(url: basePath.appending(dataPathFor: $0)) },
+            destroy: { (nid, observer) in }
         )
         dataDocumentCache = ConcurrentCache(
             create: { try await DataDocument(dataURL: basePath.appending(dataPathFor: $0)) },
@@ -106,114 +110,12 @@ actor FilesystemGraphRepository: GraphRepository {
         return (cacheEntry, sequence)
     }
 
-    var singletonQuery: NSMetadataQuery?
+    private var dataAvailabilityCache: ConcurrentCache<NID, FileAvailabilityObserver>
 
     private func getDataAvailabilityUpdates(for nid: NID) async throws -> (AnyCancellable, any AsyncSequence<DataAvailability, Never>) {
-        guard singletonQuery == nil else { return (AnyCancellable {}, [].async) }
-
-        print("initializing query")
-        let query = NSMetadataQuery()
-        singletonQuery = query
-        query.searchScopes = [NSMetadataQueryUbiquitousDataScope, NSMetadataQueryAccessibleUbiquitousExternalDocumentsScope, NSMetadataQueryUbiquitousDocumentsScope]
-        query.searchItems = [basePath.appending(metaPathFor: nid)]
-        NotificationCenter.default.addObserver(forName: .NSMetadataQueryDidStartGathering, object: query, queue: .main) { notification in
-            guard let _ = notification.object as? NSMetadataQuery else {
-                logError("query start not metadata query")
-                return
-            }
-
-            print("query started gathering")
-        }
-        NotificationCenter.default.addObserver(forName: .NSMetadataQueryGatheringProgress, object: query, queue: .main) { notification in
-            guard let query = notification.object as? NSMetadataQuery else {
-                logError("gathering progress not metadata query")
-                return
-            }
-
-            print("query gathering progress")
-            query.results.forEach { item in
-                guard let metadataItem = item as? NSMetadataItem else {
-                    logError("query gathering item is not metadata item")
-                    return
-                }
-                print("query result", metadataItem.value(forAttribute: NSMetadataItemPathKey))
-            }
-        }
-        NotificationCenter.default.addObserver(forName: .NSMetadataQueryDidFinishGathering, object: query, queue: .main) { notification in
-            guard let query = notification.object as? NSMetadataQuery else {
-                logError("finish gathering not metadata query")
-                return
-            }
-
-            print("query finished gathering")
-            query.disableUpdates()
-            query.results.forEach { print($0) }
-            query.enableUpdates()
-        }
-        NotificationCenter.default.addObserver(forName: .NSMetadataQueryDidUpdate, object: query, queue: .main) { notification in
-            guard let _ = notification.object as? NSMetadataQuery else {
-                logError("update not metadata query")
-                return
-            }
-
-            print("query updated")
-        }
-        struct SendableWrapper<T>: @unchecked Sendable { let unsafeSendable: T }
-        let sendableQuery = SendableWrapper(unsafeSendable: query)
-        DispatchQueue.main.async {
-            print("started query")
-            sendableQuery.unsafeSendable.start()
-        }
-
-        return (AnyCancellable { }, [].async)
-
-
-//        let query = NSMetadataQuery()
-//        let url = basePath.appending(dataPathFor: nid)
-////        query.predicate = NSPredicate(
-////            format: "%K == %@",
-////            NSMetadataItemURLKey,
-////            url.path() as CVarArg
-////        )
-//        query.searchItems = [url]
-//        query.searchScopes = [NSMetadataQueryAccessibleUbiquitousExternalDocumentsScope]
-//        let (stream, continuation) = AsyncStream<DataAvailability>.makeStream()
-//        // we only access the query from .main so this is actually safe
-//        struct UnsafeSendableWrapper: @unchecked Sendable {
-//            let query: NSMetadataQuery
-//        }
-//        let wrappedQuery = UnsafeSendableWrapper(query: query)
-//        let handleResult: @Sendable (Notification) -> Void = { _ in
-//            wrappedQuery.query.disableUpdates()
-//            guard let downloadStatus = wrappedQuery.query.valueLists[url.path()]?[0] as? String else {
-//                continuation.yield(.noData)
-//                return
-//            }
-//            switch downloadStatus {
-//            case NSMetadataUbiquitousItemDownloadingStatusCurrent:
-//                continuation.yield(.availableLocally)
-//            case NSMetadataUbiquitousItemDownloadingStatusDownloaded:
-//                continuation.yield(.availableLocally)
-//            case NSMetadataUbiquitousItemDownloadingStatusNotDownloaded:
-//                continuation.yield(.availableRemotely)
-//            default:
-//                logWarn("invalid value \(downloadStatus) for NSMetadataQuery \(nid)")
-//                return
-//            }
-//            wrappedQuery.query.enableUpdates()
-//        }
-//        let token1 = NotificationCenter.default.addObserver(forName: .NSMetadataQueryDidFinishGathering, object: query, queue: .main, using: handleResult)
-//        let token2 = NotificationCenter.default.addObserver(forName: .NSMetadataQueryDidUpdate, object: query, queue: .main, using: handleResult)
-//        query.start()
-//
-//        let cancellable = AnyCancellable {
-//            query.stop()
-//            continuation.finish()
-//            NotificationCenter.default.removeObserver(token1)
-//            NotificationCenter.default.removeObserver(token2)
-//        }
-//
-//        return (cancellable, stream)
+        let (cacheEntry, observer) = try await dataAvailabilityCache.getOrCreate(nid)
+        let updates = await observer.updates
+        return (cacheEntry, updates)
     }
 
     private let dataDocumentCache: ConcurrentCache<NID, DataDocument>
@@ -387,42 +289,47 @@ private extension FilesystemGraphRepository {
                     return
                 }
 
-                let dataAvailabilityTask = Task { [nid, graphRepository, weak iterator] in
-                    do {
-                        iterator?.logDebug("setting up data availability updates for \(nid)")
-                        let (_, updates) = try await graphRepository.getDataAvailabilityUpdates(for: nid)
-                        for await dataAvailability in updates {
-                            await iterator?.updateEntry(for: nid) { entry in
-                                entry.mostRecentDataAvailability = dataAvailability
+                if dataAvailabilitySubscription == nil {
+                    let dataAvailabilityTask = Task { [nid, graphRepository, weak iterator] in
+                        do {
+                            iterator?.logDebug("setting up data availability updates for \(nid)")
+                            let (_, updates) = try await graphRepository.getDataAvailabilityUpdates(for: nid)
+                            for await dataAvailability in updates {
+                                await iterator?.updateEntry(for: nid) { entry in
+                                    entry.mostRecentDataAvailability = dataAvailability
+                                    entry.setupDataSubscriptions()
+                                }
                             }
+                        } catch {
+                            iterator?.logError(error)
                         }
-                    } catch {
-                        iterator?.logError(error)
                     }
+                    dataAvailabilitySubscription = AnyCancellable { dataAvailabilityTask.cancel() }
                 }
-                dataAvailabilitySubscription = AnyCancellable { dataAvailabilityTask.cancel() }
 
                 guard isDataNeeded else {
                     dataSubscription = nil
                     return
                 }
 
-                let dataTask = Task { [nid, graphRepository, weak iterator] in
-                    do {
-                        iterator?.logDebug("setting up data updates for \(nid)")
-                        let (_, updates) = try await graphRepository.getDataUpdates(for: nid)
-                        for try await data in updates {
-                            await iterator?.updateEntry(for: nid) { entry in
-                                entry.mostRecentData = data
+                if dataSubscription == nil {
+                    let dataTask = Task { [nid, graphRepository, weak iterator] in
+                        do {
+                            iterator?.logDebug("setting up data updates for \(nid)")
+                            let (_, updates) = try await graphRepository.getDataUpdates(for: nid)
+                            for try await data in updates {
+                                await iterator?.updateEntry(for: nid) { entry in
+                                    entry.mostRecentData = data
+                                }
                             }
+                        } catch is DataDocument.DocumentClosedError {
+                            iterator?.logInfo("data no longer available, metadata query should update entry appropriately so this doesn't recur")
+                        } catch {
+                            iterator?.logError(error)
                         }
-                    } catch is DataDocument.DocumentClosedError {
-                        iterator?.logInfo("data no longer available, metadata query should update entry appropriately so this doesn't recur")
-                    } catch {
-                        iterator?.logError(error)
                     }
+                    dataSubscription = AnyCancellable { dataTask.cancel() }
                 }
-                dataSubscription = AnyCancellable { dataTask.cancel() }
             }
 
             private func _completeValue(withDataNeed dataNeed: DataNeed) -> NodeValue<UntypedDataValue>? {
@@ -430,15 +337,29 @@ private extension FilesystemGraphRepository {
                     return nil
                 }
 
-                switch dataNeed {
-                case .dataNotNeeded:
+                switch (dataNeed, mostRecentDataAvailability, mostRecentData) {
+                case (.dataNotNeeded, _, _):
                     return mostRecentValue.withAugmentation(.dataNotChecked)
-                case .wantDataIfLocal:
-                    // TODO: populate
+                case (.wantDataIfLocal, nil, _):
+                    return nil
+                case (.wantDataIfLocal, .noData, nil):
                     return mostRecentValue.withAugmentation(.dataIfLocal(.noData))
-                case .needDataEvenIfRemote:
-                    // TODO: populate
+                case (.wantDataIfLocal, .availableLocally, .some(let data)):
+                    return mostRecentValue.withAugmentation(.dataIfLocal(.localData(data)))
+                case (.wantDataIfLocal, .availableRemotely, nil):
+                    return mostRecentValue.withAugmentation(.dataIfLocal(.remoteDataExists))
+                case (.needDataEvenIfRemote, nil, _):
+                    return nil
+                case (.needDataEvenIfRemote, .noData, nil):
                     return mostRecentValue.withAugmentation(.data(nil))
+                case (.needDataEvenIfRemote, .availableLocally, .some(let data)):
+                    return mostRecentValue.withAugmentation(.data(data))
+                case (.needDataEvenIfRemote, .availableRemotely, nil):
+                    return nil
+                default:
+                    iterator?.logWarn("for \(mostRecentValue.id) inconsistent combination of dataNeed=\(dataNeed), mostRecentDataAvailability=\(String(describing: mostRecentDataAvailability)), mostRecentData=\(String(describing: mostRecentData))")
+                    // we may recover in the future
+                    return nil
                 }
             }
 
