@@ -43,6 +43,9 @@
 		032959F229CAC31F00FDE138 /* GraphManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 032959F129CAC31F00FDE138 /* GraphManager.swift */; };
 		0339C23E29010DA000345CB1 /* TransitionView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0339C23D29010DA000345CB1 /* TransitionView.swift */; };
 		035450022969D74100B5AAF6 /* FileSelectorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 035450012969D74100B5AAF6 /* FileSelectorView.swift */; };
+		0357C4CB2D2B6A4D00F7D03A /* Logging.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0357C4CA2D2B6A4A00F7D03A /* Logging.swift */; };
+		0357C4CD2D2B6A8100F7D03A /* Logging+ExtraContext.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0357C4CC2D2B6A5A00F7D03A /* Logging+ExtraContext.swift */; };
+		0357C4CF2D2B724A00F7D03A /* Base62Id.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0357C4CE2D2B724500F7D03A /* Base62Id.swift */; };
 		03589E892A8096EC004AD75B /* Tags.swift in Sources */ = {isa = PBXBuildFile; fileRef = 03589E882A8096EC004AD75B /* Tags.swift */; };
 		03589E8B2A809F72004AD75B /* SubscribingNodeVM.swift in Sources */ = {isa = PBXBuildFile; fileRef = 03589E8A2A809F72004AD75B /* SubscribingNodeVM.swift */; };
 		03589E8F2A81EDE3004AD75B /* SubscribingTransitionVM.swift in Sources */ = {isa = PBXBuildFile; fileRef = 03589E8E2A81EDE3004AD75B /* SubscribingTransitionVM.swift */; };
@@ -76,6 +79,7 @@
 		03C84EA82C27784000DB3869 /* Base62.swift in Sources */ = {isa = PBXBuildFile; fileRef = 03C84EA72C27784000DB3869 /* Base62.swift */; };
 		03C9CB3F2A7765BF007F29E7 /* AnyNodeVM.swift in Sources */ = {isa = PBXBuildFile; fileRef = 03C9CB3E2A7765BF007F29E7 /* AnyNodeVM.swift */; };
 		03C9CB412A7765C9007F29E7 /* AnyTransitionVM.swift in Sources */ = {isa = PBXBuildFile; fileRef = 03C9CB402A7765C9007F29E7 /* AnyTransitionVM.swift */; };
+		03CB440C2D343D8600F0B675 /* FileAvailabilityObserver.swift in Sources */ = {isa = PBXBuildFile; fileRef = 03CB440B2D343D7400F0B675 /* FileAvailabilityObserver.swift */; };
 		03D1D8DE28FB559B00E76F27 /* NodeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 03D1D8DD28FB559B00E76F27 /* NodeView.swift */; };
 		03DD60D129D0C809005EC4A5 /* AsyncUI.swift in Sources */ = {isa = PBXBuildFile; fileRef = 03DD60D029D0C809005EC4A5 /* AsyncUI.swift */; };
 		03DD60D429D105C1005EC4A5 /* TransitionVM.swift in Sources */ = {isa = PBXBuildFile; fileRef = 03DD60D329D105C1005EC4A5 /* TransitionVM.swift */; };
@@ -131,6 +135,9 @@
 		032959F129CAC31F00FDE138 /* GraphManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GraphManager.swift; sourceTree = "<group>"; };
 		0339C23D29010DA000345CB1 /* TransitionView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TransitionView.swift; sourceTree = "<group>"; };
 		035450012969D74100B5AAF6 /* FileSelectorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FileSelectorView.swift; sourceTree = "<group>"; };
+		0357C4CA2D2B6A4A00F7D03A /* Logging.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Logging.swift; sourceTree = "<group>"; };
+		0357C4CC2D2B6A5A00F7D03A /* Logging+ExtraContext.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Logging+ExtraContext.swift"; sourceTree = "<group>"; };
+		0357C4CE2D2B724500F7D03A /* Base62Id.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Base62Id.swift; sourceTree = "<group>"; };
 		03589E882A8096EC004AD75B /* Tags.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Tags.swift; sourceTree = "<group>"; };
 		03589E8A2A809F72004AD75B /* SubscribingNodeVM.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SubscribingNodeVM.swift; sourceTree = "<group>"; };
 		03589E8E2A81EDE3004AD75B /* SubscribingTransitionVM.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SubscribingTransitionVM.swift; sourceTree = "<group>"; };
@@ -162,6 +169,7 @@
 		03C84EA72C27784000DB3869 /* Base62.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Base62.swift; sourceTree = "<group>"; };
 		03C9CB3E2A7765BF007F29E7 /* AnyNodeVM.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnyNodeVM.swift; sourceTree = "<group>"; };
 		03C9CB402A7765C9007F29E7 /* AnyTransitionVM.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnyTransitionVM.swift; sourceTree = "<group>"; };
+		03CB440B2D343D7400F0B675 /* FileAvailabilityObserver.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FileAvailabilityObserver.swift; sourceTree = "<group>"; };
 		03D1D8DD28FB559B00E76F27 /* NodeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NodeView.swift; sourceTree = "<group>"; };
 		03DD60D029D0C809005EC4A5 /* AsyncUI.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AsyncUI.swift; sourceTree = "<group>"; };
 		03DD60D329D105C1005EC4A5 /* TransitionVM.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TransitionVM.swift; sourceTree = "<group>"; };
@@ -298,6 +306,9 @@
 		032959EE29CA997A00FDE138 /* Utils */ = {
 			isa = PBXGroup;
 			children = (
+				03CB440B2D343D7400F0B675 /* FileAvailabilityObserver.swift */,
+				0357C4CC2D2B6A5A00F7D03A /* Logging+ExtraContext.swift */,
+				0357C4CA2D2B6A4A00F7D03A /* Logging.swift */,
 				0395BCFF2D2073CE000C5D44 /* MaxAccumulator.swift */,
 				03ABF7A32CFC07C600738F76 /* URL+GraphPaths.swift */,
 				03A32F952AAD929000C6A30B /* WeakDictionary.swift */,
@@ -337,6 +348,7 @@
 		03ABF7822CD6D00C00738F76 /* Model */ = {
 			isa = PBXGroup;
 			children = (
+				0357C4CE2D2B724500F7D03A /* Base62Id.swift */,
 				039439002D0FCDED0078EE32 /* TransitionKey.swift */,
 				03ABF7982CD9B6A400738F76 /* NodeValue.swift */,
 				03ABF78F2CD6D16500738F76 /* SystemNodes.swift */,
@@ -589,12 +601,14 @@
 				03ABF78A2CD6D0EB00738F76 /* NodeDTO.swift in Sources */,
 				03A934C22A3EC10F0011DB8D /* DocumentNode.swift in Sources */,
 				03589E8F2A81EDE3004AD75B /* SubscribingTransitionVM.swift in Sources */,
+				0357C4CB2D2B6A4D00F7D03A /* Logging.swift in Sources */,
 				0367FDCC2B1BBB4B00D4B3B3 /* NodeMetadataDocument.swift in Sources */,
 				03ABF78C2CD6D0F000738F76 /* ConnectDTO.swift in Sources */,
 				0313681627149ECE00E69F83 /* ZoomableScrollView.swift in Sources */,
 				03ABF7A22CD9C1D700738F76 /* FilesystemGraphRepository.swift in Sources */,
 				03589E892A8096EC004AD75B /* Tags.swift in Sources */,
 				03C84EA82C27784000DB3869 /* Base62.swift in Sources */,
+				03CB440C2D343D8600F0B675 /* FileAvailabilityObserver.swift in Sources */,
 				0300B6C42D275D8700316337 /* ImageView.swift in Sources */,
 				03A934C42A3F8AC20011DB8D /* DataDocument.swift in Sources */,
 				03589E8B2A809F72004AD75B /* SubscribingNodeVM.swift in Sources */,
@@ -605,6 +619,8 @@
 				03D1D8DE28FB559B00E76F27 /* NodeView.swift in Sources */,
 				031367E32713FCF200E69F83 /* NodalApp.swift in Sources */,
 				0375E7C82782C06000FB6548 /* SafariView.swift in Sources */,
+				0357C4CD2D2B6A8100F7D03A /* Logging+ExtraContext.swift in Sources */,
+				0357C4CF2D2B724A00F7D03A /* Base62Id.swift in Sources */,
 				03ABF78E2CD6D13C00738F76 /* NodeTransition.swift in Sources */,
 				0395BD002D2073DB000C5D44 /* MaxAccumulator.swift in Sources */,
 				038C93032A397ECF0059C8D6 /* Errors.swift in Sources */,

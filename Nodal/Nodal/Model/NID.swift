@@ -8,49 +8,38 @@
 private let nidDigits = 12
 
 struct NID: Equatable, Hashable {
-    let representation: String
+    let underlying: Base62Id
+    var representation: String { underlying.representation }
+
+    struct InvalidNID: Error {
+        let digitCount: Int
+    }
+
+    init(underlying: Base62Id) throws {
+        guard underlying.digitCount == nidDigits else {
+            throw InvalidNID(digitCount: underlying.digitCount)
+        }
+        self.underlying = underlying
+    }
 
     init?(representation: String) {
-        guard representation.count == nidDigits && representation.allSatisfy({$0.isBase62Digit}) else {
-            return nil
-        }
-        self.representation = representation
+        guard let underlying = Base62Id(representation: representation) else { return nil }
+       try? self.init(underlying: underlying)
     }
 
     /// Fake NID constructed from an int.
     init(fake input: Int) {
-        var representation = ""
-        precondition(nidDigits < 11)
-        var remainder = input % (62 ** nidDigits)
-
-        while representation.count < nidDigits {
-            let ix = String.base62Digits.index(String.base62Digits.startIndex, offsetBy: remainder % 62)
-            let char = String.base62Digits[ix]
-            representation.append(String(char))
-            remainder /= 62
-        }
-
-        self.init(representation: representation)!
+        try! self.init(underlying: Base62Id(digitCount: nidDigits, fake: input))
     }
 }
 
 extension NID: Encodable, Decodable {
-    public init(from decoder: Decoder) throws {
-        let representation = try String(from: decoder)
-        if let nid = NID(representation: representation) {
-            self = nid
-        } else {
-            throw DecodingError.dataCorrupted(
-                .init(
-                    codingPath: decoder.codingPath,
-                    debugDescription: "Invalid NID representation: \(representation)"
-                )
-            )
-        }
+    init(from decoder: any Decoder) throws {
+        try self.init(underlying: try .init(from: decoder))
     }
 
-    public func encode(to encoder: Encoder) throws {
-        try representation.encode(to: encoder)
+    func encode(to encoder: Encoder) throws {
+        try underlying.encode(to: encoder)
     }
 }
 
@@ -61,8 +50,7 @@ extension NID {
 
 extension NID {
     static func random() -> NID {
-        let randomString = String((0..<nidDigits).map { _ in String.base62Digits.randomElement()! })
-        return NID(representation: randomString)!
+        try! .init(underlying: Base62Id.random(digitCount: nidDigits))
     }
 }
 

@@ -7,13 +7,9 @@
 
 import Foundation
 
-enum DataAvailability {
-    case noData
-    case availableRemotely
-    case availableLocally
-}
+typealias DataAvailability = FileAvailability
 
-enum UntypedDataNeed: Comparable {
+enum DataNeed: Comparable {
     case dataNotNeeded
     case wantDataIfLocal
     case needDataEvenIfRemote
@@ -41,14 +37,14 @@ struct DataValue {
     let data: Data?
 }
 
-protocol DataNeed {
+protocol TypedDataNeed {
     associatedtype Value
-    var untyped: UntypedDataNeed { get }
+    var untyped: DataNeed { get }
     func coerceValue(_ value: UntypedDataValue) -> Value?
 }
 
-struct DataNotNeeded: DataNeed {
-    let untyped = UntypedDataNeed.dataNotNeeded
+struct DataNotNeeded: TypedDataNeed {
+    let untyped = DataNeed.dataNotNeeded
     func coerceValue(_ value: UntypedDataValue) -> Void? {
         if case .dataNotChecked = value {
             ()
@@ -58,8 +54,8 @@ struct DataNotNeeded: DataNeed {
     }
 }
 
-struct WantDataIfLocal: DataNeed {
-    let untyped = UntypedDataNeed.wantDataIfLocal
+struct WantDataIfLocal: TypedDataNeed {
+    let untyped = DataNeed.wantDataIfLocal
     func coerceValue(_ value: UntypedDataValue) -> LocalDataValue? {
         if case .dataIfLocal(let localDataValue) = value {
             localDataValue
@@ -69,8 +65,8 @@ struct WantDataIfLocal: DataNeed {
     }
 }
 
-struct NeedDataEvenIfRemote: DataNeed {
-    let untyped = UntypedDataNeed.needDataEvenIfRemote
+struct NeedDataEvenIfRemote: TypedDataNeed {
+    let untyped = DataNeed.needDataEvenIfRemote
     func coerceValue(_ value: UntypedDataValue) -> DataValue? {
         if case .data(let data) = value {
             DataValue(data: data)
@@ -80,15 +76,15 @@ struct NeedDataEvenIfRemote: DataNeed {
     }
 }
 
-extension DataNeed where Self == DataNotNeeded {
+extension TypedDataNeed where Self == DataNotNeeded {
     static var dataNotNeeded: DataNotNeeded { .init() }
 }
 
-extension DataNeed where Self == WantDataIfLocal {
+extension TypedDataNeed where Self == WantDataIfLocal {
     static var wantDataIfLocal: WantDataIfLocal { .init() }
 }
 
-extension DataNeed where Self == NeedDataEvenIfRemote {
+extension TypedDataNeed where Self == NeedDataEvenIfRemote {
     static var needDataEvenIfRemote: NeedDataEvenIfRemote { .init() }
 }
 

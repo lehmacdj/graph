@@ -16,8 +16,8 @@ enum FetchDependencyError: Error {
 }
 
 protocol DependencyManager {
-    func fetch<D: DataNeed>(nid: NID, dataNeed: D) throws(FetchDependencyError) -> NodeValue<D.Value>
-    func fetch(nid: NID, untypedDataNeed: UntypedDataNeed) throws(FetchDependencyError) -> NodeValue<UntypedDataValue>
+    func fetch<D: TypedDataNeed>(nid: NID, dataNeed: D) throws(FetchDependencyError) -> NodeValue<D.Value>
+    func fetch(nid: NID, untypedDataNeed: DataNeed) throws(FetchDependencyError) -> NodeValue<UntypedDataValue>
 }
 
 typealias ComputeValueClosure<T> = (DependencyManager) throws -> T

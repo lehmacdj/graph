@@ -68,11 +68,18 @@ final class NodeMetadataDocument: UIDocument {
 
     override func load(fromContents contents: Any, ofType typeName: String?) throws {
         guard typeName == UTType.json.identifier else {
+            logError("invalid file type")
             throw InvalidFileType()
         }
         guard let data = contents as? Data else {
+            logError("contents is not data")
             throw ContentsIsNotData()
         }
-        meta = try JSONDecoder().decode(NodeMeta.self, from: data)
+        do {
+            meta = try JSONDecoder().decode(NodeMeta.self, from: data)
+        } catch {
+            logError(error)
+            throw error
+        }
     }
 }

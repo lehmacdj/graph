@@ -1,0 +1,81 @@
+//
+//  FileAvailabilityObserver.swift
+//  Nodal
+//
+//  Created by Devin Lehmacher on 1/12/25.
+//
+
+import Foundation
+
+enum FileAvailability {
+    case noData
+    case availableRemotely
+    case availableLocally
+}
+
+actor FileAvailabilityObserver {
+    let url: URL
+    private(set) var availability: FileAvailability?
+    private var updatesContinuations = [UUID: AsyncStream<FileAvailability>.Continuation]()
+
+    init(url: URL, refreshInterval: Duration = .milliseconds(500)) {
+        self.url = url
+        let (updates, updatesContinuation) = AsyncStream<FileAvailability>.makeStream()
+        Task { [weak self] in
+            while !Task.isCancelled {
+                guard let self else { return }
+                await updateAvailability()
+                try await Task.sleep(for: refreshInterval)
+            }
+        }
+    }
+
+    func updateAvailability() {
+        guard url.startAccessingSecurityScopedResource() else { return }
+        defer { url.stopAccessingSecurityScopedResource() }
+        do {
+            let resourceValues = try url.resourceValues(forKeys: [.ubiquitousItemDownloadingStatusKey])
+            switch resourceValues.ubiquitousItemDownloadingStatus {
+            case nil:
+                availability = .noData
+            case .notDownloaded:
+                availability = .availableRemotely
+            case .downloaded:
+                availability = .availableLocally
+            case .current:
+                availability = .availableLocally
+            case .some(_):
+            }
+        } catch {
+            logError(error)
+        }
+        updatesContinuations.values.forEach {
+            if let availability {
+                $0.yield(availability)
+            }
+        }
+    }
+
+    private func removeUpdatesContinuation(_ uuid: UUID) {
+        updatesContinuations.removeValue(forKey: uuid)
+    }
+
+    var updates: any AsyncSequence<FileAvailability, Never> {
+        let (updates, updatesContinuation) = AsyncStream<FileAvailability>.makeStream()
+        let uuid = UUID()
+        updatesContinuation.onTermination = { [weak self] _ in
+            Task {
+                await self?.removeUpdatesContinuation(uuid)
+            }
+        }
+        updatesContinuations[uuid] = updatesContinuation
+        if let availability {
+            updatesContinuation.yield(availability)
+        }
+        return updates
+    }
+
+    deinit {
+        updatesContinuations.values.forEach { $0.finish() }
+    }
+}

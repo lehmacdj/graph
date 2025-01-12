@@ -78,7 +78,7 @@ actor FilesystemGraphRepository: GraphRepository {
     }
 
     func updates<T>(computeValue: @escaping ComputeValueClosure<T>) -> any AsyncSequence<T, any Error> {
-        NewUpdatesSequence<T>(graphRepository: self, computeValue: computeValue)
+        UpdatesSequence<T>(graphRepository: self, computeValue: computeValue)
     }
 
     func deleteNode(withId id: NID) async {
@@ -106,51 +106,114 @@ actor FilesystemGraphRepository: GraphRepository {
         return (cacheEntry, sequence)
     }
 
+    var singletonQuery: NSMetadataQuery?
+
     private func getDataAvailabilityUpdates(for nid: NID) async throws -> (AnyCancellable, any AsyncSequence<DataAvailability, Never>) {
+        guard singletonQuery == nil else { return (AnyCancellable {}, [].async) }
+
+        print("initializing query")
         let query = NSMetadataQuery()
-        let url = basePath.appending(dataPathFor: nid)
-        query.predicate = NSPredicate(
-            format: "%K == %@",
-            NSMetadataItemURLKey,
-            url as CVarArg
-        )
-        query.searchScopes = [basePath]
-        query.valueListAttributes = [NSMetadataUbiquitousItemDownloadingStatusKey]
-        let (stream, continuation) = AsyncStream<DataAvailability>.makeStream()
-        // we only access the query from .main so this is actually safe
-        struct UnsafeSendableWrapper: @unchecked Sendable {
-            let query: NSMetadataQuery
-        }
-        let wrappedQuery = UnsafeSendableWrapper(query: query)
-        let handleResult: @Sendable (Notification) -> Void = { _ in
-            wrappedQuery.query.disableUpdates()
-            guard let downloadStatus = wrappedQuery.query.valueLists[url.path()]?[0] as? String else {
-                continuation.yield(.noData)
+        singletonQuery = query
+        query.searchScopes = [NSMetadataQueryUbiquitousDataScope, NSMetadataQueryAccessibleUbiquitousExternalDocumentsScope, NSMetadataQueryUbiquitousDocumentsScope]
+        query.searchItems = [basePath.appending(metaPathFor: nid)]
+        NotificationCenter.default.addObserver(forName: .NSMetadataQueryDidStartGathering, object: query, queue: .main) { notification in
+            guard let _ = notification.object as? NSMetadataQuery else {
+                logError("query start not metadata query")
                 return
             }
-            switch downloadStatus {
-            case NSMetadataUbiquitousItemDownloadingStatusCurrent:
-                continuation.yield(.availableLocally)
-            case NSMetadataUbiquitousItemDownloadingStatusDownloaded:
-                continuation.yield(.availableLocally)
-            case NSMetadataUbiquitousItemDownloadingStatusNotDownloaded:
-                continuation.yield(.availableRemotely)
-            default:
-                logWarn("invalid value \(downloadStatus) for NSMetadataQuery \(nid)")
+
+            print("query started gathering")
+        }
+        NotificationCenter.default.addObserver(forName: .NSMetadataQueryGatheringProgress, object: query, queue: .main) { notification in
+            guard let query = notification.object as? NSMetadataQuery else {
+                logError("gathering progress not metadata query")
                 return
             }
-            wrappedQuery.query.enableUpdates()
-        }
-        let token1 = NotificationCenter.default.addObserver(forName: .NSMetadataQueryDidFinishGathering, object: query, queue: .main, using: handleResult)
-        let token2 = NotificationCenter.default.addObserver(forName: .NSMetadataQueryDidUpdate, object: query, queue: .main, using: handleResult)
 
-        let cancellable = AnyCancellable {
-            continuation.finish()
-            NotificationCenter.default.removeObserver(token1)
-            NotificationCenter.default.removeObserver(token2)
+            print("query gathering progress")
+            query.results.forEach { item in
+                guard let metadataItem = item as? NSMetadataItem else {
+                    logError("query gathering item is not metadata item")
+                    return
+                }
+                print("query result", metadataItem.value(forAttribute: NSMetadataItemPathKey))
+            }
+        }
+        NotificationCenter.default.addObserver(forName: .NSMetadataQueryDidFinishGathering, object: query, queue: .main) { notification in
+            guard let query = notification.object as? NSMetadataQuery else {
+                logError("finish gathering not metadata query")
+                return
+            }
+
+            print("query finished gathering")
+            query.disableUpdates()
+            query.results.forEach { print($0) }
+            query.enableUpdates()
+        }
+        NotificationCenter.default.addObserver(forName: .NSMetadataQueryDidUpdate, object: query, queue: .main) { notification in
+            guard let _ = notification.object as? NSMetadataQuery else {
+                logError("update not metadata query")
+                return
+            }
+
+            print("query updated")
+        }
+        struct SendableWrapper<T>: @unchecked Sendable { let unsafeSendable: T }
+        let sendableQuery = SendableWrapper(unsafeSendable: query)
+        DispatchQueue.main.async {
+            print("started query")
+            sendableQuery.unsafeSendable.start()
         }
 
-        return (cancellable, stream)
+        return (AnyCancellable { }, [].async)
+
+
+//        let query = NSMetadataQuery()
+//        let url = basePath.appending(dataPathFor: nid)
+////        query.predicate = NSPredicate(
+////            format: "%K == %@",
+////            NSMetadataItemURLKey,
+////            url.path() as CVarArg
+////        )
+//        query.searchItems = [url]
+//        query.searchScopes = [NSMetadataQueryAccessibleUbiquitousExternalDocumentsScope]
+//        let (stream, continuation) = AsyncStream<DataAvailability>.makeStream()
+//        // we only access the query from .main so this is actually safe
+//        struct UnsafeSendableWrapper: @unchecked Sendable {
+//            let query: NSMetadataQuery
+//        }
+//        let wrappedQuery = UnsafeSendableWrapper(query: query)
+//        let handleResult: @Sendable (Notification) -> Void = { _ in
+//            wrappedQuery.query.disableUpdates()
+//            guard let downloadStatus = wrappedQuery.query.valueLists[url.path()]?[0] as? String else {
+//                continuation.yield(.noData)
+//                return
+//            }
+//            switch downloadStatus {
+//            case NSMetadataUbiquitousItemDownloadingStatusCurrent:
+//                continuation.yield(.availableLocally)
+//            case NSMetadataUbiquitousItemDownloadingStatusDownloaded:
+//                continuation.yield(.availableLocally)
+//            case NSMetadataUbiquitousItemDownloadingStatusNotDownloaded:
+//                continuation.yield(.availableRemotely)
+//            default:
+//                logWarn("invalid value \(downloadStatus) for NSMetadataQuery \(nid)")
+//                return
+//            }
+//            wrappedQuery.query.enableUpdates()
+//        }
+//        let token1 = NotificationCenter.default.addObserver(forName: .NSMetadataQueryDidFinishGathering, object: query, queue: .main, using: handleResult)
+//        let token2 = NotificationCenter.default.addObserver(forName: .NSMetadataQueryDidUpdate, object: query, queue: .main, using: handleResult)
+//        query.start()
+//
+//        let cancellable = AnyCancellable {
+//            query.stop()
+//            continuation.finish()
+//            NotificationCenter.default.removeObserver(token1)
+//            NotificationCenter.default.removeObserver(token2)
+//        }
+//
+//        return (cancellable, stream)
     }
 
     private let dataDocumentCache: ConcurrentCache<NID, DataDocument>
@@ -167,21 +230,22 @@ actor FilesystemGraphRepository: GraphRepository {
 /// AsyncSequence implementation for `updates`
 private extension FilesystemGraphRepository {
     /// Just a factory for `UpdatesIterator` which does all of the heavy lifting
-    struct NewUpdatesSequence<T>: AsyncSequence {
+    struct UpdatesSequence<T>: AsyncSequence {
         let graphRepository: FilesystemGraphRepository
 
         let computeValue: ComputeValueClosure<T>
 
-        func makeAsyncIterator() -> NewUpdatesIterator<T> {
-            NewUpdatesIterator<T>(graphRepository: graphRepository, computeValue: computeValue)
+        func makeAsyncIterator() -> UpdatesIterator<T> {
+            UpdatesIterator<T>(graphRepository: graphRepository, computeValue: computeValue)
         }
     }
 
-    actor NewUpdatesIterator<T>: AsyncIteratorProtocol {
+    actor UpdatesIterator<T>: AsyncIteratorProtocol, LogContextProviding {
         typealias Element = T
 
         let graphRepository: FilesystemGraphRepository
         let computeValue: ComputeValueClosure<T>
+        let logContext: [String]
 
         init(
             graphRepository: FilesystemGraphRepository,
@@ -190,6 +254,8 @@ private extension FilesystemGraphRepository {
             self.graphRepository = graphRepository
             self.computeValue = computeValue
             self.dependencyEntries = [:]
+            let logId = Base62Id.random(digitCount: 4)
+            self.logContext = ["UpdatesIterator:\(logId)"]
         }
 
         func next() async throws -> T? {
@@ -209,9 +275,9 @@ private extension FilesystemGraphRepository {
         }
 
         private struct DM: DependencyManager {
-            let untypedGet: (NID, UntypedDataNeed) throws(FetchDependencyError) -> NodeValue<UntypedDataValue>
+            let untypedGet: (NID, DataNeed) throws(FetchDependencyError) -> NodeValue<UntypedDataValue>
 
-            func fetch<D>(nid: NID, dataNeed: D) throws(FetchDependencyError) -> NodeValue<D.Value> where D : DataNeed {
+            func fetch<D>(nid: NID, dataNeed: D) throws(FetchDependencyError) -> NodeValue<D.Value> where D : TypedDataNeed {
                 let nodeValue = try untypedGet(nid, dataNeed.untyped)
                 guard let typedAugmentation = dataNeed.coerceValue(nodeValue.data) else {
                     fatalError("type mismatch: wrong augmentation type for data need \(dataNeed.untyped)")
@@ -219,7 +285,7 @@ private extension FilesystemGraphRepository {
                 return nodeValue.withAugmentation(typedAugmentation)
             }
 
-            func fetch(nid: NID, untypedDataNeed: UntypedDataNeed) throws(FetchDependencyError) -> NodeValue<UntypedDataValue> {
+            func fetch(nid: NID, untypedDataNeed: DataNeed) throws(FetchDependencyError) -> NodeValue<UntypedDataValue> {
                 try untypedGet(nid, untypedDataNeed)
             }
         }
@@ -244,37 +310,122 @@ private extension FilesystemGraphRepository {
 
         // MARK: dependency management
 
+        // theoretically I would like this to be ~Copyable because it manages some subscriptions that could cause memory leaks if doubled
+        // Currently however the Swift standard library barely supports ~Copyable so using it is too painful to be worth doing
         private struct DependencyEntry {
-            init(nid: NID, dataNeed: UntypedDataNeed, graphRepository: FilesystemGraphRepository, iterator: NewUpdatesIterator<T>) {
+            let nid: NID
+            let graphRepository: FilesystemGraphRepository
+            weak var iterator: UpdatesIterator<T>?
+
+            init(nid: NID, dataNeed: DataNeed, graphRepository: FilesystemGraphRepository, iterator: UpdatesIterator<T>) {
+                self.nid = nid
                 self.dataNeed = dataNeed
+                self.graphRepository = graphRepository
+                self.iterator = iterator
+                // this needs to be set for the first run where we don't call completeValue too
+                self.largestNewDataNeed.insert(dataNeed)
                 let task = Task { [nid, graphRepository, weak iterator] in
                     do {
+                        iterator?.logDebug("setting up metadata updates for \(nid)")
                         let (_, updates) = try await graphRepository.getMetadataUpdates(for: nid)
                         for await nodeValue in updates {
-                            await iterator?.updateValue(nodeValue)
+                            await iterator?.updateEntry(for: nid) { entry in
+                                entry.mostRecentValue = nodeValue
+                            }
                         }
-                        logInfo("handle.nodeValues finished")
                     } catch {
-                        logError(error)
+                        iterator?.logError(error)
                     }
                 }
-                self.updateValueTask = AnyCancellable { task.cancel() }
+                self.metadataSubscription = AnyCancellable {
+                    task.cancel()
+                }
             }
 
             /// Requested data need for this node
-            var dataNeed: UntypedDataNeed
+            var dataNeed: DataNeed
 
             /// As we run computeValue we track the data need requested on its reruns
             /// We use this to compute the maximum data need requested on the previous run which becomes the new data need
-            var largestNewRequest = Max<UntypedDataNeed>()
+            var largestNewDataNeed = Max<DataNeed>()
 
-            /// AnyCancellable that cancels a task that calls ``updateValue`` when metadataHandle emits updates for the node
-            var updateValueTask: AnyCancellable
+            /// AnyCancellable that cancels a task that updates mostRecentValue when metadataHandle emits updates for the node
+            var metadataSubscription: AnyCancellable
 
             /// Cached value from the most recent update we received from the GraphRepository.
             var mostRecentValue: NodeValue<Void>?
 
-            private func _completeValue(withDataNeed dataNeed: UntypedDataNeed) -> NodeValue<UntypedDataValue>? {
+            var dataAvailabilitySubscription: AnyCancellable?
+
+            /// Cached value from the most recent update we received from the GraphRepository.
+            var mostRecentDataAvailability: DataAvailability?
+
+            var dataSubscription: AnyCancellable?
+
+            /// Cached value from the most recent update we received from the GraphRepository.
+            var mostRecentData: Data?
+
+            var effectiveDataNeed: DataNeed {
+                max(dataNeed, largestNewDataNeed.max ?? dataNeed)
+            }
+
+            var isDataNeeded: Bool {
+                switch mostRecentDataAvailability {
+                case .availableLocally where effectiveDataNeed >= .wantDataIfLocal:
+                    fallthrough
+                case .availableRemotely where effectiveDataNeed >= .needDataEvenIfRemote:
+                    return true
+                case nil, .noData, .availableLocally, .availableRemotely:
+                    return false
+                }
+            }
+
+            mutating func setupDataSubscriptions() {
+                guard effectiveDataNeed > .dataNotNeeded else {
+                    dataAvailabilitySubscription = nil
+                    dataSubscription = nil
+                    return
+                }
+
+                let dataAvailabilityTask = Task { [nid, graphRepository, weak iterator] in
+                    do {
+                        iterator?.logDebug("setting up data availability updates for \(nid)")
+                        let (_, updates) = try await graphRepository.getDataAvailabilityUpdates(for: nid)
+                        for await dataAvailability in updates {
+                            await iterator?.updateEntry(for: nid) { entry in
+                                entry.mostRecentDataAvailability = dataAvailability
+                            }
+                        }
+                    } catch {
+                        iterator?.logError(error)
+                    }
+                }
+                dataAvailabilitySubscription = AnyCancellable { dataAvailabilityTask.cancel() }
+
+                guard isDataNeeded else {
+                    dataSubscription = nil
+                    return
+                }
+
+                let dataTask = Task { [nid, graphRepository, weak iterator] in
+                    do {
+                        iterator?.logDebug("setting up data updates for \(nid)")
+                        let (_, updates) = try await graphRepository.getDataUpdates(for: nid)
+                        for try await data in updates {
+                            await iterator?.updateEntry(for: nid) { entry in
+                                entry.mostRecentData = data
+                            }
+                        }
+                    } catch is DataDocument.DocumentClosedError {
+                        iterator?.logInfo("data no longer available, metadata query should update entry appropriately so this doesn't recur")
+                    } catch {
+                        iterator?.logError(error)
+                    }
+                }
+                dataSubscription = AnyCancellable { dataTask.cancel() }
+            }
+
+            private func _completeValue(withDataNeed dataNeed: DataNeed) -> NodeValue<UntypedDataValue>? {
                 guard let mostRecentValue else {
                     return nil
                 }
@@ -295,19 +446,20 @@ private extension FilesystemGraphRepository {
                 _completeValue(withDataNeed: dataNeed) != nil
             }
 
-            mutating func completeValue(withDataNeed dataNeed: UntypedDataNeed) -> NodeValue<UntypedDataValue>? {
-                largestNewRequest.insert(dataNeed)
+            mutating func completeValue(withDataNeed dataNeed: DataNeed) -> NodeValue<UntypedDataValue>? {
+                largestNewDataNeed.insert(dataNeed)
+                setupDataSubscriptions()
                 return _completeValue(withDataNeed: dataNeed)
             }
 
-            func resetDataNeedRequest(merge: (_ old: UntypedDataNeed, _ newMax: UntypedDataNeed) -> UntypedDataNeed) -> DependencyEntry {
-                guard let newDataNeed = largestNewRequest.max else {
+            consuming func resetDataNeedRequest(merge: (_ old: DataNeed, _ newMax: DataNeed) -> DataNeed) -> Self {
+                guard let newDataNeed = largestNewDataNeed.max else {
                     return self
                 }
-                var mutable = self
-                mutable.dataNeed = max(mutable.dataNeed, newDataNeed)
-                mutable.largestNewRequest.reset()
-                return mutable
+                self.dataNeed = merge(self.dataNeed, newDataNeed)
+                self.largestNewDataNeed.reset()
+                setupDataSubscriptions()
+                return self
             }
         }
 
@@ -324,7 +476,7 @@ private extension FilesystemGraphRepository {
             dependencyEntries = dependencyEntries
                 .filter { (_, entry) in
                     // if we didn't get a new request we no longer have a dependency on a given node
-                    entry.largestNewRequest.max != nil
+                    entry.largestNewDataNeed.max != nil
                 }
                 .mapValues { entry in entry.resetDataNeedRequest(merge: { $1 }) }
         }
@@ -336,38 +488,38 @@ private extension FilesystemGraphRepository {
             dependencyEntries.allSatisfy { $0.value.isValueComplete }
         }
 
-        private func trackedGetDependency(_ nid: NID, dataNeed: UntypedDataNeed) throws(FetchDependencyError) -> NodeValue<UntypedDataValue> {
+        private func trackedGetDependency(_ nid: NID, dataNeed: DataNeed) throws(FetchDependencyError) -> NodeValue<UntypedDataValue> {
             guard var entry = dependencyEntries[nid] else {
-                // didn't know about this dependency before, save it in the cache
+                logInfo("creating new dependency entry for \(nid)")
                 dependencyEntries[nid] = DependencyEntry(
                     nid: nid,
                     dataNeed: dataNeed,
                     graphRepository: graphRepository,
                     iterator: self
                 )
+                logDebug("created new dependency entry for \(nid)")
                 throw FetchDependencyError.cacheMiss
             }
             defer { dependencyEntries[nid] = entry }
 
             guard let value = entry.completeValue(withDataNeed: dataNeed) else {
-                // value is not up to date yet / is missing data
-                // just need to retry after waiting
+                logDebug("don't have correct data level for \(nid)")
                 throw FetchDependencyError.cacheMiss
             }
+            logDebug("successfully fetched value for \(nid)")
             return value
         }
 
         var hasDependencyChangedSinceLastNextResult = true
 
-        private func updateValue(_ newValue: NodeValue<Void>) {
-            guard var entry = dependencyEntries[newValue.id] else {
+        private func updateEntry(for nid: NID, change: (inout DependencyEntry) -> ()) {
+            guard var entry = dependencyEntries[nid] else {
                 // maybe possible if considering concurrency shenanigans?
-                logError("trying to update entry for node that doesn't exist")
+                logError("trying to update entry for \(nid) but we don't have a cache entry")
                 return
             }
-            defer { dependencyEntries[newValue.id] = entry }
-
-            entry.mostRecentValue = newValue
+            defer { dependencyEntries[nid] = entry }
+            change(&entry)
             markSomethingAsChanged()
         }
 
