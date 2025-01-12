@@ -211,5 +211,5 @@ func timestampTransitionComparison(_ tuple1: (NodeTransition, Loading<Date?>), _
         t2Timestamp = .distantPast
     }
 
-    return t1Timestamp > t2Timestamp || t1Timestamp == t2Timestamp && t1.transition < t2.transition
+    return t1.transition < t2.transition || t1.transition == t2.transition && t1Timestamp > t2Timestamp
 }
