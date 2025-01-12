@@ -21,6 +21,14 @@ enum Loading<T> {
         }
     }
 
+    var loaded: T? {
+        if case .loaded(let value) = self {
+            return value
+        } else {
+            return nil
+        }
+    }
+
     static func loading(_ value: T?) -> Loading<T> {
         if let value {
             .loaded(value)

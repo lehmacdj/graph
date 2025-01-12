@@ -47,12 +47,16 @@ final class GraphRepositoryNodeVM: NodeVM {
                 state = .loaded(NodeState(
                     data: value.data,
                     favoriteLinks: value.favoriteLinks
+                        .sorted(by: timestampTransitionComparison(_:_:))
                         .map { getTransitionVM(key: $0.0, timestamp: $0.1, configuredForSection: .favorites) },
                     links: value.otherLinks
+                        .sorted(by: timestampTransitionComparison(_:_:))
                         .map { getTransitionVM(key: $0.0, timestamp: $0.1, configuredForSection: .other) },
                     worseLinks: value.worseLinks
+                        .sorted(by: timestampTransitionComparison(_:_:))
                         .map { getTransitionVM(key: $0.0, timestamp: $0.1, configuredForSection: .worse) },
                     backlinks: value.backlinks
+                        .sorted(by: timestampTransitionComparison(_:_:))
                         .map { getTransitionVM(key: $0.0, timestamp: $0.1, configuredForSection: .backlink) },
                     tags: value.tags,
                     possibleTags: value.possibleTags
@@ -190,3 +194,22 @@ private extension NID {
     }
 }
 
+func timestampTransitionComparison(_ tuple1: (NodeTransition, Loading<Date?>), _ tuple2: (NodeTransition, Loading<Date?>)) -> Bool {
+    let (t1, t1LoadingTimestamp) = tuple1
+    let t1Timestamp: Date
+    if case .loaded(.some(let timestamp)) = t1LoadingTimestamp {
+        t1Timestamp = timestamp
+    } else {
+        t1Timestamp = .distantPast
+    }
+
+    let (t2, t2LoadingTimestamp) = tuple2
+    let t2Timestamp: Date
+    if case .loaded(.some(let timestamp)) = t2LoadingTimestamp {
+        t2Timestamp = timestamp
+    } else {
+        t2Timestamp = .distantPast
+    }
+
+    return t1Timestamp > t2Timestamp || t1Timestamp == t2Timestamp && t1.transition < t2.transition
+}
