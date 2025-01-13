@@ -1,17 +1,11 @@
 //
-//  NodeMeta.swift
+//  Node+Codable.swift
 //  Nodal
 //
-//  Created by Devin Lehmacher on 11/2/24.
+//  Created by Devin Lehmacher on 1/12/25.
 //
 
-struct NodeMeta {
-    var id: NID
-    var incoming: [String:Set<NID>]
-    var outgoing: [String:Set<NID>]
-}
-
-extension NodeMeta: Decodable, Encodable {
+extension Node<NoAugmentation>: Decodable, Encodable {
     enum NodeKeys: String, CodingKey {
         case id
         case incoming
@@ -31,6 +25,7 @@ extension NodeMeta: Decodable, Encodable {
             outgoingDict.appendSeq([c.id], toKey: c.transition)
         }
         outgoing = outgoingDict.mapValues { Set($0) }
+        self.augmentation = NoAugmentation()
     }
 
     public func encode(to encoder: Encoder) throws {

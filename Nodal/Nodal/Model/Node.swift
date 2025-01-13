@@ -6,7 +6,7 @@
 //
 
 @dynamicMemberLookup
-struct NodeValue<Augmentation: Sendable>: Identifiable, Sendable {
+struct Node<Augmentation: Sendable>: Identifiable, Sendable {
     let id: NID
     let outgoing: [String:Set<NID>]
     let incoming: [String:Set<NID>]
@@ -19,26 +19,15 @@ struct NodeValue<Augmentation: Sendable>: Identifiable, Sendable {
     }
 }
 
-extension NodeValue {
-    init(from metadata: NodeMeta, augmentation: Augmentation) {
-        self.init(
-            id: metadata.id,
-            outgoing: metadata.outgoing,
-            incoming: metadata.incoming,
-            augmentation: augmentation
-        )
+extension Node<NoAugmentation> {
+    init(id: NID, outgoing: [String:Set<NID>], incoming: [String:Set<NID>]) {
+        self.init(id: id, outgoing: outgoing, incoming: incoming, augmentation: NoAugmentation())
     }
 }
 
-extension NodeValue<NoAugmentation> {
-    init(from metadata: NodeMeta) {
-        self.init(from: metadata, augmentation: NoAugmentation())
-    }
-}
-
-extension NodeValue {
-    func withAugmentation<NewAugmentation>(_ newAugmentation: NewAugmentation) -> NodeValue<NewAugmentation> {
-        NodeValue<NewAugmentation>(
+extension Node {
+    func withAugmentation<NewAugmentation>(_ newAugmentation: NewAugmentation) -> Node<NewAugmentation> {
+        Node<NewAugmentation>(
             id: id,
             outgoing: outgoing,
             incoming: incoming,
@@ -46,8 +35,8 @@ extension NodeValue {
         )
     }
 
-    func mapAugmentation<NewAugmentation>(_ transform: (Augmentation) throws -> NewAugmentation) rethrows -> NodeValue<NewAugmentation> {
-        NodeValue<NewAugmentation>(
+    func mapAugmentation<NewAugmentation>(_ transform: (Augmentation) throws -> NewAugmentation) rethrows -> Node<NewAugmentation> {
+        Node<NewAugmentation>(
             id: id,
             outgoing: outgoing,
             incoming: incoming,
@@ -55,12 +44,12 @@ extension NodeValue {
         )
     }
 
-    func withoutAugmentation() -> NodeValue<NoAugmentation> {
+    func withoutAugmentation() -> Node<NoAugmentation> {
         self.withAugmentation(NoAugmentation())
     }
 }
 
-extension NodeValue {
+extension Node {
     var outgoingTransitions: [NodeTransition] {
         outgoing.flatMap { (transition, destinations) in
             destinations.map { NodeTransition(transition: transition, nid: $0) }
@@ -77,4 +66,5 @@ extension NodeValue {
 /// Struct for having equatable `NodeValue`s sans an augmentation
 struct NoAugmentation: Equatable, Hashable {}
 
-extension NodeValue: Equatable where Augmentation: Equatable {}
+extension Node: Equatable where Augmentation: Equatable {}
+

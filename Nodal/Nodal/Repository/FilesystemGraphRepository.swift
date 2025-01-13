@@ -56,7 +56,7 @@ actor FilesystemGraphRepository: GraphRepository {
     // MARK: GraphRepository
 
     private func createNode(with nid: NID) async throws -> Bool {
-        let newMeta = NodeMeta(id: nid, incoming: [:], outgoing: [:])
+        let newMeta = Node(id: nid, outgoing: [:], incoming: [:])
         let data: Data = try JSONEncoder().encode(newMeta)
         let metaPath = basePath.appending(metaPathFor: nid)
         do {
@@ -104,12 +104,11 @@ actor FilesystemGraphRepository: GraphRepository {
 
     private var metadataCache: ConcurrentCache<NID, NodeMetadataDocument>
 
-    private func getMetadataUpdates(for nid: NID) async throws -> (AnyCancellable, any AsyncSequence<NodeValue<NoAugmentation>, Never>) {
+    private func getMetadataUpdates(for nid: NID) async throws -> (AnyCancellable, any AsyncSequence<Node<NoAugmentation>, Never>) {
         let (cacheEntry, metadataDocument) = try await metadataCache.getOrCreate(nid)
         let sequence = await metadataDocument
             .metaPublisher
             .values
-            .map { NodeValue(from: $0) }
         return (cacheEntry, sequence)
     }
 
@@ -180,9 +179,9 @@ private extension FilesystemGraphRepository {
         }
 
         private struct DM: DependencyManager {
-            let untypedGet: (NID, DataNeed) throws(FetchDependencyError) -> NodeValue<UntypedDataValue>
+            let untypedGet: (NID, DataNeed) throws(FetchDependencyError) -> Node<UntypedDataValue>
 
-            func fetch<D>(nid: NID, dataNeed: D) throws(FetchDependencyError) -> NodeValue<D.Value> where D : TypedDataNeed {
+            func fetch<D>(nid: NID, dataNeed: D) throws(FetchDependencyError) -> Node<D.Value> where D : TypedDataNeed {
                 let nodeValue = try untypedGet(nid, dataNeed.untyped)
                 guard let typedAugmentation = dataNeed.coerceValue(nodeValue.data) else {
                     fatalError("type mismatch: wrong augmentation type for data need \(dataNeed.untyped)")
@@ -190,7 +189,7 @@ private extension FilesystemGraphRepository {
                 return nodeValue.withAugmentation(typedAugmentation)
             }
 
-            func fetch(nid: NID, untypedDataNeed: DataNeed) throws(FetchDependencyError) -> NodeValue<UntypedDataValue> {
+            func fetch(nid: NID, untypedDataNeed: DataNeed) throws(FetchDependencyError) -> Node<UntypedDataValue> {
                 try untypedGet(nid, untypedDataNeed)
             }
         }
@@ -260,7 +259,7 @@ private extension FilesystemGraphRepository {
             var metadataSubscription: AnyCancellable
 
             /// Cached value from the most recent update we received from the GraphRepository.
-            var mostRecentValue: NodeValue<NoAugmentation>?
+            var mostRecentValue: Node<NoAugmentation>?
 
             var dataAvailabilitySubscription: AnyCancellable?
 
@@ -341,7 +340,7 @@ private extension FilesystemGraphRepository {
                 }
             }
 
-            private func _completeValue(withDataNeed dataNeed: DataNeed) -> NodeValue<UntypedDataValue>? {
+            private func _completeValue(withDataNeed dataNeed: DataNeed) -> Node<UntypedDataValue>? {
                 guard let mostRecentValue else {
                     return nil
                 }
@@ -376,7 +375,7 @@ private extension FilesystemGraphRepository {
                 _completeValue(withDataNeed: dataNeed) != nil
             }
 
-            mutating func completeValue(withDataNeed dataNeed: DataNeed) -> NodeValue<UntypedDataValue>? {
+            mutating func completeValue(withDataNeed dataNeed: DataNeed) -> Node<UntypedDataValue>? {
                 largestNewDataNeed.insert(dataNeed)
                 setupDataSubscriptions()
                 return _completeValue(withDataNeed: dataNeed)
@@ -418,7 +417,7 @@ private extension FilesystemGraphRepository {
             dependencyEntries.allSatisfy { $0.value.isValueComplete }
         }
 
-        private func trackedGetDependency(_ nid: NID, dataNeed: DataNeed) throws(FetchDependencyError) -> NodeValue<UntypedDataValue> {
+        private func trackedGetDependency(_ nid: NID, dataNeed: DataNeed) throws(FetchDependencyError) -> Node<UntypedDataValue> {
             guard var entry = dependencyEntries[nid] else {
                 logInfo("creating new dependency entry for \(nid)")
                 dependencyEntries[nid] = DependencyEntry(

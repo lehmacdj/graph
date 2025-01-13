@@ -11,13 +11,6 @@ import Combine
 final class DataDocument: UIDocument {
     struct NoDataURL: Error {}
 
-    convenience init<N: Node>(node: N) async throws {
-        guard let dataURL = node.dataURL else {
-            throw NoDataURL()
-        }
-        try await self.init(dataURL: dataURL)
-    }
-
     struct FailedToOpenDocument: Error {}
 
     init(dataURL: URL) async throws {

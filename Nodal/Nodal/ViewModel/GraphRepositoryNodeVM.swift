@@ -142,7 +142,7 @@ fileprivate struct NodeStateAugmentation {
 }
 
 private extension NID {
-    func computeNodeForVM(_ dependencyManager: DependencyManager) throws(FetchDependencyError) -> NodeValue<NodeStateAugmentation> {
+    func computeNodeForVM(_ dependencyManager: DependencyManager) throws(FetchDependencyError) -> Node<NodeStateAugmentation> {
         // avoid fetching data at first even though we unconditionally render it to start fetching metadata sooner
         let node = try dependencyManager.fetch(nid: self, dataNeed: .dataNotNeeded)
 

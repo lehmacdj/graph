@@ -36,8 +36,8 @@ final class NodeMetadataDocument: UIDocument {
 
     /// Initialized with initially invalid information, but we read before returning from the constructor so it's never invalid to an outside observer
     /// TODO: add error to publisher here too to account for scenarios involving node deletions
-    @Published private var _meta: NodeMeta?
-    var meta: NodeMeta {
+    @Published private var _meta: Node<NoAugmentation>?
+    var meta: Node<NoAugmentation> {
         get {
             guard let _meta else {
                 fatalError("initialized in init")
@@ -50,7 +50,7 @@ final class NodeMetadataDocument: UIDocument {
     }
 
 
-    var metaPublisher: AnyPublisher<NodeMeta, Never> {
+    var metaPublisher: AnyPublisher<Node<NoAugmentation>, Never> {
         $_meta.compactMap { $0 }.eraseToAnyPublisher()
     }
 
@@ -76,7 +76,7 @@ final class NodeMetadataDocument: UIDocument {
             throw ContentsIsNotData()
         }
         do {
-            meta = try JSONDecoder().decode(NodeMeta.self, from: data)
+            meta = try JSONDecoder().decode(Node<NoAugmentation>.self, from: data)
         } catch {
             logError(error)
             throw error
