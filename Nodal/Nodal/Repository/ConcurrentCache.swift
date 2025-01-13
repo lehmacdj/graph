@@ -8,16 +8,19 @@
 import Combine
 
 /// A cache that manages some object that can be initialized / deallocated using async methods.
-actor ConcurrentCache<K: Hashable, V> {
+actor ConcurrentCache<K: Hashable, V>: LogContextProviding {
     private let create: (K) async throws -> V
     private let destroy: (K, V) async -> Void
+    let logContext: [String]
 
     init(
         create: @escaping (K) async throws -> V,
-        destroy: @escaping (K, V) async -> Void
+        destroy: @escaping (K, V) async -> Void,
+        logContext: String? = nil
     ) {
         self.create = create
         self.destroy = destroy
+        self.logContext = logContext.map { [$0] } ?? []
     }
 
     private var storage: [K: CacheEntry] = [:]
@@ -86,6 +89,7 @@ actor ConcurrentCache<K: Hashable, V> {
                 // initialize a new cache entry
                 storage[key] = .creating()
                 do {
+                    logInfo("allocating new cache entry \(key)")
                     let value = try await create(key)
                     guard case .creating(let waiters) = storage[key] else {
                         fatalError("only one opening operation can be active at a time")
@@ -105,7 +109,10 @@ actor ConcurrentCache<K: Hashable, V> {
         storage[key]!.incrementReferenceCount()
         let value = storage[key]!.value!
 
-        return (AnyCancellable { Task { await self.removeReference(to: key) } }, value)
+        return (AnyCancellable {
+            print("deinit called")
+            Task { await self.removeReference(to: key) }
+        }, value)
     }
 
     private func removeReference(to key: K) async {
@@ -120,6 +127,7 @@ actor ConcurrentCache<K: Hashable, V> {
         if storage[key]!.referenceCount! == 0 {
             let value = storage[key]!.value!
             storage[key]! = .destroying()
+            logInfo("destroying cache entry \(key)")
             await destroy(key, value)
             guard case .destroying(let waiters) = storage[key]! else {
                 fatalError("only one closing operation may happen at a time")

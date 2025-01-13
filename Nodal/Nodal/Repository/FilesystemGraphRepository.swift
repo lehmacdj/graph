@@ -22,11 +22,13 @@ actor FilesystemGraphRepository: GraphRepository {
                 if !result {
                     logError("failed to save while closing meta document \(nid)")
                 }
-            }
+            },
+            logContext: "metadataCache"
         )
         dataAvailabilityCache = ConcurrentCache(
             create: { FileAvailabilityObserver(url: basePath.appending(dataPathFor: $0)) },
-            destroy: { (nid, observer) in }
+            destroy: { (nid, observer) in },
+            logContext: "dataAvailabilityCache"
         )
         dataDocumentCache = ConcurrentCache(
             create: { try await DataDocument(dataURL: basePath.appending(dataPathFor: $0)) },
@@ -35,7 +37,8 @@ actor FilesystemGraphRepository: GraphRepository {
                 if !result {
                     logError("failed to save while closing data document \(nid)")
                 }
-            }
+            },
+            logContext: "dataDocumentCache"
         )
         try await initSystemNodes()
     }
@@ -101,7 +104,7 @@ actor FilesystemGraphRepository: GraphRepository {
 
     private var metadataCache: ConcurrentCache<NID, NodeMetadataDocument>
 
-    private func getMetadataUpdates(for nid: NID) async throws -> (AnyCancellable, any AsyncSequence<NodeValue<Void>, Never>) {
+    private func getMetadataUpdates(for nid: NID) async throws -> (AnyCancellable, any AsyncSequence<NodeValue<NoAugmentation>, Never>) {
         let (cacheEntry, metadataDocument) = try await metadataCache.getOrCreate(nid)
         let sequence = await metadataDocument
             .metaPublisher
@@ -229,10 +232,12 @@ private extension FilesystemGraphRepository {
                 let task = Task { [nid, graphRepository, weak iterator] in
                     do {
                         iterator?.logDebug("setting up metadata updates for \(nid)")
-                        let (_, updates) = try await graphRepository.getMetadataUpdates(for: nid)
+                        let (cancellable, updates) = try await graphRepository.getMetadataUpdates(for: nid)
                         for await nodeValue in updates {
                             await iterator?.updateEntry(for: nid) { entry in
+                                guard entry.mostRecentValue != nodeValue else { return false }
                                 entry.mostRecentValue = nodeValue
+                                return true
                             }
                         }
                     } catch {
@@ -255,7 +260,7 @@ private extension FilesystemGraphRepository {
             var metadataSubscription: AnyCancellable
 
             /// Cached value from the most recent update we received from the GraphRepository.
-            var mostRecentValue: NodeValue<Void>?
+            var mostRecentValue: NodeValue<NoAugmentation>?
 
             var dataAvailabilitySubscription: AnyCancellable?
 
@@ -293,11 +298,13 @@ private extension FilesystemGraphRepository {
                     let dataAvailabilityTask = Task { [nid, graphRepository, weak iterator] in
                         do {
                             iterator?.logDebug("setting up data availability updates for \(nid)")
-                            let (_, updates) = try await graphRepository.getDataAvailabilityUpdates(for: nid)
+                            let (cancellable, updates) = try await graphRepository.getDataAvailabilityUpdates(for: nid)
                             for await dataAvailability in updates {
                                 await iterator?.updateEntry(for: nid) { entry in
+                                    guard entry.mostRecentDataAvailability != dataAvailability else { return false }
                                     entry.mostRecentDataAvailability = dataAvailability
                                     entry.setupDataSubscriptions()
+                                    return true
                                 }
                             }
                         } catch {
@@ -316,10 +323,12 @@ private extension FilesystemGraphRepository {
                     let dataTask = Task { [nid, graphRepository, weak iterator] in
                         do {
                             iterator?.logDebug("setting up data updates for \(nid)")
-                            let (_, updates) = try await graphRepository.getDataUpdates(for: nid)
+                            let (cancellable, updates) = try await graphRepository.getDataUpdates(for: nid)
                             for try await data in updates {
                                 await iterator?.updateEntry(for: nid) { entry in
+                                    guard entry.mostRecentData != data else { return false }
                                     entry.mostRecentData = data
+                                    return true
                                 }
                             }
                         } catch is DataDocument.DocumentClosedError {
@@ -433,15 +442,16 @@ private extension FilesystemGraphRepository {
 
         var hasDependencyChangedSinceLastNextResult = true
 
-        private func updateEntry(for nid: NID, change: (inout DependencyEntry) -> ()) {
+        private func updateEntry(for nid: NID, change: (inout DependencyEntry) -> Bool) {
             guard var entry = dependencyEntries[nid] else {
                 // maybe possible if considering concurrency shenanigans?
                 logError("trying to update entry for \(nid) but we don't have a cache entry")
                 return
             }
             defer { dependencyEntries[nid] = entry }
-            change(&entry)
-            markSomethingAsChanged()
+            if change(&entry) {
+                markSomethingAsChanged()
+            }
         }
 
         private func markSomethingAsChanged() {

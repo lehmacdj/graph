@@ -20,7 +20,6 @@ final class GraphRepositoryTransitionVM: TransitionVM {
     ) {
         self.graphRepository = graphRepository
         self.destinationNid = transition.nid
-        self.destination = GraphRepositoryNodeVM(nid: destinationNid, graphRepository: graphRepository).eraseToAnyNodeVM()
         self.transition = transition.transition
         self.timestamp = timestamp
         self.direction = section.direction
@@ -29,11 +28,15 @@ final class GraphRepositoryTransitionVM: TransitionVM {
     }
 
     let destinationNid: NID
-    let destination: AnyNodeVM
     var direction: Direction
     var transition: String
     var isFavorite: Bool
     var isWorse: Bool
+
+    var destination: AnyNodeVM {
+        GraphRepositoryNodeVM(nid: destinationNid, graphRepository: graphRepository)
+            .eraseToAnyNodeVM()
+    }
 
     var subscribeThumbnailTask: Task<Void, Never>?
 

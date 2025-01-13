@@ -45,9 +45,9 @@ protocol TypedDataNeed {
 
 struct DataNotNeeded: TypedDataNeed {
     let untyped = DataNeed.dataNotNeeded
-    func coerceValue(_ value: UntypedDataValue) -> Void? {
+    func coerceValue(_ value: UntypedDataValue) -> NoAugmentation? {
         if case .dataNotChecked = value {
-            ()
+            NoAugmentation()
         } else {
             nil
         }

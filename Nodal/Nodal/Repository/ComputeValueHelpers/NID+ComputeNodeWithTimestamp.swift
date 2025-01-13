@@ -14,15 +14,15 @@ struct TimestampAugmentation {
 
 extension NID {
     private func parseAndFetch(
-        node: NodeValue<Void>,
+        node: NodeValue<NoAugmentation>,
         timeBuilder: GraphTimestampBuilder,
         parse: (GraphTimestampBuilder, String) -> GraphTimestampBuilder?,
         dependencyManager: DependencyManager
-    ) -> [(GraphTimestampBuilder, NodeValue<Void>)?] {
+    ) -> [(GraphTimestampBuilder, NodeValue<NoAugmentation>)?] {
         node.incoming.flatMap { (transition, nids) in
             // Attempt to parse the transition to get a new builder
             guard let updatedBuilder = parse(timeBuilder, transition) else {
-                return [(GraphTimestampBuilder, NodeValue<Void>)?]()
+                return [(GraphTimestampBuilder, NodeValue<NoAugmentation>)?]()
             }
             // For each subsequent NID, try fetching the node and pair it with the updated builder
             return nids
@@ -37,7 +37,7 @@ extension NID {
     func computeNodeWithTimestamp(dependencyManager: DependencyManager) throws(FetchDependencyError) -> NodeValue<TimestampAugmentation> {
         let node = try dependencyManager.fetch(nid: self, dataNeed: .dataNotNeeded)
 
-        let candidateDays: [(GraphTimestampBuilder, NodeValue<Void>)] = try parseAndFetch(
+        let candidateDays: [(GraphTimestampBuilder, NodeValue<NoAugmentation>)] = try parseAndFetch(
                 node: node,
                 timeBuilder: GraphTimestampBuilder(),
                 parse: { builder, transition in builder.parseTime(from: transition) },
@@ -45,7 +45,7 @@ extension NID {
             )
             .compactedSameSize(elseThrow: FetchDependencyError.missingDependencies)
 
-        let candidateMonths: [(GraphTimestampBuilder, NodeValue<Void>)] = try candidateDays
+        let candidateMonths: [(GraphTimestampBuilder, NodeValue<NoAugmentation>)] = try candidateDays
             .flatMap { (timeBuilder, node) in
                 parseAndFetch(
                     node: node,
@@ -56,7 +56,7 @@ extension NID {
             }
             .compactedSameSize(elseThrow: FetchDependencyError.missingDependencies)
 
-        let candidateYears: [(GraphTimestampBuilder, NodeValue<Void>)] = try candidateMonths
+        let candidateYears: [(GraphTimestampBuilder, NodeValue<NoAugmentation>)] = try candidateMonths
             .flatMap { (timeBuilder, node) in
                 parseAndFetch(
                     node: node,
@@ -67,7 +67,7 @@ extension NID {
             }
             .compactedSameSize(elseThrow: FetchDependencyError.missingDependencies)
 
-        let candidateImportDates: [(GraphTimestampBuilder, NodeValue<Void>)] = try candidateYears
+        let candidateImportDates: [(GraphTimestampBuilder, NodeValue<NoAugmentation>)] = try candidateYears
             .flatMap { (timeBuilder, node) in
                 parseAndFetch(
                     node: node,

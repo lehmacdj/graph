@@ -30,9 +30,9 @@ extension NodeValue {
     }
 }
 
-extension NodeValue<Void> {
+extension NodeValue<NoAugmentation> {
     init(from metadata: NodeMeta) {
-        self.init(from: metadata, augmentation: ())
+        self.init(from: metadata, augmentation: NoAugmentation())
     }
 }
 
@@ -55,8 +55,8 @@ extension NodeValue {
         )
     }
 
-    func withoutAugmentation() -> NodeValue<Void> {
-        self.withAugmentation(())
+    func withoutAugmentation() -> NodeValue<NoAugmentation> {
+        self.withAugmentation(NoAugmentation())
     }
 }
 
@@ -73,3 +73,8 @@ extension NodeValue {
         }
     }
 }
+
+/// Struct for having equatable `NodeValue`s sans an augmentation
+struct NoAugmentation: Equatable, Hashable {}
+
+extension NodeValue: Equatable where Augmentation: Equatable {}
