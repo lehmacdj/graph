@@ -19,11 +19,7 @@ struct Node<Augmentation: Sendable>: Identifiable, Sendable {
     }
 }
 
-extension Node<NoAugmentation> {
-    init(id: NID, outgoing: [String:Set<NID>], incoming: [String:Set<NID>]) {
-        self.init(id: id, outgoing: outgoing, incoming: incoming, augmentation: NoAugmentation())
-    }
-}
+extension Node: Equatable where Augmentation: Equatable {}
 
 extension Node {
     func withAugmentation<NewAugmentation>(_ newAugmentation: NewAugmentation) -> Node<NewAugmentation> {
@@ -47,9 +43,7 @@ extension Node {
     func withoutAugmentation() -> Node<NoAugmentation> {
         self.withAugmentation(NoAugmentation())
     }
-}
-
-extension Node {
+    
     var outgoingTransitions: [NodeTransition] {
         outgoing.flatMap { (transition, destinations) in
             destinations.map { NodeTransition(transition: transition, nid: $0) }
@@ -62,9 +56,3 @@ extension Node {
         }
     }
 }
-
-/// Struct for having equatable `NodeValue`s sans an augmentation
-struct NoAugmentation: Equatable, Hashable {}
-
-extension Node: Equatable where Augmentation: Equatable {}
-
