@@ -16,7 +16,13 @@ extension Optional {
         let column: Int
     }
 
-    func unwrapped(_ reason: String, file: String = #file, callingFunction: String = #function, line: Int = #line, column: Int = #column) throws -> Wrapped {
+    func unwrapped(
+        _ reason: String,
+        file: String = #file,
+        callingFunction: String = #function,
+        line: Int = #line,
+        column: Int = #column
+    ) throws -> Wrapped {
         if let self {
             return self
         } else {
@@ -30,8 +36,3 @@ extension Optional {
         }
     }
 }
-
-struct CouldNotCreateFile: Error {
-    let path: URL
-}
-

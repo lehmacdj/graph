@@ -16,5 +16,4 @@ extension Character {
 extension String {
     static let base62Digits: String =
     "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
-
 }

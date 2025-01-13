@@ -239,6 +239,7 @@ private extension FilesystemGraphRepository {
                                 return true
                             }
                         }
+                        _ = cancellable // needs to live until here so that updates doesn't get deallocated
                     } catch {
                         iterator?.logError(error)
                     }
@@ -306,6 +307,7 @@ private extension FilesystemGraphRepository {
                                     return true
                                 }
                             }
+                            _ = cancellable // needs to live until here so that updates doesn't get deallocated
                         } catch {
                             iterator?.logError(error)
                         }
@@ -330,6 +332,7 @@ private extension FilesystemGraphRepository {
                                     return true
                                 }
                             }
+                            _ = cancellable // needs to live until here so that updates doesn't get deallocated
                         } catch is DataDocument.DocumentClosedError {
                             iterator?.logInfo("data no longer available, metadata query should update entry appropriately so this doesn't recur")
                         } catch {
