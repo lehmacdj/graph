@@ -14,11 +14,13 @@ final class GraphRepositoryTransitionVM: TransitionVM {
 
     init(
         graphRepository: GraphRepository,
+        sourceNid: NID,
         transition: NodeTransition,
         timestamp: Loading<Date?>,
         configuredForSection section: GraphRepositoryNodeVM.NodeSection
     ) {
         self.graphRepository = graphRepository
+        self.sourceNid = sourceNid
         self.destinationNid = transition.nid
         self.transition = transition.transition
         self.timestamp = timestamp
@@ -27,6 +29,7 @@ final class GraphRepositoryTransitionVM: TransitionVM {
         self.isWorse = section == .worse
     }
 
+    let sourceNid: NID
     let destinationNid: NID
     var direction: Direction
     var transition: String
@@ -144,4 +147,15 @@ final class GraphRepositoryTransitionVM: TransitionVM {
         isWorse = section == .worse
         direction = section.direction
     }
+}
+
+extension GraphRepositoryTransitionVM: CustomStringConvertible {
+    var description: String {
+        let d = self.direction == .forward ? ">" : "<"
+        return "\(type(of: self)):\(destinationNid)\(d)\(transition)\(d)\(destinationNid))"
+    }
+}
+
+extension GraphRepositoryTransitionVM: LogContextProviding {
+    var logContext: [String] { [description] }
 }

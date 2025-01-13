@@ -105,6 +105,7 @@ final class GraphRepositoryNodeVM: NodeVM {
         } else {
             let vm = GraphRepositoryTransitionVM(
                 graphRepository: graphRepository,
+                sourceNid: nid,
                 transition: key,
                 timestamp: timestamp,
                 configuredForSection: section
@@ -212,4 +213,14 @@ func timestampTransitionComparison(_ tuple1: (NodeTransition, Loading<Date?>), _
     }
 
     return t1.transition < t2.transition || t1.transition == t2.transition && t1Timestamp > t2Timestamp
+}
+
+extension GraphRepositoryNodeVM: CustomStringConvertible {
+    var description: String {
+        "\(type(of: self)):\(self.nid)"
+    }
+}
+
+extension GraphRepositoryNodeVM: LogContextProviding {
+    var logContext: [String] { [description] }
 }
