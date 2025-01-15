@@ -44,8 +44,8 @@ class MockNodeVM: NodeVM {
 
     func subscribe() async {}
     func reload() async {}
-    func set(tags: Set<String>) async throws {}
-    func forceRemove() async throws {}
-    func toggleFavorite(child: NID) async throws {}
-    func toggleWorse(child: NID) async throws {}
+    func set(tags: Set<String>) throws {}
+    func forceRemove() throws {}
+    func toggleFavorite(child: NID) throws {}
+    func toggleWorse(child: NID) throws {}
 }

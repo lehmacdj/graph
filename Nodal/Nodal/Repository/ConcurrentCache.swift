@@ -110,7 +110,7 @@ actor ConcurrentCache<K: Hashable, V>: LogContextProviding {
         let value = storage[key]!.value!
 
         return (AnyCancellable {
-            print("deinit called")
+                print("deinit called")
             Task { await self.removeReference(to: key) }
         }, value)
     }

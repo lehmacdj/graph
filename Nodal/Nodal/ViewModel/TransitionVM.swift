@@ -57,13 +57,13 @@ protocol TransitionVM: Observable, Identifiable {
 
     func subscribe() async
 
-    func toggleFavorite() async
+    func toggleFavorite()
 
-    func toggleWorse() async
+    func toggleWorse()
 
     func fetchThumbnail()
 
-    func updateTransitionName(to newName: String) async
+    func updateTransitionName(to newName: String)
 
-    func removeTransition() async
+    func removeTransition()
 }

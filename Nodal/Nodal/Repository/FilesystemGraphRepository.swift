@@ -165,7 +165,12 @@ private extension FilesystemGraphRepository {
         func next() async throws -> T? {
             while true {
                 while !dependencyEntriesAllComplete || !hasDependencyChangedSinceLastNextResult {
-                    await waitUntilSomethingChanges()
+                    do {
+                        try await waitUntilSomethingChanges()
+                    } catch {
+                        // task was cancelled
+                        return nil
+                    }
                 }
 
                 // waitUntilSomethingChanges only works because all of this executes without any suspend points
@@ -458,23 +463,41 @@ private extension FilesystemGraphRepository {
 
         private func markSomethingAsChanged() {
             hasDependencyChangedSinceLastNextResult = true
+            resumeSomethingUpdatedContinuation()
+        }
+
+        private var isWaitingUntilSomethingChanges = false
+
+        /// Wait until something changes
+        private func waitUntilSomethingChanges() async throws(CancellationError) {
+            assert(somethingUpdatedContinuation == nil)
+            assert(!isWaitingUntilSomethingChanges)
+            assert(!dependencyEntriesAllComplete || !hasDependencyChangedSinceLastNextResult)
+            isWaitingUntilSomethingChanges = true
+            defer { isWaitingUntilSomethingChanges = false }
+            await withTaskCancellationHandler {
+                await withCheckedContinuation { continuation in
+                    somethingUpdatedContinuation = continuation
+                }
+            } onCancel: {
+                Task { await resumeSomethingUpdatedContinuation() }
+            }
+            do {
+                try Task.checkCancellation()
+            } catch is CancellationError {
+                throw CancellationError()
+            } catch {
+                logError(error)
+            }
+        }
+
+        private var somethingUpdatedContinuation: CheckedContinuation<Void, Never>?
+
+        private func resumeSomethingUpdatedContinuation() {
             if let continuation = somethingUpdatedContinuation {
                 continuation.resume()
                 somethingUpdatedContinuation = nil
             }
         }
-
-        /// Wait until something changes
-        /// TODO: this probably wants to handle cancellation more gracefully
-        private func waitUntilSomethingChanges() async {
-            assert(somethingUpdatedContinuation == nil)
-            assert(!dependencyEntriesAllComplete || !hasDependencyChangedSinceLastNextResult)
-            await withCheckedContinuation { continuation in
-                somethingUpdatedContinuation = continuation
-            }
-            somethingUpdatedContinuation = nil
-        }
-
-        private var somethingUpdatedContinuation: CheckedContinuation<Void, Never>?
     }
 }

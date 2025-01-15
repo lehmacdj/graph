@@ -44,8 +44,15 @@ final class GraphRepositoryTransitionVM: TransitionVM {
     var subscribeThumbnailTask: Task<Void, Never>?
 
     func subscribe() async {
-        guard subscribeThumbnailTask == nil else { return }
-        defer { subscribeThumbnailTask = nil }
+        guard subscribeThumbnailTask == nil else {
+            logWarn("duplicate subscribe call")
+            return
+        }
+        logDebug("beginning subscription")
+        defer {
+            logDebug("ending subscription")
+            subscribeThumbnailTask = nil
+        }
         while !Task.isCancelled {
             // this is trying to:
             // 1. continuously (re-)start the task if it gets cancelled but the parent task (called from SwiftUI isn't)
@@ -109,6 +116,7 @@ final class GraphRepositoryTransitionVM: TransitionVM {
                     thumbnail = .loaded(.cloudFile)
                 }
             }
+            logDebug("exited update loop (Task.isCancelled=\(Task.isCancelled))")
         } catch {
             logError(error)
             thumbnail = .failed(error)
@@ -127,18 +135,23 @@ final class GraphRepositoryTransitionVM: TransitionVM {
             return
         }
         requireThumbnail = true
-        subscribeThumbnailTask?.cancel()
+        if let subscribeThumbnailTask {
+            logInfo("cancelled subscribe thumbnail task")
+            subscribeThumbnailTask.cancel()
+        } else {
+            logWarn("no subscribe thumbnail task to cancel")
+        }
     }
 
     // MARK: unimplemented for now because I don't support mutation right now
 
-    func toggleFavorite() async {}
+    func toggleFavorite() {}
 
-    func toggleWorse() async {}
+    func toggleWorse() {}
 
-    func updateTransitionName(to newName: String) async {}
+    func updateTransitionName(to newName: String) {}
 
-    func removeTransition() async {}
+    func removeTransition() {}
 
     // MARK: special interop for GraphRepositoryNodeVM
 
@@ -152,7 +165,7 @@ final class GraphRepositoryTransitionVM: TransitionVM {
 extension GraphRepositoryTransitionVM: CustomStringConvertible {
     var description: String {
         let d = self.direction == .forward ? ">" : "<"
-        return "\(type(of: self)):\(destinationNid)\(d)\(transition)\(d)\(destinationNid))"
+        return "\(type(of: self)):\(sourceNid)\(d)\(transition)\(d)\(destinationNid))"
     }
 }
 

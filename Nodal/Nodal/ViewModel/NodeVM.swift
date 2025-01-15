@@ -28,13 +28,13 @@ protocol NodeVM: Observable {
 
     func reload() async
 
-    func set(tags: Set<String>) async throws
+    func set(tags: Set<String>) throws
 
-    func forceRemove() async throws
+    func forceRemove() throws
 
-    func toggleFavorite(child _: NID) async throws
+    func toggleFavorite(child _: NID) throws
 
-    func toggleWorse(child _: NID) async throws
+    func toggleWorse(child _: NID) throws
 }
 
 /// Hacky struct for adopting NavigationStack
@@ -43,6 +43,11 @@ struct NavToNode {
     let vm: AnyNodeVM
 }
 
+extension NavToNode: CustomStringConvertible {
+    var description: String {
+        "NavToNode:\(nid)"
+    }
+}
 
 extension NavToNode: Equatable {
     static func == (lhs: NavToNode, rhs: NavToNode) -> Bool {

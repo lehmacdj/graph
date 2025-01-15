@@ -6,22 +6,21 @@
 //
 
 import SwiftUI
-import AsyncButton
 
 struct FillableSymbolToggle: View {
     let isActive: Bool
     let fillableSymbol: FillableSymbol
-    let action: (() async -> Void)?
+    let action: (() -> Void)?
 
-    init(isActive: Bool, fillableSymbol: FillableSymbol, action: (() async -> Void)? = nil) {
+    init(isActive: Bool, fillableSymbol: FillableSymbol, action: (() -> Void)? = nil) {
         self.isActive = isActive
         self.fillableSymbol = fillableSymbol
         self.action = action
     }
 
     var body: some View {
-        AsyncButton {
-            await action?()
+        Button {
+            action?()
         } label: {
             if isActive {
                 Image(systemName: fillableSymbol.filled)

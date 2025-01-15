@@ -6,7 +6,6 @@
 //
 
 import SwiftUI
-import AsyncButton
 
 @MainActor
 struct NodeView: View {
@@ -102,9 +101,9 @@ struct NodeView: View {
                             // plus this makes controls somewhat less reusable, and wouldn't work if we threw a random Button in the mix somewhere
                             do {
                                 if state.tags.contains("to-update") {
-                                    try await vm.set(tags: state.tags.removing("to-update"))
+                                    try vm.set(tags: state.tags.removing("to-update"))
                                 } else {
-                                    try await vm.set(tags: state.tags.inserting("to-update"))
+                                    try vm.set(tags: state.tags.inserting("to-update"))
                                 }
                             } catch {
                                 logError("error while setting tags: \(error)")
@@ -128,7 +127,7 @@ struct NodeView: View {
                         options: [String](state.possibleTags).sorted(),
                         commit: { newTags in
                             do {
-                                try await vm.set(tags: newTags)
+                                try vm.set(tags: newTags)
                             } catch {
                                 logError("failed to set tags: \(error)")
                             }
@@ -140,10 +139,10 @@ struct NodeView: View {
                     "Really force delete node?",
                     isPresented: $showingForceDeleteNodeConfirmation,
                     actions: {
-                        AsyncButton("Delete", role: .destructive) {
+                        Button("Delete", role: .destructive) {
                             // TODO: make state a state machine that transitions to a deleted state
                             do {
-                                try await vm.forceRemove()
+                                try vm.forceRemove()
                             } catch {
                                 logError("error while trying to force remove node: \(error)")
                             }

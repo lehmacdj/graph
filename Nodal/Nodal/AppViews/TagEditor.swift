@@ -6,10 +6,9 @@
 //
 
 import SwiftUI
-import AsyncButton
 
 struct TagEditor: View {
-    init(initial: Set<String>, options: [String], commit: @escaping (Set<String>) async -> (), cancel: @escaping () async -> ()) {
+    init(initial: Set<String>, options: [String], commit: @escaping (Set<String>) -> (), cancel: @escaping () -> ()) {
         self.actual = initial
         self.options = options
         self.commitAction = commit
@@ -18,8 +17,8 @@ struct TagEditor: View {
 
     @State var actual: Set<String>
     let options: [String]
-    let commitAction: (Set<String>) async -> ()
-    let cancelAction: () async -> ()
+    let commitAction: (Set<String>) -> ()
+    let cancelAction: () -> ()
 
     @State var searchString: String = ""
 
@@ -31,10 +30,10 @@ struct TagEditor: View {
             .environment(\.editMode, .constant(.active))
             .searchable(text: $searchString, placement: .automatic, prompt: "Tag search ...")
             HStack {
-                AsyncButton(action: cancelAction) {
+                Button(action: cancelAction) {
                     Text("Cancel")
                 }
-                AsyncButton(action: { await commitAction(actual)}) {
+                Button(action: { commitAction(actual) }) {
                     Text("Commit")
                 }
             }

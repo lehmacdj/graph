@@ -50,29 +50,39 @@ import Foundation
         await underlying.subscribe()
     }
 
-    func toggleFavorite() async {
-        await underlying.toggleFavorite()
+    func toggleFavorite() {
+        underlying.toggleFavorite()
     }
 
-    func toggleWorse() async {
-        await underlying.toggleWorse()
+    func toggleWorse() {
+        underlying.toggleWorse()
     }
 
     func fetchThumbnail() {
         underlying.fetchThumbnail()
     }
 
-    func updateTransitionName(to newName: String) async {
-        await underlying.updateTransitionName(to: newName)
+    func updateTransitionName(to newName: String) {
+        underlying.updateTransitionName(to: newName)
     }
 
-    func removeTransition() async {
-        await underlying.removeTransition()
+    func removeTransition() {
+        underlying.removeTransition()
     }
 }
 
 extension TransitionVM {
     func eraseToAnyTransitionVM() -> AnyTransitionVM {
         AnyTransitionVM(erasing: self)
+    }
+}
+
+extension AnyTransitionVM: LogContextProviding {
+    var logContext: [String] {
+        if let logContextProviding = underlying as? LogContextProviding {
+            logContextProviding.logContext
+        } else {
+            []
+        }
     }
 }

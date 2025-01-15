@@ -27,8 +27,10 @@ final class GraphRepositoryNodeVM: NodeVM {
             logWarn("duplicate subscribe call")
             return
         }
+        logDebug("beginning subscription")
         isSubscribed = true
         defer {
+            logDebug("ending subscription")
             isSubscribed = false
             switch state {
             case .loading: state = .idle
@@ -63,6 +65,7 @@ final class GraphRepositoryNodeVM: NodeVM {
                 ))
                 endTransitionVMsGeneration()
             }
+            logDebug("exited update loop (Task.isCancelled=\(Task.isCancelled))")
         } catch {
             logError(error)
             state = .failed(error)
@@ -122,13 +125,13 @@ final class GraphRepositoryNodeVM: NodeVM {
 
     // MARK: these have been no-op-ed for now because we don't support modifying the graph yet
 
-    func set(tags: Set<String>) async throws {}
+    func set(tags: Set<String>) throws {}
 
-    func forceRemove() async throws {}
+    func forceRemove() throws {}
 
-    func toggleFavorite(child _: NID) async throws {}
+    func toggleFavorite(child _: NID) throws {}
 
-    func toggleWorse(child _: NID) async throws {}
+    func toggleWorse(child _: NID) throws {}
 }
 
 fileprivate struct NodeStateAugmentation {

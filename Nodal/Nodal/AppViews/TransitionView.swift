@@ -6,12 +6,11 @@
 //
 
 import SwiftUI
-import AsyncButton
 
 struct LabelEditor: View {
     @State var label: String
     @Binding var displayed: Bool
-    let action: (String) async -> ()
+    let action: (String) -> ()
 
     var body: some View {
         HStack {
@@ -21,8 +20,8 @@ struct LabelEditor: View {
             }
             // without applying this button style the button takes over the entire row via List's behavior
             .buttonStyle(BorderlessButtonStyle())
-            AsyncButton("Confirm") {
-                await action(label)
+            Button("Confirm") {
+                action(label)
                 displayed = false
             }
             // without applying this button style the button takes over the entire row via List's behavior
@@ -89,7 +88,7 @@ struct TransitionView: View {
 
             if editing {
                 LabelEditor(label: vm.transition, displayed: $editing) { newLabel in
-                    await vm.updateTransitionName(to: newLabel)
+                    vm.updateTransitionName(to: newLabel)
                 }
             } else {
                 if case .loaded(.cloudFile) = vm.thumbnail {
@@ -111,8 +110,8 @@ struct TransitionView: View {
             }
         }
         .alert("Really delete transition?", isPresented: $confirmingDelete) {
-            AsyncButton("Delete", role: .destructive) {
-                await vm.removeTransition()
+            Button("Delete", role: .destructive) {
+                vm.removeTransition()
             }
         } message: {
             Text("Deleting a transition is not reversible.")
@@ -138,8 +137,8 @@ struct TransitionView: View {
         }
         .swipeActions(edge: .leading) {
             if vm.direction == .forward {
-                AsyncButton() {
-                    await vm.toggleFavorite()
+                Button() {
+                    vm.toggleFavorite()
                 } label: {
                     if vm.isFavorite {
                         Label("Unfavorite", systemImage: "star.fill")
@@ -149,8 +148,8 @@ struct TransitionView: View {
                 }
                 .tint(.yellow)
 
-                AsyncButton() {
-                    await vm.toggleWorse()
+                Button {
+                    vm.toggleWorse()
                 } label: {
                     if vm.isWorse {
                         Label("Unworsen", systemImage: "xmark.bin.fill")
