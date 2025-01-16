@@ -64,3 +64,8 @@ extension Base62Id: CustomStringConvertible {
     }
 }
 
+extension Base62Id {
+    static func + (lhs: Base62Id, rhs: Base62Id) -> Base62Id {
+        Base62Id(representation: lhs.representation + rhs.representation)!
+    }
+}

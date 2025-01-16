@@ -134,13 +134,26 @@ actor FilesystemGraphRepository: GraphRepository {
 /// AsyncSequence implementation for `updates`
 private extension FilesystemGraphRepository {
     /// Just a factory for `UpdatesIterator` which does all of the heavy lifting
-    struct UpdatesSequence<T>: AsyncSequence {
+    struct UpdatesSequence<T>: AsyncSequence, LogContextProviding, CustomStringConvertible {
         let graphRepository: FilesystemGraphRepository
 
         let computeValue: ComputeValueClosure<T>
 
+        let logId: Base62Id
+        var logContext: [String] { [description] }
+
+        init(graphRepository: FilesystemGraphRepository, computeValue: @escaping ComputeValueClosure<T>) {
+            self.graphRepository = graphRepository
+            self.computeValue = computeValue
+            self.logId = Base62Id.random(digitCount: 3)
+        }
+
         func makeAsyncIterator() -> UpdatesIterator<T> {
-            UpdatesIterator<T>(graphRepository: graphRepository, computeValue: computeValue)
+            UpdatesIterator<T>(graphRepository: graphRepository, computeValue: computeValue, logId: logId)
+        }
+
+        var description: String {
+            "UpdatesSequence:\(logId)"
         }
     }
 
@@ -153,13 +166,14 @@ private extension FilesystemGraphRepository {
 
         init(
             graphRepository: FilesystemGraphRepository,
-            computeValue: @escaping ComputeValueClosure<T>
+            computeValue: @escaping ComputeValueClosure<T>,
+            logId: Base62Id
         ) {
             self.graphRepository = graphRepository
             self.computeValue = computeValue
             self.dependencyEntries = [:]
-            let logId = Base62Id.random(digitCount: 4)
-            self.logContext = ["UpdatesIterator:\(logId)"]
+            let logId = logId + Base62Id.random(digitCount: 1)
+            logContext = ["UpdatesIterator:\(logId)"]
         }
 
         func next() async throws -> T? {
@@ -348,16 +362,23 @@ private extension FilesystemGraphRepository {
                 }
             }
 
-            private func _completeValue(withDataNeed dataNeed: DataNeed) -> Node<UntypedDataValue>? {
+            enum IncompleteValueReason: Error {
+                case missingMetadata
+                case needDataAvailability
+                case needData
+                case inconsistentDataNeedAvailabilityAndData
+            }
+
+            private func _completeValue(withDataNeed dataNeed: DataNeed) throws -> Node<UntypedDataValue> {
                 guard let mostRecentValue else {
-                    return nil
+                    throw IncompleteValueReason.missingMetadata
                 }
 
                 switch (dataNeed, mostRecentDataAvailability, mostRecentData) {
                 case (.dataNotNeeded, _, _):
                     return mostRecentValue.withAugmentation(.dataNotChecked)
                 case (.wantDataIfLocal, nil, _):
-                    return nil
+                    throw IncompleteValueReason.needDataAvailability
                 case (.wantDataIfLocal, .noData, nil):
                     return mostRecentValue.withAugmentation(.dataIfLocal(.noData))
                 case (.wantDataIfLocal, .availableLocally, .some(let data)):
@@ -365,28 +386,29 @@ private extension FilesystemGraphRepository {
                 case (.wantDataIfLocal, .availableRemotely, nil):
                     return mostRecentValue.withAugmentation(.dataIfLocal(.remoteDataExists))
                 case (.needDataEvenIfRemote, nil, _):
-                    return nil
+                    throw IncompleteValueReason.needDataAvailability
                 case (.needDataEvenIfRemote, .noData, nil):
                     return mostRecentValue.withAugmentation(.data(nil))
                 case (.needDataEvenIfRemote, .availableLocally, .some(let data)):
                     return mostRecentValue.withAugmentation(.data(data))
                 case (.needDataEvenIfRemote, .availableRemotely, nil):
-                    return nil
+                    throw IncompleteValueReason.needData
                 default:
                     iterator?.logWarn("for \(mostRecentValue.id) inconsistent combination of dataNeed=\(dataNeed), mostRecentDataAvailability=\(String(describing: mostRecentDataAvailability)), mostRecentData=\(String(describing: mostRecentData))")
                     // we may recover in the future
-                    return nil
+                    throw IncompleteValueReason.inconsistentDataNeedAvailabilityAndData
                 }
             }
 
             var isValueComplete: Bool {
-                _completeValue(withDataNeed: dataNeed) != nil
+                Result { try _completeValue(withDataNeed: dataNeed) }
+                    .isSuccess
             }
 
-            mutating func completeValue(withDataNeed dataNeed: DataNeed) -> Node<UntypedDataValue>? {
+            mutating func completeValue(withDataNeed dataNeed: DataNeed) throws -> Node<UntypedDataValue> {
                 largestNewDataNeed.insert(dataNeed)
                 setupDataSubscriptions()
-                return _completeValue(withDataNeed: dataNeed)
+                return try _completeValue(withDataNeed: dataNeed)
             }
 
             consuming func resetDataNeedRequest(merge: (_ old: DataNeed, _ newMax: DataNeed) -> DataNeed) -> Self {
@@ -434,17 +456,18 @@ private extension FilesystemGraphRepository {
                     graphRepository: graphRepository,
                     iterator: self
                 )
-                logDebug("created new dependency entry for \(nid)")
                 throw FetchDependencyError.cacheMiss
             }
             defer { dependencyEntries[nid] = entry }
 
-            guard let value = entry.completeValue(withDataNeed: dataNeed) else {
-                logDebug("don't have correct data level for \(nid)")
+            do {
+                let value = try entry.completeValue(withDataNeed: dataNeed)
+                logDebug("successfully fetched value for \(nid)")
+                return value
+            } catch {
+                logDebug("failed to get complete value for \(nid) for reason \(error)")
                 throw FetchDependencyError.cacheMiss
             }
-            logDebug("successfully fetched value for \(nid)")
-            return value
         }
 
         var hasDependencyChangedSinceLastNextResult = true
@@ -457,12 +480,14 @@ private extension FilesystemGraphRepository {
             }
             defer { dependencyEntries[nid] = entry }
             if change(&entry) {
+                logInfo("updating entry for \(nid)")
                 markSomethingAsChanged()
             }
         }
 
         private func markSomethingAsChanged() {
             hasDependencyChangedSinceLastNextResult = true
+            logInfo("making progress")
             resumeSomethingUpdatedContinuation()
         }
 
@@ -499,5 +524,33 @@ private extension FilesystemGraphRepository {
                 somethingUpdatedContinuation = nil
             }
         }
+    }
+}
+
+
+enum CustomError: Error {
+    case first
+    case second
+}
+
+struct N {
+    let value: Int
+}
+
+class DataManager {
+    // This will crash the compiler
+    private func processData(value: Int) throws(CustomError) -> N {
+        if value < 0 {
+            throw CustomError.first
+        }
+        if value > 100 {
+            throw CustomError.second
+        }
+        return N(value: value)
+    }
+
+    // This function calls the crashing function
+    func process(value: Int) throws -> N {
+        try processData(value: value)
     }
 }
