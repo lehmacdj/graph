@@ -162,20 +162,22 @@ struct NodeView: View {
 }
 
 #Preview {
-    NodeView(
-        of: MockNodeVM(
-            nid: NID(fake: 91),
-            data: nil,
-            favoriteLinks: [
-                .init(transition: "some favorite")
-            ],
-            links: [
-                .init(transition: "some named link"),
-                .init(),
-                .init(),
-                .init(transition: "some other link"),
-            ]
+    NavigationStack {
+        NodeView(
+            of: MockNodeVM(
+                nid: NID(fake: 91),
+                data: nil,
+                favoriteLinks: [
+                    .init(transition: "some favorite")
+                ],
+                links: [
+                    .init(thumbnail: .loaded(.thumbnail(.loaded(.millionLive11Th)))),
+                    .init(thumbnail: .loaded(.thumbnail(.loaded(.moreMoreJumpBackground)))),
+                    .init(transition: "some named link"),
+                    .init(transition: "some other link"),
+                ]
+            )
+            .eraseToAnyNodeVM()
         )
-        .eraseToAnyNodeVM()
-    )
+    }
 }

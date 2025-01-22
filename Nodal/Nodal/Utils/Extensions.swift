@@ -110,7 +110,9 @@ public extension Int {
                 result *= base
             }
             exp /= 2
-            base *= base
+            if exp > 0 {
+                base *= base
+            }
         }
 
         return result

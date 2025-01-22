@@ -25,7 +25,7 @@ struct Base62Id: Equatable, Hashable {
         while representation.count < digitCount {
             let ix = String.base62Digits.index(String.base62Digits.startIndex, offsetBy: remainder % 62)
             let char = String.base62Digits[ix]
-            representation.append(String(char))
+            representation = String(char) + representation
             remainder /= 62
         }
 
