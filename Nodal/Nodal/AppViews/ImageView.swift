@@ -9,17 +9,15 @@ import SwiftUI
 
 struct ImageView: View {
     let uiImage: UIImage
-    @State var navigationVisible: Bool = false
+    let extraContentVisible: Bool
 
     var body: some View {
         ZoomableView {
             Image(uiImage: uiImage)
         }
-        .overlay(navigationVisible ? ImageStats(uiImage: uiImage) : nil, alignment: .bottomTrailing)
-        .onTapGesture { navigationVisible = !navigationVisible }
+        .overlay(extraContentVisible ? ImageStats(uiImage: uiImage) : nil, alignment: .bottomTrailing)
         .ignoresSafeArea(.all)
-        .navigationBarHidden(!navigationVisible)
-        .statusBar(hidden: !navigationVisible)
+        .preventSleeping(!extraContentVisible)
     }
 }
 
