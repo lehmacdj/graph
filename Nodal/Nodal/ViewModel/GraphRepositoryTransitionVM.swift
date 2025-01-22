@@ -17,7 +17,7 @@ final class GraphRepositoryTransitionVM: TransitionVM {
         sourceNid: NID,
         transition: NodeTransition,
         timestamp: Loading<Date?>,
-        configuredForSection section: GraphRepositoryNodeVM.NodeSection
+        configuredForSection section: NodeSection
     ) {
         self.graphRepository = graphRepository
         self.sourceNid = sourceNid
@@ -155,7 +155,7 @@ final class GraphRepositoryTransitionVM: TransitionVM {
 
     // MARK: special interop for GraphRepositoryNodeVM
 
-    func configureForSection(_ section: GraphRepositoryNodeVM.NodeSection) {
+    func configureForSection(_ section: NodeSection) {
         isFavorite = section == .favorites
         isWorse = section == .worse
         direction = section.direction

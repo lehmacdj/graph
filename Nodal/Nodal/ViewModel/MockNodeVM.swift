@@ -19,10 +19,10 @@ class MockNodeVM: NodeVM {
     convenience init(
         nid: NID,
         data: Data? = nil,
-        favoriteLinks: [AnyTransitionVM]? = nil,
-        links: [AnyTransitionVM] = [],
-        worseLinks: [AnyTransitionVM]? = nil,
-        backlinks: [AnyTransitionVM] = [],
+        favoriteLinks: [TransitionTemplate]? = nil,
+        links: [TransitionTemplate] = [],
+        worseLinks: [TransitionTemplate]? = nil,
+        backlinks: [TransitionTemplate] = [],
         tags: Set<String> = Set(),
         possibleTags: Set<String> = Set()
     ) {
@@ -31,10 +31,10 @@ class MockNodeVM: NodeVM {
             state: .loaded(
                 NodeState(
                     data: data,
-                    favoriteLinks: favoriteLinks,
-                    links: links,
-                    worseLinks: worseLinks,
-                    backlinks: backlinks,
+                    favoriteLinks: favoriteLinks.map { $0.map(\.asFavorites) },
+                    links: links.map(\.asOther),
+                    worseLinks: worseLinks.map { $0.map(\.asWorse) },
+                    backlinks: backlinks.map(\.asBacklink),
                     tags: tags,
                     possibleTags: possibleTags
                 )
@@ -48,4 +48,57 @@ class MockNodeVM: NodeVM {
     func forceRemove() throws {}
     func toggleFavorite(child: NID) throws {}
     func toggleWorse(child: NID) throws {}
+}
+
+extension MockNodeVM {
+    struct TransitionTemplate {
+        let transition: String
+        let thumbnail: Loading<ThumbnailValue>
+        let timestamp: Loading<Date?>
+        let destination: AnyNodeVM?
+
+        init(
+            transition: String = "",
+            thumbnail: Loading<ThumbnailValue> = .loaded(.noThumbnail),
+            timestamp: Loading<Date?> = .loaded(nil),
+            destination: AnyNodeVM? = nil
+        ) {
+            self.transition = transition
+            self.thumbnail = thumbnail
+            self.timestamp = timestamp
+            self.destination = destination
+        }
+
+        @MainActor
+        func intoVM(section: NodeSection) -> AnyTransitionVM {
+            MockTransitionVM(
+                transition: transition,
+                section: section,
+                thumbnail: thumbnail,
+                timestamp: timestamp,
+                destination: destination
+            )
+            .eraseToAnyTransitionVM()
+        }
+
+        @MainActor
+        var asFavorites: AnyTransitionVM {
+            intoVM(section: .favorites)
+        }
+
+        @MainActor
+        var asOther: AnyTransitionVM {
+            intoVM(section: .other)
+        }
+
+        @MainActor
+        var asWorse: AnyTransitionVM {
+            intoVM(section: .worse)
+        }
+
+        @MainActor
+        var asBacklink: AnyTransitionVM {
+            intoVM(section: .backlink)
+        }
+    }
 }

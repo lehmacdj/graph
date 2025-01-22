@@ -166,7 +166,7 @@ struct TransitionView: View {
 
 #Preview {
     List {
-        TransitionView(MockTransitionVM(to: .origin, transition: "asdf").eraseToAnyTransitionVM())
-        TransitionView(MockTransitionVM(to: .origin, transition: "Hello world!").eraseToAnyTransitionVM())
+        TransitionView(MockTransitionVM(transition: "asdf").eraseToAnyTransitionVM())
+        TransitionView(MockTransitionVM(transition: "Hello world!").eraseToAnyTransitionVM())
     }
 }

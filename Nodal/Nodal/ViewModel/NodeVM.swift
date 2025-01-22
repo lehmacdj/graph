@@ -18,6 +18,20 @@ struct NodeState {
     let possibleTags: Set<String>
 }
 
+enum NodeSection {
+    case favorites
+    case worse
+    case other
+    case backlink
+
+    var direction: Direction {
+        switch self {
+        case .favorites, .worse, .other: .forward
+        case .backlink: .backward
+        }
+    }
+}
+
 @MainActor
 protocol NodeVM: Observable {
     var nid: NID { get }

@@ -29,7 +29,7 @@ struct NID: Equatable, Hashable {
 
     /// Fake NID constructed from an int.
     init(fake input: Int) {
-        try! self.init(underlying: Base62Id(digitCount: nidDigits, fake: input))
+        try! self.init(underlying: Base62Id(representation: "XT")! + Base62Id(digitCount: 10, fake: input))
     }
 }
 

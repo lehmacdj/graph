@@ -161,8 +161,21 @@ struct NodeView: View {
     }
 }
 
-struct NodeView_Previews: PreviewProvider {
-    static var previews: some View {
-        Text("preview not supported")
-    }
+#Preview {
+    NodeView(
+        of: MockNodeVM(
+            nid: NID(fake: 91),
+            data: nil,
+            favoriteLinks: [
+                .init(transition: "some favorite")
+            ],
+            links: [
+                .init(transition: "some named link"),
+                .init(),
+                .init(),
+                .init(transition: "some other link"),
+            ]
+        )
+        .eraseToAnyNodeVM()
+    )
 }

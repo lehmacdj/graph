@@ -76,20 +76,6 @@ final class GraphRepositoryNodeVM: NodeVM {
     private var transitionVMsPrevious = [TransitionKey: GraphRepositoryTransitionVM]()
     private var transitionVMs = [TransitionKey: GraphRepositoryTransitionVM]()
 
-    enum NodeSection {
-        case favorites
-        case worse
-        case other
-        case backlink
-
-        var direction: Direction {
-            switch self {
-            case .favorites, .worse, .other: .forward
-            case .backlink: .backward
-            }
-        }
-    }
-
     /// Mark that we are done creating transition VMs for an update cycle
     private func endTransitionVMsGeneration() {
         transitionVMsPrevious = transitionVMs

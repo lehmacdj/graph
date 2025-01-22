@@ -19,22 +19,19 @@ class MockTransitionVM: TransitionVM {
     let destination: AnyNodeVM
 
     init(
-        to destinationNid: NID,
-        transition: String = "Transition name",
-        direction: Direction = .forward,
+        transition: String = "",
+        section: NodeSection = .other,
         thumbnail: Loading<ThumbnailValue> = .loaded(.noThumbnail),
         timestamp: Loading<Date?> = .loaded(nil),
-        isFavorite: Bool = false,
-        isWorse: Bool = false,
         destination: AnyNodeVM? = nil
     ) {
-        self.direction = direction
-        self.destinationNid = destinationNid
+        self.destinationNid = Self.nextNid()
         self.transition = transition
         self.thumbnail = thumbnail
         self.timestamp = timestamp
-        self.isFavorite = isFavorite
-        self.isWorse = isWorse
+        self.direction = section.direction
+        self.isFavorite = section == .favorites
+        self.isWorse = section == .worse
         self.destination = destination ?? MockNodeVM(nid: destinationNid).eraseToAnyNodeVM()
     }
 
@@ -44,4 +41,10 @@ class MockTransitionVM: TransitionVM {
     func fetchThumbnail() {}
     func updateTransitionName(to newName: String) {}
     func removeTransition() {}
+
+    private static var lastUsedNid = 0
+    static func nextNid() -> NID {
+        lastUsedNid += 1
+        return NID(fake: lastUsedNid)
+    }
 }
