@@ -51,16 +51,16 @@ final class GraphRepositoryNodeVM: NodeVM {
                     data: value.data,
                     favoriteLinks: value.favoriteLinks
                         .sorted(by: timestampTransitionComparison(_:_:))
-                        .map { getTransitionVM(key: $0.0, timestamp: $0.1, configuredForSection: .favorites) },
+                        .map { getTransitionVM(transition: $0.0, timestamp: $0.1, configuredForSection: .favorites) },
                     links: value.otherLinks
                         .sorted(by: timestampTransitionComparison(_:_:))
-                        .map { getTransitionVM(key: $0.0, timestamp: $0.1, configuredForSection: .other) },
+                        .map { getTransitionVM(transition: $0.0, timestamp: $0.1, configuredForSection: .other) },
                     worseLinks: value.worseLinks
                         .sorted(by: timestampTransitionComparison(_:_:))
-                        .map { getTransitionVM(key: $0.0, timestamp: $0.1, configuredForSection: .worse) },
+                        .map { getTransitionVM(transition: $0.0, timestamp: $0.1, configuredForSection: .worse) },
                     backlinks: value.backlinks
                         .sorted(by: timestampTransitionComparison(_:_:))
-                        .map { getTransitionVM(key: $0.0, timestamp: $0.1, configuredForSection: .backlink) },
+                        .map { getTransitionVM(transitio: $0.0, timestamp: $0.1, configuredForSection: .backlink) },
                     tags: value.tags,
                     possibleTags: value.possibleTags
                 ))
@@ -83,24 +83,25 @@ final class GraphRepositoryNodeVM: NodeVM {
     }
 
     private func getTransitionVM(
-        key: NodeTransition,
+        transition: NodeTransition,
         timestamp: Loading<Date?>,
         configuredForSection section: NodeSection
     ) -> AnyTransitionVM {
-        // TODO: try axing the caching to see if GraphRepository is doing a sufficient job in caching things that are already loaded itself
-        if let vm = transitionVMsPrevious[TransitionKey(key, direction: section.direction)] {
+        let key = TransitionKey(transition, direction: section.direction)
+        if let vm = transitionVMsPrevious[key] {
             vm.configureForSection(section)
             vm.timestamp = timestamp
+            transitionVMs[key] = vm
             return vm.eraseToAnyTransitionVM()
         } else {
             let vm = GraphRepositoryTransitionVM(
                 graphRepository: graphRepository,
                 sourceNid: nid,
-                transition: key,
+                transition: transition,
                 timestamp: timestamp,
                 configuredForSection: section
             )
-            transitionVMs[TransitionKey(key, direction: section.direction)] = vm
+            transitionVMs[key] = vm
             return vm.eraseToAnyTransitionVM()
         }
     }
@@ -209,6 +210,10 @@ extension GraphRepositoryNodeVM: CustomStringConvertible {
     var description: String {
         "\(type(of: self)):\(self.nid)"
     }
+}
+
+extension GraphRepositoryNodeVM: CustomDebugStringConvertible {
+    var debugDescription: String { description }
 }
 
 extension GraphRepositoryNodeVM: LogContextProviding {
