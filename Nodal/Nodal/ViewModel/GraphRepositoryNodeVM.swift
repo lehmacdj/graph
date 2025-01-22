@@ -60,7 +60,7 @@ final class GraphRepositoryNodeVM: NodeVM {
                         .map { getTransitionVM(transition: $0.0, timestamp: $0.1, configuredForSection: .worse) },
                     backlinks: value.backlinks
                         .sorted(by: timestampTransitionComparison(_:_:))
-                        .map { getTransitionVM(transitio: $0.0, timestamp: $0.1, configuredForSection: .backlink) },
+                        .map { getTransitionVM(transition: $0.0, timestamp: $0.1, configuredForSection: .backlink) },
                     tags: value.tags,
                     possibleTags: value.possibleTags
                 ))
@@ -171,6 +171,12 @@ private extension NID {
         let data = try dependencyManager
             .fetch(nid: self, dataNeed: .needDataEvenIfRemote)
             .data
+
+        // for other sorts that don't depend on time we wouldn't want to do this, but when time is essential for the
+        // sort it is too disruptive to rearrange nodes as timestamps load in
+        guard links.allSatisfy({ $0.1.isLoaded }) && backlinks.allSatisfy({ $0.1.isLoaded }) else {
+            throw .missingDependencies
+        }
 
         return node.withAugmentation(
             NodeStateAugmentation(
