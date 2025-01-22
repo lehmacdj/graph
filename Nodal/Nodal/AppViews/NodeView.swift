@@ -159,6 +159,7 @@ struct NodeView: View {
     }
 }
 
+#if DEBUG
 #Preview {
     NavigationStack {
         NodeView(
@@ -169,7 +170,7 @@ struct NodeView: View {
                     .init(transition: "some favorite")
                 ],
                 links: [
-                    .init(thumbnail: .loaded(.thumbnail(.loaded(.millionLive11Th)))),
+                    .init(thumbnail: .loaded(.thumbnail(.loaded(.millionLive11)))),
                     .init(thumbnail: .loaded(.thumbnail(.loaded(.moreMoreJumpBackground)))),
                     .init(transition: "some named link"),
                     .init(transition: "some other link"),
@@ -179,3 +180,4 @@ struct NodeView: View {
         )
     }
 }
+#endif
