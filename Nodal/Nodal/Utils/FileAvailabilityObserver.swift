@@ -22,9 +22,8 @@ actor FileAvailabilityObserver {
     init(url: URL, refreshInterval: Duration = .milliseconds(500)) {
         self.url = url
         Task { [weak self] in
-            while !Task.isCancelled {
-                guard let self else { return }
-                await updateAvailability()
+            while !Task.isCancelled && self != nil {
+                await self?.updateAvailability()
                 try await Task.sleep(for: refreshInterval)
             }
         }
