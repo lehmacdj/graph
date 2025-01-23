@@ -238,6 +238,7 @@ private extension FilesystemGraphRepository {
         private struct DependencyEntry {
             let nid: NID
             let graphRepository: FilesystemGraphRepository
+            let logger: FrozenLogger
             weak var iterator: UpdatesIterator<T>?
 
             init(nid: NID, dataNeed: DataNeed, graphRepository: FilesystemGraphRepository, iterator: UpdatesIterator<T>) {
@@ -245,11 +246,12 @@ private extension FilesystemGraphRepository {
                 self.dataNeed = dataNeed
                 self.graphRepository = graphRepository
                 self.iterator = iterator
+                self.logger = iterator.frozenLogger()
                 // this needs to be set for the first run where we don't call completeValue too
                 self.largestNewDataNeed.insert(dataNeed)
-                let task = Task { [nid, graphRepository, weak iterator] in
+                let task = Task { [nid, graphRepository, logger, weak iterator] in
                     do {
-                        iterator?.logDebug("setting up metadata updates for \(nid)")
+                        logger.logDebug("setting up metadata updates for \(nid)")
                         let (cancellable, updates) = try await graphRepository.getMetadataUpdates(for: nid)
                         for await nodeValue in updates {
                             await iterator?.updateEntry(for: nid) { entry in
@@ -259,8 +261,9 @@ private extension FilesystemGraphRepository {
                             }
                         }
                         _ = cancellable // needs to live until here so that updates doesn't get deallocated
+                        logger.logInfo("metadata task finishing")
                     } catch {
-                        iterator?.logError(error)
+                        logger.logError(error)
                     }
                 }
                 self.metadataSubscription = AnyCancellable {
@@ -314,9 +317,9 @@ private extension FilesystemGraphRepository {
                 }
 
                 if dataAvailabilitySubscription == nil {
-                    let dataAvailabilityTask = Task { [nid, graphRepository, weak iterator] in
+                    let dataAvailabilityTask = Task { [nid, graphRepository, logger, weak iterator] in
                         do {
-                            iterator?.logDebug("setting up data availability updates for \(nid)")
+                            logger.logDebug("setting up data availability updates for \(nid)")
                             let (cancellable, updates) = try await graphRepository.getDataAvailabilityUpdates(for: nid)
                             for await dataAvailability in updates {
                                 await iterator?.updateEntry(for: nid) { entry in
@@ -327,8 +330,9 @@ private extension FilesystemGraphRepository {
                                 }
                             }
                             _ = cancellable // needs to live until here so that updates doesn't get deallocated
+                            logger.logInfo("data availability task finishing")
                         } catch {
-                            iterator?.logError(error)
+                            logger.logError(error)
                         }
                     }
                     dataAvailabilitySubscription = AnyCancellable { dataAvailabilityTask.cancel() }
@@ -340,9 +344,9 @@ private extension FilesystemGraphRepository {
                 }
 
                 if dataSubscription == nil {
-                    let dataTask = Task { [nid, graphRepository, weak iterator] in
+                    let dataTask = Task { [nid, graphRepository, logger, weak iterator] in
                         do {
-                            iterator?.logDebug("setting up data updates for \(nid)")
+                            logger.logDebug("setting up data updates for \(nid)")
                             let (cancellable, updates) = try await graphRepository.getDataUpdates(for: nid)
                             for try await data in updates {
                                 await iterator?.updateEntry(for: nid) { entry in
@@ -352,13 +356,17 @@ private extension FilesystemGraphRepository {
                                 }
                             }
                             _ = cancellable // needs to live until here so that updates doesn't get deallocated
+                            logger.logInfo("data task finishing")
                         } catch is DataDocument.DocumentClosedError {
-                            iterator?.logInfo("data no longer available, metadata query should update entry appropriately so this doesn't recur")
+                            logger.logInfo("data no longer available, metadata query should update entry appropriately so this doesn't recur")
                         } catch {
-                            iterator?.logError(error)
+                            logger.logError(error)
                         }
                     }
-                    dataSubscription = AnyCancellable { dataTask.cancel() }
+                    dataSubscription = AnyCancellable { [logger] in
+                        logger.logInfo("cancelling data subscription")
+                        dataTask.cancel()
+                    }
                 }
             }
 
@@ -394,7 +402,7 @@ private extension FilesystemGraphRepository {
                 case (.needDataEvenIfRemote, .availableRemotely, nil):
                     throw IncompleteValueReason.needData
                 default:
-                    iterator?.logWarn("for \(mostRecentValue.id) inconsistent combination of dataNeed=\(dataNeed), mostRecentDataAvailability=\(String(describing: mostRecentDataAvailability)), mostRecentData=\(String(describing: mostRecentData))")
+                    logger.logWarn("for \(mostRecentValue.id) inconsistent combination of dataNeed=\(dataNeed), mostRecentDataAvailability=\(String(describing: mostRecentDataAvailability)), mostRecentData=\(String(describing: mostRecentData))")
                     // we may recover in the future
                     throw IncompleteValueReason.inconsistentDataNeedAvailabilityAndData
                 }

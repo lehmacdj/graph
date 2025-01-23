@@ -39,3 +39,28 @@ extension LogContextProviding {
         return val
     }
 }
+
+struct FrozenLogger: LogContextProviding {
+    let logContext: [String]
+}
+
+extension LogContextProviding {
+    /// Returns a logger with context frozen to the context from the current context.
+    /// This does not capture/retain self.
+    func frozenLogger(file: StaticString = #file, line: UInt = #line, column: UInt = #column) -> FrozenLogger {
+        FrozenLogger(logContext: frozenContext(file: file, line: line, column: column))
+    }
+
+    func frozenContext(file: StaticString = #file, line: UInt = #line, column: UInt = #column) -> [String] {
+        ["frozen@\(file):\(line):\(column)"] + logContext
+    }
+}
+
+extension Optional where Wrapped: LogContextProviding {
+    func frozenLogger(file: StaticString = #file, line: UInt = #line, column: UInt = #column) -> FrozenLogger {
+        FrozenLogger(
+            logContext: self?.frozenContext(file: file, line: line, column: column)
+                ?? ["freeze-context-nil@\(file):\(line):\(column)"]
+        )
+    }
+}
