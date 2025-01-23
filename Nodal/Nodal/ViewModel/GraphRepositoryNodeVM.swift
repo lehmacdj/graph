@@ -44,7 +44,7 @@ final class GraphRepositoryNodeVM: NodeVM {
         }
 
         do {
-            let updatesSequence = await graphRepository.updates(computeValue: nid.computeNodeForVM)
+            let updatesSequence = await graphRepository.updates(logContext: logContext, computeValue: nid.computeNodeForVM)
             logInfo("starting listening to sequence: \(updatesSequence)")
             for try await value in updatesSequence {
                 state = .loaded(NodeState(

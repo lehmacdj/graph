@@ -84,8 +84,8 @@ actor FilesystemGraphRepository: GraphRepository {
         return nid
     }
 
-    func updates<T>(computeValue: @escaping ComputeValueClosure<T>) -> any AsyncSequence<T, any Error> {
-        UpdatesSequence<T>(graphRepository: self, computeValue: computeValue)
+    func updates<T>(logContext: [String] = [], computeValue: @escaping ComputeValueClosure<T>) -> any AsyncSequence<T, any Error> {
+        UpdatesSequence<T>(graphRepository: self, computeValue: computeValue, logContext: logContext)
     }
 
     func deleteNode(withId id: NID) async {
@@ -106,9 +106,11 @@ actor FilesystemGraphRepository: GraphRepository {
 
     private func getMetadataUpdates(for nid: NID) async throws -> (AnyCancellable, any AsyncSequence<Node<NoAugmentation>, Never>) {
         let (cacheEntry, metadataDocument) = try await metadataCache.getOrCreate(nid)
+        logDebug("acquired metadata document \(nid)")
         let sequence = await metadataDocument
             .metaPublisher
             .values
+        logDebug("returning sequence \(nid)")
         return (cacheEntry, sequence)
     }
 
@@ -139,21 +141,23 @@ private extension FilesystemGraphRepository {
 
         let computeValue: ComputeValueClosure<T>
 
+        let passedLogContext: [String]
         let logId: Base62Id
-        var logContext: [String] { [description] }
+        var logContext: [String] { passedLogContext + [description] }
 
-        init(graphRepository: FilesystemGraphRepository, computeValue: @escaping ComputeValueClosure<T>) {
+        init(graphRepository: FilesystemGraphRepository, computeValue: @escaping ComputeValueClosure<T>, logContext: [String]) {
             self.graphRepository = graphRepository
             self.computeValue = computeValue
+            self.passedLogContext = logContext
             self.logId = Base62Id.random(digitCount: 3)
         }
 
         func makeAsyncIterator() -> UpdatesIterator<T> {
-            UpdatesIterator<T>(graphRepository: graphRepository, computeValue: computeValue, logId: logId)
+            UpdatesIterator<T>(graphRepository: graphRepository, computeValue: computeValue, logContext: passedLogContext, logId: logId)
         }
 
         var description: String {
-            "UpdatesSequence:\(logId)"
+            "Updates:\(logId)"
         }
     }
 
@@ -167,13 +171,13 @@ private extension FilesystemGraphRepository {
         init(
             graphRepository: FilesystemGraphRepository,
             computeValue: @escaping ComputeValueClosure<T>,
+            logContext: [String],
             logId: Base62Id
         ) {
             self.graphRepository = graphRepository
             self.computeValue = computeValue
             self.dependencyEntries = [:]
-            let logId = logId + Base62Id.random(digitCount: 1)
-            logContext = ["UpdatesIterator:\(logId)"]
+            self.logContext = logContext + ["Updates:\(logId):\(Base62Id.random(digitCount: 2))"]
         }
 
         func next() async throws -> T? {
@@ -261,7 +265,7 @@ private extension FilesystemGraphRepository {
                             }
                         }
                         _ = cancellable // needs to live until here so that updates doesn't get deallocated
-                        logger.logInfo("metadata task finishing")
+                        logger.logInfo("metadata task finishing for \(nid)")
                     } catch {
                         logger.logError(error)
                     }
@@ -330,7 +334,7 @@ private extension FilesystemGraphRepository {
                                 }
                             }
                             _ = cancellable // needs to live until here so that updates doesn't get deallocated
-                            logger.logInfo("data availability task finishing")
+                            logger.logDebug("data availability task finishing for \(nid)")
                         } catch {
                             logger.logError(error)
                         }
@@ -356,17 +360,14 @@ private extension FilesystemGraphRepository {
                                 }
                             }
                             _ = cancellable // needs to live until here so that updates doesn't get deallocated
-                            logger.logInfo("data task finishing")
+                            logger.logDebug("data task finishing for \(nid)")
                         } catch is DataDocument.DocumentClosedError {
-                            logger.logInfo("data no longer available, metadata query should update entry appropriately so this doesn't recur")
+                            logger.logInfo("data for \(nid) no longer available, data availability update should prevent recurrence")
                         } catch {
                             logger.logError(error)
                         }
                     }
-                    dataSubscription = AnyCancellable { [logger] in
-                        logger.logInfo("cancelling data subscription")
-                        dataTask.cancel()
-                    }
+                    dataSubscription = AnyCancellable { dataTask.cancel() }
                 }
             }
 
@@ -488,7 +489,7 @@ private extension FilesystemGraphRepository {
             }
             defer { dependencyEntries[nid] = entry }
             if change(&entry) {
-                logInfo("updating entry for \(nid)")
+                logDebug("updating entry for \(nid)")
                 markSomethingAsChanged()
             }
         }
@@ -527,7 +528,9 @@ private extension FilesystemGraphRepository {
         private var somethingUpdatedContinuation: CheckedContinuation<Void, Never>?
 
         private func resumeSomethingUpdatedContinuation() {
+            logDebug("continuation == nil: \(somethingUpdatedContinuation == nil)")
             if let continuation = somethingUpdatedContinuation {
+                logDebug("resuming continuation")
                 continuation.resume()
                 somethingUpdatedContinuation = nil
             }

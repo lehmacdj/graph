@@ -16,7 +16,8 @@ func log(_ message: String, level: LogLevel = .info, file: String = #file, line:
         let contextString = context
             .map { "[\($0)]" }
             .joined(separator: "")
-        print("[\(Date())][\(level)][\(file):\(line):\(column)]\(contextString)[\(callingFunction)]: \(message)")
+        let threadInfo = Thread.current.isMainThread ? "thread:main" : "thread:\(Thread.current.hashValue)"
+        print("[\(Date())][\(level)][\(file):\(line):\(column)]\(contextString)[\(threadInfo)][\(callingFunction)]: \(message)")
     }
 }
 

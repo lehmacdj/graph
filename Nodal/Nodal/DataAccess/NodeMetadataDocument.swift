@@ -51,7 +51,8 @@ final class NodeMetadataDocument: UIDocument {
 
 
     var metaPublisher: AnyPublisher<Node<NoAugmentation>, Never> {
-        $_meta.compactMap { $0 }.eraseToAnyPublisher()
+        logDebug("fetching meta publisher \(meta.id)")
+        return $_meta.compactMap { $0 }.eraseToAnyPublisher()
     }
 
     struct InvalidFileType: Error {}

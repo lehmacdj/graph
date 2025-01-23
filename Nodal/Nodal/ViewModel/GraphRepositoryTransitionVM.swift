@@ -93,7 +93,7 @@ final class GraphRepositoryTransitionVM: TransitionVM {
         }
 
         do {
-            let updatesSequence = await graphRepository.updates { [destinationNid, requireThumbnail] dependencyManager in
+            let updatesSequence = await graphRepository.updates(logContext: logContext) { [destinationNid, requireThumbnail] dependencyManager in
                 return try dependencyManager.fetch(
                     nid: destinationNid,
                     untypedDataNeed: requireThumbnail ? .needDataEvenIfRemote : .wantDataIfLocal
