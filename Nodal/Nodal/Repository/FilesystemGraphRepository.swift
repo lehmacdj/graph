@@ -509,12 +509,19 @@ private extension FilesystemGraphRepository {
             assert(!dependencyEntriesAllComplete || !hasDependencyChangedSinceLastNextResult)
             isWaitingUntilSomethingChanges = true
             defer { isWaitingUntilSomethingChanges = false }
+            logDebug("about to setup cancellation handler")
             await withTaskCancellationHandler {
+                self.logDebug("running with cancellation handler")
                 await withCheckedContinuation { continuation in
+                    self.logDebug("setting up continuation")
                     somethingUpdatedContinuation = continuation
                 }
             } onCancel: {
-                Task { await resumeSomethingUpdatedContinuation() }
+                self.logDebug("cancelled spawning task to resume continuation")
+                Task {
+                    self.logDebug("trying to resume continuation")
+                    await resumeSomethingUpdatedContinuation()
+                }
             }
             do {
                 try Task.checkCancellation()

@@ -51,6 +51,7 @@ actor ConcurrentCache<K: Hashable, V>: LogContextProviding {
             guard case .live(let referenceCount, let value) = self else {
                 fatalError("can't change reference count if not live")
             }
+            precondition(referenceCount > 0)
             self = .live(referenceCount: referenceCount - 1, value: value)
         }
 
