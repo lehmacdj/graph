@@ -12,7 +12,7 @@ import Testing
 
 class NodalTests: XCTestCase {
     func testFakeNID() {
-        NID(fake: 0)
+        _ = NID(fake: 0)
     }
 
     func testFillableSymbolsExist() throws {
@@ -21,7 +21,6 @@ class NodalTests: XCTestCase {
             XCTAssertNotNil(Image(systemName: symbol.rawValue))
         }
     }
-
 
     func testWeakDictionaryDeallocates() {
         class Foo {
