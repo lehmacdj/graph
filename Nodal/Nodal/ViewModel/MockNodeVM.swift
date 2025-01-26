@@ -23,8 +23,7 @@ class MockNodeVM: NodeVM {
         links: [TransitionTemplate] = [],
         worseLinks: [TransitionTemplate]? = nil,
         backlinks: [TransitionTemplate] = [],
-        tags: Set<String> = Set(),
-        possibleTags: Set<String> = Set()
+        tags: [String] = []
     ) {
         self.init(
             nid: nid,
@@ -35,8 +34,7 @@ class MockNodeVM: NodeVM {
                     links: links.map(\.asOther),
                     worseLinks: worseLinks.map { $0.map(\.asWorse) },
                     backlinks: backlinks.map(\.asBacklink),
-                    tags: tags,
-                    possibleTags: possibleTags
+                    tags: tags
                 )
             )
         )

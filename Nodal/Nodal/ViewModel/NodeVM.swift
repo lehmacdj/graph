@@ -14,8 +14,7 @@ struct NodeState {
     let links: [AnyTransitionVM]
     let worseLinks: [AnyTransitionVM]?
     let backlinks: [AnyTransitionVM]
-    let tags: Set<String>
-    let possibleTags: Set<String>
+    let tags: [String]
 }
 
 enum NodeSection {

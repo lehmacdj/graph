@@ -65,8 +65,7 @@ final class GraphRepositoryNodeVM: NodeVM {
                     backlinks: value.backlinks
                         .sorted(by: timestampTransitionComparison(_:_:))
                         .map { getTransitionVM(transition: $0.0, timestamp: $0.1, configuredForSection: .backlink) },
-                    tags: value.tags,
-                    possibleTags: value.possibleTags
+                    tags: value.tags
                 ))
                 endTransitionVMsGeneration()
             }
@@ -132,8 +131,7 @@ fileprivate struct NodeStateAugmentation: Sendable {
     let worseLinks: [(NodeTransition, Loading<Date?>)]
     let backlinks: [(NodeTransition, Loading<Date?>)]
     let otherLinks: [(NodeTransition, Loading<Date?>)]
-    let tags: Set<String>
-    let possibleTags: Set<String>
+    let tags: [String]
 }
 
 private extension NID {
@@ -166,11 +164,15 @@ private extension NID {
                 return (transition, Loading.loading(timestamped.map { $0.timestamp }))
             }
 
-        let allTags = try dependencyManager.fetch(nid: NID.tags, dataNeed: .dataNotNeeded)
-            .outgoing
-            .keys
-            .to(Set.init)
-        let tags = allTags.filter { node.outgoing[$0] != nil }
+        let tagsNode = try dependencyManager.fetch(nid: NID.tags, dataNeed: .dataNotNeeded)
+
+        let incomingNids = node.incoming.flatMap(\.value).to(Set.init)
+        let tags = tagsNode
+            .outgoingTransitions
+            .filter { transition in incomingNids.contains(transition.nid) }
+            // if there are two transitions with the same name but different nids this will collapse them
+            .map { transition in transition.transition }
+            .sorted()
 
         let data = try dependencyManager
             .fetch(nid: self, dataNeed: .needDataEvenIfRemote)
@@ -189,8 +191,7 @@ private extension NID {
                 worseLinks: links.filter { worseNids.contains($0.0.nid) },
                 backlinks: backlinks,
                 otherLinks: links.filter { !favoritesNids.contains($0.0.nid) && !worseNids.contains($0.0.nid) },
-                tags: tags,
-                possibleTags: allTags
+                tags: tags
             )
         )
     }

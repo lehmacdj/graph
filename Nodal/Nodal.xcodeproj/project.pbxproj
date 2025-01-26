@@ -84,6 +84,7 @@
 		03DD60D629D11E04005EC4A5 /* ErrorIndicator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 03DD60D529D11E04005EC4A5 /* ErrorIndicator.swift */; };
 		03DD60D829D15891005EC4A5 /* NodeVM.swift in Sources */ = {isa = PBXBuildFile; fileRef = 03DD60D729D15891005EC4A5 /* NodeVM.swift */; };
 		03DFE0B02A642F2900370692 /* Geometry.swift in Sources */ = {isa = PBXBuildFile; fileRef = 03DFE0AF2A642F2900370692 /* Geometry.swift */; };
+		03E36F3B2D46F32800496D7F /* FlowLayout.swift in Sources */ = {isa = PBXBuildFile; fileRef = 03E36F3A2D46F32600496D7F /* FlowLayout.swift */; };
 		03EB93042A62158E0014BBF8 /* ZoomableView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 03EB93032A62158E0014BBF8 /* ZoomableView.swift */; };
 /* End PBXBuildFile section */
 
@@ -172,6 +173,7 @@
 		03DD60D529D11E04005EC4A5 /* ErrorIndicator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ErrorIndicator.swift; sourceTree = "<group>"; };
 		03DD60D729D15891005EC4A5 /* NodeVM.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NodeVM.swift; sourceTree = "<group>"; };
 		03DFE0AF2A642F2900370692 /* Geometry.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Geometry.swift; sourceTree = "<group>"; };
+		03E36F3A2D46F32600496D7F /* FlowLayout.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FlowLayout.swift; sourceTree = "<group>"; };
 		03EB93032A62158E0014BBF8 /* ZoomableView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ZoomableView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -314,6 +316,7 @@
 		0351022D2BF1B9A2000F3E1E /* Components */ = {
 			isa = PBXGroup;
 			children = (
+				03E36F3A2D46F32600496D7F /* FlowLayout.swift */,
 				034856AC2D40C19800223C1A /* PreventSleeping.swift */,
 				031CE3F329DA8643001470BD /* Suspense.swift */,
 				03DD60D529D11E04005EC4A5 /* ErrorIndicator.swift */,
@@ -559,6 +562,7 @@
 				031CE3F629E21CDF001470BD /* FillableSymbolToggle.swift in Sources */,
 				0313681227140A0900E69F83 /* Utils.swift in Sources */,
 				0375E94A2D34C50B006175F0 /* Node+Codable.swift in Sources */,
+				03E36F3B2D46F32800496D7F /* FlowLayout.swift in Sources */,
 				03ABF7862CD6D0A800738F76 /* NID.swift in Sources */,
 				03C84EA42C27734C00DB3869 /* MockNodeVM.swift in Sources */,
 				0375E9482D34C475006175F0 /* GraphTimestampModels.swift in Sources */,

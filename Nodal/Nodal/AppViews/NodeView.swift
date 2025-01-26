@@ -16,7 +16,6 @@ struct NodeView: View {
         _vm = State(wrappedValue: node)
     }
 
-    @State var showingTags: Bool = false
     @State var showingLinks: Bool = false
     @State var showingForceDeleteNodeConfirmation: Bool = false
 
@@ -72,7 +71,8 @@ struct NodeView: View {
                 Text("Node has data with unknown kind")
             }
         } else {
-            links(state).refreshable { await vm.reload() }
+            links(state)
+                .refreshable { await vm.reload() }
         }
     }
 
@@ -96,11 +96,6 @@ struct NodeView: View {
                 Image(systemName: "ellipsis")
             }
         }
-        ToolbarItem(placement: .navigationBarTrailing) {
-            Button(action: { showingTags.toggle() }) {
-                Image(systemName: "tag")
-            }
-        }
         if state.data != nil {
             ToolbarItem(placement: .navigationBarTrailing) {
                 Button(action: { showingLinks.toggle() }) {
@@ -118,20 +113,6 @@ struct NodeView: View {
     func content(for state: NodeState) -> some View {
         loadedContent(state)
             .toolbar { toolbarContent(for: state) }
-            .sheet(isPresented: $showingTags) {
-                TagEditor(
-                    initial: state.tags,
-                    options: [String](state.possibleTags).sorted(),
-                    commit: { newTags in
-                        do {
-                            try vm.set(tags: newTags)
-                        } catch {
-                            logError("failed to set tags: \(error)")
-                        }
-                        showingTags = false
-                    },
-                    cancel: { showingTags = false })
-            }
             .alert(
                 "Really force delete node?",
                 isPresented: $showingForceDeleteNodeConfirmation,
@@ -147,7 +128,8 @@ struct NodeView: View {
                 },
                 message: {
                     Text("Force deleting a node is not reversible.")
-                })
+                }
+            )
     }
 
     var body: some View {
@@ -174,7 +156,8 @@ struct NodeView: View {
                     .init(thumbnail: .loaded(.thumbnail(.loaded(.moreMoreJumpBackground)))),
                     .init(transition: "some named link"),
                     .init(transition: "some other link"),
-                ]
+                ],
+                tags: ["foo", "bar", "baz", "white", "red", "green", "blue", "purple"]
             )
             .eraseToAnyNodeVM()
         )
