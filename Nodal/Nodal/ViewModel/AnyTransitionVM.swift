@@ -76,13 +76,3 @@ extension TransitionVM {
         AnyTransitionVM(erasing: self)
     }
 }
-
-extension AnyTransitionVM: LogContextProviding {
-    var logContext: [String] {
-        if let logContextProviding = underlying as? LogContextProviding {
-            logContextProviding.logContext()
-        } else {
-            []
-        }
-    }
-}

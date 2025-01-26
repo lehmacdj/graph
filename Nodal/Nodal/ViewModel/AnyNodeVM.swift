@@ -53,13 +53,3 @@ extension NodeVM {
         return AnyNodeVM(erasing: self)
     }
 }
-
-extension AnyNodeVM: LogContextProviding {
-    var logContext: [String] {
-        if let logContextProviding = underlying as? LogContextProviding {
-        logContextProviding.logContext()
-        } else {
-            []
-        }
-    }
-}

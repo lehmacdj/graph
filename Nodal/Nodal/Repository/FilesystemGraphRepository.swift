@@ -86,8 +86,8 @@ actor FilesystemGraphRepository: GraphRepository {
         return nid
     }
 
-    func updates<T: Sendable>(logContext: [String] = [], computeValue: @escaping ComputeValueClosure<T>) -> some SendableAsyncSequence<T, Error> {
-        UpdatesSequence<T>(graphRepository: self, computeValue: computeValue, logContext: logContext)
+    func updates<T: Sendable>(computeValue: @escaping ComputeValueClosure<T>) -> any SendableAsyncSequence<T, Error> {
+        UpdatesSequence<T>(graphRepository: self, computeValue: computeValue)
     }
 
     func deleteNode(withId id: NID) async {
@@ -138,48 +138,34 @@ actor FilesystemGraphRepository: GraphRepository {
 /// AsyncSequence implementation for `updates`
 private extension FilesystemGraphRepository {
     /// Just a factory for `UpdatesIterator` which does all of the heavy lifting
-    struct UpdatesSequence<T: Sendable>: AsyncSequence, Sendable, LogContextProviding, CustomStringConvertible {
+    struct UpdatesSequence<T: Sendable>: AsyncSequence, Sendable {
         let graphRepository: FilesystemGraphRepository
 
         let computeValue: ComputeValueClosure<T>
 
-        let passedLogContext: [String]
-        let logId: Base62Id
-        var logContext: [String] { passedLogContext + [description] }
-
-        init(graphRepository: FilesystemGraphRepository, computeValue: @escaping ComputeValueClosure<T>, logContext: [String]) {
+        init(graphRepository: FilesystemGraphRepository, computeValue: @escaping ComputeValueClosure<T>) {
             self.graphRepository = graphRepository
             self.computeValue = computeValue
-            self.passedLogContext = logContext
-            self.logId = Base62Id.random(digitCount: 3)
         }
 
         func makeAsyncIterator() -> UpdatesIterator<T> {
-            UpdatesIterator<T>(graphRepository: graphRepository, computeValue: computeValue, logContext: passedLogContext, logId: logId)
-        }
-
-        var description: String {
-            "Updates:\(logId)"
+            UpdatesIterator<T>(graphRepository: graphRepository, computeValue: computeValue)
         }
     }
 
-    actor UpdatesIterator<T: Sendable>: AsyncIteratorProtocol, LogContextProviding {
+    actor UpdatesIterator<T: Sendable>: AsyncIteratorProtocol {
         typealias Element = T
 
         let graphRepository: FilesystemGraphRepository
         let computeValue: ComputeValueClosure<T>
-        let logContext: [String]
 
         init(
             graphRepository: FilesystemGraphRepository,
-            computeValue: @escaping ComputeValueClosure<T>,
-            logContext: [String],
-            logId: Base62Id
+            computeValue: @escaping ComputeValueClosure<T>
         ) {
             self.graphRepository = graphRepository
             self.computeValue = computeValue
             self.dependencyEntries = [:]
-            self.logContext = logContext + ["Updates:\(logId):\(Base62Id.random(digitCount: 2))"]
         }
 
         func next() async throws -> T? {
@@ -244,7 +230,6 @@ private extension FilesystemGraphRepository {
         private struct DependencyEntry {
             let nid: NID
             let graphRepository: FilesystemGraphRepository
-            let logger: FrozenLogger
             weak var iterator: UpdatesIterator<T>?
 
             init(nid: NID, dataNeed: DataNeed, graphRepository: FilesystemGraphRepository, iterator: UpdatesIterator<T>) {
@@ -252,28 +237,27 @@ private extension FilesystemGraphRepository {
                 self.dataNeed = dataNeed
                 self.graphRepository = graphRepository
                 self.iterator = iterator
-                self.logger = iterator.frozenLogger()
                 // this needs to be set for the first run where we don't call completeValue too
                 self.largestNewDataNeed.insert(dataNeed)
-                let task = Task { [nid, graphRepository, logger, weak iterator] in
+                let task = Task { [nid, graphRepository, weak iterator] in
                     do {
-                        logger.logDebug("setting up metadata updates for \(nid)")
+                        logDebug("setting up metadata updates for \(nid)")
                         let (cancellable, updates) = try await graphRepository.getMetadataUpdates(for: nid)
-                        logger.logDebug("got metadata updates")
+                        logDebug("got metadata updates")
                         for await nodeValue in updates {
-                            logger.logDebug("updating entry \(nodeValue)")
+                            logDebug("updating entry \(nodeValue)")
                             await iterator?.updateEntry(for: nid) { entry in
                                 guard entry.mostRecentValue != nodeValue else { return false }
                                 entry.mostRecentValue = nodeValue
                                 return true
                             }
-                            logger.logDebug("updated entry")
+                            logDebug("updated entry")
                         }
-                        logger.logDebug("loop ending")
+                        logDebug("loop ending")
                         _ = cancellable // needs to live until here so that updates doesn't get deallocated
-                        logger.logInfo("metadata task finishing for \(nid)")
+                        logInfo("metadata task finishing for \(nid)")
                     } catch {
-                        logger.logError(error)
+                        logError(error)
                     }
                 }
                 self.metadataSubscription = AnyCancellable {
@@ -327,9 +311,9 @@ private extension FilesystemGraphRepository {
                 }
 
                 if dataAvailabilitySubscription == nil {
-                    let dataAvailabilityTask = Task { [nid, graphRepository, logger, weak iterator] in
+                    let dataAvailabilityTask = Task { [nid, graphRepository, weak iterator] in
                         do {
-                            logger.logDebug("setting up data availability updates for \(nid)")
+                            logDebug("setting up data availability updates for \(nid)")
                             let (cancellable, updates) = try await graphRepository.getDataAvailabilityUpdates(for: nid)
                             for await dataAvailability in updates {
                                 await iterator?.updateEntry(for: nid) { entry in
@@ -340,9 +324,9 @@ private extension FilesystemGraphRepository {
                                 }
                             }
                             _ = cancellable // needs to live until here so that updates doesn't get deallocated
-                            logger.logDebug("data availability task finishing for \(nid)")
+                            logDebug("data availability task finishing for \(nid)")
                         } catch{
-                            logger.logError(error)
+                            logError(error)
                         }
                     }
                     dataAvailabilitySubscription = AnyCancellable { dataAvailabilityTask.cancel() }
@@ -354,9 +338,9 @@ private extension FilesystemGraphRepository {
                 }
 
                 if dataSubscription == nil {
-                    let dataTask = Task { [nid, graphRepository, logger, weak iterator] in
+                    let dataTask = Task { [nid, graphRepository, weak iterator] in
                         do {
-                            logger.logDebug("setting up data updates for \(nid)")
+                            logDebug("setting up data updates for \(nid)")
                             let (cancellable, updates) = try await graphRepository.getDataUpdates(for: nid)
                             for try await data in updates {
                                 await iterator?.updateEntry(for: nid) { entry in
@@ -366,11 +350,11 @@ private extension FilesystemGraphRepository {
                                 }
                             }
                             _ = cancellable // needs to live until here so that updates doesn't get deallocated
-                            logger.logDebug("data task finishing for \(nid)")
+                            logDebug("data task finishing for \(nid)")
                         } catch is DataDocument.DocumentClosedError {
-                            logger.logInfo("data for \(nid) no longer available, data availability update should prevent recurrence")
+                            logInfo("data for \(nid) no longer available, data availability update should prevent recurrence")
                         } catch {
-                            logger.logError(error)
+                            logError(error)
                         }
                     }
                     dataSubscription = AnyCancellable { dataTask.cancel() }
@@ -409,7 +393,7 @@ private extension FilesystemGraphRepository {
                 case (.needDataEvenIfRemote, .availableRemotely, nil):
                     throw IncompleteValueReason.needData
                 default:
-                    logger.logWarn("for \(mostRecentValue.id) inconsistent combination of dataNeed=\(dataNeed), mostRecentDataAvailability=\(String(describing: mostRecentDataAvailability)), mostRecentData=\(String(describing: mostRecentData))")
+                    logWarn("for \(mostRecentValue.id) inconsistent combination of dataNeed=\(dataNeed), mostRecentDataAvailability=\(String(describing: mostRecentDataAvailability)), mostRecentData=\(String(describing: mostRecentData))")
                     // we may recover in the future
                     throw IncompleteValueReason.inconsistentDataNeedAvailabilityAndData
                 }
@@ -517,15 +501,15 @@ private extension FilesystemGraphRepository {
             defer { isWaitingUntilSomethingChanges = false }
             logDebug("about to setup cancellation handler")
             await withTaskCancellationHandler {
-                self.logDebug("running with cancellation handler")
+                logDebug("running with cancellation handler")
                 await withCheckedContinuation { continuation in
-                    self.logDebug("setting up continuation")
+                    logDebug("setting up continuation")
                     somethingUpdatedContinuation = continuation
                 }
             } onCancel: {
-                self.logDebug("cancelled spawning task to resume continuation")
+                logDebug("cancelled spawning task to resume continuation")
                 Task {
-                    self.logDebug("trying to resume continuation")
+                    logDebug("trying to resume continuation")
                     await resumeSomethingUpdatedContinuation()
                 }
             }

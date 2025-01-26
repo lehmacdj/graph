@@ -93,14 +93,12 @@ final class GraphRepositoryTransitionVM: TransitionVM {
         }
 
         do {
-            let updatesSequence = await graphRepository.updates(
-                logContext: logContext(),
-                computeValue: { [destinationNid, requireThumbnail] dependencyManager in
+            let updatesSequence = await graphRepository.updates { [destinationNid, requireThumbnail] dependencyManager in
                 return try dependencyManager.fetch(
                     nid: destinationNid,
                     untypedDataNeed: requireThumbnail ? .needDataEvenIfRemote : .wantDataIfLocal
                 ).data
-            })
+            }
             for try await update in updatesSequence {
                 switch update {
                 case .dataNotChecked:
@@ -164,7 +162,7 @@ final class GraphRepositoryTransitionVM: TransitionVM {
     }
 }
 
-extension GraphRepositoryTransitionVM: LogContextProviding {
+extension GraphRepositoryTransitionVM {
     func logContext() -> [String] {
         let d = self.direction == .forward ? ">" : "<"
         let description = "\(type(of: self)):\(sourceNid)\(d)\(transition)\(d)\(destinationNid))"

@@ -43,7 +43,6 @@
 		034856AD2D40C19B00223C1A /* PreventSleeping.swift in Sources */ = {isa = PBXBuildFile; fileRef = 034856AC2D40C19800223C1A /* PreventSleeping.swift */; };
 		035450022969D74100B5AAF6 /* FileSelectorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 035450012969D74100B5AAF6 /* FileSelectorView.swift */; };
 		0357C4CB2D2B6A4D00F7D03A /* Logging.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0357C4CA2D2B6A4A00F7D03A /* Logging.swift */; };
-		0357C4CD2D2B6A8100F7D03A /* Logging+ExtraContext.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0357C4CC2D2B6A5A00F7D03A /* Logging+ExtraContext.swift */; };
 		0357C4CF2D2B724A00F7D03A /* Base62Id.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0357C4CE2D2B724500F7D03A /* Base62Id.swift */; };
 		0367FDCC2B1BBB4B00D4B3B3 /* NodeMetadataDocument.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0367FDCB2B1BBB4B00D4B3B3 /* NodeMetadataDocument.swift */; };
 		0375E7C82782C06000FB6548 /* SafariView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0375E7C72782C06000FB6548 /* SafariView.swift */; };
@@ -130,7 +129,6 @@
 		034856AC2D40C19800223C1A /* PreventSleeping.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PreventSleeping.swift; sourceTree = "<group>"; };
 		035450012969D74100B5AAF6 /* FileSelectorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FileSelectorView.swift; sourceTree = "<group>"; };
 		0357C4CA2D2B6A4A00F7D03A /* Logging.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Logging.swift; sourceTree = "<group>"; };
-		0357C4CC2D2B6A5A00F7D03A /* Logging+ExtraContext.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Logging+ExtraContext.swift"; sourceTree = "<group>"; };
 		0357C4CE2D2B724500F7D03A /* Base62Id.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Base62Id.swift; sourceTree = "<group>"; };
 		0367FDCB2B1BBB4B00D4B3B3 /* NodeMetadataDocument.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NodeMetadataDocument.swift; sourceTree = "<group>"; };
 		0368D1E829976B4C0026D9EE /* Nodal.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Nodal.entitlements; sourceTree = "<group>"; };
@@ -288,7 +286,6 @@
 			children = (
 				03CB440B2D343D7400F0B675 /* FileAvailabilityObserver.swift */,
 				0357C4CA2D2B6A4A00F7D03A /* Logging.swift */,
-				0357C4CC2D2B6A5A00F7D03A /* Logging+ExtraContext.swift */,
 				0395BCFF2D2073CE000C5D44 /* MaxAccumulator.swift */,
 				03ABF7A32CFC07C600738F76 /* URL+GraphPaths.swift */,
 				03A32F952AAD929000C6A30B /* WeakDictionary.swift */,
@@ -590,7 +587,6 @@
 				03D1D8DE28FB559B00E76F27 /* NodeView.swift in Sources */,
 				031367E32713FCF200E69F83 /* NodalApp.swift in Sources */,
 				0375E7C82782C06000FB6548 /* SafariView.swift in Sources */,
-				0357C4CD2D2B6A8100F7D03A /* Logging+ExtraContext.swift in Sources */,
 				0357C4CF2D2B724A00F7D03A /* Base62Id.swift in Sources */,
 				03ABF78E2CD6D13C00738F76 /* NodeTransition.swift in Sources */,
 				0395BD002D2073DB000C5D44 /* MaxAccumulator.swift in Sources */,

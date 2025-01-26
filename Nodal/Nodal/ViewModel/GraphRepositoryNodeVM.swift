@@ -44,7 +44,7 @@ final class GraphRepositoryNodeVM: NodeVM {
         }
 
         do {
-            let updatesSequence = await graphRepository.updates(logContext: logContext, computeValue: nid.computeNodeForVM)
+            let updatesSequence = await graphRepository.updates(computeValue: nid.computeNodeForVM)
             logInfo("starting listening to sequence: \(updatesSequence)")
             for try await value in updatesSequence {
                 state = .loaded(NodeState(
@@ -210,11 +210,4 @@ func timestampTransitionComparison(_ tuple1: (NodeTransition, Loading<Date?>), _
     }
 
     return t1.transition < t2.transition || t1.transition == t2.transition && t1Timestamp > t2Timestamp
-}
-
-extension GraphRepositoryNodeVM: LogContextProviding {
-    var logContext: [String] {
-        let description = "\(type(of: self)):\(self.nid)"
-        return [description]
-    }
 }

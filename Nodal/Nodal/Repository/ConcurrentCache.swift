@@ -9,7 +9,7 @@ import Combine
 import Foundation
 
 /// A cache that manages some object that can be initialized / deallocated using async methods.
-actor ConcurrentCache<K: Hashable & Sendable, V: Sendable>: LogContextProviding {
+actor ConcurrentCache<K: Hashable & Sendable, V: Sendable> {
     private let create: (K) async throws -> V
     private let destroy: (K, V) async -> Void
     let logContext: [String]
@@ -125,9 +125,9 @@ actor ConcurrentCache<K: Hashable & Sendable, V: Sendable>: LogContextProviding 
 
         logDebug("returning \(key)")
         return (AnyCancellable {
-            self.logDebug("spawning task to remove reference \(key)")
+            logDebug("spawning task to remove reference \(key)")
             Task {
-                self.logDebug("removing reference \(key)")
+                logDebug("removing reference \(key)")
                 await self.removeReference(to: key)
             }
         }, value)
