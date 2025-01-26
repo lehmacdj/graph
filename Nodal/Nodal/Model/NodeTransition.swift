@@ -5,7 +5,7 @@
 //  Created by Devin Lehmacher on 11/2/24.
 //
 
-struct NodeTransition: Identifiable, Hashable {
+struct NodeTransition: Identifiable, Hashable, Sendable {
     let transition: String
     let nid: NID
 

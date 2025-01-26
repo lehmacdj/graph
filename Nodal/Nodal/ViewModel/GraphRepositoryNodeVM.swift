@@ -122,7 +122,7 @@ final class GraphRepositoryNodeVM: NodeVM {
     func toggleWorse(child _: NID) throws {}
 }
 
-fileprivate struct NodeStateAugmentation {
+fileprivate struct NodeStateAugmentation: Sendable {
     let data: Data?
     let favoriteLinks: [(NodeTransition, Loading<Date?>)]
     let worseLinks: [(NodeTransition, Loading<Date?>)]
@@ -212,16 +212,9 @@ func timestampTransitionComparison(_ tuple1: (NodeTransition, Loading<Date?>), _
     return t1.transition < t2.transition || t1.transition == t2.transition && t1Timestamp > t2Timestamp
 }
 
-extension GraphRepositoryNodeVM: CustomStringConvertible {
-    var description: String {
-        "\(type(of: self)):\(self.nid)"
-    }
-}
-
-extension GraphRepositoryNodeVM: CustomDebugStringConvertible {
-    var debugDescription: String { description }
-}
-
 extension GraphRepositoryNodeVM: LogContextProviding {
-    var logContext: [String] { [description] }
+    var logContext: [String] {
+        let description = "\(type(of: self)):\(self.nid)"
+        return [description]
+    }
 }

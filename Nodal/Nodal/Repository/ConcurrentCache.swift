@@ -9,7 +9,7 @@ import Combine
 import Foundation
 
 /// A cache that manages some object that can be initialized / deallocated using async methods.
-actor ConcurrentCache<K: Hashable, V>: LogContextProviding {
+actor ConcurrentCache<K: Hashable & Sendable, V: Sendable>: LogContextProviding {
     private let create: (K) async throws -> V
     private let destroy: (K, V) async -> Void
     let logContext: [String]

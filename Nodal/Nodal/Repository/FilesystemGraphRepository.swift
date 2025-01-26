@@ -6,7 +6,7 @@
 //
 
 import Foundation
-import Combine
+@preconcurrency import Combine
 import UIKit
 import AsyncAlgorithms
 
@@ -18,7 +18,9 @@ actor FilesystemGraphRepository: GraphRepository {
         metadataCache = ConcurrentCache(
             create: { try await NodeMetadataDocument(metaURL: basePath.appending(metaPathFor: $0)) },
             destroy: { (nid, document) in
+                logDebug("started destroying \(nid)")
                 let result = await document.close()
+                logDebug("document closed \(nid)")
                 if !result {
                     logError("failed to save while closing meta document \(nid)")
                 }
@@ -84,7 +86,7 @@ actor FilesystemGraphRepository: GraphRepository {
         return nid
     }
 
-    func updates<T>(logContext: [String] = [], computeValue: @escaping ComputeValueClosure<T>) -> any AsyncSequence<T, any Error> {
+    func updates<T: Sendable>(logContext: [String] = [], computeValue: @escaping ComputeValueClosure<T>) -> some SendableAsyncSequence<T, Error> {
         UpdatesSequence<T>(graphRepository: self, computeValue: computeValue, logContext: logContext)
     }
 
@@ -104,7 +106,7 @@ actor FilesystemGraphRepository: GraphRepository {
 
     private var metadataCache: ConcurrentCache<NID, NodeMetadataDocument>
 
-    private func getMetadataUpdates(for nid: NID) async throws -> (AnyCancellable, any AsyncSequence<Node<NoAugmentation>, Never>) {
+    private func getMetadataUpdates(for nid: NID) async throws -> (AnyCancellable, any SendableAsyncSequence<Node<NoAugmentation>, Never>) {
         let (cacheEntry, metadataDocument) = try await metadataCache.getOrCreate(nid)
         logDebug("acquired metadata document \(nid)")
         let sequence = await metadataDocument
@@ -116,7 +118,7 @@ actor FilesystemGraphRepository: GraphRepository {
 
     private var dataAvailabilityCache: ConcurrentCache<NID, FileAvailabilityObserver>
 
-    private func getDataAvailabilityUpdates(for nid: NID) async throws -> (AnyCancellable, any AsyncSequence<DataAvailability, Never>) {
+    private func getDataAvailabilityUpdates(for nid: NID) async throws -> (AnyCancellable, any SendableAsyncSequence<DataAvailability, Never>) {
         let (cacheEntry, observer) = try await dataAvailabilityCache.getOrCreate(nid)
         let updates = await observer.updates
         return (cacheEntry, updates)
@@ -124,7 +126,7 @@ actor FilesystemGraphRepository: GraphRepository {
 
     private let dataDocumentCache: ConcurrentCache<NID, DataDocument>
 
-    private func getDataUpdates(for nid: NID) async throws -> (AnyCancellable, any AsyncSequence<Data, Error>) {
+    private func getDataUpdates(for nid: NID) async throws -> (AnyCancellable, any SendableAsyncSequence<Data, Error>) {
         let (cacheEntry, dataDocument) = try await dataDocumentCache.getOrCreate(nid)
         let sequence = await dataDocument
             .dataPublisher
@@ -136,7 +138,7 @@ actor FilesystemGraphRepository: GraphRepository {
 /// AsyncSequence implementation for `updates`
 private extension FilesystemGraphRepository {
     /// Just a factory for `UpdatesIterator` which does all of the heavy lifting
-    struct UpdatesSequence<T>: AsyncSequence, LogContextProviding, CustomStringConvertible {
+    struct UpdatesSequence<T: Sendable>: AsyncSequence, Sendable, LogContextProviding, CustomStringConvertible {
         let graphRepository: FilesystemGraphRepository
 
         let computeValue: ComputeValueClosure<T>
@@ -161,7 +163,7 @@ private extension FilesystemGraphRepository {
         }
     }
 
-    actor UpdatesIterator<T>: AsyncIteratorProtocol, LogContextProviding {
+    actor UpdatesIterator<T: Sendable>: AsyncIteratorProtocol, LogContextProviding {
         typealias Element = T
 
         let graphRepository: FilesystemGraphRepository
@@ -257,13 +259,17 @@ private extension FilesystemGraphRepository {
                     do {
                         logger.logDebug("setting up metadata updates for \(nid)")
                         let (cancellable, updates) = try await graphRepository.getMetadataUpdates(for: nid)
+                        logger.logDebug("got metadata updates")
                         for await nodeValue in updates {
+                            logger.logDebug("updating entry \(nodeValue)")
                             await iterator?.updateEntry(for: nid) { entry in
                                 guard entry.mostRecentValue != nodeValue else { return false }
                                 entry.mostRecentValue = nodeValue
                                 return true
                             }
+                            logger.logDebug("updated entry")
                         }
+                        logger.logDebug("loop ending")
                         _ = cancellable // needs to live until here so that updates doesn't get deallocated
                         logger.logInfo("metadata task finishing for \(nid)")
                     } catch {
@@ -335,7 +341,7 @@ private extension FilesystemGraphRepository {
                             }
                             _ = cancellable // needs to live until here so that updates doesn't get deallocated
                             logger.logDebug("data availability task finishing for \(nid)")
-                        } catch {
+                        } catch{
                             logger.logError(error)
                         }
                     }
@@ -542,33 +548,5 @@ private extension FilesystemGraphRepository {
                 somethingUpdatedContinuation = nil
             }
         }
-    }
-}
-
-
-enum CustomError: Error {
-    case first
-    case second
-}
-
-struct N {
-    let value: Int
-}
-
-class DataManager {
-    // This will crash the compiler
-    private func processData(value: Int) throws(CustomError) -> N {
-        if value < 0 {
-            throw CustomError.first
-        }
-        if value > 100 {
-            throw CustomError.second
-        }
-        return N(value: value)
-    }
-
-    // This function calls the crashing function
-    func process(value: Int) throws -> N {
-        try processData(value: value)
     }
 }

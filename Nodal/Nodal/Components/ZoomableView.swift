@@ -7,7 +7,7 @@
 
 import SwiftUI
 
-enum ZoomState {
+enum ZoomState: Sendable {
     case fit
     case fill
     case actualSize
@@ -104,8 +104,15 @@ struct ZoomableView<Content: View>: View {
             .backgroundPreferenceValue(ContentCenterPreference.self) { contentCenter in
                 content
                     .fixedSize()
-                    .anchorPreference(key: ContentSizePreference.self, value: .bounds) {
-                        outerGeometry[$0].size
+                    .onGeometryChange(for: CGSize.self) {
+                        $0.size
+                    } action: {
+                        contentSize = $0
+                        if !didInitialZoom {
+                            applyZoomState(zoomState: nextZoomState, viewSize: outerGeometry.size)
+                            nextZoomState = nextZoomState.next
+                            didInitialZoom = true
+                        }
                     }
                     .modifyIfLet(currentRotationInfo) { rotationInfo in
                         _RotationEffect(angle: rotationInfo.angle, anchor: rotationInfo.anchor).ignoredByLayout()
@@ -121,14 +128,6 @@ struct ZoomableView<Content: View>: View {
                     }
                     .offset(contentCenter - (outerGeometry.size / 2).vector)
             }
-            .onPreferenceChange(ContentSizePreference.self) {
-                contentSize = $0
-                if !didInitialZoom {
-                    applyZoomState(zoomState: nextZoomState, viewSize: outerGeometry.size)
-                    nextZoomState = nextZoomState.next
-                    didInitialZoom = true
-                }
-            }
             // it seems like the magnify gesture on it's own breaks when simultaneous with the rotation gesture; maybe worth trying to use SimultaneousGesture explicitly in order to resolve the conflict somehow
             .gesture(rotationGesture)
             .simultaneousGesture(magnificationGesture)
@@ -137,10 +136,10 @@ struct ZoomableView<Content: View>: View {
     }
 }
 
-struct ContentSizePreference: PreferenceKey {
+struct ContentSizePreference: PreferenceKey, Sendable {
     typealias Value = CGSize
 
-    static var defaultValue: CGSize = .zero
+    static let defaultValue: CGSize = .zero
 
     static func reduce(value: inout CGSize, nextValue: () -> CGSize) {
         value = nextValue()
@@ -148,10 +147,10 @@ struct ContentSizePreference: PreferenceKey {
 }
 
 
-struct ContentCenterPreference: PreferenceKey {
+struct ContentCenterPreference: PreferenceKey, Sendable {
     typealias Value = CGPoint
 
-    static var defaultValue: CGPoint = .zero
+    static let defaultValue: CGPoint = .zero
 
     static func reduce(value: inout CGPoint, nextValue: () -> CGPoint) {
         value = nextValue()

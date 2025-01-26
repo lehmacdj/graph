@@ -80,7 +80,7 @@ extension TransitionVM {
 extension AnyTransitionVM: LogContextProviding {
     var logContext: [String] {
         if let logContextProviding = underlying as? LogContextProviding {
-            logContextProviding.logContext
+            logContextProviding.logContext()
         } else {
             []
         }

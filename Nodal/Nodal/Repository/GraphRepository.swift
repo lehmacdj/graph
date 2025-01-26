@@ -20,7 +20,17 @@ protocol DependencyManager {
     func fetch(nid: NID, untypedDataNeed: DataNeed) throws(FetchDependencyError) -> Node<UntypedDataValue>
 }
 
-typealias ComputeValueClosure<T> = (DependencyManager) throws -> T
+typealias ComputeValueClosure<T> = @Sendable (DependencyManager) throws -> T
+
+protocol UpdatesProvider<T>: Sendable {
+    /// The type of value enumerated by the sequences returned
+    associatedtype T
+
+    associatedtype Result: AsyncSequence<T, Error> & Sendable
+
+}
+
+typealias SendableAsyncSequence<E, F> = AsyncSequence<E, F> & Sendable where E: Sendable, F: Error & Sendable
 
 protocol GraphRepository: Actor {
     /// Create a new node with a random NID returning the newly generated NID.
@@ -34,7 +44,10 @@ protocol GraphRepository: Actor {
     /// - It is `computeValue`'s implementor's responsibility to make sure that the dependencies are stable enough to capture all data from the graph that is actually depended on. If you only use values returned by the closure and don't store them externally to the closure, this should be achieved for free.
     ///
     /// The sequence attempts to handle errors internally (e.g. by retrying) but when mitigations fail may throw an `Error` that describes why the subscription failed. This may be the first returned result if something is really broken.
-    func updates<T>(logContext: [String], computeValue: @escaping ComputeValueClosure<T>) -> any AsyncSequence<T, Error>
+    func updates<T: Sendable>(
+        logContext: [String],
+        computeValue: @escaping ComputeValueClosure<T>
+    ) -> any SendableAsyncSequence<T, Error>
 
     func deleteNode(withId id: NID) async throws
 
@@ -43,7 +56,10 @@ protocol GraphRepository: Actor {
 }
 
 extension GraphRepository {
-    func updates<T>(logContext: [String] = [], computeValue: @escaping ComputeValueClosure<T>) -> any AsyncSequence<T, Error> {
+    func updates<T: Sendable>(
+        logContext: [String] = [],
+        computeValue: @escaping ComputeValueClosure<T>
+    ) -> any SendableAsyncSequence<T, Error> {
         updates(logContext: logContext, computeValue: computeValue)
     }
 }

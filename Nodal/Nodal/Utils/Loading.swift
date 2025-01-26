@@ -75,3 +75,6 @@ extension Loading: Identifiable where T: Identifiable {
         }
     }
 }
+
+
+extension Loading: Sendable where T: Sendable {}
