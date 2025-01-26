@@ -89,7 +89,7 @@ actor ConcurrentCache<K: Hashable & Sendable, V: Sendable> {
                 }
             } else {
                 // initialize a new cache entry
-                logDebug("allocating new cache entry \(key)")
+                logDebug("allocating new cache entry \(key)", extraLogContext: logContext)
                 storage[key] = .creating()
                 do {
                     let value = try await create(key)
@@ -101,7 +101,7 @@ actor ConcurrentCache<K: Hashable & Sendable, V: Sendable> {
                     // we probably could break/return here, but the logic is clearer if there
                     // is only a single point where it is possible to break out of the loop
                 } catch {
-                    logError("exception \(error) while creating new value \(key)")
+                    logError("exception \(error) while creating new value \(key)", extraLogContext: logContext)
                     storage.removeValue(forKey: key)
                     throw error
                 }
@@ -143,7 +143,7 @@ actor ConcurrentCache<K: Hashable & Sendable, V: Sendable> {
         if storage[key]!.referenceCount! == 0 {
             let value = storage[key]!.value!
             storage[key]! = .destroying()
-            logDebug("destroying cache entry \(key)")
+            logDebug("destroying cache entry \(key)", extraLogContext: logContext)
             await destroy(key, value)
             guard case .destroying(let waiters) = storage[key]! else {
                 fatalError("only one closing operation may happen at a time")

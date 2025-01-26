@@ -10,20 +10,21 @@ import Foundation
 /// Log level to use when logging traces via log function
 let logLevel = LogLevel.info
 
-@TaskLocal var logContext: [String] = []
+@TaskLocal var taskLogContext: [String] = []
 
 func withPushLogContext<T>(_ context: String..., operation: () throws -> T) rethrows {
-    try $logContext.withValue(logContext + context, operation: operation)
+    try $taskLogContext.withValue(taskLogContext + context, operation: operation)
 }
 
 func withPushLogContext<T>(_ context: String..., operation: () async throws -> T) async rethrows {
-    try await $logContext.withValue(logContext + context, operation: operation)
+    try await $taskLogContext.withValue(taskLogContext + context, operation: operation)
 }
 
 /// Logging function to be abstracted out into a real logging framework later if that seems worth it
 func log(
     _ message: String,
     level: LogLevel = .info,
+    extraLogContext: @autoclosure () -> [String] = [],
     file: String = #file,
     line: Int = #line,
     column: Int = #column,
@@ -32,27 +33,48 @@ func log(
     if level >= logLevel {
         let timestamp = "\(Date())"
         let caller = "\(file):\(line):\(column):\(callingFunction)"
-        let threadInfo = if Thread.current.isMainThread {
-            "thread:main"
-        } else {
-            "thread:\(Thread.current.hashValue)"
-        }
-        let context = [
+//        let threadInfo = if Thread.current.isMainThread {
+//            "thread:main"
+//        } else {
+//            "thread:\(Thread.current.hashValue)"
+//        }
+        let defaultLogContext = [
             timestamp,
             "\(level)",
-            threadInfo,
             caller,
-        ] + logContext
-        let contextString = context
+        ]
+        let logContext = defaultLogContext
+            + taskLogContext
+            + extraLogContext()
+        let contextString = logContext
             .map { "[\($0)]" }
             .joined(separator: "")
         print("\(contextString): \(message)")
     }
 }
 
+func logVerbose(
+    _ message: String,
+    extraLogContext: @autoclosure () -> [String] = [],
+    file: String = #file,
+    line: Int = #line,
+    column: Int = #column,
+    callingFunction: String = #function
+) {
+    log(
+        message,
+        level: .verbose,
+        extraLogContext: extraLogContext(),
+        file: file,
+        line: line,
+        column: column,
+        callingFunction: callingFunction
+    )
+}
+
 func logDebug(
     _ message: String,
-    level: LogLevel = .debug,
+    extraLogContext: @autoclosure () -> [String] = [],
     file: String = #file,
     line: Int = #line,
     column: Int = #column,
@@ -61,6 +83,7 @@ func logDebug(
     log(
         message,
         level: .debug,
+        extraLogContext: extraLogContext(),
         file: file,
         line: line,
         column: column,
@@ -70,6 +93,7 @@ func logDebug(
 
 func logInfo(
     _ message: String,
+    extraLogContext: @autoclosure () -> [String] = [],
     file: String = #file,
     line: Int = #line,
     column: Int = #column,
@@ -78,6 +102,7 @@ func logInfo(
     log(
         message,
         level: .info,
+        extraLogContext: extraLogContext(),
         file: file,
         line: line,
         column: column,
@@ -87,7 +112,7 @@ func logInfo(
 
 func logWarn(
     _ message: String,
-    level: LogLevel = .warning,
+    extraLogContext: @autoclosure () -> [String] = [],
     file: String = #file,
     line: Int = #line,
     column: Int = #column,
@@ -96,6 +121,7 @@ func logWarn(
     log(
         message,
         level: .warning,
+        extraLogContext: extraLogContext(),
         file: file,
         line: line,
         column: column,
@@ -105,6 +131,7 @@ func logWarn(
 
 func logError(
     _ message: String,
+    extraLogContext: @autoclosure () -> [String] = [],
     file: String = #file,
     line: Int = #line,
     column: Int = #column,
@@ -113,6 +140,7 @@ func logError(
     log(
         message,
         level: .error,
+        extraLogContext: extraLogContext(),
         file: file,
         line: line,
         column: column,
@@ -122,14 +150,15 @@ func logError(
 
 func logError(
     _ error: Error,
+    extraLogContext: @autoclosure () -> [String] = [],
     file: String = #file,
     line: Int = #line,
     column: Int = #column,
-    context: [String] = [],
     callingFunction: String = #function
 ) {
     logError(
         "\(error)",
+        extraLogContext: extraLogContext(),
         file: file,
         line: line,
         column: column,
@@ -140,6 +169,7 @@ func logError(
 func trace<T>(
     _ val: T,
     level: LogLevel = .debug,
+    extraLogContext: @autoclosure () -> [String] = [],
     file: String = #file,
     line: Int = #line,
     column: Int = #column,
@@ -148,6 +178,7 @@ func trace<T>(
     log(
         String(reflecting: val),
         level: level,
+        extraLogContext: extraLogContext(),
         file: file,
         line: line,
         column: column,
