@@ -44,6 +44,12 @@ final class GraphRepositoryTransitionVM: TransitionVM {
     var subscribeThumbnailTask: Task<Void, Never>?
 
     func subscribe() async {
+        let d = direction == .forward ? ">" : "<"
+        let context = "TransitionVM(\(sourceNid)\(d)\(transition)\(d)\(destinationNid)).subscribe"
+        await withPushLogContext(context, operation: _subscribe)
+    }
+
+    func _subscribe() async {
         guard subscribeThumbnailTask == nil else {
             logWarn("duplicate subscribe call")
             return

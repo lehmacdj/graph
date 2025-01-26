@@ -22,6 +22,10 @@ final class GraphRepositoryNodeVM: NodeVM {
     var isSubscribed = false
 
     func subscribe() async {
+        await withPushLogContext("NodeVM(\(nid)).subscribe", operation: _subscribe)
+    }
+
+    func _subscribe() async {
         guard !isSubscribed else {
             // guaranteeing that there is only one process executing subscribe makes it easier to reason about
             logWarn("duplicate subscribe call")
@@ -45,7 +49,7 @@ final class GraphRepositoryNodeVM: NodeVM {
 
         do {
             let updatesSequence = await graphRepository.updates(computeValue: nid.computeNodeForVM)
-            logInfo("starting listening to sequence: \(updatesSequence)")
+            logInfo("starting to listen to updates")
             for try await value in updatesSequence {
                 state = .loaded(NodeState(
                     data: value.data,

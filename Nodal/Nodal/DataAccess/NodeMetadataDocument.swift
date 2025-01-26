@@ -9,8 +9,8 @@ import Combine
 import UIKit
 import UniformTypeIdentifiers
 
-/// There should only be a maximum of one of these per
-final class NodeMetadataDocument: UIDocument {
+/// There should only be a maximum of one of these per NID
+final class NodeMetadataDocument: SwiftConcurrencyUIDocument {
     struct FailedToOpenDocument: Error {
         let documentClosed: Bool
         let inConflict: Bool
@@ -51,7 +51,6 @@ final class NodeMetadataDocument: UIDocument {
 
 
     var metaPublisher: AnyPublisher<Node<NoAugmentation>, Never> {
-        logDebug("fetching meta publisher \(meta.id)")
         return $_meta
             .compactMap { $0 }
             .subscribe(on: DispatchQueue.main)

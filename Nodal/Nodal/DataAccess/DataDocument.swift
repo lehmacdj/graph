@@ -8,7 +8,7 @@
 import UIKit
 import Combine
 
-final class DataDocument: UIDocument {
+final class DataDocument: SwiftConcurrencyUIDocument {
     struct NoDataURL: Error {}
 
     struct FailedToOpenDocument: Error {}

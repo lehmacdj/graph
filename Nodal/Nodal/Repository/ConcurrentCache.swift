@@ -75,43 +75,33 @@ actor ConcurrentCache<K: Hashable & Sendable, V: Sendable> {
     }
 
     /// The returned anycancellable relinquishes the hold on the cache entry. Destroy will be called even if `V` is still retained and used somewhere else.
-    func getOrCreate(_ key: K) async throws -> (AnyCancellable, V) {
+    func getOrCreate(_ key: K) async throws -> (Handle, V) {
         // ensure we have a live cache entry
-        logDebug("getting or creating \(key)")
         while true {
-            logDebug("top of loop \(key)")
             if case .live = storage[key] {
                 // leave the loop, then in the guard we will have a live cache entry
-                logDebug("breaking \(key)")
                 break
             } else if var cacheEntry = storage[key] {
-                logDebug("starting continuation \(key)")
                 // wait for the closing or opening operation to complete then try again
                 await withCheckedContinuation { continuation in
-                    logDebug("adding continuation to waiters \(key)")
                     cacheEntry.addWaiter(continuation)
                     storage[key] = cacheEntry
-                    logDebug("added continuation to waiters \(key)")
                 }
             } else {
                 // initialize a new cache entry
-                logDebug("creating \(key)")
+                logDebug("allocating new cache entry \(key)")
                 storage[key] = .creating()
                 do {
-                    logInfo("allocating new cache entry \(key)")
                     let value = try await create(key)
-                    logDebug("created new value \(key)")
                     guard case .creating(let waiters) = storage[key] else {
                         fatalError("only one opening operation can be active at a time")
                     }
-                    logDebug("resuming waiters \(key)")
                     waiters.forEach { $0.resume() }
-                    logDebug("marking entry as live \(key)")
                     storage[key]! = .live(referenceCount: 0, value: value)
                     // we probably could break/return here, but the logic is clearer if there
                     // is only a single point where it is possible to break out of the loop
                 } catch {
-                    logDebug("exception \(error) while creating new value \(key)")
+                    logError("exception \(error) while creating new value \(key)")
                     storage.removeValue(forKey: key)
                     throw error
                 }
@@ -119,22 +109,29 @@ actor ConcurrentCache<K: Hashable & Sendable, V: Sendable> {
         }
 
         // safe because we checked above without suspend points in between
-        logDebug("incrementing reference count \(key)")
         storage[key]!.incrementReferenceCount()
         let value = storage[key]!.value!
 
-        logDebug("returning \(key)")
-        return (AnyCancellable {
-            logDebug("spawning task to remove reference \(key)")
-            Task {
-                logDebug("removing reference \(key)")
-                await self.removeReference(to: key)
+        return (Handle(key: key, owner: self), value)
+    }
+
+    class Handle: @unchecked Sendable {
+        init(key: K, owner: ConcurrentCache<K, V>) {
+            self.key = key
+            self.owner = owner
+        }
+
+        private let key: K
+        private weak var owner: ConcurrentCache<K, V>?
+
+        deinit {
+            Task { [owner, key] in
+                await owner?.removeReference(to: key)
             }
-        }, value)
+        }
     }
 
     private func removeReference(to key: K) async {
-        logDebug("remove reference to \(key)")
         guard case .live = storage[key] else {
             // we only return a MetadataHandle when .live and only transition out of that
             // state in this method
