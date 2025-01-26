@@ -338,7 +338,7 @@ private extension FilesystemGraphRepository {
                             for try await data in updates {
                                 await iterator?.updateEntry(for: nid) { entry in
                                     guard entry.mostRecentData != data else { return false }
-                                    entry.mostRecentData = .some(data)
+                                    entry.mostRecentData = .some(.some(data))
                                     return true
                                 }
                             }
@@ -383,10 +383,17 @@ private extension FilesystemGraphRepository {
                     throw IncompleteValueReason.needDataAvailability
                 case (.needDataEvenIfRemote, .noData, .none):
                     return mostRecentValue.withAugmentation(.data(nil))
+                case (.needDataEvenIfRemote, .availableLocally, .none):
+                    throw IncompleteValueReason.needData
                 case (.needDataEvenIfRemote, .availableLocally, .some(.some(let data))):
                     return mostRecentValue.withAugmentation(.data(data))
                 case (.needDataEvenIfRemote, .availableRemotely, nil):
                     throw IncompleteValueReason.needData
+                case (.needDataEvenIfRemote, .availableRemotely, .some(.some(let data))):
+                    // because of the refresh interval for FileAvailabilityObserver this state is
+                    // fairly common just after requesting data from the server
+                    // it is better to treat this as the data existing
+                    return mostRecentValue.withAugmentation(.data(data))
                 default:
                     logWarn("inconsistent combination of dataNeed=\(dataNeed), mostRecentDataAvailability=\(mostRecentDataAvailability.compactDescription), mostRecentData=\(mostRecentData.compactDescription))")
                     // we may recover in the future

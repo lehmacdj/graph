@@ -43,10 +43,13 @@ final class GraphRepositoryTransitionVM: TransitionVM {
 
     var subscribeThumbnailTask: Task<Void, Never>?
 
-    func subscribe() async {
+    var description: String {
         let d = direction == .forward ? ">" : "<"
-        let context = "TransitionVM(\(sourceNid)\(d)\(transition)\(d)\(destinationNid)).subscribe"
-        await withPushLogContext(context, operation: _subscribe)
+        return "TransitionVM(\(sourceNid)\(d)\(transition)\(d)\(destinationNid))"
+    }
+
+    func subscribe() async {
+        await withPushLogContext(description + ".subscribe", operation: _subscribe)
     }
 
     func _subscribe() async {
@@ -136,14 +139,22 @@ final class GraphRepositoryTransitionVM: TransitionVM {
     var requireThumbnail = false
 
     func fetchThumbnail() {
+        withPushLogContext(description + ".fetchThumbnail", operation: _fetchThumbnail)
+    }
+
+    func _fetchThumbnail() {
+        guard case .loaded(.cloudFile) = thumbnail else {
+            logWarn("can't fetch thumbnail unless it is available remotely")
+            return
+        }
         guard !requireThumbnail else {
             logWarn("trying to fetch thumbnail a second time")
             return
         }
         requireThumbnail = true
         if let subscribeThumbnailTask {
-            logInfo("cancelled subscribe thumbnail task")
             subscribeThumbnailTask.cancel()
+            thumbnail = .loaded(.thumbnail(.loading))
         } else {
             logWarn("no subscribe thumbnail task to cancel")
         }
