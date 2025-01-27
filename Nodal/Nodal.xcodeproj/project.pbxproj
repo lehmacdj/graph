@@ -22,7 +22,6 @@
 
 /* Begin PBXBuildFile section */
 		0300B6C42D275D8700316337 /* ImageView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0300B6C32D275D8400316337 /* ImageView.swift */; };
-		0300B6C62D275DC500316337 /* TagEditor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0300B6C52D275DC300316337 /* TagEditor.swift */; };
 		0300B6CA2D27756000316337 /* GraphRepository+DataNeed.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0300B6C92D27755E00316337 /* GraphRepository+DataNeed.swift */; };
 		0300B6CD2D2777C000316337 /* NID+ComputeNodeWithTimestamp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0300B6CC2D2777B400316337 /* NID+ComputeNodeWithTimestamp.swift */; };
 		030CD85829F62B6800C27442 /* FillableSymbol.swift in Sources */ = {isa = PBXBuildFile; fileRef = 030CD85729F62B6800C27442 /* FillableSymbol.swift */; };
@@ -107,7 +106,6 @@
 
 /* Begin PBXFileReference section */
 		0300B6C32D275D8400316337 /* ImageView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImageView.swift; sourceTree = "<group>"; };
-		0300B6C52D275DC300316337 /* TagEditor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TagEditor.swift; sourceTree = "<group>"; };
 		0300B6C92D27755E00316337 /* GraphRepository+DataNeed.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "GraphRepository+DataNeed.swift"; sourceTree = "<group>"; };
 		0300B6CC2D2777B400316337 /* NID+ComputeNodeWithTimestamp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "NID+ComputeNodeWithTimestamp.swift"; sourceTree = "<group>"; };
 		030CD85729F62B6800C27442 /* FillableSymbol.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FillableSymbol.swift; sourceTree = "<group>"; };
@@ -367,7 +365,6 @@
 		03D1D8DF28FB564700E76F27 /* AppViews */ = {
 			isa = PBXGroup;
 			children = (
-				0300B6C52D275DC300316337 /* TagEditor.swift */,
 				0300B6C32D275D8400316337 /* ImageView.swift */,
 				035450012969D74100B5AAF6 /* FileSelectorView.swift */,
 				031367E62713FCF200E69F83 /* ContentView.swift */,
@@ -601,7 +598,6 @@
 				03A934C42A3F8AC20011DB8D /* DataDocument.swift in Sources */,
 				03DD60D829D15891005EC4A5 /* NodeVM.swift in Sources */,
 				0300B6CD2D2777C000316337 /* NID+ComputeNodeWithTimestamp.swift in Sources */,
-				0300B6C62D275DC500316337 /* TagEditor.swift in Sources */,
 				0375E94C2D34C65D006175F0 /* Node+NoAugmentation.swift in Sources */,
 				034856AD2D40C19B00223C1A /* PreventSleeping.swift in Sources */,
 				03D1D8DE28FB559B00E76F27 /* NodeView.swift in Sources */,
