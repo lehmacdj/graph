@@ -31,7 +31,7 @@ struct LabelEditor: View {
 }
 
 @MainActor
-struct TransitionView: View {
+struct TransitionCell: View {
     @State var vm: AnyTransitionVM
     @State private var confirmingDelete: Bool = false
     @State private var editing: Bool = false
@@ -65,7 +65,7 @@ struct TransitionView: View {
     var timestamp: some View {
         let dateFormatter = {
             let formatter = DateFormatter()
-            formatter.dateStyle = .medium
+            formatter.dateStyle = .short
             formatter.timeStyle = .medium
             formatter.locale = Locale.current
             return formatter
@@ -167,28 +167,28 @@ struct TransitionView: View {
 #Preview {
     NavigationStack {
         List {
-            TransitionView(
+            TransitionCell(
                 MockTransitionVM(
                     transition: "Million Live",
                     thumbnail: .loaded(.thumbnail(.loaded(.millionLive11))),
                     tags: .loaded(["millions", "of", "tags", "that", "cause", "horizontal", "space", "to", "overflow"])
                 ).eraseToAnyTransitionVM()
             )
-            TransitionView(
+            TransitionCell(
                 MockTransitionVM(
                     transition: "More More Jump",
                     thumbnail: .loaded(.thumbnail(.loaded(.moreMoreJumpBackground))),
                     timestamp: .loaded(Date(timeIntervalSince1970: 0))
                 ).eraseToAnyTransitionVM()
             )
-            TransitionView(MockTransitionVM(transition: "foo").eraseToAnyTransitionVM())
-            TransitionView(
+            TransitionCell(MockTransitionVM(transition: "foo").eraseToAnyTransitionVM())
+            TransitionCell(
                 MockTransitionVM(
                     transition: "bar",
                     tags: .loaded(["millions", "of", "tags", "that", "cause", "horizontal", "space", "to", "overflow"])
                 ).eraseToAnyTransitionVM()
             )
-            TransitionView(
+            TransitionCell(
                 MockTransitionVM(
                     transition: "Hello world!",
                     timestamp: .loaded(Date(timeIntervalSince1970: 0)),

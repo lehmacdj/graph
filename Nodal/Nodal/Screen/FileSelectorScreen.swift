@@ -7,7 +7,7 @@
 
 import SwiftUI
 
-struct FileSelectorView: View {
+struct FileSelectorScreen: View {
     @State var fileUrl: URL? = nil
 
     @SceneStorage("fileUrlBookmark") var fileUrlBookmark: Data?
@@ -18,7 +18,7 @@ struct FileSelectorView: View {
 
     var body: some View {
         if let fileUrl = fileUrl {
-            ContentView(fileUrl: fileUrl, doSelectFile: initiateFileSelection)
+            RootScreen(fileUrl: fileUrl, doSelectFile: initiateFileSelection)
         } else {
             Button("Please select a graph directory...", action: {
                 // TODO(iOS 16): check if this is still necessary
@@ -97,8 +97,8 @@ struct FileSelectorView: View {
     }
 }
 
-struct FileSelectorView_Previews: PreviewProvider {
-    static var previews: some View {
-        FileSelectorView()
-    }
+#if DEBUG
+#Preview {
+    FileSelectorScreen()
 }
+#endif

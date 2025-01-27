@@ -1,5 +1,5 @@
 //
-//  NodeView.swift
+//  NodeScreen.swift
 //  Nodal
 //
 //  Created by Devin Lehmacher on 10/15/22.
@@ -9,7 +9,7 @@ import SwiftUI
 import UniformTypeIdentifiers
 
 @MainActor
-struct NodeView: View {
+struct NodeScreen: View {
     @State var vm: AnyNodeVM
 
     init(of node: AnyNodeVM) {
@@ -25,27 +25,27 @@ struct NodeView: View {
             if let favorites = state.favoriteLinks {
                 Section("Favorites") {
                     ForEach(favorites) { favorite in
-                        TransitionView(favorite)
+                        TransitionCell(favorite)
                     }
                 }
             }
 
             Section {
                 ForEach(state.links) { link in
-                    TransitionView(link)
+                    TransitionCell(link)
                 }
             }
 
             Section("Backlinks") {
                 ForEach(state.backlinks) { backlink in
-                    TransitionView(backlink)
+                    TransitionCell(backlink)
                 }
             }
 
             if let worses = state.worseLinks {
                 Section("Worse") {
                     ForEach(worses) { worse in
-                        TransitionView(worse)
+                        TransitionCell(worse)
                     }
                 }
             }
@@ -144,7 +144,7 @@ struct NodeView: View {
 #if DEBUG
 #Preview {
     NavigationStack {
-        NodeView(
+        NodeScreen(
             of: MockNodeVM(
                 nid: NID(fake: 91),
                 data: nil,

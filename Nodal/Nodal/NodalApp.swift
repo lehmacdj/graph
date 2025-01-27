@@ -11,7 +11,7 @@ import SwiftUI
 struct NodalApp: App {
     var body: some Scene {
         WindowGroup {
-            FileSelectorView()
+            FileSelectorScreen()
         }
     }
 }

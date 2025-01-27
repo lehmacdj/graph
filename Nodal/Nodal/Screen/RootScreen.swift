@@ -1,5 +1,5 @@
 //
-//  ContentView.swift
+//  RootScreen.swift
 //  Nodal
 //
 //  Created by Devin Lehmacher on 10/10/21.
@@ -7,7 +7,7 @@
 
 import SwiftUI
 
-struct ContentView: View {
+struct RootScreen: View {
     let fileUrl: URL
     let doSelectFile: () -> ()
 
@@ -25,7 +25,7 @@ struct ContentView: View {
                     Text("Loading...")
                 case .loaded(let graphRepository):
                     let nodeVM = GraphRepositoryNodeVM(nid: NID.origin, graphRepository: graphRepository)
-                    NodeView(of: nodeVM.eraseToAnyNodeVM())
+                    NodeScreen(of: nodeVM.eraseToAnyNodeVM())
                 case .failed(let error):
                     ErrorIndicator(for: error)
                 }
@@ -38,7 +38,7 @@ struct ContentView: View {
                 }
             }
             .navigationDestination(for: NavToNode.self) { nav in
-                NodeView(of: nav.vm)
+                NodeScreen(of: nav.vm)
             }
         }
         .task(id: fileUrl) {
@@ -53,11 +53,5 @@ struct ContentView: View {
             }
         }
         .navigationViewStyle(StackNavigationViewStyle())
-    }
-}
-
-struct ContentView_Previews: PreviewProvider {
-    static var previews: some View {
-        Text("Preview not supported")
     }
 }
