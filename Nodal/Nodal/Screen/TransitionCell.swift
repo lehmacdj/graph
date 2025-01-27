@@ -34,7 +34,6 @@ struct LabelEditor: View {
 struct TransitionCell: View {
     @State var vm: AnyTransitionVM
     @State private var confirmingDelete: Bool = false
-    @State private var editing: Bool = false
 
     init(_ transitionVM: AnyTransitionVM) {
         _vm = State(wrappedValue: transitionVM)
@@ -62,104 +61,130 @@ struct TransitionCell: View {
     }
 
     @ViewBuilder
+    var cellButton: some View {
+        if case .loaded(.cloudFile) = vm.thumbnail {
+            Button(role: .none) {
+                vm.fetchThumbnail()
+            } label: {
+                content
+            }
+        } else {
+            NavigationLink(value: vm.destination.nav) {
+                content
+            }
+        }
+    }
+
+    @ViewBuilder
+    var tags: some View {
+        Suspense(vm.tags) { tags in
+            ForEach(tags) { tag in
+                Text("#\(tag)")
+            }
+        }
+        .pillStyled()
+    }
+
+    @ViewBuilder
     var timestamp: some View {
-        let dateFormatter = {
-            let formatter = DateFormatter()
-            formatter.dateStyle = .short
-            formatter.timeStyle = .medium
-            formatter.locale = Locale.current
-            return formatter
-        }()
         Suspense(vm.timestamp) { timestamp in
             if let timestamp {
-                Text(dateFormatter.string(from: timestamp))
+                TimestampView(timestamp: timestamp)
+                    .foregroundStyle(.secondary)
                     .font(.caption)
-            } else {
-                EmptyView()
             }
-        } placeholder: {
-            EmptyView()
+        }
+        .pillStyled()
+    }
+
+    @ViewBuilder
+    var content: some View {
+        HStack {
+            thumbnail
+            ViewThatFits {
+                HStack(spacing: 0) {
+                    Text(vm.transition)
+                    Spacer()
+                    FlowLayout(spacing: 4) {
+                        tags
+                        timestamp
+                    }
+                }
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(vm.transition)
+                    FlowLayout(spacing: 4) {
+                        timestamp
+                        tags
+                    }
+                }
+            }
         }
     }
 
     var body: some View {
-        HStack {
-            thumbnail
-
-            if editing {
-                LabelEditor(label: vm.transition, displayed: $editing) { newLabel in
-                    vm.updateTransitionName(to: newLabel)
+        cellButton
+            .alert("Really delete transition?", isPresented: $confirmingDelete) {
+                Button("Delete", role: .destructive) {
+                    vm.removeTransition()
                 }
-            } else {
-                if case .loaded(.cloudFile) = vm.thumbnail {
-                    Button(vm.transition, role: .none) {
-                        vm.fetchThumbnail()
-                    }
-                } else {
-                    NavigationLink(value: vm.destination.nav) {
-                        Text(vm.transition)
-                            .overlay {
-                                GeometryReader { proxy in
-                                    timestamp
-                                        .fixedSize()
-                                        .offset(y: proxy.size.height)
-                                }
-                            }
-                    }
-                }
+            } message: {
+                Text("Deleting a transition is not reversible.")
             }
-        }
-        .alert("Really delete transition?", isPresented: $confirmingDelete) {
-            Button("Delete", role: .destructive) {
-                vm.removeTransition()
-            }
-        } message: {
-            Text("Deleting a transition is not reversible.")
-        }
-        .swipeActions(edge: .trailing) {
-            // this button can't be role: .destructive because if it
-            // is SwiftUI tries to be smart by removing the list item
-            // but that cancels the confirmation dialogue that is attached
-            // to the list item
-            Button(role: .destructive) {
-                confirmingDelete = true
-            } label: {
-                Label("Delete", systemImage: "trash")
-            }
-
-            Button() {
-                editing = true
-            } label: {
-                Label("More", systemImage: "pencil")
-            }
-            .tint(.orange)
-        }
-        .swipeActions(edge: .leading) {
-            if vm.direction == .forward {
-                Button() {
-                    vm.toggleFavorite()
+            .swipeActions(edge: .trailing) {
+                // this button can't be role: .destructive because if it
+                // is SwiftUI tries to be smart by removing the list item
+                // but that cancels the confirmation dialogue that is attached
+                // to the list item
+                Button(role: .destructive) {
+                    confirmingDelete = true
                 } label: {
-                    if vm.isFavorite {
-                        Label("Unfavorite", systemImage: "star.fill")
-                    } else {
-                        Label("Favorite", systemImage: "star")
-                    }
+                    Label("Delete", systemImage: "trash")
                 }
-                .tint(.yellow)
 
-                Button {
-                    vm.toggleWorse()
-                } label: {
-                    if vm.isWorse {
-                        Label("Unworsen", systemImage: "xmark.bin.fill")
-                    } else {
-                        Label("Worsen", systemImage: "xmark.bin")
-                    }
+                Button() {} label: {
+                    Label("More", systemImage: "pencil")
                 }
-                .tint(.purple)
+                .tint(.orange)
             }
-        }
-        .task { await vm.subscribe() }
+            .swipeActions(edge: .leading) {
+                if vm.direction == .forward {
+                    Button() {
+                        vm.toggleFavorite()
+                    } label: {
+                        if vm.isFavorite {
+                            Label("Unfavorite", systemImage: "star.fill")
+                        } else {
+                            Label("Favorite", systemImage: "star")
+                        }
+                    }
+                    .tint(.yellow)
+
+                    Button {
+                        vm.toggleWorse()
+                    } label: {
+                        if vm.isWorse {
+                            Label("Unworsen", systemImage: "xmark.bin.fill")
+                        } else {
+                            Label("Worsen", systemImage: "xmark.bin")
+                        }
+                    }
+                    .tint(.purple)
+                }
+            }
+            .task { await vm.subscribe() }
+    }
+}
+
+private extension View {
+    func pillStyled() -> some View {
+        self
+            .font(.caption2)
+            .padding(4)
+            .foregroundColor(.secondary)
+            .overlay(
+                RoundedRectangle(cornerRadius: 4)
+                    .stroke(Color.secondary, lineWidth: 1)
+            )
     }
 }
 

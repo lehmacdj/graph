@@ -25,6 +25,8 @@
 		0300B6CA2D27756000316337 /* GraphRepository+DataNeed.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0300B6C92D27755E00316337 /* GraphRepository+DataNeed.swift */; };
 		0300B6CD2D2777C000316337 /* NID+ComputeNodeWithTimestamp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0300B6CC2D2777B400316337 /* NID+ComputeNodeWithTimestamp.swift */; };
 		030CD85829F62B6800C27442 /* FillableSymbol.swift in Sources */ = {isa = PBXBuildFile; fileRef = 030CD85729F62B6800C27442 /* FillableSymbol.swift */; };
+		0310B09D2D470F88003D9F28 /* TimestampView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0310B09C2D470F80003D9F28 /* TimestampView.swift */; };
+		0310B0A22D470FD3003D9F28 /* DateProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0310B0A12D470FCE003D9F28 /* DateProvider.swift */; };
 		031367E32713FCF200E69F83 /* NodalApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 031367E22713FCF200E69F83 /* NodalApp.swift */; };
 		031367E72713FCF200E69F83 /* RootScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 031367E62713FCF200E69F83 /* RootScreen.swift */; };
 		031367E92713FCF400E69F83 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 031367E82713FCF400E69F83 /* Assets.xcassets */; };
@@ -108,6 +110,8 @@
 		0300B6C92D27755E00316337 /* GraphRepository+DataNeed.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "GraphRepository+DataNeed.swift"; sourceTree = "<group>"; };
 		0300B6CC2D2777B400316337 /* NID+ComputeNodeWithTimestamp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "NID+ComputeNodeWithTimestamp.swift"; sourceTree = "<group>"; };
 		030CD85729F62B6800C27442 /* FillableSymbol.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FillableSymbol.swift; sourceTree = "<group>"; };
+		0310B09C2D470F80003D9F28 /* TimestampView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimestampView.swift; sourceTree = "<group>"; };
+		0310B0A12D470FCE003D9F28 /* DateProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DateProvider.swift; sourceTree = "<group>"; };
 		031367DF2713FCF200E69F83 /* Nodal.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Nodal.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		031367E22713FCF200E69F83 /* NodalApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NodalApp.swift; sourceTree = "<group>"; };
 		031367E62713FCF200E69F83 /* RootScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootScreen.swift; sourceTree = "<group>"; };
@@ -221,6 +225,7 @@
 		0310B09A2D470E4B003D9F28 /* Content */ = {
 			isa = PBXGroup;
 			children = (
+				0310B09C2D470F80003D9F28 /* TimestampView.swift */,
 				0300B6C32D275D8400316337 /* ImageView.swift */,
 				0375E7C72782C06000FB6548 /* SafariView.swift */,
 				03DD60D529D11E04005EC4A5 /* ErrorIndicator.swift */,
@@ -237,6 +242,14 @@
 				034856AC2D40C19800223C1A /* PreventSleeping.swift */,
 			);
 			path = UtilityViews;
+			sourceTree = "<group>";
+		};
+		0310B09E2D470FB4003D9F28 /* Providers */ = {
+			isa = PBXGroup;
+			children = (
+				0310B0A12D470FCE003D9F28 /* DateProvider.swift */,
+			);
+			path = Providers;
 			sourceTree = "<group>";
 		};
 		031367D62713FCF200E69F83 = {
@@ -265,6 +278,7 @@
 			children = (
 				03ABF7822CD6D00C00738F76 /* Model */,
 				032959ED29CA996000FDE138 /* DataAccess */,
+				0310B09E2D470FB4003D9F28 /* Providers */,
 				03ABF7832CD6D02400738F76 /* Repository */,
 				03DD60D229D105B2005EC4A5 /* ViewModel */,
 				03D1D8DF28FB564700E76F27 /* Screen */,
@@ -581,7 +595,9 @@
 				0313681227140A0900E69F83 /* Utils.swift in Sources */,
 				0375E94A2D34C50B006175F0 /* Node+Codable.swift in Sources */,
 				03E36F3B2D46F32800496D7F /* FlowLayout.swift in Sources */,
+				0310B0A22D470FD3003D9F28 /* DateProvider.swift in Sources */,
 				03ABF7862CD6D0A800738F76 /* NID.swift in Sources */,
+				0310B09D2D470F88003D9F28 /* TimestampView.swift in Sources */,
 				03C84EA42C27734C00DB3869 /* MockNodeVM.swift in Sources */,
 				0375E9482D34C475006175F0 /* GraphTimestampModels.swift in Sources */,
 				03CCF6132D46C31100A2D576 /* SwiftConcurrencyUIDocument.swift in Sources */,
