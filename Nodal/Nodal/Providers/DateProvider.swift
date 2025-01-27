@@ -34,15 +34,8 @@ final class LiveDateProvider: DateProvider, @unchecked Sendable {
     }
 }
 
-private struct _EnvironmentKey: EnvironmentKey {
-    static let defaultValue: DateProvider = LiveDateProvider()
-}
-
 extension EnvironmentValues {
-    var dateProvider: DateProvider {
-        get { self[_EnvironmentKey.self] }
-        set { self[_EnvironmentKey.self] = newValue }
-    }
+    @Entry var dateProvider: DateProvider = LiveDateProvider()
 }
 
 struct MockDateProvider: DateProvider {
