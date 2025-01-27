@@ -41,18 +41,34 @@ final class GraphRepositoryTransitionVM: TransitionVM {
             .eraseToAnyNodeVM()
     }
 
-    var subscribeThumbnailTask: Task<Void, Never>?
-
     var description: String {
         let d = direction == .forward ? ">" : "<"
         return "TransitionVM(\(sourceNid)\(d)\(transition)\(d)\(destinationNid))"
     }
 
     func subscribe() async {
-        await withPushLogContext(description + ".subscribe", operation: _subscribe)
+        await withTaskGroup(of: Void.self) { group in
+            withPushLogContext(description + ".subscribeThumbnail") {
+                group.addTask { await self.subscribeThumbnail() }
+            }
+            withPushLogContext(description + ".subscribeTags") {
+                group.addTask { await self.subscribeTags() }
+            }
+        }
     }
 
-    func _subscribe() async {
+    var thumbnail: Loading<ThumbnailValue> = .loaded(.noThumbnail)
+
+    /// Whether we require the thumbnail to be available locally
+    /// Once set to true this should remain true
+    private var requireThumbnail = false
+
+    /// Task that tries to fetch the thumbnail
+    /// `subscribeThumbnail` continuously restarts this task so that we can cancel from
+    /// ``fetchThumbnail()`` to respect the ``requireThumbnail`` property
+    private var subscribeThumbnailTask: Task<Void, Never>?
+
+    private func subscribeThumbnail() async {
         guard subscribeThumbnailTask == nil else {
             logWarn("duplicate subscribe call")
             return
@@ -84,8 +100,6 @@ final class GraphRepositoryTransitionVM: TransitionVM {
             }
         }
     }
-
-    var thumbnail: Loading<ThumbnailValue> = .loaded(.noThumbnail)
 
     private func updateThumbnailLoop() async {
         defer {
@@ -134,11 +148,34 @@ final class GraphRepositoryTransitionVM: TransitionVM {
 
     var timestamp: Loading<Date?>
 
-    var tags: Loading<[String]> = .loaded([])
+    var tags: Loading<[String]> = .idle
 
-    /// Whether we require the thumbnail to be available locally
-    /// Once set to true this should remain true
-    var requireThumbnail = false
+    private var isSubscribedToTags = false
+
+    private func subscribeTags() async {
+        defer {
+            isSubscribedToTags = false
+            switch tags {
+            case .loading: tags = .idle
+            default: break
+            }
+        }
+        switch tags {
+        case .idle: tags = .loading
+        case .failed: return
+        case .loaded, .loading: break
+        }
+
+        do {
+            let tagUpdates = await graphRepository.updates(computeValue: destinationNid.computeNodeWithTags)
+            for try await nodeWithTags in tagUpdates {
+                tags = .loaded(nodeWithTags.tags.sorted())
+            }
+        } catch {
+            logError(error)
+            tags = .failed(error)
+        }
+    }
 
     func fetchThumbnail() {
         withPushLogContext(description + ".fetchThumbnail", operation: _fetchThumbnail)

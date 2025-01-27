@@ -19,6 +19,7 @@ final class GraphRepositoryNodeVM: NodeVM {
     }
 
     var state: Loading<NodeState> = .idle
+
     var isSubscribed = false
 
     func subscribe() async {
@@ -164,16 +165,10 @@ private extension NID {
                 return (transition, Loading.loading(timestamped.map { $0.timestamp }))
             }
 
-        let tagsNode = try dependencyManager.fetch(nid: NID.tags, dataNeed: .dataNotNeeded)
 
-        let incomingNids = node.incoming.flatMap(\.value).to(Set.init)
-        let tags = tagsNode
-            .outgoingTransitions
-            .filter { transition in incomingNids.contains(transition.nid) }
-            // if there are two transitions with the same name but different nids this will collapse them
-            .map { transition in transition.transition }
+        let tags = try self.computeNodeWithTags(dependencyManager: dependencyManager)
+            .tags
             .sorted()
-
         let data = try dependencyManager
             .fetch(nid: self, dataNeed: .needDataEvenIfRemote)
             .data

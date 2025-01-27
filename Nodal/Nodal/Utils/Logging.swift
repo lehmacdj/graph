@@ -12,11 +12,11 @@ let logLevel = LogLevel.info
 
 @TaskLocal var taskLogContext: [String] = []
 
-func withPushLogContext<T>(_ context: String..., operation: () throws -> T) rethrows {
+func withPushLogContext<T>(_ context: String..., @_implicitSelfCapture operation: () throws -> T) rethrows {
     try $taskLogContext.withValue(taskLogContext + context, operation: operation)
 }
 
-func withPushLogContext<T>(_ context: String..., operation: () async throws -> T) async rethrows {
+func withPushLogContext<T>(_ context: String..., @_implicitSelfCapture operation: () async throws -> T) async rethrows {
     try await $taskLogContext.withValue(taskLogContext + context, operation: operation)
 }
 
