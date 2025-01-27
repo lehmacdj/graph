@@ -55,16 +55,16 @@ final class GraphRepositoryNodeVM: NodeVM {
                 state = .loaded(NodeState(
                     data: value.data,
                     favoriteLinks: value.favoriteLinks
-                        .sorted(by: sortOrder.comparisonFunction)
+                        .sorted(by: sortOrder.weirdDataComparisonFunction)
                         .map { getTransitionVM(transition: $0.0, timestamp: $0.1, configuredForSection: .favorites) },
                     links: value.otherLinks
-                        .sorted(by: sortOrder.comparisonFunction)
+                        .sorted(by: sortOrder.weirdDataComparisonFunction)
                         .map { getTransitionVM(transition: $0.0, timestamp: $0.1, configuredForSection: .other) },
                     worseLinks: value.worseLinks
-                        .sorted(by: sortOrder.comparisonFunction)
+                        .sorted(by: sortOrder.weirdDataComparisonFunction)
                         .map { getTransitionVM(transition: $0.0, timestamp: $0.1, configuredForSection: .worse) },
                     backlinks: value.backlinks
-                        .sorted(by: sortOrder.comparisonFunction)
+                        .sorted(by: sortOrder.weirdDataComparisonFunction)
                         .map { getTransitionVM(transition: $0.0, timestamp: $0.1, configuredForSection: .backlink) },
                     tags: value.tags
                 ))
@@ -80,7 +80,28 @@ final class GraphRepositoryNodeVM: NodeVM {
     private var transitionVMsPrevious = [TransitionKey: GraphRepositoryTransitionVM]()
     private var transitionVMs = [TransitionKey: GraphRepositoryTransitionVM]()
 
-    var sortOrder: NodeSortOrder = .transitionThenTimestamp(timestampOrder: .newerFirst)
+    var sortOrder: NodeSortOrder = .transitionThenTimestamp(timestampOrder: .newerFirst) {
+        didSet {
+            guard let currentState = state.loaded else { return }
+            do {
+                state = try .loaded(NodeState(
+                    data: currentState.data,
+                    favoriteLinks: currentState.favoriteLinks?
+                        .sorted(by: sortOrder.transitionVMComparisonFunction),
+                    links: currentState.links
+                        .sorted(by: sortOrder.transitionVMComparisonFunction),
+                    worseLinks: currentState.worseLinks?
+                        .sorted(by: sortOrder.transitionVMComparisonFunction),
+                    backlinks: currentState.backlinks
+                        .sorted(by: sortOrder.transitionVMComparisonFunction),
+                    tags: currentState.tags
+                ))
+            } catch {
+                logError(error)
+                state = .failed(error)
+            }
+        }
+    }
 
     /// Mark that we are done creating transition VMs for an update cycle
     private func endTransitionVMsGeneration() {
@@ -207,7 +228,7 @@ private extension NID {
 }
 
 private extension NodeSortOrder {
-    var comparisonFunction: ( (NodeTransition, Loading<Date?>), (NodeTransition, Loading<Date?>) ) -> Bool {
+    var weirdDataComparisonFunction: ( (NodeTransition, Loading<Date?>), (NodeTransition, Loading<Date?>) ) -> Bool {
         { tuple1, tuple2 in
             let (t1, t1LoadingTimestamp) = tuple1
             let t1Timestamp = t1LoadingTimestamp.loaded.flatMap { $0 } ?? .distantPast
@@ -224,6 +245,27 @@ private extension NodeSortOrder {
                 transitionThenTimestampOlderFirstOrdering(t1Timestamp:t2Timestamp:t1Transition:t2Transition:)
             }
             return sortFunc(t1Timestamp, t2Timestamp, t1.transition, t2.transition)
+        }
+    }
+
+    var comparisonFunction: (Date, Date, String, String) -> Bool {
+        switch self {
+        case .timestampThenTransition(timestampOrder: .newerFirst):
+            timestampNewerFirstThenTransitionOrdering(t1Timestamp:t2Timestamp:t1Transition:t2Transition:)
+        case .timestampThenTransition(timestampOrder: .olderFirst):
+            timestampOlderFirstThenTransitionOrdering(t1Timestamp:t2Timestamp:t1Transition:t2Transition:)
+        case .transitionThenTimestamp(timestampOrder: .newerFirst):
+            transitionThenTimestampNewerFirstOrdering(t1Timestamp:t2Timestamp:t1Transition:t2Transition:)
+        case .transitionThenTimestamp(timestampOrder: .olderFirst):
+            transitionThenTimestampOlderFirstOrdering(t1Timestamp:t2Timestamp:t1Transition:t2Transition:)
+        }
+    }
+
+    var transitionVMComparisonFunction: @MainActor (AnyTransitionVM, AnyTransitionVM) -> Bool {
+        { vm1, vm2 in
+            let t1Timestamp = vm1.timestamp.loaded.flatMap { $0 } ?? .distantPast
+            let t2Timestamp = vm2.timestamp.loaded.flatMap { $0 } ?? .distantPast
+            return comparisonFunction(t1Timestamp, t2Timestamp, vm1.transition, vm2.transition)
         }
     }
 

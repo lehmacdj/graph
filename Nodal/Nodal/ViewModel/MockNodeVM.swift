@@ -40,6 +40,8 @@ class MockNodeVM: NodeVM {
         )
     }
 
+    var sortOrder: NodeSortOrder = .transitionThenTimestamp(timestampOrder: .newerFirst)
+
     func subscribe() async {}
     func reload() async {}
     func set(tags: Set<String>) throws {}

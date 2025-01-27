@@ -96,6 +96,26 @@ struct NodeScreen: View {
                 Image(systemName: "ellipsis")
             }
         }
+        ToolbarItem(placement: .navigationBarTrailing) {
+            Button {
+                vm.sortOrder = vm.sortOrder.next
+            } label: {
+                SortOrderIcon(sortOrder: vm.sortOrder)
+            }
+            .contextMenu {
+                ForEach(Array(NodeSortOrder.allCases.enumerated()), id: \.offset) { _, order in
+                    Button {
+                        vm.sortOrder = order
+                    } label: {
+                        Label {
+                            Text(order.name)
+                        } icon: {
+                            SortOrderIcon(sortOrder: order)
+                        }
+                    }
+                }
+            }
+        }
         if state.data != nil {
             ToolbarItem(placement: .navigationBarTrailing) {
                 Button(action: { showingLinks.toggle() }) {

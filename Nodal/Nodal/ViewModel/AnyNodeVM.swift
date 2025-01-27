@@ -19,6 +19,11 @@ import Foundation
         get { underlying.state }
     }
 
+    var sortOrder: NodeSortOrder {
+        get { underlying.sortOrder }
+        set { underlying.sortOrder = newValue }
+    }
+
     var nid: NID {
         get { underlying.nid }
     }

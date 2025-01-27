@@ -31,13 +31,48 @@ enum NodeSection {
     }
 }
 
-enum NodeSortOrder {
+enum NodeSortOrder: CaseIterable {
+    static let allCases: [NodeSortOrder] = [
+        .transitionThenTimestamp(timestampOrder: .newerFirst),
+        .timestampThenTransition(timestampOrder: .olderFirst),
+        .transitionThenTimestamp(timestampOrder: .newerFirst),
+        .timestampThenTransition(timestampOrder: .olderFirst),
+    ]
+
     enum TimestampOrder {
         case newerFirst
         case olderFirst
     }
     case transitionThenTimestamp(timestampOrder: TimestampOrder)
     case timestampThenTransition(timestampOrder: TimestampOrder)
+
+    var name: String {
+        switch self {
+        case .transitionThenTimestamp(.newerFirst):
+            "Transition, then timestamp, newer first"
+        case .timestampThenTransition(.newerFirst):
+            "Timestamp, newer first"
+        case .timestampThenTransition(.olderFirst):
+            "Timestamp, older first"
+        case .transitionThenTimestamp(.olderFirst):
+            "Transition, then timestamp, older first"
+        }
+    }
+
+    /// we just cycle between the things that have the same timestamp order; switching timestamp order in this cycle is confusing
+    /// switching between newer/older first must be accomplished by the context menu
+    var next: Self {
+        switch self {
+        case .transitionThenTimestamp(.newerFirst):
+            .timestampThenTransition(timestampOrder: .newerFirst)
+        case .timestampThenTransition(.newerFirst):
+            .transitionThenTimestamp(timestampOrder: .newerFirst)
+        case .timestampThenTransition(.olderFirst):
+            .transitionThenTimestamp(timestampOrder: .olderFirst)
+        case .transitionThenTimestamp(.olderFirst):
+            .timestampThenTransition(timestampOrder: .olderFirst)
+        }
+    }
 }
 
 @MainActor
