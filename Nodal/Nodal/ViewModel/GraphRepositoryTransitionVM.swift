@@ -134,6 +134,8 @@ final class GraphRepositoryTransitionVM: TransitionVM {
 
     var timestamp: Loading<Date?>
 
+    var tags: Loading<[String]> = .loaded([])
+
     /// Whether we require the thumbnail to be available locally
     /// Once set to true this should remain true
     var requireThumbnail = false

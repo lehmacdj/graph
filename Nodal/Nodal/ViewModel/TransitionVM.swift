@@ -49,6 +49,8 @@ protocol TransitionVM: Observable, Identifiable {
 
     var timestamp: Loading<Date?> { get }
 
+    var tags: Loading<[String]> { get }
+
     var isFavorite: Bool { get set }
 
     var isWorse: Bool { get set }

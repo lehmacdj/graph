@@ -121,12 +121,11 @@ struct TransitionView: View {
             // is SwiftUI tries to be smart by removing the list item
             // but that cancels the confirmation dialogue that is attached
             // to the list item
-            Button() {
+            Button(role: .destructive) {
                 confirmingDelete = true
             } label: {
                 Label("Delete", systemImage: "trash")
             }
-            .tint(.red)
 
             Button() {
                 editing = true
@@ -164,9 +163,39 @@ struct TransitionView: View {
     }
 }
 
+#if DEBUG
 #Preview {
-    List {
-        TransitionView(MockTransitionVM(transition: "asdf").eraseToAnyTransitionVM())
-        TransitionView(MockTransitionVM(transition: "Hello world!").eraseToAnyTransitionVM())
+    NavigationStack {
+        List {
+            TransitionView(
+                MockTransitionVM(
+                    transition: "Million Live",
+                    thumbnail: .loaded(.thumbnail(.loaded(.millionLive11))),
+                    tags: .loaded(["millions", "of", "tags", "that", "cause", "horizontal", "space", "to", "overflow"])
+                ).eraseToAnyTransitionVM()
+            )
+            TransitionView(
+                MockTransitionVM(
+                    transition: "More More Jump",
+                    thumbnail: .loaded(.thumbnail(.loaded(.moreMoreJumpBackground))),
+                    timestamp: .loaded(Date(timeIntervalSince1970: 0))
+                ).eraseToAnyTransitionVM()
+            )
+            TransitionView(MockTransitionVM(transition: "foo").eraseToAnyTransitionVM())
+            TransitionView(
+                MockTransitionVM(
+                    transition: "bar",
+                    tags: .loaded(["millions", "of", "tags", "that", "cause", "horizontal", "space", "to", "overflow"])
+                ).eraseToAnyTransitionVM()
+            )
+            TransitionView(
+                MockTransitionVM(
+                    transition: "Hello world!",
+                    timestamp: .loaded(Date(timeIntervalSince1970: 0)),
+                    tags: .loaded(["hello", "world"])
+                ).eraseToAnyTransitionVM()
+            )
+        }
     }
 }
+#endif

@@ -36,6 +36,10 @@ import Foundation
         get { underlying.timestamp }
     }
 
+    var tags: Loading<[String]> {
+        get { underlying.tags }
+    }
+
     var isFavorite: Bool {
         get { underlying.isFavorite }
         set { underlying.isFavorite = newValue }
