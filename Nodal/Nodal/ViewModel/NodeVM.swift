@@ -31,6 +31,15 @@ enum NodeSection {
     }
 }
 
+enum NodeSortOrder {
+    enum TimestampOrder {
+        case newerFirst
+        case olderFirst
+    }
+    case transitionThenTimestamp(timestampOrder: TimestampOrder)
+    case timestampThenTransition(timestampOrder: TimestampOrder)
+}
+
 @MainActor
 protocol NodeVM: Observable {
     var nid: NID { get }
@@ -40,6 +49,8 @@ protocol NodeVM: Observable {
     func subscribe() async
 
     func reload() async
+
+    var sortOrder: NodeSortOrder { get set }
 
     func set(tags: Set<String>) throws
 

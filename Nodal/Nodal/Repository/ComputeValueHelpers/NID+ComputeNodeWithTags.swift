@@ -37,7 +37,7 @@ extension NID {
     func computeNodeWithTags(dependencyManager: DependencyManager) throws(FetchDependencyError) -> Node<TagsAugmentation> {
         let node = try dependencyManager.fetch(nid: self, dataNeed: .dataNotNeeded)
         let tagsNode = try dependencyManager.fetch(nid: NID.tags, dataNeed: .dataNotNeeded)
-        
+
         let incomingNids = node.incoming.flatMap(\.value).to(Set.init)
         let tags = tagsNode
             .outgoingTransitions

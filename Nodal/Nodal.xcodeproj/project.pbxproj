@@ -28,6 +28,7 @@
 		0310B09D2D470F88003D9F28 /* TimestampView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0310B09C2D470F80003D9F28 /* TimestampView.swift */; };
 		0310B0A22D470FD3003D9F28 /* DateProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0310B0A12D470FCE003D9F28 /* DateProvider.swift */; };
 		0310B0A42D472C75003D9F28 /* NID+ComputeNodeWithTags.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0310B0A32D472C6F003D9F28 /* NID+ComputeNodeWithTags.swift */; };
+		0310B0A62D473879003D9F28 /* Dictionary+Frequencies.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0310B0A52D473871003D9F28 /* Dictionary+Frequencies.swift */; };
 		031367E32713FCF200E69F83 /* NodalApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 031367E22713FCF200E69F83 /* NodalApp.swift */; };
 		031367E72713FCF200E69F83 /* RootScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 031367E62713FCF200E69F83 /* RootScreen.swift */; };
 		031367E92713FCF400E69F83 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 031367E82713FCF400E69F83 /* Assets.xcassets */; };
@@ -114,6 +115,7 @@
 		0310B09C2D470F80003D9F28 /* TimestampView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimestampView.swift; sourceTree = "<group>"; };
 		0310B0A12D470FCE003D9F28 /* DateProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DateProvider.swift; sourceTree = "<group>"; };
 		0310B0A32D472C6F003D9F28 /* NID+ComputeNodeWithTags.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "NID+ComputeNodeWithTags.swift"; sourceTree = "<group>"; };
+		0310B0A52D473871003D9F28 /* Dictionary+Frequencies.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Dictionary+Frequencies.swift"; sourceTree = "<group>"; };
 		031367DF2713FCF200E69F83 /* Nodal.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Nodal.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		031367E22713FCF200E69F83 /* NodalApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NodalApp.swift; sourceTree = "<group>"; };
 		031367E62713FCF200E69F83 /* RootScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootScreen.swift; sourceTree = "<group>"; };
@@ -338,6 +340,7 @@
 		032959EE29CA997A00FDE138 /* Utils */ = {
 			isa = PBXGroup;
 			children = (
+				0310B0A52D473871003D9F28 /* Dictionary+Frequencies.swift */,
 				03CCF6162D46CC5000A2D576 /* Optional+CompactDescription.swift */,
 				03CCF6102D46C11B00A2D576 /* UnsafeTransfer.swift */,
 				03CB440B2D343D7400F0B675 /* FileAvailabilityObserver.swift */,
@@ -617,6 +620,7 @@
 				0300B6CA2D27756000316337 /* GraphRepository+DataNeed.swift in Sources */,
 				03ABF7922CD6D37400738F76 /* GraphRepository.swift in Sources */,
 				03ABF7A42CFC07D100738F76 /* URL+GraphPaths.swift in Sources */,
+				0310B0A62D473879003D9F28 /* Dictionary+Frequencies.swift in Sources */,
 				03ABF7992CD9B6A600738F76 /* Node.swift in Sources */,
 				03ABF7902CD6D16A00738F76 /* SystemNodes.swift in Sources */,
 				03DD60D429D105C1005EC4A5 /* TransitionVM.swift in Sources */,

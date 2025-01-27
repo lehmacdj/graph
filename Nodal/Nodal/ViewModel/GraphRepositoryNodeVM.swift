@@ -49,22 +49,22 @@ final class GraphRepositoryNodeVM: NodeVM {
         }
 
         do {
-            let updatesSequence = await graphRepository.updates(computeValue: nid.computeNodeForVM)
+            let updatesSequence = await graphRepository.updates(computeValue: nid.computeNodeForVM(sortOrder: sortOrder))
             logInfo("starting to listen to updates")
             for try await value in updatesSequence {
                 state = .loaded(NodeState(
                     data: value.data,
                     favoriteLinks: value.favoriteLinks
-                        .sorted(by: timestampTransitionComparison(_:_:))
+                        .sorted(by: sortOrder.comparisonFunction)
                         .map { getTransitionVM(transition: $0.0, timestamp: $0.1, configuredForSection: .favorites) },
                     links: value.otherLinks
-                        .sorted(by: timestampTransitionComparison(_:_:))
+                        .sorted(by: sortOrder.comparisonFunction)
                         .map { getTransitionVM(transition: $0.0, timestamp: $0.1, configuredForSection: .other) },
                     worseLinks: value.worseLinks
-                        .sorted(by: timestampTransitionComparison(_:_:))
+                        .sorted(by: sortOrder.comparisonFunction)
                         .map { getTransitionVM(transition: $0.0, timestamp: $0.1, configuredForSection: .worse) },
                     backlinks: value.backlinks
-                        .sorted(by: timestampTransitionComparison(_:_:))
+                        .sorted(by: sortOrder.comparisonFunction)
                         .map { getTransitionVM(transition: $0.0, timestamp: $0.1, configuredForSection: .backlink) },
                     tags: value.tags
                 ))
@@ -79,6 +79,8 @@ final class GraphRepositoryNodeVM: NodeVM {
 
     private var transitionVMsPrevious = [TransitionKey: GraphRepositoryTransitionVM]()
     private var transitionVMs = [TransitionKey: GraphRepositoryTransitionVM]()
+
+    var sortOrder: NodeSortOrder = .transitionThenTimestamp(timestampOrder: .newerFirst)
 
     /// Mark that we are done creating transition VMs for an update cycle
     private func endTransitionVMsGeneration() {
@@ -136,7 +138,13 @@ fileprivate struct NodeStateAugmentation: Sendable {
 }
 
 private extension NID {
-    func computeNodeForVM(_ dependencyManager: DependencyManager) throws(FetchDependencyError) -> Node<NodeStateAugmentation> {
+    func computeNodeForVM(sortOrder: NodeSortOrder) -> @Sendable (_ dependencyManager: DependencyManager) throws -> Node<NodeStateAugmentation> {
+        { dependencyManager in
+            try self._computeNodeForVM(sortOrder: sortOrder, dependencyManager)
+        }
+    }
+
+    private func _computeNodeForVM(sortOrder: NodeSortOrder, _ dependencyManager: DependencyManager) throws(FetchDependencyError) -> Node<NodeStateAugmentation> {
         // avoid fetching data at first even though we unconditionally render it to start fetching metadata sooner
         let node = try dependencyManager.fetch(nid: self, dataNeed: .dataNotNeeded)
 
@@ -173,41 +181,99 @@ private extension NID {
             .fetch(nid: self, dataNeed: .needDataEvenIfRemote)
             .data
 
-        // for other sorts that don't depend on time we wouldn't want to do this, but when time is essential for the
-        // sort it is too disruptive to rearrange nodes as timestamps load in
-        guard links.allSatisfy({ $0.1.isLoaded }) && backlinks.allSatisfy({ $0.1.isLoaded }) else {
+        // make sure that we can uniquely sort based on the data we have, otherwise transitions jump around wildly
+        let favoriteLinks = links.filter { favoritesNids.contains($0.0.nid) }
+        let worseLinks = links.filter { worseNids.contains($0.0.nid) }
+        let otherLinks = links.filter { !favoritesNids.contains($0.0.nid) && !worseNids.contains($0.0.nid) }
+        guard sortOrder.isSufficientForCompleteSort(links: otherLinks)
+                && sortOrder.isSufficientForCompleteSort(links: favoriteLinks)
+                && sortOrder.isSufficientForCompleteSort(links: worseLinks)
+                && sortOrder.isSufficientForCompleteSort(links: backlinks)
+        else {
             throw .missingDependencies
         }
 
         return node.withAugmentation(
             NodeStateAugmentation(
                 data: data,
-                favoriteLinks: links.filter { favoritesNids.contains($0.0.nid) },
-                worseLinks: links.filter { worseNids.contains($0.0.nid) },
+                favoriteLinks: favoriteLinks,
+                worseLinks: worseLinks,
                 backlinks: backlinks,
-                otherLinks: links.filter { !favoritesNids.contains($0.0.nid) && !worseNids.contains($0.0.nid) },
+                otherLinks: otherLinks,
                 tags: tags
             )
         )
     }
 }
 
-func timestampTransitionComparison(_ tuple1: (NodeTransition, Loading<Date?>), _ tuple2: (NodeTransition, Loading<Date?>)) -> Bool {
-    let (t1, t1LoadingTimestamp) = tuple1
-    let t1Timestamp: Date
-    if case .loaded(.some(let timestamp)) = t1LoadingTimestamp {
-        t1Timestamp = timestamp
-    } else {
-        t1Timestamp = .distantPast
+private extension NodeSortOrder {
+    var comparisonFunction: ( (NodeTransition, Loading<Date?>), (NodeTransition, Loading<Date?>) ) -> Bool {
+        { tuple1, tuple2 in
+            let (t1, t1LoadingTimestamp) = tuple1
+            let t1Timestamp = t1LoadingTimestamp.loaded.flatMap { $0 } ?? .distantPast
+            let (t2, t2LoadingTimestamp) = tuple2
+            let t2Timestamp: Date = t2LoadingTimestamp.loaded.flatMap { $0 } ?? .distantPast
+            let sortFunc: (Date, Date, String, String) -> Bool = switch self {
+            case .timestampThenTransition(timestampOrder: .newerFirst):
+                timestampNewerFirstThenTransitionOrdering(t1Timestamp:t2Timestamp:t1Transition:t2Transition:)
+            case .timestampThenTransition(timestampOrder: .olderFirst):
+                timestampOlderFirstThenTransitionOrdering(t1Timestamp:t2Timestamp:t1Transition:t2Transition:)
+            case .transitionThenTimestamp(timestampOrder: .newerFirst):
+                transitionThenTimestampNewerFirstOrdering(t1Timestamp:t2Timestamp:t1Transition:t2Transition:)
+            case .transitionThenTimestamp(timestampOrder: .olderFirst):
+                transitionThenTimestampOlderFirstOrdering(t1Timestamp:t2Timestamp:t1Transition:t2Transition:)
+            }
+            return sortFunc(t1Timestamp, t2Timestamp, t1.transition, t2.transition)
+        }
     }
 
-    let (t2, t2LoadingTimestamp) = tuple2
-    let t2Timestamp: Date
-    if case .loaded(.some(let timestamp)) = t2LoadingTimestamp {
-        t2Timestamp = timestamp
-    } else {
-        t2Timestamp = .distantPast
+    func isSufficientForCompleteSort(links: [(NodeTransition, Loading<Date?>)]) -> Bool {
+        let uniqueTransitions = links
+            .map(\.0.transition)
+            .frequencies()
+            .filter { $0.value == 1 }
+            .keys
+        return switch self {
+        case .timestampThenTransition:
+            true
+        case .transitionThenTimestamp:
+            links.allSatisfy { link in uniqueTransitions.contains(link.0.transition) || link.1.isLoaded }
+        }
     }
+}
 
-    return t1.transition < t2.transition || t1.transition == t2.transition && t1Timestamp > t2Timestamp
+private func timestampNewerFirstThenTransitionOrdering(
+    t1Timestamp: Date,
+    t2Timestamp: Date,
+    t1Transition: String,
+    t2Transition: String
+) -> Bool {
+    return t1Timestamp > t2Timestamp || t1Timestamp == t2Timestamp && t1Transition < t2Transition
+}
+
+private func transitionThenTimestampNewerFirstOrdering(
+    t1Timestamp: Date,
+    t2Timestamp: Date,
+    t1Transition: String,
+    t2Transition: String
+) -> Bool {
+    return t1Transition < t2Transition || t1Transition == t2Transition && t1Timestamp > t2Timestamp
+}
+
+private func timestampOlderFirstThenTransitionOrdering(
+    t1Timestamp: Date,
+    t2Timestamp: Date,
+    t1Transition: String,
+    t2Transition: String
+) -> Bool {
+    return t1Timestamp < t2Timestamp || t1Timestamp == t2Timestamp && t1Transition < t2Transition
+}
+
+private func transitionThenTimestampOlderFirstOrdering(
+    t1Timestamp: Date,
+    t2Timestamp: Date,
+    t1Transition: String,
+    t2Transition: String
+) -> Bool {
+    return t1Transition < t2Transition || t1Transition == t2Transition && t1Timestamp < t2Timestamp
 }
