@@ -14,6 +14,8 @@ enum FileAvailability {
     case availableLocally
 }
 
+/// It might be possible to replace this with just ``DataDocument`` if we open it only when needed and use `observedPresentedItemUbiquityAttributes`
+/// https://developer.apple.com/documentation/foundation/nsfilepresenter/2909022-observedpresenteditemubiquityatt
 actor FileAvailabilityObserver {
     let url: URL
     private(set) var availability: FileAvailability?

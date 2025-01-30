@@ -290,7 +290,7 @@ private extension FilesystemGraphRepository {
                             }
                         }
                         _ = cancellable // needs to live until here so that updates doesn't get deallocated
-                        logDebug("metadata subscription for \(nid) finishing")
+                        logVerbose("metadata subscription for \(nid) finishing")
                     } catch {
                         logError(error)
                     }
@@ -318,7 +318,7 @@ private extension FilesystemGraphRepository {
                                 }
                             }
                             _ = cancellable // needs to live until here so that updates doesn't get deallocated
-                            logDebug("data availability subscription for \(nid) finishing")
+                            logVerbose("data availability subscription for \(nid) finishing")
                         } catch{
                             logError(error)
                         }
@@ -343,7 +343,7 @@ private extension FilesystemGraphRepository {
                                 }
                             }
                             _ = cancellable // needs to live until here so that updates doesn't get deallocated
-                            logDebug("data subscription for \(nid) finishing")
+                            logVerbose("data subscription for \(nid) finishing")
                         } catch is DataDocument.DocumentClosedError {
                             logInfo("data for \(nid) no longer available, data availability update should prevent recurrence")
                         } catch {
@@ -450,7 +450,7 @@ private extension FilesystemGraphRepository {
 
         private func trackedGetDependency(_ nid: NID, dataNeed: DataNeed) throws(FetchDependencyError) -> Node<UntypedDataValue> {
             guard var entry = dependencyEntries[nid] else {
-                logDebug("creating new dependency entry for \(nid)")
+                logVerbose("creating new dependency entry for \(nid)")
                 dependencyEntries[nid] = DependencyEntry(
                     nid: nid,
                     dataNeed: dataNeed,

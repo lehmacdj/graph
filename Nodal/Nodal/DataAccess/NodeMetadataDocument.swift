@@ -49,7 +49,6 @@ final class NodeMetadataDocument: SwiftConcurrencyUIDocument {
         }
     }
 
-
     var metaPublisher: AnyPublisher<Node<NoAugmentation>, Never> {
         return $_meta
             .compactMap { $0 }

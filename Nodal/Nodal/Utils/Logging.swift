@@ -8,7 +8,7 @@
 import Foundation
 
 /// Log level to use when logging traces via log function
-let logLevel = LogLevel.info
+let logLevel = LogLevel.debug
 
 @TaskLocal var taskLogContext: [String] = []
 
