@@ -58,61 +58,6 @@ struct RootScreen: View {
             _ = try? await Task.sleepForever()
             await filePresenterManager.background()
         }
-        .task {
-            let originUrl = URL(fileURLWithPath: "/Users/devin/iCloud Drive/pictures/000000000000.json")
-
-            class FilePresenter: NSObject, NSFilePresenter {
-                let url: URL
-
-                init(url: URL) {
-                    self.url = url
-                }
-
-                // MARK: NSFilePresenter
-
-                var presentedItemURL: URL? { url }
-                var presentedItemOperationQueue: OperationQueue = .init()
-
-                func relinquishPresentedItem(toWriter writer: @escaping @Sendable ((@Sendable () -> Void)?) -> Void) {
-                    print("relinquishing ownership for writing")
-                    writer {
-                        print("regained ownership for writing")
-                    }
-                    do {
-                        guard let contents = String(data: try Data(contentsOf: url), encoding: .utf8) else {
-                            print("couldn't get contents")
-                            return
-                        }
-                        print(contents)
-                    } catch {
-                        print("\(error)")
-                    }
-                }
-
-                func presentedItemDidChange() {
-                    print("presented item changed")
-                    do {
-                        guard let contents = String(data: try Data(contentsOf: url), encoding: .utf8) else {
-                            print("couldn't get contents")
-                            return
-                        }
-                        print(contents)
-                    } catch {
-                        print("\(error)")
-                    }
-                }
-
-                func relinquishPresentedItem(toReader reader: @escaping @Sendable ((@Sendable () -> Void)?) -> Void) {
-                    print("relinquishing ownership for reading")
-                    reader {
-                        print("regained ownership for reading")
-                    }
-                }
-            }
-
-            let filePresenter = FilePresenter(url: originUrl)
-            NSFileCoordinator.addFilePresenter(filePresenter)
-        }
         .navigationViewStyle(StackNavigationViewStyle())
     }
 }

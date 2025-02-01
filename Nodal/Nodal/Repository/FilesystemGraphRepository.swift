@@ -5,8 +5,8 @@
 //  Created by Devin Lehmacher on 11/4/24.
 //
 
+import Combine
 import Foundation
-@preconcurrency import Combine
 import UIKit
 import AsyncAlgorithms
 
@@ -18,8 +18,8 @@ actor FilesystemGraphRepository: GraphRepository {
         self.basePath = basePath
         self.filePresenterManager = filePresenterManager
         metadataCache = ConcurrentCache(
-            create: { [filePresenterManager] in
-                let presenter = NodeMetadataPresenter(url: basePath.appending(metaPathFor: $0))
+            create: { [filePresenterManager] nid in
+                let presenter = NodeMetadataPresenter(url: basePath.appending(metaPathFor: nid))
                 await filePresenterManager.add(presenter)
                 return presenter
             },
@@ -28,19 +28,16 @@ actor FilesystemGraphRepository: GraphRepository {
             },
             logContext: "metadataCache"
         )
-        dataAvailabilityCache = ConcurrentCache(
-            create: { FileAvailabilityObserver(url: basePath.appending(dataPathFor: $0)) },
-            destroy: { (nid, observer) in },
-            logContext: "dataAvailabilityCache"
-        )
-        dataDocumentCache = ConcurrentCache(
-            create: { try await DataDocument(dataURL: basePath.appending(dataPathFor: $0)) },
-            destroy: { (nid, document) in
-                if await !document.close() {
-                    logError("failed to save while closing data document \(nid)")
-                }
+        dataCache = ConcurrentCache(
+            create: { [filePresenterManager] nid in
+                let presenter = DataFilePresenter(url: basePath.appending(dataPathFor: nid))
+                await filePresenterManager.add(presenter)
+                return presenter
             },
-            logContext: "dataDocumentCache"
+            destroy: { [filePresenterManager] (_, presenter) in
+                await filePresenterManager.remove(presenter)
+            },
+            logContext: "dataCache"
         )
         try await initSystemNodes()
     }
@@ -116,32 +113,26 @@ actor FilesystemGraphRepository: GraphRepository {
         return (cacheEntry, await presenter.getUpdates())
     }
 
-    private var dataAvailabilityCache: ConcurrentCache<NID, FileAvailabilityObserver>
+    private var dataCache: ConcurrentCache<NID, DataFilePresenter>
 
     private func getDataAvailabilityUpdates(
         for nid: NID
     ) async throws -> sending (
-        ConcurrentCache<NID, FileAvailabilityObserver>.Handle,
-        any AsyncSequence<DataAvailability, Never>
+        ConcurrentCache<NID, DataFilePresenter>.Handle,
+        any AsyncSequence<DataAvailability, DataFilePresenter.FileError>
     ) {
-        let (cacheEntry, observer) = try await dataAvailabilityCache.getOrCreate(nid)
-        let updates = await observer.updates
-        return (cacheEntry, updates)
+        let (cacheEntry, presenter) = try await dataCache.getOrCreate(nid)
+        return (cacheEntry, await presenter.getDataAvailabilityUpdates())
     }
-
-    private let dataDocumentCache: ConcurrentCache<NID, DataDocument>
 
     private func getDataUpdates(
         for nid: NID
     ) async throws -> sending (
-        ConcurrentCache<NID, DataDocument>.Handle,
-        any AsyncSequence<Data, Error>
+        ConcurrentCache<NID, DataFilePresenter>.Handle,
+        any AsyncSequence<Data, DataFilePresenter.FileError>
     ) {
-        let (cacheEntry, dataDocument) = try await dataDocumentCache.getOrCreate(nid)
-        let sequence = await dataDocument
-            .dataPublisher
-            .values
-        return (cacheEntry, sequence)
+        let (cacheEntry, presenter) = try await dataCache.getOrCreate(nid)
+        return (cacheEntry, await presenter.getDataUpdates())
     }
 }
 
@@ -325,7 +316,7 @@ private extension FilesystemGraphRepository {
                     let dataAvailabilityTask = Task { [nid, graphRepository, weak iterator] in
                         do {
                             let (cancellable, updates) = try await graphRepository.getDataAvailabilityUpdates(for: nid)
-                            for await dataAvailability in updates {
+                            for try await dataAvailability in updates {
                                 await iterator?.updateEntry(for: nid) { entry in
                                     guard entry.mostRecentDataAvailability != dataAvailability else { return false }
                                     entry.mostRecentDataAvailability = dataAvailability
@@ -360,8 +351,6 @@ private extension FilesystemGraphRepository {
                             }
                             _ = cancellable // needs to live until here so that updates doesn't get deallocated
                             logVerbose("data subscription for \(nid) finishing")
-                        } catch is DataDocument.DocumentClosedError {
-                            logInfo("data for \(nid) no longer available, data availability update should prevent recurrence")
                         } catch {
                             logError(error)
                         }
