@@ -11,6 +11,8 @@ import SwiftUI
 struct NodalApp: App {
     var body: some Scene {
         FilePresenterBackgroundingScene()
+            .environment(\.filePresenterManager, FilePresenterManager())
+            .environment(\.dateProvider, LiveDateProvider())
     }
 }
 
