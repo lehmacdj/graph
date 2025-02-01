@@ -11,9 +11,8 @@ struct RootScreen: View {
     let fileUrl: URL
     let doSelectFile: () -> ()
 
+    @Environment(\.filePresenterManager) var filePresenterManager
     @State private var graphRepository: Loading<GraphRepository> = .loading
-    @State private var filePresenterManager = FilePresenterManager()
-
     @State private var path: [NavToNode] = []
 
     var body: some View {
@@ -52,11 +51,6 @@ struct RootScreen: View {
                 logError(error)
                 graphRepository = .failed(error)
             }
-        }
-        .task {
-            await filePresenterManager.unbackground()
-            _ = try? await Task.sleepForever()
-            await filePresenterManager.background()
         }
         .navigationViewStyle(StackNavigationViewStyle())
     }

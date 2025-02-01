@@ -6,6 +6,7 @@
 //
 
 import Foundation
+import SwiftUI
 
 actor FilePresenterManager {
     private var managedPresenters = [any NSFilePresenter]()
@@ -30,7 +31,7 @@ actor FilePresenterManager {
     }
 
     func background() {
-        assert(isActive, "already backgrounded")
+        guard isActive else { return }
         logInfo("backgrounding")
         isActive = false
         for presenter in managedPresenters {
@@ -39,11 +40,15 @@ actor FilePresenterManager {
     }
 
     func unbackground() {
-        assert(!isActive, "already active")
+        guard !isActive else { return }
         logInfo("foregrounding")
         isActive = true
         for presenter in managedPresenters {
             NSFileCoordinator.addFilePresenter(presenter)
         }
     }
+}
+
+extension EnvironmentValues {
+    @Entry var filePresenterManager = FilePresenterManager()
 }
