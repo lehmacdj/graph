@@ -62,11 +62,12 @@ final class DataFilePresenter: NSObject, NSFilePresenter, @unchecked Sendable {
 
     private func queue_publish(dataAvailability newDataAvailability: DataAvailability) {
         guard newDataAvailability != queue_mostRecentDataAvailability else {
-            logWarn("publishing without change \(queue_url)")
+            logVerbose("publishing without change \(queue_url)")
             return
         }
 
         queue_mostRecentDataAvailability = newDataAvailability
+        logDebug("publishing new data availability for \(queue_url)")
         for continuation in queue_dataAvailabilityStreamContinuations.values {
             continuation.yield(newDataAvailability)
         }
@@ -142,11 +143,13 @@ final class DataFilePresenter: NSObject, NSFilePresenter, @unchecked Sendable {
 
     private func queue_publish(data newData: Data) {
         guard newData != queue_mostRecentData else {
-            logWarn("publishing without change \(queue_url)")
+            // this is common: presentedItemDidChange is called too often
+            logVerbose("publishing without change \(queue_url)")
             return
         }
 
         queue_mostRecentData = newData
+        logDebug("publishing new data for \(queue_url)")
         for continuation in queue_dataStreamContinuations.values {
             continuation.yield(newData)
         }

@@ -74,10 +74,12 @@ final class NodeMetadataPresenter: NSObject, NSFilePresenter, @unchecked Sendabl
 
     private func queue_publish(metadata newMetadata: Node<NoAugmentation>) {
         guard newMetadata != queue_mostRecentMetadata else {
-            logWarn("no change to metadata for \(newMetadata.id)")
+            // this is common: presentedItemDidChange is called too often
+            logVerbose("no change to metadata for \(queue_url)")
             return
         }
 
+        logDebug("publishing new metadata for \(queue_url)")
         queue_mostRecentMetadata = newMetadata
         for continuation in queue_streamContinuations.values {
             continuation.yield(newMetadata)
@@ -123,7 +125,7 @@ final class NodeMetadataPresenter: NSObject, NSFilePresenter, @unchecked Sendabl
     }
 
     func presentedItemDidChange() {
-        logDebug("\(queue_url) changed")
+        logVerbose("\(queue_url) changed")
         queue_updateMetadata()
     }
 
