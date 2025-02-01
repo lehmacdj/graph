@@ -12,15 +12,19 @@ import AsyncAlgorithms
 
 actor FilesystemGraphRepository: GraphRepository {
     private let basePath: URL
+    private let filePresenterManager: FilePresenterManager
 
-    init(basePath: URL) async throws {
+    init(basePath: URL, filePresenterManager: FilePresenterManager) async throws {
         self.basePath = basePath
+        self.filePresenterManager = filePresenterManager
         metadataCache = ConcurrentCache(
-            create: { try await NodeMetadataDocument(metaURL: basePath.appending(metaPathFor: $0)) },
-            destroy: { (nid, document) in
-                if await !document.close() {
-                    logError("failed to save while closing metadata document for \(nid)")
-                }
+            create: { [filePresenterManager] in
+                let presenter = NodeMetadataPresenter(url: basePath.appending(metaPathFor: $0))
+                await filePresenterManager.add(presenter)
+                return presenter
+            },
+            destroy: { [filePresenterManager] (_, presenter) in
+                await filePresenterManager.remove(presenter)
             },
             logContext: "metadataCache"
         )
@@ -82,7 +86,7 @@ actor FilesystemGraphRepository: GraphRepository {
         return nid
     }
 
-    func updates<T: Sendable>(computeValue: @escaping ComputeValueClosure<T>) -> any SendableAsyncSequence<T, Error> {
+    func updates<T: Sendable>(computeValue: @escaping ComputeValueClosure<T>) -> sending any AsyncSequence<T, Error> {
         UpdatesSequence<T>(graphRepository: self, computeValue: computeValue)
     }
 
@@ -100,19 +104,26 @@ actor FilesystemGraphRepository: GraphRepository {
 
     // MARK: Primitive update sequences used by the custom AsyncSequence iterators we return
 
-    private var metadataCache: ConcurrentCache<NID, NodeMetadataDocument>
+    private var metadataCache: ConcurrentCache<NID, NodeMetadataPresenter>
 
-    private func getMetadataUpdates(for nid: NID) async throws -> (ConcurrentCache<NID, NodeMetadataDocument>.Handle, any SendableAsyncSequence<Node<NoAugmentation>, Never>) {
-        let (cacheEntry, metadataDocument) = try await metadataCache.getOrCreate(nid)
-        let sequence = await metadataDocument
-            .metaPublisher
-            .values
-        return (cacheEntry, sequence)
+    private func getMetadataUpdates(
+        for nid: NID
+    ) async throws -> sending (
+        ConcurrentCache<NID, NodeMetadataPresenter>.Handle,
+        any AsyncSequence<Node<NoAugmentation>, NodeMetadataPresenter.FileError>
+    ) {
+        let (cacheEntry, presenter) = try await metadataCache.getOrCreate(nid)
+        return (cacheEntry, await presenter.getUpdates())
     }
 
     private var dataAvailabilityCache: ConcurrentCache<NID, FileAvailabilityObserver>
 
-    private func getDataAvailabilityUpdates(for nid: NID) async throws -> (ConcurrentCache<NID, FileAvailabilityObserver>.Handle, any SendableAsyncSequence<DataAvailability, Never>) {
+    private func getDataAvailabilityUpdates(
+        for nid: NID
+    ) async throws -> sending (
+        ConcurrentCache<NID, FileAvailabilityObserver>.Handle,
+        any AsyncSequence<DataAvailability, Never>
+    ) {
         let (cacheEntry, observer) = try await dataAvailabilityCache.getOrCreate(nid)
         let updates = await observer.updates
         return (cacheEntry, updates)
@@ -120,7 +131,12 @@ actor FilesystemGraphRepository: GraphRepository {
 
     private let dataDocumentCache: ConcurrentCache<NID, DataDocument>
 
-    private func getDataUpdates(for nid: NID) async throws -> (ConcurrentCache<NID, DataDocument>.Handle, any SendableAsyncSequence<Data, Error>) {
+    private func getDataUpdates(
+        for nid: NID
+    ) async throws -> sending (
+        ConcurrentCache<NID, DataDocument>.Handle,
+        any AsyncSequence<Data, Error>
+    ) {
         let (cacheEntry, dataDocument) = try await dataDocumentCache.getOrCreate(nid)
         let sequence = await dataDocument
             .dataPublisher
@@ -282,7 +298,7 @@ private extension FilesystemGraphRepository {
                 let task = Task { [nid, graphRepository, weak iterator] in
                     do {
                         let (cancellable, updates) = try await graphRepository.getMetadataUpdates(for: nid)
-                        for await nodeValue in updates {
+                        for try await nodeValue in updates {
                             await iterator?.updateEntry(for: nid) { entry in
                                 guard entry.mostRecentValue != nodeValue else { return false }
                                 entry.mostRecentValue = nodeValue

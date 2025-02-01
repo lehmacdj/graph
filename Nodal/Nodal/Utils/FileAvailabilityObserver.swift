@@ -60,7 +60,7 @@ actor FileAvailabilityObserver {
         updatesContinuations.removeValue(forKey: uuid)
     }
 
-    var updates: some SendableAsyncSequence<DataAvailability, Never> {
+    var updates: some AsyncSequence<DataAvailability, Never> & Sendable {
         let (updates, updatesContinuation) = AsyncStream<FileAvailability>.makeStream()
         let uuid = UUID()
         updatesContinuation.onTermination = { [weak self] _ in
