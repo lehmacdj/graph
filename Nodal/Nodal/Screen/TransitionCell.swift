@@ -39,6 +39,7 @@ struct TransitionCell: View {
         _vm = State(wrappedValue: transitionVM)
     }
 
+    @ViewBuilder
     var thumbnail: some View {
         Suspense(vm.thumbnail) { loadingThumbnail in
             switch loadingThumbnail {
@@ -54,9 +55,6 @@ struct TransitionCell: View {
                 }
                 .frame(height: 120)
             }
-        } placeholder: {
-            // until we know if we have a thumbnail assume we don't
-            EmptyView()
         }
     }
 
