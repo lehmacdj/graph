@@ -12,17 +12,58 @@ import System.MacOS.NSFileCoordinator
 
 main :: IO ()
 main = do
+  putStrLn "Testing NSFileCoordinator FFI functions..."
+  
+  -- Initialize coordinator
   fileCoordinator <- nsFileCoordinator_init
-  url <- withCString "/Users/devin/iCloud Drive/test.json" $ \cannonicalPath ->
-    nsURL_initFileURL cannonicalPath (fromBool True)
+  
+  -- Create test URLs
+  url1 <- withCString "/tmp/test1.txt" $ \path ->
+    nsURL_initFileURL path (fromBool False)
+  url2 <- withCString "/tmp/test2.txt" $ \path ->
+    nsURL_initFileURL path (fromBool False)
+
+  -- Test reading
+  putStrLn "\nTesting coordinateReadingItem..."
   m_NSFileCoordinator_coordinateReadingItem
     fileCoordinator
-    url
+    url1
     k_NSFileCoordinatorReadingWithoutChanges
     nullPtr
-    (\newURL -> do
-      putStrLn "got access to read file"
-      pure ())
+    (\newURL -> putStrLn "  Got read access to file 1")
+
+  -- Test writing
+  putStrLn "\nTesting coordinateWritingItem..."
+  m_NSFileCoordinator_coordinateWritingItem
+    fileCoordinator
+    url1
+    k_NSFileCoordinatorWritingContentIndependentMetadataOnly
+    nullPtr
+    (\newURL -> putStrLn "  Got write access to file 1")
+
+  -- Test reading and writing
+  putStrLn "\nTesting coordinateReadingAndWritingItem..."
+  m_NSFileCoordinator_coordinateReadingAndWritingItem
+    fileCoordinator
+    url1
+    k_NSFileCoordinatorReadingWithoutChanges
+    url2
+    k_NSFileCoordinatorWritingContentIndependentMetadataOnly
+    nullPtr
+    (\readURL writeURL -> putStrLn "  Got read access to file 1 and write access to file 2")
+
+  -- Test writing multiple
+  putStrLn "\nTesting coordinateWritingItems..."
+  m_NSFileCoordinator_coordinateWritingItems
+    fileCoordinator
+    url1
+    k_NSFileCoordinatorWritingContentIndependentMetadataOnly
+    url2
+    k_NSFileCoordinatorWritingContentIndependentMetadataOnly
+    nullPtr
+    (\newURL1 newURL2 -> putStrLn "  Got write access to both files")
+
+  putStrLn "\nAll tests complete!"
 
 #else
 
