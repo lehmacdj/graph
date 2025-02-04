@@ -41,6 +41,8 @@ dependencies:
 - generic-lens
 - haskeline
 - hspec-expectations
+- inline-c
+- inline-c-objc
 - html-conduit
 - http-conduit
 - http-types
@@ -61,6 +63,7 @@ dependencies:
 - temporary
 - text
 - time
+- template-haskell
 - transformers
 - typed-process
 - unix
@@ -81,6 +84,7 @@ dependencies:
 default-extensions:
 - BangPatterns
 - BlockArguments
+- CApiFFI
 - ConstraintKinds
 - DataKinds
 - DeriveAnyClass
@@ -102,6 +106,7 @@ default-extensions:
 - OverloadedStrings
 - PatternSynonyms
 - PolyKinds
+- QuasiQuotes
 - RankNTypes
 - RecordWildCards
 - ScopedTypeVariables
@@ -121,6 +126,14 @@ ghc-options:
 
 library:
   source-dirs: src
+  when:
+    - condition: os(darwin)
+      then:
+        extra-libraries: [ objc ]
+        frameworks: [ Foundation ]
+      else:
+        extra-libraries: []
+        frameworks: []
 
 executables:
   ge:
@@ -136,6 +149,16 @@ executables:
   dump-graph:
     main:                Main.hs
     source-dirs:         app/dump-graph
+    ghc-options:
+    - -threaded
+    - -rtsopts
+    - -with-rtsopts=-N
+    dependencies:
+    - graph
+
+  scratch:
+    main:                Main.hs
+    source-dirs:         app/scratch
     ghc-options:
     - -threaded
     - -rtsopts

@@ -46,6 +46,7 @@ library
       Executable.GraphEditor.Completion
       Executable.GraphEditor.GoldenSpec
       Executable.GraphEditor.Options
+      Executable.Scratch
       Graph.Check
       Graph.Effect
       Graph.Export.FileSystem
@@ -80,6 +81,8 @@ library
       System.IO.Term.BinarySerialize
       System.IO.Term.Image
       System.IO.Term.Image.Payload
+      System.MacOS.NSFileCoordinator.RawBindings
+      System.MacOS.NSFileCoordinator.Types
       TestPrelude
       Utils.Base62
       Utils.Extensibility
@@ -91,6 +94,7 @@ library
   default-extensions:
       BangPatterns
       BlockArguments
+      CApiFFI
       ConstraintKinds
       DataKinds
       DeriveAnyClass
@@ -112,6 +116,7 @@ library
       OverloadedStrings
       PatternSynonyms
       PolyKinds
+      QuasiQuotes
       RankNTypes
       RecordWildCards
       ScopedTypeVariables
@@ -149,6 +154,8 @@ library
     , html-conduit
     , http-conduit
     , http-types
+    , inline-c
+    , inline-c-objc
     , lens
     , megaparsec
     , mono-traversable
@@ -167,6 +174,7 @@ library
     , tasty-golden
     , tasty-hunit
     , tasty-quickcheck
+    , template-haskell
     , temporary
     , text
     , time
@@ -179,6 +187,12 @@ library
     , xdg-basedir
     , xml-conduit
   default-language: Haskell2010
+  if os(darwin)
+    extra-libraries:
+        objc
+    frameworks:
+        Foundation
+  else
 
 executable dump-graph
   main-is: Main.hs
@@ -189,6 +203,7 @@ executable dump-graph
   default-extensions:
       BangPatterns
       BlockArguments
+      CApiFFI
       ConstraintKinds
       DataKinds
       DeriveAnyClass
@@ -210,6 +225,7 @@ executable dump-graph
       OverloadedStrings
       PatternSynonyms
       PolyKinds
+      QuasiQuotes
       RankNTypes
       RecordWildCards
       ScopedTypeVariables
@@ -248,6 +264,8 @@ executable dump-graph
     , html-conduit
     , http-conduit
     , http-types
+    , inline-c
+    , inline-c-objc
     , lens
     , megaparsec
     , mono-traversable
@@ -266,6 +284,7 @@ executable dump-graph
     , tasty-golden
     , tasty-hunit
     , tasty-quickcheck
+    , template-haskell
     , temporary
     , text
     , time
@@ -288,6 +307,7 @@ executable ge
   default-extensions:
       BangPatterns
       BlockArguments
+      CApiFFI
       ConstraintKinds
       DataKinds
       DeriveAnyClass
@@ -309,6 +329,7 @@ executable ge
       OverloadedStrings
       PatternSynonyms
       PolyKinds
+      QuasiQuotes
       RankNTypes
       RecordWildCards
       ScopedTypeVariables
@@ -347,6 +368,8 @@ executable ge
     , html-conduit
     , http-conduit
     , http-types
+    , inline-c
+    , inline-c-objc
     , lens
     , megaparsec
     , mono-traversable
@@ -365,6 +388,111 @@ executable ge
     , tasty-golden
     , tasty-hunit
     , tasty-quickcheck
+    , template-haskell
+    , temporary
+    , text
+    , time
+    , transformers
+    , typed-process
+    , unix
+    , unliftio
+    , witherable
+    , wreq
+    , xdg-basedir
+    , xml-conduit
+  default-language: Haskell2010
+
+executable scratch
+  main-is: Main.hs
+  other-modules:
+      Paths_graph
+  hs-source-dirs:
+      app/scratch
+  default-extensions:
+      BangPatterns
+      BlockArguments
+      CApiFFI
+      ConstraintKinds
+      DataKinds
+      DeriveAnyClass
+      DeriveFoldable
+      DeriveFunctor
+      DeriveGeneric
+      DeriveTraversable
+      DerivingStrategies
+      DerivingVia
+      DisambiguateRecordFields
+      DuplicateRecordFields
+      FlexibleContexts
+      GADTs
+      GeneralizedNewtypeDeriving
+      LambdaCase
+      NamedFieldPuns
+      NoImplicitPrelude
+      OverloadedLabels
+      OverloadedStrings
+      PatternSynonyms
+      PolyKinds
+      QuasiQuotes
+      RankNTypes
+      RecordWildCards
+      ScopedTypeVariables
+      StandaloneDeriving
+      StrictData
+      TupleSections
+      TypeApplications
+      TypeFamilies
+      TypeOperators
+      ViewPatterns
+  ghc-options: -Wall -fplugin=Polysemy.Plugin -flate-specialise -fspecialise-aggressively -threaded -rtsopts -with-rtsopts=-N
+  build-depends:
+      Glob
+    , SHA
+    , aeson
+    , attoparsec
+    , base >=4.7 && <5
+    , base64
+    , base64-bytestring
+    , bytestring
+    , classy-prelude
+    , conduit
+    , conduit-extra
+    , containers
+    , deepseq
+    , directory
+    , directory-tree
+    , exceptions
+    , filepath
+    , foreign-store
+    , free
+    , generic-lens
+    , graph
+    , haskeline
+    , hspec-expectations
+    , html-conduit
+    , http-conduit
+    , http-types
+    , inline-c
+    , inline-c-objc
+    , lens
+    , megaparsec
+    , mono-traversable
+    , mtl
+    , optparse-applicative
+    , ordered-containers
+    , parser-combinators
+    , polysemy
+    , polysemy-plugin
+    , polysemy-readline
+    , polysemy-zoo
+    , random
+    , random-shuffle
+    , tasty
+    , tasty-discover
+    , tasty-golden
+    , tasty-hunit
+    , tasty-quickcheck
+    , template-haskell
     , temporary
     , text
     , time
@@ -388,6 +516,7 @@ test-suite graph-test
   default-extensions:
       BangPatterns
       BlockArguments
+      CApiFFI
       ConstraintKinds
       DataKinds
       DeriveAnyClass
@@ -409,6 +538,7 @@ test-suite graph-test
       OverloadedStrings
       PatternSynonyms
       PolyKinds
+      QuasiQuotes
       RankNTypes
       RecordWildCards
       ScopedTypeVariables
@@ -447,6 +577,8 @@ test-suite graph-test
     , html-conduit
     , http-conduit
     , http-types
+    , inline-c
+    , inline-c-objc
     , lens
     , megaparsec
     , mono-traversable
@@ -465,6 +597,7 @@ test-suite graph-test
     , tasty-golden
     , tasty-hunit
     , tasty-quickcheck
+    , template-haskell
     , temporary
     , text
     , time

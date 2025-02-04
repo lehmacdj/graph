@@ -32,6 +32,13 @@ packages:
       size: 2955
   original:
     hackage: haskeline-0.8.2.1
+- completed:
+    hackage: inline-c-objc-0.1.0.0@sha256:b08f875fc26c6a676eaca1e7de8649c91631b683d7a74bfb0ed09b649358133c,1337
+    pantry-tree:
+      sha256: cb4a280fb81e2f172794fe7bd426914c3e7f0c0f3fe50ddbd8d5a19b2d5cac04
+      size: 233
+  original:
+    hackage: inline-c-objc-0.1.0.0
 snapshots:
 - completed:
     sha256: abcc4a65c15c7c2313f1a87f01bfd4d910516e1930b99653eef1d2d006515916

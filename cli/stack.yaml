@@ -42,6 +42,7 @@ extra-deps:
 - polysemy-zoo-0.8.2.0
 - compact-0.2.0.0
 - haskeline-0.8.2.1
+- inline-c-objc-0.1.0.0
 
 # allow dependencies to be filled with newer things
 allow-newer: true
