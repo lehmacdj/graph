@@ -18,9 +18,9 @@ main = do
   fileCoordinator <- nsFileCoordinator_init
   
   -- Create test URLs
-  url1 <- withCString "/tmp/test1.txt" $ \path ->
+  url1 <- withCString "/Users/devin/iCloud Drive/test.json" $ \path ->
     nsURL_initFileURL path (fromBool False)
-  url2 <- withCString "/tmp/test2.txt" $ \path ->
+  url2 <- withCString "/Users/devin/iCloud Drive/foo.json" $ \path ->
     nsURL_initFileURL path (fromBool False)
 
   -- Test reading
