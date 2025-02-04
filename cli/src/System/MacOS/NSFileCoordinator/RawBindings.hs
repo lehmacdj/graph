@@ -6,7 +6,7 @@
 
 module System.MacOS.NSFileCoordinator.RawBindings
   ( module X,
-    module System.MacOS.NSFileCoordinator,
+    module System.MacOS.NSFileCoordinator.RawBindings,
   )
 where
 

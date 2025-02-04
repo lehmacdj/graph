@@ -6,17 +6,17 @@ module Executable.Scratch where
 import Foreign
 import Foreign.C
 import MyPrelude
-import System.MacOS.NSFileCoordinator
+import System.MacOS.NSFileCoordinator.RawBindings
 
 #ifdef darwin_HOST_OS
 
 main :: IO ()
 main = do
   putStrLn "Testing NSFileCoordinator FFI functions..."
-  
+
   -- Initialize coordinator
   fileCoordinator <- nsFileCoordinator_init
-  
+
   -- Create test URLs
   url1 <- withCString "/Users/devin/iCloud Drive/test.json" $ \path ->
     nsURL_initFileURL path (fromBool False)
