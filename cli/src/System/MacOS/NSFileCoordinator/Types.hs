@@ -10,6 +10,10 @@ module System.MacOS.NSFileCoordinator.Types
     NSError,
     NSURL,
     NSFileCoordinator,
+    NSArray,
+
+    -- * Helpers
+    castToId,
 
     -- * Reading/writing options
     NSFileCoordinatorReadingOptions,
@@ -29,6 +33,7 @@ where
 import Foreign
 import Language.C.Inline
 import Language.C.Inline.Context
+import qualified Language.C.Inline.ObjC as C
 import qualified Language.C.Types as CT
 import qualified Language.Haskell.TH.Syntax as TH
 import MyPrelude
@@ -38,6 +43,11 @@ data NSError
 data NSURL
 
 data NSFileCoordinator
+
+data NSArray
+
+castToId :: Ptr a -> C.Id
+castToId = C.Id . castPtr
 
 type NSFileCoordinatorReadingOptions = CULong
 
@@ -66,7 +76,7 @@ foundationCtx =
           [ (CT.TypeName "NSURL", [t|NSURL|]),
             (CT.TypeName "NSFileCoordinator", [t|NSFileCoordinator|]),
             (CT.TypeName "NSError", [t|NSError|]),
-            (CT.TypeName "NSError", [t|NSError|]),
+            (CT.TypeName "NSArray", [t|NSArray|]),
             (CT.TypeName "NSFileCoordinatorReadingOptions", [t|NSFileCoordinatorReadingOptions|]),
             (CT.TypeName "NSFileCoordinatorWritingOptions", [t|NSFileCoordinatorWritingOptions|])
           ]
