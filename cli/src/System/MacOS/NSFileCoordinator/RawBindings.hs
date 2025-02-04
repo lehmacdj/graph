@@ -37,6 +37,12 @@ nsURL_initFileURL cannonicalPath isDirectory = [C.exp| NSURL *{
   }
   |]
 
+nsArray_initWithObjects :: Ptr C.Id -> CUInt -> IO (Ptr NSArray)
+nsArray_initWithObjects objects count = [C.exp| NSArray *{
+    [NSArray arrayWithObjects: $(id *objects) count: $(unsigned int count)]
+  }
+  |]
+
 -- | - (instancetype)initWithFilePresenter:(nullable id<NSFilePresenter>)filePresenterOrNil NS_DESIGNATED_INITIALIZER;
 nsFileCoordinator_init :: IO (Ptr NSFileCoordinator)
 nsFileCoordinator_init = [C.exp| NSFileCoordinator *{ [[NSFileCoordinator alloc] initWithFilePresenter:nil] } |]
