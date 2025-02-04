@@ -55,6 +55,7 @@ m_NSFileCoordinator_coordinateReadingItem fileCoordinator url options errorPtr a
   }
   |]
 
+-- | - (void)coordinateWritingItemAtURL:(NSURL *)url options:(NSFileCoordinatorWritingOptions)options error:(NSError **)outError byAccessor:(void (NS_NOESCAPE ^)(NSURL *newURL))writer;
 m_NSFileCoordinator_coordinateWritingItem ::
   Ptr NSFileCoordinator ->
   Ptr NSURL -> NSFileCoordinatorWritingOptions -> Ptr (Ptr NSError) -> SingleURLAccessor -> IO ()
@@ -68,6 +69,7 @@ m_NSFileCoordinator_coordinateWritingItem fileCoordinator url options errorPtr a
   }
   |]
 
+-- | - (void)coordinateReadingItemAtURL:(NSURL *)readingURL options:(NSFileCoordinatorReadingOptions)readingOptions writingItemAtURL:(NSURL *)writingURL options:(NSFileCoordinatorWritingOptions)writingOptions error:(NSError **)outError byAccessor:(void (NS_NOESCAPE ^)(NSURL *newReadingURL, NSURL *newWritingURL))readerWriter;
 m_NSFileCoordinator_coordinateReadingAndWritingItem ::
   Ptr NSFileCoordinator ->
   Ptr NSURL -> NSFileCoordinatorReadingOptions ->
@@ -87,6 +89,7 @@ m_NSFileCoordinator_coordinateReadingAndWritingItem fileCoordinator readingURL r
   }
   |]
 
+-- | - (void)coordinateWritingItemAtURL:(NSURL *)url1 options:(NSFileCoordinatorWritingOptions)options1 writingItemAtURL:(NSURL *)url2 options:(NSFileCoordinatorWritingOptions)options2 error:(NSError **)outError byAccessor:(void (NS_NOESCAPE ^)(NSURL *newURL1, NSURL *newURL2))writer;
 m_NSFileCoordinator_coordinateWritingItems ::
   Ptr NSFileCoordinator ->
   Ptr NSURL -> NSFileCoordinatorWritingOptions ->
