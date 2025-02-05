@@ -1,5 +1,8 @@
 {-# LANGUAGE CPP #-}
 
+-- | This module provides a high-level interface to the NSFileCoordinator API.
+-- Though it is only available on macOS, this module provides a cross-platform
+-- API by providing a no-op implementation on non-macOS platforms.
 module System.MacOS.NSFileCoordinator
   ( coordinateReading,
     coordinateWriting,
@@ -13,7 +16,20 @@ module System.MacOS.NSFileCoordinator
   )
 where
 
--- Common types shared between Darwin and non-Darwin implementations
+import MyPrelude
+
+#ifdef darwin_HOST_OS
+
+import Control.Lens
+import Control.Monad.Trans.Cont
+import Foreign
+import Foreign.C.String
+import System.MacOS.NSFileCoordinator.RawBindings
+
+#endif
+
+-- * Common types shared between Darwin and non-Darwin implementations
+
 data WritingOptions = WritingOptions
 
 data ReadingOptions = ReadingOptions
@@ -29,22 +45,15 @@ data NSErrorException = NSErrorException
 
 #ifdef darwin_HOST_OS
 
-import Control.Lens
-import Control.Monad.Trans.Cont
-import Foreign
-import Foreign.C.String
-import MyPrelude
-import System.MacOS.NSFileCoordinator.RawBindings
-
 withNSURL :: FilePath -> Bool -> (Ptr NSURL -> IO a) -> IO a
 withNSURL path isDirectory action = withCString path $ \pathPtr ->
   bracket (nsURL_initFileURL pathPtr (fromBool isDirectory)) m_release action
 
 fromWritingOptions :: WritingOptions -> NSFileCoordinatorWritingOptions
-fromWritingOptions = 0
+fromWritingOptions _ = 0
 
 fromReadingOptions :: ReadingOptions -> NSFileCoordinatorReadingOptions
-fromReadingOptions = 0
+fromReadingOptions _ = 0
 
 filePathFromNSURL :: Ptr NSURL -> IO FilePath
 filePathFromNSURL url = do
@@ -63,7 +72,7 @@ throwNSError nsError = peekNSError nsError >>= throwIO
 withNSArray :: Objc a => [Ptr a] -> (Ptr NSArray -> IO b) -> IO b
 withNSArray objects action = withArrayLen objects $ \len objectsPtr ->
   bracket
-    (nsArray_initWithObjects (castToId objectsPtr) (fromIntegral len))
+    (nsArray_initWithObjects (castPtr objectsPtr) (fromIntegral len))
     m_release
     action
 
@@ -212,8 +221,8 @@ coordinateAccessing readingPaths blanketReadingOptions writingPaths blanketWriti
       ContT $ withNSURL path isDirectory
     writingUrls <- for writingPaths $ \(path, isDirectory) ->
       ContT $ withNSURL path isDirectory
-    readingUrlsArray <- ContT $ withNSArray (toList readingUrls)
-    writingUrlsArray <- ContT $ withNSArray (toList readingUrls)
+    readingUrlsArray <- ContT $ withNSArray (readingUrls ^.. folded)
+    writingUrlsArray <- ContT $ withNSArray (writingUrls ^.. folded)
     fileCoordinator <- ContT $ bracket nsFileCoordinator_init m_release
     errPtr <- ContT alloca
     let readingAccessors =
