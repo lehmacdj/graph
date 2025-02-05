@@ -13,6 +13,20 @@ module System.MacOS.NSFileCoordinator
   )
 where
 
+-- Common types shared between Darwin and non-Darwin implementations
+data WritingOptions = WritingOptions
+
+data ReadingOptions = ReadingOptions
+
+data NullResultException = NullResultException
+  deriving (Show, Exception)
+
+data NSErrorException = NSErrorException
+  { domain :: Text,
+    code :: Int
+  }
+  deriving (Show, Exception)
+
 #ifdef darwin_HOST_OS
 
 import Control.Lens
@@ -26,12 +40,8 @@ withNSURL :: FilePath -> Bool -> (Ptr NSURL -> IO a) -> IO a
 withNSURL path isDirectory action = withCString path $ \pathPtr ->
   bracket (nsURL_initFileURL pathPtr (fromBool isDirectory)) m_release action
 
-data WritingOptions = WritingOptions
-
 fromWritingOptions :: WritingOptions -> NSFileCoordinatorWritingOptions
 fromWritingOptions = 0
-
-data ReadingOptions = ReadingOptions
 
 fromReadingOptions :: ReadingOptions -> NSFileCoordinatorReadingOptions
 fromReadingOptions = 0
@@ -40,12 +50,6 @@ filePathFromNSURL :: Ptr NSURL -> IO FilePath
 filePathFromNSURL url = do
   path <- p_NSURL_path url
   unpack <$> packNSString path
-
-data NSErrorException = NSErrorException
-  { domain :: Text,
-    code :: Int
-  }
-  deriving (Show, Exception)
 
 peekNSError :: Ptr NSError -> IO NSErrorException
 peekNSError nsError = do
@@ -62,9 +66,6 @@ withNSArray objects action = withArrayLen objects $ \len objectsPtr ->
     (nsArray_initWithObjects (castToId objectsPtr) (fromIntegral len))
     m_release
     action
-
-data NullResultException = NullResultException
-  deriving (Show, Exception)
 
 coordinateReading' ::
   Ptr NSFileCoordinator ->
@@ -232,19 +233,6 @@ coordinateAccessing readingPaths blanketReadingOptions writingPaths blanketWriti
         $ action readingAccessors writingAccessors
 
 #else
-
-data WritingOptions = WritingOptions
-
-data ReadingOptions = ReadingOptions
-
-data NullResultException = NullResultException
-  deriving (Show, Exception)
-
-data NSErrorException = NSErrorException
-  { domain :: Text,
-    code :: Int
-  }
-  deriving (Show, Exception)
 
 coordinateReading :: FilePath -> Bool -> ReadingOptions -> (FilePath -> IO a) -> IO a
 coordinateReading path _ _ action = action path
