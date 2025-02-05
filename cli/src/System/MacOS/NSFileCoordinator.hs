@@ -1,4 +1,19 @@
-module System.MacOS.NSFileCoordinator where
+{-# LANGUAGE CPP #-}
+
+module System.MacOS.NSFileCoordinator
+  ( coordinateReading,
+    coordinateWriting,
+    coordinateReadingThenWriting,
+    coordinateWritingAndWriting,
+    coordinateAccessing,
+    ReadingOptions (..),
+    WritingOptions (..),
+    NullResultException (..),
+    NSErrorException (..),
+  )
+where
+
+#ifdef darwin_HOST_OS
 
 import Control.Lens
 import Control.Monad.Trans.Cont
@@ -215,3 +230,5 @@ coordinateAccessing readingPaths blanketReadingOptions writingPaths blanketWriti
         (fromWritingOptions blanketWritingOptions)
         errPtr
         $ action readingAccessors writingAccessors
+
+#endif
