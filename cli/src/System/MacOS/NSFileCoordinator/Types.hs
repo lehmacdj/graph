@@ -6,14 +6,18 @@
 module System.MacOS.NSFileCoordinator.Types
   ( foundationCtx,
 
+    -- * Helpers
+    Objc (castToId, castFromId),
+
     -- * Opaque types for use with pointers
     NSError,
     NSURL,
     NSFileCoordinator,
     NSArray,
-
-    -- * Helpers
-    castToId,
+    NSString,
+    NSErrorDomain,
+    NSInteger,
+    NSUInteger,
 
     -- * Reading/writing options
     NSFileCoordinatorReadingOptions,
@@ -38,18 +42,31 @@ import qualified Language.C.Types as CT
 import qualified Language.Haskell.TH.Syntax as TH
 import MyPrelude
 
-data NSError
+-- | Marker typeclass for Objective-C types
+class Objc a where
+  castToId :: Ptr a -> C.Id
+  castToId = C.Id . castPtr
 
-data NSURL
+  castFromId :: C.Id -> Ptr a
+  castFromId (C.Id ptr) = castPtr ptr
 
-data NSFileCoordinator
+data NSError deriving (Objc)
 
-data NSArray
+data NSURL deriving (Objc)
 
-castToId :: Ptr a -> C.Id
-castToId = C.Id . castPtr
+data NSFileCoordinator deriving (Objc)
 
-type NSFileCoordinatorReadingOptions = CULong
+data NSArray deriving (Objc)
+
+data NSString deriving (Objc)
+
+type NSErrorDomain = NSString
+
+type NSInteger = CLong
+
+type NSUInteger = CULong
+
+type NSFileCoordinatorReadingOptions = NSUInteger
 
 k_NSFileCoordinatorReadingWithoutChanges, k_NSFileCoordinatorReadingResolvesSymbolicLink, k_NSFileCoordinatorReadingImmediatelyAvailableMetadataOnly, k_NSFileCoordinatorReadingForUploading :: NSFileCoordinatorReadingOptions
 k_NSFileCoordinatorReadingWithoutChanges = shift 1 0
@@ -57,7 +74,7 @@ k_NSFileCoordinatorReadingResolvesSymbolicLink = shift 1 1
 k_NSFileCoordinatorReadingImmediatelyAvailableMetadataOnly = shift 1 2
 k_NSFileCoordinatorReadingForUploading = shift 1 3
 
-type NSFileCoordinatorWritingOptions = CULong
+type NSFileCoordinatorWritingOptions = NSUInteger
 
 k_NSFileCoordinatorWritingForDeleting, k_NSFileCoordinatorWritingForMoving, k_NSFileCoordinatorWritingForMerging, k_NSFileCoordinatorWritingForReplacing, k_NSFileCoordinatorWritingContentIndependentMetadataOnly :: NSFileCoordinatorWritingOptions
 k_NSFileCoordinatorWritingForDeleting = shift 1 0
@@ -77,6 +94,10 @@ foundationCtx =
             (CT.TypeName "NSFileCoordinator", [t|NSFileCoordinator|]),
             (CT.TypeName "NSError", [t|NSError|]),
             (CT.TypeName "NSArray", [t|NSArray|]),
+            (CT.TypeName "NSString", [t|NSString|]),
+            (CT.TypeName "NSErrorDomain", [t|NSErrorDomain|]),
+            (CT.TypeName "NSInteger", [t|NSInteger|]),
+            (CT.TypeName "NSUInteger", [t|NSUInteger|]),
             (CT.TypeName "NSFileCoordinatorReadingOptions", [t|NSFileCoordinatorReadingOptions|]),
             (CT.TypeName "NSFileCoordinatorWritingOptions", [t|NSFileCoordinatorWritingOptions|])
           ]

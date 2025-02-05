@@ -10,9 +10,11 @@ module System.MacOS.NSFileCoordinator.RawBindings
   )
 where
 
+import qualified Data.ByteString.Unsafe as ByteString
 import Foreign.C.String
 import Foreign.C.Types
 import Foreign.Ptr
+import qualified Language.C.Inline as C
 import qualified Language.C.Inline.ObjC as C
 import MyPrelude
 import System.MacOS.NSFileCoordinator.Types
@@ -23,9 +25,11 @@ import System.MacOS.NSFileCoordinator.Types as X hiding (foundationCtx)
 C.context (C.objcCtx <> C.funCtx <> foundationCtx)
 C.include "<Foundation/Foundation.h>"
 
+m_release :: Objc a => Ptr a -> IO ()
+m_release (castToId -> obj) = [C.exp| void { [$(id obj) release] } |]
+
 type SingleURLAccessor = Ptr NSURL -> IO ()
 type DualURLAccessor = Ptr NSURL -> Ptr NSURL -> IO ()
-type CleaningUpAccessor = FunPtr (() -> IO ()) -> IO ()
 
 nsURL_initFileURL :: CString -> CBool -> IO (Ptr NSURL)
 nsURL_initFileURL cannonicalPath isDirectory = [C.exp| NSURL *{
@@ -36,6 +40,20 @@ nsURL_initFileURL cannonicalPath isDirectory = [C.exp| NSURL *{
     ]
   }
   |]
+
+p_NSURL_path :: Ptr NSURL -> IO (Ptr NSString)
+p_NSURL_path nsURL = [C.exp| NSString *{ [$(NSURL *nsURL) path] } |]
+
+p_NSError_domain :: Ptr NSError -> IO (Ptr NSErrorDomain)
+p_NSError_domain nsError = [C.exp| NSString *{ $(NSError *nsError).domain } |]
+
+p_NSError_code :: Ptr NSError -> IO NSInteger
+p_NSError_code nsError = [C.exp| NSInteger { $(NSError *nsError).code } |]
+
+packNSString :: Ptr NSString -> IO Text
+packNSString nsString = do
+  cString <- [C.exp| const char *{ [$(NSString *nsString) UTF8String] } |]
+  decodeUtf8 <$> ByteString.unsafePackCString cString
 
 nsArray_initWithObjects :: Ptr C.Id -> CUInt -> IO (Ptr NSArray)
 nsArray_initWithObjects objects count = [C.exp| NSArray *{
@@ -144,7 +162,7 @@ m_NSFileCoordinator_prepareForReadingAndWritingItems ::
   Ptr NSArray ->  -- writingURLs
   NSFileCoordinatorWritingOptions ->
   Ptr (Ptr NSError) ->
-  CleaningUpAccessor ->
+  IO () ->
   IO ()
 m_NSFileCoordinator_prepareForReadingAndWritingItems fileCoordinator readingURLs readingOptions writingURLs writingOptions errorPtr accessor =
   [C.block| void {
@@ -155,7 +173,8 @@ m_NSFileCoordinator_prepareForReadingAndWritingItems fileCoordinator readingURLs
       options: $(NSFileCoordinatorWritingOptions writingOptions)
       error: $(NSError **errorPtr)
       byAccessor: ^(void (^completionHandler)(void)) {
-        $fun:(void (*accessor)(void (*)(void)))(completionHandler);
+        $fun:(void (*accessor)())();
+        completionHandler();
       }
     ];
   }
