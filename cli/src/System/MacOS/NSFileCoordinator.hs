@@ -231,4 +231,47 @@ coordinateAccessing readingPaths blanketReadingOptions writingPaths blanketWriti
         errPtr
         $ action readingAccessors writingAccessors
 
+#else
+
+data WritingOptions = WritingOptions
+
+data ReadingOptions = ReadingOptions
+
+data NullResultException = NullResultException
+  deriving (Show, Exception)
+
+data NSErrorException = NSErrorException
+  { domain :: Text,
+    code :: Int
+  }
+  deriving (Show, Exception)
+
+coordinateReading :: FilePath -> Bool -> ReadingOptions -> (FilePath -> IO a) -> IO a
+coordinateReading path _ _ action = action path
+
+coordinateWriting :: FilePath -> Bool -> WritingOptions -> (FilePath -> IO a) -> IO a
+coordinateWriting path _ _ action = action path
+
+coordinateReadingThenWriting :: FilePath -> Bool -> ReadingOptions -> FilePath -> Bool -> WritingOptions -> (FilePath -> FilePath -> IO a) -> IO a
+coordinateReadingThenWriting readingPath _ _ writingPath _ _ action = action readingPath writingPath
+
+coordinateWritingAndWriting :: FilePath -> Bool -> WritingOptions -> FilePath -> Bool -> WritingOptions -> (FilePath -> FilePath -> IO a) -> IO a
+coordinateWritingAndWriting writingPath1 _ _ writingPath2 _ _ action = action writingPath1 writingPath2
+
+coordinateAccessing ::
+  Traversable t =>
+  t (FilePath, Bool) ->
+  ReadingOptions ->
+  t (FilePath, Bool) ->
+  WritingOptions ->
+  ( t (ReadingOptions -> (FilePath -> IO ()) -> IO ()) ->
+    t (WritingOptions -> (FilePath -> IO ()) -> IO ()) ->
+    IO ()
+  ) ->
+  IO ()
+coordinateAccessing readingPaths _ writingPaths _ action =
+  let readingAccessors = readingPaths <&> \(path, _) _ readingAction -> readingAction path
+      writingAccessors = writingPaths <&> \(path, _) _ writingAction -> writingAction path
+   in action readingAccessors writingAccessors
+
 #endif
