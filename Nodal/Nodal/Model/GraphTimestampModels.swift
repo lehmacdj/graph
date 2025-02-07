@@ -148,6 +148,7 @@ func makeDate(year: Int, month: Int, day: Int, time: Date) -> Date {
     )
     let dateComponents = DateComponents(
         calendar: calendar,
+        timeZone: .gmt,
         year: year,
         month: month,
         day: day,
