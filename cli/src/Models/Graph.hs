@@ -40,19 +40,19 @@ refreshNode ::
   Graph t a ->
   Node t a ->
   Node t a
-refreshNode g = lookupNode g . nidOf
+refreshNode g = lookupNode g . view #nid
 
 nodeLookup ::
   ValidNode t a =>
   NID ->
   Graph t a ->
   Node t a
-nodeLookup i g = fromMaybe err . lookup i . nodeMap $ g
+nodeLookup i g = fromMaybe err . lookup i . (^. #nodeMap) $ g
   where
     err =
       error $
         "expected to find " ++ show i ++ " in the Graph\n"
-          ++ MD.showTree (nodeMap g)
+          ++ MD.showTree ((^. #nodeMap) g)
 
 -- | Utility function for constructing a primed version of a function operating
 -- on ids instead of nodes
@@ -76,8 +76,8 @@ primeds f i ig = f (nodeLookup <$> i <*> pure ig) ig
 delEdge :: ValidNode t a => Edge t -> Graph t a -> Graph t a
 delEdge e g =
   withNodeMap g $
-    adjustMap (over #outgoing (deleteSet (outConnect e))) (source e)
-      . adjustMap (over #incoming (deleteSet (inConnect e))) (sink e)
+    adjustMap (over #outgoing (deleteSet (outConnect e))) (e ^. #source)
+      . adjustMap (over #incoming (deleteSet (inConnect e))) (e ^. #sink)
 
 delEdges ::
   ValidNode t a =>
@@ -95,7 +95,7 @@ delNode n g =
       . omap deleteOutgoing
       . deleteMap nid
   where
-    nid = view #nodeId n
+    nid = n ^. #nid
     del = filterSet ((/= nid) . view #node)
     deleteIncoming = over #incoming del
     deleteOutgoing = over #outgoing del
@@ -125,8 +125,8 @@ insertEdge ::
   Graph t a
 insertEdge e g =
   withNodeMap g $
-    adjustMap (over #outgoing (insertSet (outConnect e))) (source e)
-      . adjustMap (over #incoming (insertSet (inConnect e))) (sink e)
+    adjustMap (over #outgoing (insertSet (outConnect e))) (e ^. #source)
+      . adjustMap (over #incoming (insertSet (inConnect e))) (e ^. #sink)
 
 insertEdges ::
   ValidNode t a =>
@@ -145,7 +145,7 @@ insertNode n g =
   insertEdges (incomingEs ++ outgoingEs) $
     withNodeMap g (insertMap nid n)
   where
-    nid = view #nodeId n
+    nid = n ^. #nid
     incomingEs = map (`incomingEdge` nid) (toList (view #incoming n))
     outgoingEs = map (outgoingEdge nid) (toList (view #outgoing n))
 
@@ -157,13 +157,13 @@ insertNodes ::
 insertNodes = listify insertNode
 
 nodesOf :: Graph t a -> [Node t a]
-nodesOf = toList . nodeMap
+nodesOf = (^.. #nodeMap . folded)
 
 emptyGraph :: Graph t a
 emptyGraph = Graph mempty
 
 isEmptyGraph :: Graph t a -> Bool
-isEmptyGraph = null . nodeMap
+isEmptyGraph = null . view #nodeMap
 
 -- | sets the data, setting to nothing is equivalent to deleting the data
 -- this is a terrible function that should probably not be used
@@ -184,7 +184,7 @@ setData' ::
 setData' d = primed (setData d)
 
 maybeLookupNode :: Graph t a -> NID -> Maybe (Node t a)
-maybeLookupNode = flip lookup . nodeMap
+maybeLookupNode = flip lookup . view #nodeMap
 
 nodeConsistentWithGraph ::
   (HasCallStack, ValidNode t a, Eq a) =>
@@ -192,21 +192,21 @@ nodeConsistentWithGraph ::
   Node t a ->
   Node t a
 nodeConsistentWithGraph g n
-  | lookupNode g (nidOf n) == n = n
+  | lookupNode g (n ^. #nid) == n = n
   | otherwise = error $ "node " ++ show n ++ " is inconsistent with the state of the graph " ++ show g
 
 traceGraph :: ValidNode t a => Graph t a -> Graph t a
 traceGraph g = withNodeMap g $ \nm -> Debug.trace (showDebug (Debug.trace "graph is:" g)) nm
 
 showDebug :: ValidNode t a => Graph t a -> String
-showDebug = unlines . map show . toList . nodeMap
+showDebug = unlines . map show . toList . view #nodeMap
 
 filterGraph ::
   Ord t =>
   (Node t a -> Bool) ->
   Graph t a ->
   Graph t a
-filterGraph f g = ofoldr maybeDelNode g (nodeMap g)
+filterGraph f g = ofoldr maybeDelNode g (view #nodeMap g)
   where
     maybeDelNode x ig'
       | not $ f x = delNode x ig'

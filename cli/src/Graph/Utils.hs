@@ -35,7 +35,7 @@ getNodeDatalessSem nid =
     Nothing -> throwMissing nid
     Just n -> pure n
 
--- | Make it so that the node in the graph with nid = nidOf n, has supersets of
+-- | Make it so that the node in the graph with n ^. #nid, has supersets of
 -- in and out transitions present in n.
 -- Also sets the data to the data in n.
 -- We can't delete edges, because in some implementations that requires
@@ -46,7 +46,7 @@ insertNode ::
   Node t (Maybe ByteString) ->
   Sem effs ()
 insertNode n = do
-  let nid = nidOf n
+  let nid = n ^. #nid
   touchNode @t nid
   setData @t nid (dataOf n)
   let esOut = toListOf (#outgoing . folded . to (outgoingEdge nid)) n
@@ -146,7 +146,7 @@ mergeNode nid1 nid2 = do
   deleteNode @t nid1
   deleteNode @t nid2
   insertNode @t nNew
-  pure (nidOf nNew)
+  pure (nNew ^. #nid)
 
 -- | Create one node that unions together all of the connects of all of the
 -- other nodes

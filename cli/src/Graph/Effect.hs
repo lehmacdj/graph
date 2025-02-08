@@ -42,7 +42,7 @@ makeSem ''ReadGraph
 makeSem ''ReadGraphDataless
 
 newtype IsDual = IsDual {isDual :: Bool}
-  deriving (Show, Eq, Ord)
+  deriving (Show, Eq, Ord, Generic)
 
 type instance Element IsDual = Bool
 
@@ -54,7 +54,7 @@ instance MonoFunctor IsDual where
 -- dualization parameter.
 ifDualized :: IsDual -> (a -> a) -> a -> a
 ifDualized dual f
-  | isDual dual = f
+  | dual ^. #isDual = f
   | otherwise = id
 
 type Dualizeable = State IsDual
@@ -203,7 +203,7 @@ runReadGraphState ::
   Sem effs a
 runReadGraphState = interpret $ \case
   GetNode nid -> G.maybeLookupNode <$> get <*> pure nid
-  NodeManifest -> keys . G.nodeMap <$> get @(Graph t d)
+  NodeManifest -> keys . view #nodeMap <$> get @(Graph t d)
 
 runWriteGraphState ::
   forall t effs.

@@ -8,11 +8,11 @@ import MyPrelude
 -- efficient as the history grows very large. This is a representation like a
 -- zipper.
 data History = History
-  { _past :: [NID],
-    _now :: NID,
-    _future :: [NID]
+  { past :: [NID],
+    now :: NID,
+    future :: [NID]
   }
-  deriving (Show, Eq, Ord)
+  deriving (Show, Eq, Ord, Generic)
 
 singletonHistory :: NID -> History
 singletonHistory node = History [] node []
@@ -33,7 +33,7 @@ goBack (History [] now future) = History [] now future
 goBack (History (prev : past) now future) = History past prev (now : future)
 
 pickNow :: History -> (NID, History)
-pickNow history = (_now history, history)
+pickNow history = (history ^. #now, history)
 
 backInTime :: Int -> History -> (NID, History)
 backInTime howFar history

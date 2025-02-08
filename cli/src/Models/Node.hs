@@ -11,9 +11,6 @@ indegreeOf = Set.size . view #incoming
 outdegreeOf :: Node t a -> Int
 outdegreeOf = Set.size . view #outgoing
 
-nidOf :: Node t a -> NID
-nidOf = view #nodeId
-
 incomingConnectsOf ::
   ValidNode t a =>
   Node t a ->

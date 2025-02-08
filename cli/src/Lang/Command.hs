@@ -154,7 +154,7 @@ promptYesNo prompt = do
 guardDangerousDualizedOperation ::
   Members [Readline, Error UserError, Dualizeable] r => Sem r ()
 guardDangerousDualizedOperation = do
-  isDual' <- isDual <$> get @IsDual
+  isDual' <- view #isDual <$> get @IsDual
   when isDual' do
     outputStrLn "the graph is currently dualized"
     outputStrLn "the operation you are attempting may be dangerous in that state"

@@ -37,7 +37,7 @@ import qualified Data.ByteString as B
 import qualified Data.ByteString.Lazy as BL
 import Effect.UserError hiding (catch, throw)
 import qualified Models.Graph as Graph
-import Models.Node (dataOf, nidOf)
+import Models.Node (dataOf)
 import Models.Types
 import MyPrelude
 import System.Directory
@@ -66,11 +66,11 @@ serializeNodeEx ::
   IO ()
 serializeNodeEx n base = do
   createDirectoryIfMissing True base
-  BL.writeFile (linksFile base (nidOf n)) (Aeson.encode . nodeToDTO $ n)
+  BL.writeFile (linksFile base (n ^. #nid)) (Aeson.encode . nodeToDTO $ n)
   case dataOf n of
-    Just d -> B.writeFile (nodeDataFile base (nidOf n)) d
+    Just d -> B.writeFile (nodeDataFile base (n ^. #nid)) d
     Nothing ->
-      removeFile (nodeDataFile base (nidOf n)) `catch` \case
+      removeFile (nodeDataFile base (n ^. #nid)) `catch` \case
         e | isDoesNotExistError e -> pure ()
         e -> throwIO e
 

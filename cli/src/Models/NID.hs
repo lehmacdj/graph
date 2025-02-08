@@ -39,7 +39,7 @@ nidDigits = 12
 -- We represent these IDs using a string because it's not worth deserializing
 -- them to a more compact format. We verify that they are valid before
 -- converting them to this newtype however.
-newtype NID = UnsafeNID {textRep :: Text}
+newtype NID = UnsafeNID {representation :: Text}
   deriving (Eq, Ord, Generic)
   deriving newtype (NFData)
 
@@ -66,7 +66,7 @@ smallNID = UnsafeNID . pack . reverse . go nidDigits . (`rem` (62 ^ nidDigits))
         go (digitsLeft - 1) (n `quot` 62)
 
 instance Show NID where
-  show = unpack . textRep
+  show = unpack . (^. #representation)
 
 instance Read NID where
   readsPrec _ x
@@ -74,7 +74,7 @@ instance Read NID where
     | otherwise = []
 
 instance ToJSON NID where
-  toEncoding = toEncoding . (id :: Text -> Text) . textRep
+  toEncoding = toEncoding . (id :: Text -> Text) . (^. #representation)
 
 instance FromJSON NID where
   parseJSON = withText "NID" $ \t ->

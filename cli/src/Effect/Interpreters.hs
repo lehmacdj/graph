@@ -30,12 +30,12 @@ import qualified System.Console.Haskeline as H
 import System.Random
 
 data Env = Env
-  { _filePath :: IORef FilePath,
+  { filePath :: IORef FilePath,
     -- | random generator used for creating new node ids
-    _randomGen :: IORef StdGen,
-    _history :: IORef History,
-    _isDualized :: IORef IsDual,
-    _replSettings :: H.Settings IO
+    randomGen :: IORef StdGen,
+    history :: IORef History,
+    isDualized :: IORef IsDual,
+    replSettings :: H.Settings IO
   }
   deriving (Generic)
 
@@ -55,7 +55,7 @@ initEnv graphDir nidGenerator _replSettings =
 runLocableHistoryState ::
   Member (State History) effs =>
   Sem (GetLocation : SetLocation : effs) ~> Sem effs
-runLocableHistoryState = subsumeReaderState _now >>> runSetLocationHistoryState
+runLocableHistoryState = subsumeReaderState (view #now) >>> runSetLocationHistoryState
 
 runSetLocationHistoryState ::
   Member (State History) r => Sem (SetLocation : r) ~> Sem r
@@ -121,15 +121,15 @@ runMainEffectsIO errorHandlingBehavior timeBehavior env v = do
           >>> applyInput2 (runReadGraphDualizeableIO @String)
           >>> applyInput2 interpretEditorAsIOVimFSGraph
           >>> runRawGraphAsInput
-          >>> contramapInputSem @FilePath (embed . readIORef . view #_filePath)
+          >>> contramapInputSem @FilePath (embed . readIORef . view #filePath)
           >>> runWebIO
           >>> runFileSystemIO
-          >>> runStateInputIORefOf @IsDual #_isDualized
+          >>> runStateInputIORefOf @IsDual #isDualized
           >>> interpretConsoleIO
           >>> timeBehavior
           >>> runLocableHistoryState
-          >>> runStateInputIORefOf @History #_history
-          >>> runStateInputIORefOf #_randomGen
+          >>> runStateInputIORefOf @History #history
+          >>> runStateInputIORefOf #randomGen
           >>> errorHandlingBehavior
           >>> runReadlineFinal
           >>> runFileTypeOracle
@@ -139,7 +139,7 @@ runMainEffectsIO errorHandlingBehavior timeBehavior env v = do
           >>> withEffects @'[Embed (InputT IO), Final (InputT IO)]
           >>> embedToFinal @(InputT IO)
           >>> runFinal
-          >>> H.runInputT (_replSettings env)
+          >>> H.runInputT (view #replSettings env)
   handler v
 
 -- | Less capable, but less demanding interpreter.

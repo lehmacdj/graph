@@ -189,12 +189,12 @@ resolvePathSuccessesDetail' nid = \case
   Wild ->
     getNodeSem nid <&> \n -> OSet.fromList $ do
       Connect t nid' <- toList $ outgoingConnectsOf n
-      pure $ DPath nid [nidOf n `FromVia` t] nid' []
+      pure $ DPath nid [view #nid n `FromVia` t] nid' []
   Literal t ->
     getNodeSem nid <&> \n ->
       case matchConnect t (outgoingConnectsOf n) of
         [] -> OSet.singleton (DPath nid [] nid [t])
-        ms -> OSet.fromList (DPath nid [nidOf n `FromVia` t] <$> ms <*> pure [])
+        ms -> OSet.fromList (DPath nid [view #nid n `FromVia` t] <$> ms <*> pure [])
   p1 :/ p2 -> do
     r1 <- toList <$> resolvePathSuccessesDetail' nid p1
     fmap OSet.fromList . (`concatMapM` r1) $ \case
@@ -389,7 +389,10 @@ resolvePath ::
   Graph t a ->
   OSet (DPath t)
 resolvePath p n g =
-  nodeConsistentWithGraph g n `seq` fromMaybe (error "node is from graph") (resolvePathInConcreteGraph (nidOf n) p g)
+  nodeConsistentWithGraph g n
+    `seq` fromMaybe
+      (error "node is from graph")
+      (resolvePathInConcreteGraph (view #nid n) p g)
 
 resolvePathInConcreteGraph ::
   forall t a.

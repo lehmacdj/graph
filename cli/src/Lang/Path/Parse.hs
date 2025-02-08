@@ -9,11 +9,11 @@ where
 
 import Control.Monad.Combinators.Expr
 import Data.Functor
+import Graph.SystemNodes (tagsNID)
 import Lang.Parsing
 import Lang.ParsingSpec
 import Lang.Path
 import MyPrelude hiding (try)
-import Graph.SystemNodes (tagsNID)
 import TestPrelude hiding (try)
 import Text.Megaparsec (try, (<?>))
 import Text.Megaparsec.Char (char)
@@ -21,7 +21,7 @@ import Text.Megaparsec.Char (char)
 pathTerm :: Parser t -> Parser (Path t)
 pathTerm pTransition =
   try (Absolute <$> (char '@' *> nodeId))
-    <|> try ((Absolute tagsNID :/) <$> (Literal <$> (char '#' *> pTransition)))
+    <|> try ((Absolute tagsNID :/) . Literal <$> (char '#' *> pTransition))
     <|> (symbol "@" $> One)
     <|> (symbol "*" $> Wild)
     <|> (symbol "!" $> Zero)

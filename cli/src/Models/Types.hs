@@ -36,9 +36,7 @@ instance (ToJSON t, ValidTransition t) => ToJSON (Connect t) where
   toEncoding = genericToEncoding defaultOptions
 
 data Node t a = Node
-  { -- | unique node id
-    -- TODO once we have NoFieldSelectors use that and name this id
-    nodeId :: NID,
+  { nid :: NID,
     incoming :: Set (Connect t),
     outgoing :: Set (Connect t),
     associatedData :: a
@@ -47,7 +45,7 @@ data Node t a = Node
 
 instance (Show t, Ord t) => Show (Node t a) where
   show Node {..} =
-    show nodeId ++ "{"
+    show nid ++ "{"
       ++ "in="
       ++ show (toList incoming)
       ++ ", out="
@@ -61,7 +59,7 @@ newtype Graph t a = Graph
   deriving anyclass (NFData)
 
 instance (Show t, Ord t) => Show (Graph t a) where
-  show = unlines' . map show . Map.elems . nodeMap
+  show = unlines' . map show . Map.elems . (^. #nodeMap)
     where
       unlines' = intercalate "\n"
 

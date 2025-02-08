@@ -69,9 +69,7 @@ whenNonNull ::
   mono ->
   (NonNull mono -> f ()) ->
   f ()
-whenNonNull mono f = case fromNullable mono of
-  Nothing -> pure ()
-  Just xs -> f xs
+whenNonNull mono = for_ (fromNullable mono)
 
 -- | generalized foldl1 monadically
 foldlM1 ::
@@ -139,14 +137,15 @@ handleError action handler = do
     Left e -> handler e
 
 newtype FastGenericEncoding a = GenericEncodingAeson
-  {unGenericEncodingAeson :: a}
+  {underlying :: a}
+  deriving (Generic)
 
 instance
   (Generic a, GToJSON' Encoding Zero (Rep a), GToJSON' Value Zero (Rep a)) =>
   ToJSON (FastGenericEncoding a)
   where
-  toJSON = genericToJSON defaultOptions . unGenericEncodingAeson
-  toEncoding = genericToEncoding defaultOptions . unGenericEncodingAeson
+  toJSON = genericToJSON defaultOptions . (^. #underlying)
+  toEncoding = genericToEncoding defaultOptions . (^. #underlying)
 
 instance
   (Generic a, GFromJSON Zero (Rep a)) =>

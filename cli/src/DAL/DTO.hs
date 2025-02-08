@@ -21,13 +21,13 @@ data NodeDTO t = NodeDTO
 nodeToDTO :: Ord t => Node t a -> NodeDTO t
 nodeToDTO Node {..} =
   NodeDTO
-    { id = nodeId,
+    { id = nid,
       incoming = mapSet connectToDTO incoming,
       outgoing = mapSet connectToDTO outgoing
     }
 
 nodeFromDTO :: Ord t => NodeDTO t -> Node t ()
-nodeFromDTO NodeDTO {id = nodeId, ..} =
+nodeFromDTO NodeDTO {id = nid, ..} =
   Node
     { associatedData = (),
       incoming = mapSet connectFromDTO incoming,

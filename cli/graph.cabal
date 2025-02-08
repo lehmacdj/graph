@@ -112,6 +112,7 @@ library
       GeneralizedNewtypeDeriving
       LambdaCase
       NamedFieldPuns
+      NoFieldSelectors
       NoImplicitPrelude
       OverloadedLabels
       OverloadedStrings
@@ -221,6 +222,7 @@ executable dump-graph
       GeneralizedNewtypeDeriving
       LambdaCase
       NamedFieldPuns
+      NoFieldSelectors
       NoImplicitPrelude
       OverloadedLabels
       OverloadedStrings
@@ -325,6 +327,7 @@ executable ge
       GeneralizedNewtypeDeriving
       LambdaCase
       NamedFieldPuns
+      NoFieldSelectors
       NoImplicitPrelude
       OverloadedLabels
       OverloadedStrings
@@ -429,6 +432,7 @@ executable scratch
       GeneralizedNewtypeDeriving
       LambdaCase
       NamedFieldPuns
+      NoFieldSelectors
       NoImplicitPrelude
       OverloadedLabels
       OverloadedStrings
@@ -534,6 +538,7 @@ test-suite graph-test
       GeneralizedNewtypeDeriving
       LambdaCase
       NamedFieldPuns
+      NoFieldSelectors
       NoImplicitPrelude
       OverloadedLabels
       OverloadedStrings
