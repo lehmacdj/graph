@@ -8,7 +8,7 @@ import MyPrelude
 
 printNodeDebugRepresentation :: FilePath -> NID -> IO ()
 printNodeDebugRepresentation base nid = do
-  result :: Either String (Node' String) <- deserializeNode base nid
+  result :: Either String (Node String (Maybe ByteString)) <- deserializeNode base nid
   case result of
     Right n -> print n
     Left e ->

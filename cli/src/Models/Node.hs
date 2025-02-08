@@ -63,7 +63,7 @@ emptyNode i = Node i mempty mempty ()
 
 -- | Warning! It is up to the user of the graph to ensure that node ids are
 -- unique within the graph
-emptyNode' :: Ord t => NID -> Node' t
+emptyNode' :: Ord t => NID -> Node t (Maybe ByteString)
 emptyNode' i = emptyNode i $> Nothing
 
 dualizeNode :: Node t a -> Node t a

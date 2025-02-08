@@ -14,7 +14,7 @@ import Models.Graph hiding (insertEdge, insertNode, setData)
 import MyPrelude
 import Witherable
 
-getNodes :: Member (ReadGraph t (Maybe ByteString)) effs => [NID] -> Sem effs [Node' t]
+getNodes :: Member (ReadGraph t (Maybe ByteString)) effs => [NID] -> Sem effs [Node t (Maybe ByteString)]
 getNodes = wither getNode
 
 getNodeSem ::
@@ -29,7 +29,7 @@ getNodeSem nid =
 getNodeDatalessSem ::
   Members [ReadGraphDataless t, Error Missing] effs =>
   NID ->
-  Sem effs (Node' t)
+  Sem effs (Node t (Maybe ByteString))
 getNodeDatalessSem nid =
   getNodeDataless nid >>= \case
     Nothing -> throwMissing nid
@@ -43,7 +43,7 @@ getNodeDatalessSem nid =
 insertNode ::
   forall t effs.
   (Member (Error Missing) effs, HasGraph t effs) =>
-  Node' t ->
+  Node t (Maybe ByteString) ->
   Sem effs ()
 insertNode n = do
   let nid = nidOf n
@@ -56,7 +56,7 @@ insertNode n = do
 
 currentNode ::
   Members [ReadGraph t (Maybe ByteString), GetLocation, Error Missing] effs =>
-  Sem effs (Node' t)
+  Sem effs (Node t (Maybe ByteString))
 currentNode = currentLocation >>= getNodeSem
 
 -- | nid `transitionsVia` t finds a node that can be transitioned to via the

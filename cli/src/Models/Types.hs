@@ -45,8 +45,6 @@ data Node t a = Node
   }
   deriving (Eq, Ord, Generic, NFData, Functor)
 
-type Node' t = Node t (Maybe ByteString)
-
 instance (Show t, Ord t) => Show (Node t a) where
   show Node {..} =
     show nodeId ++ "{"

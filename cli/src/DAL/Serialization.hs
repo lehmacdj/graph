@@ -61,7 +61,7 @@ nodeDataFile base nid = base </> (show nid ++ ".data")
 
 serializeNodeEx ::
   (ToJSON (NodeDTO t), ValidTransition t) =>
-  Node' t ->
+  Node t (Maybe ByteString) ->
   FilePath ->
   IO ()
 serializeNodeEx n base = do
@@ -83,7 +83,7 @@ deserializeNodeF ::
   ) =>
   FilePath ->
   NID ->
-  Sem effs (Node' t)
+  Sem effs (Node t (Maybe ByteString))
 deserializeNodeF base nid = do
   node <- deserializeNodeWithoutDataF base nid
   d <- liftIO $ tryGetBinaryData base nid
@@ -100,7 +100,7 @@ deserializeNodeWithoutDataF ::
   ) =>
   FilePath ->
   NID ->
-  Sem effs (Node' t)
+  Sem effs (Node t (Maybe ByteString))
 deserializeNodeWithoutDataF base nid = do
   fileContents <- fromExceptionToUserError (B.readFile (linksFile base nid))
   throwLeft
@@ -117,10 +117,10 @@ deserializeNode ::
   ) =>
   FilePath ->
   NID ->
-  m (Either String (Node' t))
+  m (Either String (Node t (Maybe ByteString)))
 deserializeNode base nid = do
   fileContents <- liftIO $ B.readFile (linksFile base nid)
-  let node :: Either String (Node' t)
+  let node :: Either String (Node t (Maybe ByteString))
       node = second (($> Nothing) . nodeFromDTO) . Aeson.eitherDecode $ fromStrict fileContents
   d <- liftIO $ tryGetBinaryData base nid
   pure $ fmap (#associatedData .~ d) node
@@ -152,7 +152,7 @@ withSerializedNode ::
     ToJSON (NodeDTO t),
     ValidTransition t
   ) =>
-  (Node' t -> Node' t) ->
+  (Node t (Maybe ByteString) -> Node t (Maybe ByteString)) ->
   FilePath ->
   NID ->
   IO ()

@@ -38,7 +38,7 @@ graphHeterarchy (startName, start) = do
       go visited nid
         | nid `member` visited = pure []
         | otherwise = do
-          n :: Node' String <- S2.deserializeNodeWithoutDataF fp nid
+          n :: Node String (Maybe ByteString) <- S2.deserializeNodeWithoutDataF fp nid
           let visited' = singleton nid <> visited
               toTree (Connect t nid') = do
                 dfAndE <- dataFileAndExtensionIfExists nid'

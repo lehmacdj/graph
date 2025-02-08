@@ -275,7 +275,7 @@ runWriteGraphIODualizeable ::
 runWriteGraphIODualizeable dir = reinterpret $ \case
   TouchNode nid ->
     whenM (not <$> S2.doesNodeExist dir nid) $
-      fromExceptionToUserError $ S2.serializeNodeEx (G.emptyNode' nid :: Node' t) dir
+      fromExceptionToUserError $ S2.serializeNodeEx (G.emptyNode' nid :: Node t (Maybe ByteString)) dir
   DeleteNode nid -> do
     n <- S2.deserializeNodeF @t dir nid
     let del = Set.filter ((/= nid) . view #node) :: Set (Connect t) -> Set (Connect t)
@@ -298,7 +298,7 @@ runWriteGraphIODualizeable dir = reinterpret $ \case
     let (Edge i t o) = ifDualized dual G.dualizeEdge e
     liftIO $ S2.withSerializedNode (#outgoing %~ deleteSet (Connect t o)) dir i
     liftIO $ S2.withSerializedNode (#incoming %~ deleteSet (Connect t i)) dir o
-  SetData nid d -> liftIO $ S2.withSerializedNode (#associatedData .~ d :: Node' t -> Node' t) dir nid
+  SetData nid d -> liftIO $ S2.withSerializedNode (#associatedData .~ d :: Node t (Maybe ByteString) -> Node t (Maybe ByteString)) dir nid
 
 -- | Run both the Dualizeable effect and the WriteGraph in IO
 -- The default state of all graphs stored on disk is that they are not dual
