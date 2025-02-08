@@ -270,7 +270,7 @@ interpretCommand = \case
     changeLocation nid
   Debug -> do
     echo "current node:"
-    currentLocation >>= subsumeUserError . getNodeSem >>= echo . show @(Node String)
+    currentLocation >>= subsumeUserError . getNodeSem >>= echo . show @(Node String (Maybe ByteString))
     echo "history:"
     get @History >>= echo . show
   -- echo "node-ids in the graph:"

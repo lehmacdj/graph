@@ -15,7 +15,7 @@ outgoingEdge s (Connect l t) = Edge s l t
 incomingEdge :: Connect t -> NID -> Edge t
 incomingEdge (Connect l s) = Edge s l
 
-edgeBetween :: Node t -> t -> Node t -> Edge t
+edgeBetween :: Node t a -> t -> Node t a -> Edge t
 edgeBetween s l t = Edge (view #nodeId s) l (view #nodeId t)
 
 dualizeEdge :: Edge t -> Edge t

@@ -60,8 +60,8 @@ nodeDataFile :: FilePath -> NID -> FilePath
 nodeDataFile base nid = base </> (show nid ++ ".data")
 
 serializeNodeEx ::
-  (ToJSON (NodeDTO t), TransitionValid t) =>
-  Node t ->
+  (ToJSON (NodeDTO t), ValidTransition t) =>
+  Node' t ->
   FilePath ->
   IO ()
 serializeNodeEx n base = do
@@ -77,13 +77,13 @@ serializeNodeEx n base = do
 deserializeNodeF ::
   forall t effs.
   ( FromJSON (NodeDTO t),
-    TransitionValid t,
+    ValidTransition t,
     Member (Error UserError) effs,
     Member (Embed IO) effs
   ) =>
   FilePath ->
   NID ->
-  Sem effs (Node t)
+  Sem effs (Node' t)
 deserializeNodeF base nid = do
   node <- deserializeNodeWithoutDataF base nid
   d <- liftIO $ tryGetBinaryData base nid
@@ -94,17 +94,17 @@ deserializeNodeF base nid = do
 deserializeNodeWithoutDataF ::
   forall t effs.
   ( FromJSON (NodeDTO t),
-    TransitionValid t,
+    ValidTransition t,
     Member (Error UserError) effs,
     Member (Embed IO) effs
   ) =>
   FilePath ->
   NID ->
-  Sem effs (Node t)
+  Sem effs (Node' t)
 deserializeNodeWithoutDataF base nid = do
   fileContents <- fromExceptionToUserError (B.readFile (linksFile base nid))
   throwLeft
-    . bimap AesonDeserialize nodeFromDTO
+    . bimap AesonDeserialize (($> Nothing) . nodeFromDTO)
     . Aeson.eitherDecode
     . fromStrict
     $ fileContents
@@ -112,16 +112,16 @@ deserializeNodeWithoutDataF base nid = do
 deserializeNode ::
   forall t m.
   ( FromJSON (NodeDTO t),
-    TransitionValid t,
+    ValidTransition t,
     MonadIO m
   ) =>
   FilePath ->
   NID ->
-  m (Either String (Node t))
+  m (Either String (Node' t))
 deserializeNode base nid = do
   fileContents <- liftIO $ B.readFile (linksFile base nid)
-  let node :: Either String (Node t)
-      node = second nodeFromDTO . Aeson.eitherDecode $ fromStrict fileContents
+  let node :: Either String (Node' t)
+      node = second (($> Nothing) . nodeFromDTO) . Aeson.eitherDecode $ fromStrict fileContents
   d <- liftIO $ tryGetBinaryData base nid
   pure $ fmap (#associatedData .~ d) node
 
@@ -136,7 +136,7 @@ doesNodeExist base nid = liftIO $ do
 initializeGraph :: MonadIO m => FilePath -> m ()
 initializeGraph base = liftIO $ do
   createDirectoryIfMissing True base
-  serializeNodeEx (Graph.emptyNode @String nilNID) base
+  serializeNodeEx (Graph.emptyNode @String nilNID $> Nothing) base
 
 removeNode :: MonadIO m => FilePath -> NID -> m ()
 removeNode base nid = do
@@ -150,9 +150,9 @@ withSerializedNode ::
   forall t.
   ( FromJSON (NodeDTO t),
     ToJSON (NodeDTO t),
-    TransitionValid t
+    ValidTransition t
   ) =>
-  (Node t -> Node t) ->
+  (Node' t -> Node' t) ->
   FilePath ->
   NID ->
   IO ()
@@ -161,7 +161,7 @@ withSerializedNode f base nid =
     n <- deserializeNodeF @t @[Error UserError, Embed IO] base nid
     fromExceptionToUserError $ serializeNodeEx (f n) base
 
-readGraph :: MonadIO m => FilePath -> m (Either String (Graph String))
+readGraph :: MonadIO m => FilePath -> m (Either String (Graph String (Maybe ByteString)))
 readGraph base = do
   nids <- getAllNodeIds base
   nodes <- traverse (deserializeNode base) nids

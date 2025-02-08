@@ -137,7 +137,7 @@ isValidPath = \case
         _ :& _ -> False
         _ :/ _ -> False
 
-isFullyRelativePath :: TransitionValid t => Path t -> Bool
+isFullyRelativePath :: ValidTransition t => Path t -> Bool
 isFullyRelativePath = all (isNothing . fst) . setToList . listifyNewPath
 
 -- | A deterministic path is successful if it ends at a node in the graph
@@ -147,7 +147,7 @@ successfulDPathEndpoint _ = Nothing
 
 resolvePathSuccesses ::
   forall t effs.
-  (Members [ReadGraph t, Error Missing] effs, TransitionValid t) =>
+  (Members [ReadGraph t (Maybe ByteString), Error Missing] effs, ValidTransition t) =>
   NID ->
   Path t ->
   Sem effs (Set NID)
@@ -174,8 +174,8 @@ resolvePathSuccesses nid = \case
 -- TODO: refactor so I don't need Error Missing. Currently it is used only
 -- for the initial node in case it does not exist
 resolvePathSuccessesDetail' ::
-  forall t effs.
-  (Members [ReadGraph t, Error Missing] effs, TransitionValid t) =>
+  forall t a effs.
+  (Members [ReadGraph t a, Error Missing] effs, ValidNode t a) =>
   NID ->
   Path t ->
   Sem effs (OSet (DPath t))
@@ -221,7 +221,7 @@ resolvePathSuccessesDetail' nid = \case
 
 resolvePathSuccessesDetail ::
   forall t effs.
-  (Members [ReadGraph t, Error Missing] effs, TransitionValid t) =>
+  (Members [ReadGraph t (Maybe ByteString), Error Missing] effs, ValidTransition t) =>
   NID ->
   Path t ->
   Sem effs (Set (DPath t))
@@ -254,11 +254,11 @@ mkPath nid p =
 -- by the literal edges in the path.
 -- nids are the same as in the original graph
 tracePath ::
-  forall t effs.
-  Members [FreshNID, Error Missing, ReadGraph t] effs =>
+  forall t a effs.
+  Members [FreshNID, Error Missing, ReadGraph t a] effs =>
   NID ->
   Path t ->
-  Sem effs (Graph t)
+  Sem effs (Graph t a)
 tracePath _ _ = error "unimplemented"
 
 delPath ::
@@ -354,7 +354,7 @@ aliasDPath dpathFrom nidPathStart pathTo =
 -- Transitions are asumed to behave deterministically in this translation.
 listifyNewPath ::
   forall t.
-  TransitionValid t =>
+  ValidTransition t =>
   Path t ->
   Set (Maybe NID, [t])
 listifyNewPath = \case
@@ -383,24 +383,24 @@ listifyNewPath = \case
 -- In a graph with 0 -a> 1 the same path a/b + c resolves at 0 to
 -- [(a, 1, b), (#, 0, c)]
 resolvePath ::
-  TransitionValid t =>
+  ValidNode t a =>
   Path t ->
-  Node t ->
-  Graph t ->
+  Node t a ->
+  Graph t a ->
   OSet (DPath t)
 resolvePath p n g =
   nodeConsistentWithGraph g n `seq` fromMaybe (error "node is from graph") (resolvePathInConcreteGraph (nidOf n) p g)
 
 resolvePathInConcreteGraph ::
-  forall t.
-  TransitionValid t =>
+  forall t a.
+  ValidNode t a =>
   NID ->
   Path t ->
-  Graph t ->
+  Graph t a ->
   Maybe (OSet (DPath t))
 resolvePathInConcreteGraph nid p g =
   resolvePathSuccessesDetail' nid p
-    & runReadGraphState @t
+    & runReadGraphState @t @a
     & evalState g
     & runError
     & run

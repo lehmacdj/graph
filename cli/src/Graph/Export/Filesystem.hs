@@ -32,13 +32,13 @@ graphHeterarchy (startName, start) = do
         let ndf = S2.nodeDataFile fp nid
         fileExists <- embed $ doesFileExist ndf
         if fileExists
-          then Just <$> ((ndf,) . unpack <$> getExtension ndf)
+          then Just . (ndf,) . unpack <$> getExtension ndf
           else pure Nothing
       go :: Set NID -> NID -> Sem r [Tree (Maybe (FilePath, String), String)]
       go visited nid
         | nid `member` visited = pure []
         | otherwise = do
-          n :: Node String <- S2.deserializeNodeWithoutDataF fp nid
+          n :: Node' String <- S2.deserializeNodeWithoutDataF fp nid
           let visited' = singleton nid <> visited
               toTree (Connect t nid') = do
                 dfAndE <- dataFileAndExtensionIfExists nid'

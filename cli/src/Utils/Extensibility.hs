@@ -35,7 +35,7 @@ import System.Process.Typed
 -- because we'll want the process to be able to emit to stdout/err itself too.
 defaultMain ::
   ( forall r.
-    Members [GetLocation, WriteGraph String, ReadGraph String, Warn UserError, Error UserError, Embed IO] r =>
+    Members [GetLocation, WriteGraph String, ReadGraph String (Maybe ByteString), Warn UserError, Error UserError, Embed IO] r =>
     Sem r ()
   ) ->
   IO ()

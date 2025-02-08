@@ -14,22 +14,22 @@ import Models.Graph hiding (insertEdge, insertNode, setData)
 import MyPrelude
 import Witherable
 
-getNodes :: Member (ReadGraph t) effs => [NID] -> Sem effs [Node t]
+getNodes :: Member (ReadGraph t (Maybe ByteString)) effs => [NID] -> Sem effs [Node' t]
 getNodes = wither getNode
 
 getNodeSem ::
-  Members [ReadGraph t, Error Missing] effs =>
+  Members [ReadGraph t a, Error Missing] effs =>
   NID ->
-  Sem effs (Node t)
+  Sem effs (Node t a)
 getNodeSem nid =
   getNode nid >>= \case
     Nothing -> throwMissing nid
     Just n -> pure n
 
 getNodeDatalessSem ::
-  Members [ReadGraph t, Error Missing] effs =>
+  Members [ReadGraphDataless t, Error Missing] effs =>
   NID ->
-  Sem effs (Node t)
+  Sem effs (Node' t)
 getNodeDatalessSem nid =
   getNodeDataless nid >>= \case
     Nothing -> throwMissing nid
@@ -43,7 +43,7 @@ getNodeDatalessSem nid =
 insertNode ::
   forall t effs.
   (Member (Error Missing) effs, HasGraph t effs) =>
-  Node t ->
+  Node' t ->
   Sem effs ()
 insertNode n = do
   let nid = nidOf n
@@ -55,8 +55,8 @@ insertNode n = do
   forM_ esOut insertEdge
 
 currentNode ::
-  Members [ReadGraph t, GetLocation, Error Missing] effs =>
-  Sem effs (Node t)
+  Members [ReadGraph t (Maybe ByteString), GetLocation, Error Missing] effs =>
+  Sem effs (Node' t)
 currentNode = currentLocation >>= getNodeSem
 
 -- | nid `transitionsVia` t finds a node that can be transitioned to via the
@@ -180,7 +180,7 @@ cloneNode nid = do
 -- defined in the graph. It will probably overwrite stuff in unpredictable
 -- ways in that case.
 unsafeRenumberNode ::
-  Members [ReadGraph String, WriteGraph String, Error Missing] effs =>
+  (Member (Error Missing) effs, HasGraph String effs) =>
   -- | Node to rewrite on left, number to be rewritten to on right
   (NID, NID) ->
   Sem effs ()

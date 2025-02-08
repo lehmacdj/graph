@@ -25,10 +25,10 @@ assertNodeInGraph i Nothing =
   error $ "expected " ++ show i ++ " to be in the graph"
 
 lookupNode ::
-  TransitionValid t =>
-  Graph t ->
+  ValidNode t a =>
+  Graph t a ->
   NID ->
-  Node t
+  Node t a
 lookupNode = flip nodeLookup
 {-# INLINE lookupNode #-}
 
@@ -36,17 +36,17 @@ lookupNode = flip nodeLookup
 -- This does not imply that graphs have version control, it simply means that
 -- the original node might be out of date otherwise.
 refreshNode ::
-  TransitionValid t =>
-  Graph t ->
-  Node t ->
-  Node t
+  ValidNode t a =>
+  Graph t a ->
+  Node t a ->
+  Node t a
 refreshNode g = lookupNode g . nidOf
 
 nodeLookup ::
-  TransitionValid t =>
+  ValidNode t a =>
   NID ->
-  Graph t ->
-  Node t
+  Graph t a ->
+  Node t a
 nodeLookup i g = fromMaybe err . lookup i . nodeMap $ g
   where
     err =
@@ -57,38 +57,38 @@ nodeLookup i g = fromMaybe err . lookup i . nodeMap $ g
 -- | Utility function for constructing a primed version of a function operating
 -- on ids instead of nodes
 primed ::
-  TransitionValid t =>
-  (Node t -> Graph t -> a) ->
-  (NID -> Graph t -> a)
+  ValidNode t a =>
+  (Node t a -> Graph t a -> x) ->
+  (NID -> Graph t a -> x)
 primed f i ig = f (lookupNode ig i) ig
 
 listify ::
-  (a -> Graph t -> Graph t) ->
-  ([a] -> Graph t -> Graph t)
+  (x -> Graph t a -> Graph t a) ->
+  ([x] -> Graph t a -> Graph t a)
 listify f nodes ig = foldl' (flip f) ig nodes
 
 primeds ::
-  TransitionValid t =>
-  ([Node t] -> Graph t -> Graph t) ->
-  ([NID] -> Graph t -> Graph t)
+  ValidNode t a =>
+  ([Node t a] -> Graph t a -> x) ->
+  ([NID] -> Graph t a -> x)
 primeds f i ig = f (nodeLookup <$> i <*> pure ig) ig
 
-delEdge :: TransitionValid t => Edge t -> Graph t -> Graph t
+delEdge :: ValidNode t a => Edge t -> Graph t a -> Graph t a
 delEdge e g =
   withNodeMap g $
     adjustMap (over #outgoing (deleteSet (outConnect e))) (source e)
       . adjustMap (over #incoming (deleteSet (inConnect e))) (sink e)
 
 delEdges ::
-  TransitionValid t =>
+  ValidNode t a =>
   [Edge t] ->
-  Graph t ->
-  Graph t
+  Graph t a ->
+  Graph t a
 delEdges = listify delEdge
 
 -- | Remove a node from the graph; updating the cached data in the neighbors
 -- nodes as well.
-delNode :: Ord t => Node t -> Graph t -> Graph t
+delNode :: Ord t => Node t a -> Graph t a -> Graph t a
 delNode n g =
   withNodeMap g $
     omap deleteIncoming
@@ -101,46 +101,46 @@ delNode n g =
     deleteOutgoing = over #outgoing del
 
 delNode' ::
-  TransitionValid t =>
+  ValidNode t a =>
   NID ->
-  Graph t ->
-  Graph t
+  Graph t a ->
+  Graph t a
 delNode' = primed delNode
 
 delNodes ::
-  Ord t => [Node t] -> Graph t -> Graph t
+  Ord t => [Node t a] -> Graph t a -> Graph t a
 delNodes = listify delNode
 
 delNodes' ::
-  TransitionValid t =>
+  ValidNode t a =>
   [NID] ->
-  Graph t ->
-  Graph t
+  Graph t a ->
+  Graph t a
 delNodes' = primeds delNodes
 
 insertEdge ::
-  TransitionValid t =>
+  ValidNode t a =>
   Edge t ->
-  Graph t ->
-  Graph t
+  Graph t a ->
+  Graph t a
 insertEdge e g =
   withNodeMap g $
     adjustMap (over #outgoing (insertSet (outConnect e))) (source e)
       . adjustMap (over #incoming (insertSet (inConnect e))) (sink e)
 
 insertEdges ::
-  TransitionValid t =>
+  ValidNode t a =>
   [Edge t] ->
-  Graph t ->
-  Graph t
+  Graph t a ->
+  Graph t a
 insertEdges = listify insertEdge
 
 -- | Add a node, and all the edges it is associated with to the Graph.
 insertNode ::
-  TransitionValid t =>
-  Node t ->
-  Graph t ->
-  Graph t
+  ValidNode t a =>
+  Node t a ->
+  Graph t a ->
+  Graph t a
 insertNode n g =
   insertEdges (incomingEs ++ outgoingEs) $
     withNodeMap g (insertMap nid n)
@@ -150,62 +150,62 @@ insertNode n g =
     outgoingEs = map (outgoingEdge nid) (toList (view #outgoing n))
 
 insertNodes ::
-  TransitionValid t =>
-  [Node t] ->
-  Graph t ->
-  Graph t
+  ValidNode t a =>
+  [Node t a] ->
+  Graph t a ->
+  Graph t a
 insertNodes = listify insertNode
 
-nodesOf :: Graph t -> [Node t]
+nodesOf :: Graph t a -> [Node t a]
 nodesOf = toList . nodeMap
 
-emptyGraph :: Graph t
+emptyGraph :: Graph t a
 emptyGraph = Graph mempty
 
-isEmptyGraph :: Graph t -> Bool
+isEmptyGraph :: Graph t a -> Bool
 isEmptyGraph = null . nodeMap
 
 -- | sets the data, setting to nothing is equivalent to deleting the data
 -- this is a terrible function that should probably not be used
 setData ::
-  TransitionValid t =>
-  Maybe ByteString ->
-  Node t ->
-  Graph t ->
-  Graph t
+  (ValidNode t a, Eq a) =>
+  a ->
+  Node t a ->
+  Graph t a ->
+  Graph t a
 setData d n g = insertNode (set #associatedData d (nodeConsistentWithGraph g n)) g
 
 setData' ::
-  TransitionValid t =>
-  Maybe ByteString ->
+  ValidNode t a =>
+  a ->
   NID ->
-  Graph t ->
-  Graph t
+  Graph t a ->
+  Graph t a
 setData' d = primed (setData d)
 
-maybeLookupNode :: Graph t -> NID -> Maybe (Node t)
+maybeLookupNode :: Graph t a -> NID -> Maybe (Node t a)
 maybeLookupNode = flip lookup . nodeMap
 
 nodeConsistentWithGraph ::
-  (HasCallStack, TransitionValid t) =>
-  Graph t ->
-  Node t ->
-  Node t
+  (HasCallStack, ValidNode t a, Eq a) =>
+  Graph t a ->
+  Node t a ->
+  Node t a
 nodeConsistentWithGraph g n
   | lookupNode g (nidOf n) == n = n
   | otherwise = error $ "node " ++ show n ++ " is inconsistent with the state of the graph " ++ show g
 
-traceGraph :: TransitionValid t => Graph t -> Graph t
+traceGraph :: ValidNode t a => Graph t a -> Graph t a
 traceGraph g = withNodeMap g $ \nm -> Debug.trace (showDebug (Debug.trace "graph is:" g)) nm
 
-showDebug :: TransitionValid t => Graph t -> String
+showDebug :: ValidNode t a => Graph t a -> String
 showDebug = unlines . map show . toList . nodeMap
 
 filterGraph ::
   Ord t =>
-  (Node t -> Bool) ->
-  Graph t ->
-  Graph t
+  (Node t a -> Bool) ->
+  Graph t a ->
+  Graph t a
 filterGraph f g = ofoldr maybeDelNode g (nodeMap g)
   where
     maybeDelNode x ig'
@@ -213,10 +213,10 @@ filterGraph f g = ofoldr maybeDelNode g (nodeMap g)
       | otherwise = ig'
 
 mapGraph ::
-  (Node t -> Node t) ->
-  Graph t ->
-  Graph t
+  (Node t a -> Node t a) ->
+  Graph t a ->
+  Graph t a
 mapGraph f g = withNodeMap g $ \nm -> omap f nm
 
-dualizeGraph :: Graph t -> Graph t
+dualizeGraph :: Graph t a -> Graph t a
 dualizeGraph = mapGraph dualizeNode

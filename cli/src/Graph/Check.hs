@@ -16,7 +16,7 @@ import MyPrelude
 data Direction = In | Out
   deriving (Eq, Ord)
 
-dirToLens :: Direction -> Lens' (Node t) (Set (Connect t))
+dirToLens :: Direction -> Lens' (Node t a) (Set (Connect t))
 dirToLens = \case
   In -> #incoming
   Out -> #outgoing
@@ -63,7 +63,7 @@ dirToCombineEdges d nid c
 
 fixErrors ::
   forall t effs.
-  (Member (WriteGraph t) effs, TransitionValid t) =>
+  (Member (WriteGraph t) effs, ValidTransition t) =>
   Sem (ReportMissing t : effs) ~> Sem effs
 fixErrors = interpret $ \case
   NodeMissing nid -> touchNode @t nid

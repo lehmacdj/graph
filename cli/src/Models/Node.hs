@@ -5,61 +5,66 @@ import qualified Data.Set as Set
 import Models.Types
 import MyPrelude
 
-indegreeOf :: Node t -> Int
+indegreeOf :: Node t a -> Int
 indegreeOf = Set.size . view #incoming
 
-outdegreeOf :: Node t -> Int
+outdegreeOf :: Node t a -> Int
 outdegreeOf = Set.size . view #outgoing
 
-nidOf :: Node t -> NID
+nidOf :: Node t a -> NID
 nidOf = view #nodeId
 
 incomingConnectsOf ::
-  TransitionValid t =>
-  Node t ->
+  ValidNode t a =>
+  Node t a ->
   Set (Connect t)
 incomingConnectsOf = view #incoming
 
 outgoingConnectsOf ::
-  TransitionValid t =>
-  Node t ->
+  ValidNode t a =>
+  Node t a ->
   Set (Connect t)
 outgoingConnectsOf = view #outgoing
 
 incomingNeighborsOf ::
-  TransitionValid t =>
-  Node t ->
+  ValidNode t a =>
+  Node t a ->
   Set NID
 incomingNeighborsOf = Set.map (view #node) . incomingConnectsOf
 
 incomingTransitionsOf ::
-  TransitionValid t =>
-  Node t ->
+  ValidNode t a =>
+  Node t a ->
   Set t
 incomingTransitionsOf = Set.map (view #transition) . incomingConnectsOf
 
 outgoingNeighborsOf ::
-  TransitionValid t =>
-  Node t ->
+  ValidNode t a =>
+  Node t a ->
   Set NID
 outgoingNeighborsOf = Set.map (view #node) . incomingConnectsOf
 
 outgoingTransitionsOf ::
-  TransitionValid t =>
-  Node t ->
+  ValidNode t a =>
+  Node t a ->
   Set t
 outgoingTransitionsOf = Set.map (view #transition) . outgoingConnectsOf
 
 dataOf ::
-  TransitionValid t =>
-  Node t ->
-  Maybe ByteString
+  ValidNode t a =>
+  Node t a ->
+  a
 dataOf = view #associatedData
 
 -- | Warning! It is up to the user of the graph to ensure that node ids are
 -- unique within the graph
-emptyNode :: Ord t => NID -> Node t
-emptyNode i = Node i mempty mempty Nothing
+emptyNode :: Ord t => NID -> Node t ()
+emptyNode i = Node i mempty mempty ()
 
-dualizeNode :: Node t -> Node t
+-- | Warning! It is up to the user of the graph to ensure that node ids are
+-- unique within the graph
+emptyNode' :: Ord t => NID -> Node' t
+emptyNode' i = emptyNode i $> Nothing
+
+dualizeNode :: Node t a -> Node t a
 dualizeNode (Node nid i o x) = Node nid o i x

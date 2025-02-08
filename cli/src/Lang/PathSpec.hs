@@ -1,11 +1,11 @@
 module Lang.PathSpec where
 
 import qualified Data.Set.Ordered as OSet
-import Models.Graph
 import Lang.Path
+import Models.Graph
 import TestPrelude
 
-testGraph :: Graph String
+testGraph :: Graph String ()
 testGraph =
   insertEdge (edge' 1 "c" 2)
     . insertEdge (edge' 1 "b" 2)

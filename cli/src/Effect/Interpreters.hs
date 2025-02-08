@@ -117,6 +117,7 @@ runMainEffectsIO errorHandlingBehavior timeBehavior env v = do
   let handler =
         runFreshNIDRandom
           >>> applyInput2 (runWriteGraphDualizeableIO @String)
+          >>> applyInput2 (runReadGraphDatalessDualizeableIO @String)
           >>> applyInput2 (runReadGraphDualizeableIO @String)
           >>> applyInput2 interpretEditorAsIOVimFSGraph
           >>> runRawGraphAsInput
@@ -146,7 +147,7 @@ runReadWriteGraphIO ::
   FilePath ->
   Sem
     [ WriteGraph String,
-      ReadGraph String,
+      ReadGraph String (Maybe ByteString),
       Warn UserError,
       Error UserError,
       FreshNID,
@@ -170,7 +171,7 @@ runLocatedReadWriteGraphIO ::
   Sem
     [ GetLocation,
       WriteGraph String,
-      ReadGraph String,
+      ReadGraph String (Maybe ByteString),
       Warn UserError,
       Error UserError,
       FreshNID,
