@@ -116,6 +116,7 @@ library
       NoImplicitPrelude
       OverloadedLabels
       OverloadedStrings
+      OverloadedRecordDot
       PatternSynonyms
       PolyKinds
       QuasiQuotes
@@ -226,6 +227,7 @@ executable dump-graph
       NoImplicitPrelude
       OverloadedLabels
       OverloadedStrings
+      OverloadedRecordDot
       PatternSynonyms
       PolyKinds
       QuasiQuotes
@@ -331,6 +333,7 @@ executable ge
       NoImplicitPrelude
       OverloadedLabels
       OverloadedStrings
+      OverloadedRecordDot
       PatternSynonyms
       PolyKinds
       QuasiQuotes
@@ -436,6 +439,7 @@ executable scratch
       NoImplicitPrelude
       OverloadedLabels
       OverloadedStrings
+      OverloadedRecordDot
       PatternSynonyms
       PolyKinds
       QuasiQuotes
@@ -542,6 +546,7 @@ test-suite graph-test
       NoImplicitPrelude
       OverloadedLabels
       OverloadedStrings
+      OverloadedRecordDot
       PatternSynonyms
       PolyKinds
       QuasiQuotes

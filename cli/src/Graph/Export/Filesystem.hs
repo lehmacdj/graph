@@ -44,7 +44,7 @@ graphHeterarchy (startName, start) = do
               toTree (Connect t nid') = do
                 dfAndE <- dataFileAndExtensionIfExists nid'
                 T.Node (dfAndE, t) <$> go visited' nid'
-          traverse toTree (toList (outgoingConnectsOf n))
+          traverse toTree (toList (n.outgoing))
   dfAndE <- dataFileAndExtensionIfExists start
   T.Node (dfAndE, startName) <$> go mempty start
 

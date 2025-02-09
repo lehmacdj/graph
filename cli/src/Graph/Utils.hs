@@ -69,7 +69,7 @@ transitionsVia ::
   Sem effs NID
 transitionsVia nid t = do
   n <- getNodeSem nid
-  case matchConnect t (outgoingConnectsOf n) of
+  case matchConnect t n.outgoing of
     [] -> nid `transitionsFreshVia` t
     -- generalize the choice of node here to an parameter?
     -- makes sense if we run into trouble with this choosing an arbitrary trans
@@ -139,8 +139,8 @@ mergeNode ::
 mergeNode nid1 nid2 = do
   n1 <- getNodeSem nid1
   n2 <- getNodeSem nid2
-  let cin = #incoming %~ selfLoopify nid2 nid1 . (`union` incomingConnectsOf n2)
-      cout = #outgoing %~ selfLoopify nid2 nid1 . (`union` outgoingConnectsOf n2)
+  let cin = #incoming %~ selfLoopify nid2 nid1 . (`union` view #incoming n2)
+      cout = #outgoing %~ selfLoopify nid2 nid1 . (`union` n2.outgoing)
       -- take n2's data first so it is easier to overwrite data if desireable
       cdata = #associatedData .~ alaf First foldMap (view #associatedData) [n2, n1]
       nNew = cdata . cin . cout $ n1
@@ -172,8 +172,8 @@ cloneNode ::
 cloneNode nid = do
   nid' <- freshNID
   n <- getNodeSem nid
-  let i = selfLoopify nid nid' $ incomingConnectsOf n
-      o = selfLoopify nid nid' $ outgoingConnectsOf n
+  let i = selfLoopify nid nid' n.incoming
+      o = selfLoopify nid nid' n.outgoing
   insertNode @t (Node nid' i o (dataOf n))
   pure nid'
 
@@ -187,7 +187,7 @@ unsafeRenumberNode ::
   Sem effs ()
 unsafeRenumberNode (nid, nid') = do
   n <- getNodeSem nid
-  let i = selfLoopify nid nid' $ incomingConnectsOf n
-      o = selfLoopify nid nid' $ outgoingConnectsOf n
+  let i = selfLoopify nid nid' n.incoming
+      o = selfLoopify nid nid' n.outgoing
   insertNode @String (Node nid' i o (dataOf n))
   deleteNode @String nid

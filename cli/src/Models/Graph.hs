@@ -1,8 +1,7 @@
 {-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE OverloadedRecordDot #-}
 
 module Models.Graph
-  ( module Models.Graph
+  ( module Models.Graph,
   )
 where
 
@@ -11,8 +10,8 @@ import qualified Data.Map.Internal.Debug as MD
 import qualified Debug.Trace as Debug
 import GHC.Stack
 import Models.Edge
-import Models.Node
 import Models.NID
+import Models.Node
 import MyPrelude
 
 newtype Graph t a = Graph

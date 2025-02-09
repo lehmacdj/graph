@@ -22,9 +22,9 @@ import Graph.Utils
 import Models.Connect
 import Models.Edge
 import Models.Graph hiding (insertEdge)
-import Models.Node
 import MyPrelude
 import Polysemy.State (evalState)
+import Models.Node
 
 -- breadcrumb in a trail in the graph
 -- each piece denotes an edge from the specified via the transition
@@ -158,10 +158,10 @@ resolvePathSuccesses nid = \case
   One -> pure $ singleton nid
   Wild -> do
     n <- getNodeSem nid
-    pure $ toSetOf (folded . #node) (outgoingConnectsOf @t n)
+    pure $ toSetOf (folded . #node) n.outgoing
   Literal x -> do
     n <- getNodeSem nid
-    pure . setFromList $ matchConnect x (outgoingConnectsOf @t n)
+    pure . setFromList $ matchConnect x n.outgoing
   Absolute nid -> pure $ singleton nid
   p :/ q -> do
     pResolved <- toList <$> resolvePathSuccesses nid p
@@ -190,11 +190,11 @@ resolvePathSuccessesDetail' nid = \case
       Just _ -> OSet.singleton $ DPath nid' [] nid' []
   Wild ->
     getNodeSem nid <&> \n -> OSet.fromList $ do
-      Connect t nid' <- toList $ outgoingConnectsOf n
+      Connect t nid' <- n ^.. #outgoing . folded
       pure $ DPath nid [view #nid n `FromVia` t] nid' []
   Literal t ->
     getNodeSem nid <&> \n ->
-      case matchConnect t (outgoingConnectsOf n) of
+      case matchConnect t n.outgoing of
         [] -> OSet.singleton (DPath nid [] nid [t])
         ms -> OSet.fromList (DPath nid [view #nid n `FromVia` t] <$> ms <*> pure [])
   p1 :/ p2 -> do

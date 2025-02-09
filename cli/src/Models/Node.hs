@@ -29,47 +29,11 @@ instance (Show t, Ord t) => Show (Node t a) where
       ++ show (toList outgoing)
       ++ "}"
 
-indegreeOf :: Node t a -> Int
-indegreeOf = Set.size . view #incoming
+indegree :: Getter (Node t a) Int
+indegree = #incoming . to Set.size
 
-outdegreeOf :: Node t a -> Int
-outdegreeOf = Set.size . view #outgoing
-
-incomingConnectsOf ::
-  ValidNode t a =>
-  Node t a ->
-  Set (Connect t)
-incomingConnectsOf = view #incoming
-
-outgoingConnectsOf ::
-  ValidNode t a =>
-  Node t a ->
-  Set (Connect t)
-outgoingConnectsOf = view #outgoing
-
-incomingNeighborsOf ::
-  ValidNode t a =>
-  Node t a ->
-  Set NID
-incomingNeighborsOf = Set.map (view #node) . incomingConnectsOf
-
-incomingTransitionsOf ::
-  ValidNode t a =>
-  Node t a ->
-  Set t
-incomingTransitionsOf = Set.map (view #transition) . incomingConnectsOf
-
-outgoingNeighborsOf ::
-  ValidNode t a =>
-  Node t a ->
-  Set NID
-outgoingNeighborsOf = Set.map (view #node) . incomingConnectsOf
-
-outgoingTransitionsOf ::
-  ValidNode t a =>
-  Node t a ->
-  Set t
-outgoingTransitionsOf = Set.map (view #transition) . outgoingConnectsOf
+outdegree :: Getter (Node t a) Int
+outdegree = #outgoing . to Set.size
 
 dataOf ::
   ValidNode t a =>

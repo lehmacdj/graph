@@ -252,7 +252,7 @@ interpretCommand = \case
     for_ [Edge nid t nid' | nid' <- toList nodesToFlatten] insertEdge
   ListOut -> do
     n <- subsumeUserError currentNode
-    printTransitions (outgoingConnectsOf n)
+    printTransitions n.outgoing
   ShowImage -> do
     n <- subsumeUserError (currentNode @String)
     forM_ (dataOf n) $ subsumeUserError @Missing . displayImage . fromStrict
