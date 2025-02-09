@@ -1,14 +1,14 @@
 module DAL.FileSystemOperations where
 
-import MyPrelude
-import System.MacOS.NSFileCoordinator
+import DAL.DTO
+import DAL.DecodeJSON
+import DAL.DirectoryFormat
 import Effect.RawGraph
 import Error.Utils
-import DAL.DirectoryFormat
-import Models.Node
 import Models.NID
-import Data.Aeson
-import DAL.DTO
+import Models.Node
+import MyPrelude
+import System.MacOS.NSFileCoordinator
 
 readNodeMetadata ::
   Members [RawGraph, Embed IO, Error Missing, Error UserError] effs =>
@@ -18,5 +18,5 @@ readNodeMetadata nid = do
   result <- embed $ coordinateReading path False defaultReadingOptions $ \path' ->
     try @IO @SomeException $ readFile path'
   serialized <- throwMissingIfLeft nid result
-  dto <- throwMissingIfLeft nid $ eitherDecode (fromStrict serialized)
+  dto <- decodeJSON serialized
   pure $ nodeFromDTO dto

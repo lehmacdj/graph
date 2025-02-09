@@ -24,6 +24,7 @@ source-repository head
 
 library
   exposed-modules:
+      DAL.DecodeJSON
       DAL.DirectoryFormat
       DAL.DTO
       DAL.DTOSpec
@@ -32,7 +33,7 @@ library
       Data.Set.Ordered.Orphans
       Effect.Console
       Effect.Editor
-      Effect.Filesystem
+      Effect.FileSystem
       Effect.FileTypeOracle
       Effect.FreshNID
       Effect.Interpreters
@@ -53,7 +54,7 @@ library
       Executable.Scratch
       Graph.Check
       Graph.Effect
-      Graph.Export.Filesystem
+      Graph.Export.FileSystem
       Graph.Import.ByteString
       Graph.Import.FileSystem
       Graph.SystemNodes
