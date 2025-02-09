@@ -11,7 +11,7 @@ module Utils.Extensibility where
 import qualified Data.ByteString.Lazy as BL
 import Effect.Interpreters (HasMainEffects, runLocatedReadWriteGraphIO)
 import Effect.NodeLocated
-import Effect.UserError
+import Error.Utils
 import Effect.Warn
 import Graph.Effect
 import MyPrelude

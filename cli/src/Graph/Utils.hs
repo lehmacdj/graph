@@ -7,7 +7,7 @@ import Control.Lens
 import Data.Monoid (First (First))
 import Effect.FreshNID
 import Effect.NodeLocated
-import Effect.UserError
+import Error.Utils
 import Graph.Effect
 import Models.Connect
 import Models.Edge

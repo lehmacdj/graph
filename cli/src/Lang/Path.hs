@@ -16,7 +16,7 @@ import qualified Data.Set as Set
 import Data.Set.Ordered (OSet)
 import qualified Data.Set.Ordered as OSet
 import Effect.FreshNID
-import Effect.UserError
+import Error.Utils
 import Graph.Effect
 import Graph.Utils
 import Models.Connect

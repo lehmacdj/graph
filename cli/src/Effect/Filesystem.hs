@@ -2,7 +2,7 @@
 
 module Effect.FileSystem where
 
-import Effect.UserError
+import Error.Utils
 import MyPrelude
 import qualified System.Directory as Directory
 import System.Directory.Tree

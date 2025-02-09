@@ -7,7 +7,7 @@ import DAL.Serialization (nodesWithPrefix)
 import Effect.Interpreters
 import Effect.NodeLocated
 import Effect.Time
-import Effect.UserError
+import Error.Utils
 import Effect.Warn
 import Graph.Utils
 import Lang.Parsing

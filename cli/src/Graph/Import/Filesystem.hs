@@ -13,7 +13,7 @@ import Effect.Console
 import Effect.FileSystem
 import Effect.FreshNID
 import Effect.Time
-import Effect.UserError
+import Error.Utils
 import Graph.Effect
 import Graph.Import.ByteString
 import Graph.Time (taggingFreshNodesWithTime)

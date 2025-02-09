@@ -35,7 +35,7 @@ import Data.Aeson (FromJSON, ToJSON)
 import qualified Data.Aeson as Aeson
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Lazy as BL
-import Effect.UserError hiding (catch, throw)
+import Error.Utils hiding (catch, throw)
 import Models.Connect
 import Models.Graph
 import Models.NID

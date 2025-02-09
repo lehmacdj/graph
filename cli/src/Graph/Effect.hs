@@ -15,7 +15,7 @@ import Control.Lens hiding (transform)
 import qualified DAL.Serialization as S2
 import Data.Aeson (FromJSON (..), ToJSON (..))
 import qualified Data.Set as Set
-import Effect.UserError
+import Error.Utils
 import Effect.Util
 import Effect.Warn
 import Models.Connect

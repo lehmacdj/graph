@@ -7,7 +7,7 @@ module Graph.Check where
 
 import Control.Lens
 import Effect.Console
-import Effect.UserError
+import Error.Utils
 import Graph.Effect
 import Graph.Utils
 import Models.Connect

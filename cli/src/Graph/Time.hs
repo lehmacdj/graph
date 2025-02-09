@@ -3,7 +3,7 @@ module Graph.Time where
 import qualified Data.Set as Set
 import Effect.FreshNID
 import Effect.Time
-import Effect.UserError
+import Error.Utils
 import Graph.Effect
 import Graph.SystemNodes
 import Graph.Utils

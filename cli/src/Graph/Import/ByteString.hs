@@ -3,7 +3,7 @@ module Graph.Import.ByteString where
 import Data.Digest.Pure.SHA
 import Effect.FreshNID
 import Effect.Time
-import Effect.UserError
+import Error.Utils
 import Effect.Web
 import Graph.Effect
 import Graph.SystemNodes

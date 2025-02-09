@@ -15,7 +15,7 @@ import System.Directory (doesFileExist)
 import System.Directory.Clone (cloneFile)
 import qualified System.Directory.Tree as DT
 import System.FilePath (makeValid, splitFileName)
-import Effect.UserError
+import Error.Utils
 import Models.Connect
 import Models.Node
 import Effect.RawGraph

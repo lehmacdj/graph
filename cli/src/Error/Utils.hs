@@ -1,5 +1,5 @@
-module Effect.UserError
-  ( module Effect.UserError,
+module Error.Utils
+  ( module Error.Utils,
     module Error.UserError,
     module Polysemy.Error,
   )

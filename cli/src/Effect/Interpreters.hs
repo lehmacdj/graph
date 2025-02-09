@@ -11,7 +11,7 @@ import Effect.FileTypeOracle
 import Effect.FreshNID
 import Effect.NodeLocated
 import Effect.Time
-import Effect.UserError
+import Error.Utils
 import Effect.Util
 import Effect.Warn
 import Effect.Web

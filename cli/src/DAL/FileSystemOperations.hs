@@ -3,7 +3,7 @@ module DAL.FileSystemOperations where
 import MyPrelude
 import System.MacOS.NSFileCoordinator
 import Effect.RawGraph
-import Effect.UserError
+import Error.Utils
 import DAL.DirectoryFormat
 import Models.Node
 import Models.NID

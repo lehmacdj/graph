@@ -39,11 +39,12 @@ library
       Effect.NodeLocated
       Effect.RawGraph
       Effect.Time
-      Effect.UserError
       Effect.Util
       Effect.UtilSpec
       Effect.Warn
       Effect.Web
+      Error.UserError
+      Error.Utils
       Executable.DumpGraph
       Executable.GraphEditor
       Executable.GraphEditor.Completion
@@ -76,7 +77,6 @@ library
       Models.NID
       Models.NIDSpec
       Models.Node
-      Models.UserError
       MyPrelude
       Polysemy.MTL
       Spec
