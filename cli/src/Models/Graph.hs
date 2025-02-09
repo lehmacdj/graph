@@ -184,7 +184,7 @@ setData ::
   Node t a ->
   Graph t a ->
   Graph t a
-setData d n g = insertNode (set #associatedData d (nodeConsistentWithGraph g n)) g
+setData d n g = insertNode (set #augmentation d (nodeConsistentWithGraph g n)) g
 
 setData' ::
   ValidNode t a =>

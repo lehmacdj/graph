@@ -301,7 +301,7 @@ runWriteGraphIODualizeable dir = reinterpret $ \case
     let (Edge i t o) = ifDualized dual dualizeEdge e
     liftIO $ S2.withSerializedNode (#outgoing %~ deleteSet (Connect t o)) dir i
     liftIO $ S2.withSerializedNode (#incoming %~ deleteSet (Connect t i)) dir o
-  SetData nid d -> liftIO $ S2.withSerializedNode (#associatedData .~ d :: Node t (Maybe ByteString) -> Node t (Maybe ByteString)) dir nid
+  SetData nid d -> liftIO $ S2.withSerializedNode (#augmentation .~ d :: Node t (Maybe ByteString) -> Node t (Maybe ByteString)) dir nid
 
 -- | Run both the Dualizeable effect and the WriteGraph in IO
 -- The default state of all graphs stored on disk is that they are not dual

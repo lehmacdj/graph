@@ -16,7 +16,7 @@ data Node t a = Node
   { nid :: NID,
     incoming :: Set (Connect t),
     outgoing :: Set (Connect t),
-    associatedData :: a
+    augmentation :: a
   }
   deriving (Eq, Ord, Generic, NFData, Functor)
 
@@ -39,7 +39,7 @@ dataOf ::
   ValidNode t a =>
   Node t a ->
   a
-dataOf = view #associatedData
+dataOf = view #augmentation
 
 -- | Warning! It is up to the user of the graph to ensure that node ids are
 -- unique within the graph

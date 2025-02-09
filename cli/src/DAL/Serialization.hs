@@ -88,7 +88,7 @@ deserializeNodeF ::
 deserializeNodeF base nid = do
   node <- deserializeNodeWithoutDataF base nid
   d <- liftIO $ tryGetBinaryData base nid
-  pure $ (#associatedData .~ d) node
+  pure $ (#augmentation .~ d) node
 
 -- | Like deserializeNodeF but the data associated with the node is always
 -- Nothing. No attempt is made to read the data from the disk.
@@ -124,7 +124,7 @@ deserializeNode base nid = do
   let node :: Either String (Node t (Maybe ByteString))
       node = second (($> Nothing) . nodeFromDTO) . Aeson.eitherDecode $ fromStrict fileContents
   d <- liftIO $ tryGetBinaryData base nid
-  pure $ fmap (#associatedData .~ d) node
+  pure $ fmap (#augmentation .~ d) node
 
 doesNodeExist :: MonadIO m => FilePath -> NID -> m Bool
 doesNodeExist base nid = liftIO $ do

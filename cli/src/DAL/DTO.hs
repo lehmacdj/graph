@@ -31,7 +31,7 @@ nodeToDTO Node {..} =
 nodeFromDTO :: Ord t => NodeDTO t -> Node t ()
 nodeFromDTO NodeDTO {id = nid, ..} =
   Node
-    { associatedData = (),
+    { augmentation = (),
       incoming = mapSet connectFromDTO incoming,
       outgoing = mapSet connectFromDTO outgoing,
       ..

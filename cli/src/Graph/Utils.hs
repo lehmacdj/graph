@@ -142,7 +142,7 @@ mergeNode nid1 nid2 = do
   let cin = #incoming %~ selfLoopify nid2 nid1 . (`union` view #incoming n2)
       cout = #outgoing %~ selfLoopify nid2 nid1 . (`union` n2.outgoing)
       -- take n2's data first so it is easier to overwrite data if desireable
-      cdata = #associatedData .~ alaf First foldMap (view #associatedData) [n2, n1]
+      cdata = #augmentation .~ alaf First foldMap (view #augmentation) [n2, n1]
       nNew = cdata . cin . cout $ n1
   deleteNode @t nid1
   deleteNode @t nid2
