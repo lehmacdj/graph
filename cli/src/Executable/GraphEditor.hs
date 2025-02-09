@@ -21,7 +21,7 @@ import Graph.SystemNodes.Init (createSystemNodes)
 import Lang.Command hiding (printTransitions)
 import Lang.Command.Parse
 import Models.History
-import Models.Types
+import Models.NID
 import MyPrelude
 import Polysemy.Readline
 import Polysemy.State

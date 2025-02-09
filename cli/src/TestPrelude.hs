@@ -11,9 +11,11 @@ module TestPrelude
   )
 where
 
-import Data.Aeson
 import DAL.Serialization (initializeGraph)
-import Models.Types
+import Data.Aeson
+import Models.Connect
+import Models.Edge
+import Models.NID
 import MyPrelude hiding (assert)
 import System.Directory (copyFile)
 import System.Directory.Tree (AnchoredDirTree ((:/)))

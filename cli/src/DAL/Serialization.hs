@@ -36,9 +36,10 @@ import qualified Data.Aeson as Aeson
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Lazy as BL
 import Effect.UserError hiding (catch, throw)
-import qualified Models.Graph as Graph
-import Models.Node (dataOf)
-import Models.Types
+import Models.Connect
+import Models.Graph
+import Models.NID
+import Models.Node
 import MyPrelude
 import System.Directory
 import System.FilePath (dropExtension, takeFileName)
@@ -136,7 +137,7 @@ doesNodeExist base nid = liftIO $ do
 initializeGraph :: MonadIO m => FilePath -> m ()
 initializeGraph base = liftIO $ do
   createDirectoryIfMissing True base
-  serializeNodeEx (Graph.emptyNode @String nilNID $> Nothing) base
+  serializeNodeEx (emptyNode @String nilNID $> Nothing) base
 
 removeNode :: MonadIO m => FilePath -> NID -> m ()
 removeNode base nid = do
@@ -165,7 +166,7 @@ readGraph :: MonadIO m => FilePath -> m (Either String (Graph String (Maybe Byte
 readGraph base = do
   nids <- getAllNodeIds base
   nodes <- traverse (deserializeNode base) nids
-  pure $ Graph.insertNodes <$> sequence nodes <*> pure Graph.emptyGraph
+  pure $ insertNodes <$> sequence nodes <*> pure emptyGraph
 
 -- | takes a base 62 prefix & returns all NIDs in the graph that start with
 -- that prefix

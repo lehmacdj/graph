@@ -18,7 +18,7 @@ import Graph.Effect
 import Graph.Import.ByteString
 import Graph.Time (taggingFreshNodesWithTime)
 import Graph.Utils
-import Models.Graph hiding (insertEdge)
+import Models.Edge
 import MyPrelude
 import System.Directory.Tree hiding (readDirectory)
 

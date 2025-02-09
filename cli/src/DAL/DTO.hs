@@ -6,7 +6,9 @@
 module DAL.DTO where
 
 import Data.Aeson
-import Models.Types
+import Models.Connect
+import Models.NID
+import Models.Node
 import MyPrelude
 
 data NodeDTO t = NodeDTO

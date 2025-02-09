@@ -1,6 +1,6 @@
 module Models.History (History (..), singletonHistory, addToHistory, backInTime) where
 
-import Models.Graph (NID)
+import Models.NID (NID)
 import MyPrelude
 
 -- History [2, 3] 0 [4, 5] represents a chronology 3, 2, 0 (present), 4, 5

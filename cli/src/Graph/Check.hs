@@ -10,7 +10,8 @@ import Effect.Console
 import Effect.UserError
 import Graph.Effect
 import Graph.Utils
-import Models.Graph hiding (insertEdge, insertNode, setData)
+import Models.Connect
+import Models.Edge
 import MyPrelude
 
 data Direction = In | Out

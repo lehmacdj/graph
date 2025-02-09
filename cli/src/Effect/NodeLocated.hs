@@ -5,7 +5,7 @@ module Effect.NodeLocated
   )
 where
 
-import Models.Graph (NID)
+import Models.NID (NID)
 import MyPrelude hiding (Reader, ask)
 import Polysemy.Output
 import Polysemy.Reader

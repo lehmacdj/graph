@@ -4,9 +4,10 @@ module Graph.SystemNodes.Init
 where
 
 import Graph.Effect
-import Models.Types
-import MyPrelude
 import Graph.SystemNodes
+import Models.Edge
+import Models.NID
+import MyPrelude
 
 createSystemNodes :: HasGraph String effs => Sem effs ()
 createSystemNodes = do

@@ -64,6 +64,7 @@ library
       Lang.Path.Parse
       Lang.Path.Partial
       Lang.PathSpec
+      Models.Common
       Models.Connect
       Models.Edge
       Models.Graph
@@ -72,7 +73,6 @@ library
       Models.NID
       Models.NIDSpec
       Models.Node
-      Models.Types
       Models.UserError
       MyPrelude
       Polysemy.MTL

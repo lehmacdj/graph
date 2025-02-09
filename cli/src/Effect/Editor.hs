@@ -2,8 +2,8 @@
 
 module Effect.Editor where
 
-import Models.Graph (NID)
 import DAL.Serialization
+import Models.NID (NID)
 import MyPrelude
 import System.Directory
 import System.Environment

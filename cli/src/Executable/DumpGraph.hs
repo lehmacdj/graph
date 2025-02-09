@@ -3,7 +3,8 @@
 module Executable.DumpGraph (main) where
 
 import DAL.Serialization
-import Models.Types
+import Models.NID
+import Models.Node
 import MyPrelude
 
 printNodeDebugRepresentation :: FilePath -> NID -> IO ()

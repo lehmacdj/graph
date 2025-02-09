@@ -20,7 +20,9 @@ import Effect.UserError
 import Graph.Effect
 import Graph.Utils
 import Models.Connect
+import Models.Edge
 import Models.Graph hiding (insertEdge)
+import Models.Node
 import MyPrelude
 import Polysemy.State (evalState)
 

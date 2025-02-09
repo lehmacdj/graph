@@ -1,10 +1,8 @@
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE OverloadedRecordDot #-}
 
 module Models.Graph
-  ( module Models.Graph,
-    module Models.Types,
-    module Models.Edge,
-    module Models.Node,
+  ( module Models.Graph
   )
 where
 
@@ -14,8 +12,22 @@ import qualified Debug.Trace as Debug
 import GHC.Stack
 import Models.Edge
 import Models.Node
-import Models.Types
+import Models.NID
 import MyPrelude
+
+newtype Graph t a = Graph
+  { nodeMap :: Map NID (Node t a)
+  }
+  deriving stock (Eq, Ord, Generic)
+  deriving anyclass (NFData)
+
+instance (Show t, Ord t) => Show (Graph t a) where
+  show = unlines' . map show . toList . (.nodeMap)
+    where
+      unlines' = intercalate "\n"
+
+withNodeMap :: Graph t a -> (Map NID (Node t a) -> Map NID (Node t a)) -> Graph t a
+withNodeMap = flip (over #nodeMap)
 
 -- | Utility function for converting lookups into actual node values with error
 -- reporting.

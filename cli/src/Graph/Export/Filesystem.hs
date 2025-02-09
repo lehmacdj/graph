@@ -8,7 +8,6 @@ import qualified Data.Tree as T
 import Effect.FileTypeOracle
 import Graph.Effect
 import Effect.Warn
-import Models.Graph
 import qualified DAL.Serialization as S2
 import MyPrelude
 import Polysemy.Error
@@ -17,6 +16,8 @@ import System.Directory.Clone (cloneFile)
 import qualified System.Directory.Tree as DT
 import System.FilePath (makeValid, splitFileName)
 import Effect.UserError
+import Models.Connect
+import Models.Node
 
 -- | Like a DFS tree of the graph, but include duplciates unless they would form
 -- a cycle. Term Heterarchy comes from neuron zettelkasten

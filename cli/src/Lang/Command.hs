@@ -35,8 +35,11 @@ import Graph.Import.FileSystem
 import Graph.Time (taggingFreshNodesWithTime)
 import Graph.Utils
 import Lang.Path
-import Models.Graph (Connect (..), Edge (..), dataOf, nilNID, outgoingConnectsOf)
+import Models.Connect
+import Models.Edge
 import Models.History
+import Models.NID
+import Models.Node
 import MyPrelude
 import Polysemy.Readline
 import Polysemy.State

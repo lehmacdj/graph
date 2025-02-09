@@ -3,6 +3,8 @@ module Lang.PathSpec where
 import qualified Data.Set.Ordered as OSet
 import Lang.Path
 import Models.Graph
+import Models.NID
+import Models.Node
 import TestPrelude
 
 testGraph :: Graph String ()

@@ -1,10 +1,33 @@
 -- | Utilities for dealing with connects and following them.
-module Models.Connect where
+module Models.Connect
+  ( module Models.Connect,
+    module Models.Common,
+  )
+where
 
 import Control.Lens (filtered)
+import Data.Aeson
 import Data.Set.Lens
-import Models.Graph
+import Models.Common
+import Models.NID
 import MyPrelude
+
+-- | A transition from/to a node to/from another node.
+-- The first node isn't represented here, because this is used only in the node
+-- structure where the first node is clear from context.
+data Connect t = Connect
+  { transition :: t,
+    node :: NID
+  }
+  deriving (Eq, Ord, Generic, NFData)
+
+instance Show t => Show (Connect t) where
+  show (Connect t nid) = show nid ++ " via " ++ show t
+
+instance (FromJSON t, ValidTransition t) => FromJSON (Connect t)
+
+instance (ToJSON t, ValidTransition t) => ToJSON (Connect t) where
+  toEncoding = genericToEncoding defaultOptions
 
 pairOfConnect :: Connect t -> (t, NID)
 pairOfConnect (Connect x nid) = (x, nid)

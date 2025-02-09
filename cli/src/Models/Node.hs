@@ -1,9 +1,33 @@
-module Models.Node where
+module Models.Node
+  ( module Models.Node,
+    module Models.Common,
+  )
+where
 
+import Control.DeepSeq
 import Control.Lens
 import qualified Data.Set as Set
-import Models.Types
+import Models.Common
+import Models.Connect
+import Models.NID
 import MyPrelude
+
+data Node t a = Node
+  { nid :: NID,
+    incoming :: Set (Connect t),
+    outgoing :: Set (Connect t),
+    associatedData :: a
+  }
+  deriving (Eq, Ord, Generic, NFData, Functor)
+
+instance (Show t, Ord t) => Show (Node t a) where
+  show Node {..} =
+    show nid ++ "{"
+      ++ "in="
+      ++ show (toList incoming)
+      ++ ", out="
+      ++ show (toList outgoing)
+      ++ "}"
 
 indegreeOf :: Node t a -> Int
 indegreeOf = Set.size . view #incoming

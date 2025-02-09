@@ -10,7 +10,8 @@ import Effect.NodeLocated
 import Effect.UserError
 import Graph.Effect
 import Models.Connect
-import Models.Graph hiding (insertEdge, insertNode, setData)
+import Models.Edge
+import Models.Node
 import MyPrelude
 import Witherable
 

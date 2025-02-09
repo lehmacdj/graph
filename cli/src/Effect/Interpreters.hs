@@ -16,8 +16,8 @@ import Effect.Util
 import Effect.Warn
 import Effect.Web
 import Graph.Effect
-import Models.Graph
 import Models.History
+import Models.NID
 import MyPrelude hiding (Reader, ask)
 import Polysemy.Embed
 import Polysemy.Input

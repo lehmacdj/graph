@@ -9,7 +9,7 @@ import Graph.Effect
 import Graph.SystemNodes
 import Graph.Time
 import Graph.Utils
-import Models.Graph (Edge (..))
+import Models.Edge (Edge (..))
 import MyPrelude
 
 computeSHA :: ByteString -> String

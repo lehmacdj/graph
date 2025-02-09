@@ -1,5 +1,3 @@
-{-# LANGUAGE ViewPatterns #-}
-
 module Models.UserError
   ( module Models.UserError,
     left,
@@ -9,7 +7,7 @@ where
 
 import Control.Arrow (left)
 import Control.Lens
-import Models.Graph (NID)
+import Models.NID (NID)
 import MyPrelude
 import Network.HTTP.Conduit (HttpException)
 

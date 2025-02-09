@@ -18,9 +18,12 @@ import qualified Data.Set as Set
 import Effect.UserError
 import Effect.Util
 import Effect.Warn
+import Models.Connect
+import Models.Edge
+import Models.Graph (Graph)
 import qualified Models.Graph as G
-import Models.Node (dualizeNode)
-import Models.Types
+import Models.NID
+import Models.Node
 import MyPrelude
 import Polysemy.Input
 import Polysemy.State
@@ -210,7 +213,7 @@ runWriteGraphState ::
   (Member (State (Graph t (Maybe ByteString))) effs, ValidTransition t) =>
   Sem (WriteGraph t ': effs) ~> Sem effs
 runWriteGraphState = interpret $ \case
-  TouchNode nid -> modify (G.insertNode (G.emptyNode' nid) :: Graph t (Maybe ByteString) -> Graph t (Maybe ByteString))
+  TouchNode nid -> modify (G.insertNode (emptyNode' nid) :: Graph t (Maybe ByteString) -> Graph t (Maybe ByteString))
   DeleteNode nid -> modify (G.delNode' nid :: Graph t (Maybe ByteString) -> Graph t (Maybe ByteString))
   InsertEdge e -> modify (G.insertEdge e)
   DeleteEdge e -> modify (G.delEdge e)
@@ -275,7 +278,7 @@ runWriteGraphIODualizeable ::
 runWriteGraphIODualizeable dir = reinterpret $ \case
   TouchNode nid ->
     whenM (not <$> S2.doesNodeExist dir nid) $
-      fromExceptionToUserError $ S2.serializeNodeEx (G.emptyNode' nid :: Node t (Maybe ByteString)) dir
+      fromExceptionToUserError $ S2.serializeNodeEx (emptyNode' nid :: Node t (Maybe ByteString)) dir
   DeleteNode nid -> do
     n <- S2.deserializeNodeF @t dir nid
     let del = Set.filter ((/= nid) . view #node) :: Set (Connect t) -> Set (Connect t)
@@ -288,14 +291,14 @@ runWriteGraphIODualizeable dir = reinterpret $ \case
     convertError @UserError . fromExceptionToUserError $ S2.removeNode dir nid
   InsertEdge e -> do
     dual <- input @IsDual
-    let (Edge i t o) = ifDualized dual G.dualizeEdge e
+    let (Edge i t o) = ifDualized dual dualizeEdge e
     runWriteGraphIODualizeable @t dir (touchNode @t i)
     runWriteGraphIODualizeable @t dir (touchNode @t o)
     liftIO $ S2.withSerializedNode (#outgoing %~ insertSet (Connect t o)) dir i
     liftIO $ S2.withSerializedNode (#incoming %~ insertSet (Connect t i)) dir o
   DeleteEdge e -> do
     dual <- input @IsDual
-    let (Edge i t o) = ifDualized dual G.dualizeEdge e
+    let (Edge i t o) = ifDualized dual dualizeEdge e
     liftIO $ S2.withSerializedNode (#outgoing %~ deleteSet (Connect t o)) dir i
     liftIO $ S2.withSerializedNode (#incoming %~ deleteSet (Connect t i)) dir o
   SetData nid d -> liftIO $ S2.withSerializedNode (#associatedData .~ d :: Node t (Maybe ByteString) -> Node t (Maybe ByteString)) dir nid
