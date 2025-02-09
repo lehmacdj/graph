@@ -29,6 +29,7 @@ import qualified System.Console.Haskeline as H
 import System.Directory (createDirectoryIfMissing, doesDirectoryExist)
 import System.Environment.XDG.BaseDir (getUserDataDir)
 import System.Random (initStdGen, mkStdGen)
+import Effect.RawGraph
 
 ioExceptionHandler :: IOError -> IO (Maybe a)
 ioExceptionHandler _ = pure Nothing

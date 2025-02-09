@@ -11,13 +11,20 @@ import Models.NID (NID)
 import MyPrelude
 import Network.HTTP.Conduit (HttpException)
 
+-- | Blanket error type used by the app. This is called @UserError@ because
+-- generally we only want to intercept it when propagating errors to the user.
 data UserError
   = OtherError String
   | -- | Thrown when aborting an action (e.g. via a y/n prompt)
     OperationCancelled
   | OtherException SomeException
   | IOFail IOError
-  | MissingNode NID (Maybe Text)
+  | -- | A @Missing@ error that was converted into an UserError.
+    -- Generally we keep Missing separate because it is more legitimate for
+    -- various parts of the application to want to intercept them and handle
+    -- then in different ways, while generally UserErrors need to be propogated
+    -- all the way up to the user.
+    MissingNode NID (Maybe Text)
   | -- | report that the thing that has a given
     -- representation wasn't a singleton
     NotSingleton String

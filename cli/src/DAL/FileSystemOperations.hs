@@ -11,7 +11,7 @@ import Data.Aeson
 import DAL.DTO
 
 readNodeMetadata ::
-  Members [RawGraph, Embed IO, Error Missing] effs =>
+  Members [RawGraph, Embed IO, Error Missing, Error UserError] effs =>
   NID -> Sem effs (Node Text ())
 readNodeMetadata nid = do
   path <- getMetadataFile nid

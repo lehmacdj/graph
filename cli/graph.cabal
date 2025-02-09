@@ -32,7 +32,7 @@ library
       Data.Set.Ordered.Orphans
       Effect.Console
       Effect.Editor
-      Effect.FileSystem
+      Effect.Filesystem
       Effect.FileTypeOracle
       Effect.FreshNID
       Effect.Interpreters
@@ -53,7 +53,7 @@ library
       Executable.Scratch
       Graph.Check
       Graph.Effect
-      Graph.Export.FileSystem
+      Graph.Export.Filesystem
       Graph.Import.ByteString
       Graph.Import.FileSystem
       Graph.SystemNodes
