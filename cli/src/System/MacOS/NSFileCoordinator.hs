@@ -1,4 +1,5 @@
 {-# LANGUAGE CPP #-}
+{-# LANGUAGE ImpredicativeTypes #-}
 
 -- | This module provides a high-level interface to the NSFileCoordinator API.
 -- Though it is only available on macOS, this module provides a cross-platform
@@ -8,6 +9,11 @@ module System.MacOS.NSFileCoordinator
     coordinateWriting,
     coordinateReadingThenWriting,
     coordinateWritingAndWriting,
+    FilesToCoordinate (..),
+    WrappedReader (..),
+    unwrappingReader,
+    WrappedWriter (..),
+    unwrappingWriter,
     coordinateAccessing,
     ReadingOptions (..),
     defaultReadingOptions,
@@ -280,19 +286,33 @@ coordinateWritingAndWriting writingPath1 writingIsDirectory1 writingOptions1 wri
 coordinateWritingAndWriting writingPath1 _ _ writingPath2 _ _ action = action writingPath1 writingPath2
 #endif
 
+data FilesToCoordinate t = FilesToCoordinate
+  { readingPaths :: t (FilePath, Bool),
+    blanketReadingOptions :: ReadingOptions,
+    writingPaths :: t (FilePath, Bool),
+    blanketWritingOptions :: WritingOptions
+  }
+
+newtype WrappedReader m = WrappedReader {unwrapped :: forall a. ReadingOptions -> (FilePath -> m a) -> m a}
+
+unwrappingReader :: WrappedReader m -> ReadingOptions -> (FilePath -> m a) -> m a
+unwrappingReader (WrappedReader unwrapped) = unwrapped
+
+newtype WrappedWriter m = WrappedWriter {unwrapped :: forall a. WritingOptions -> (FilePath -> m a) -> m a}
+
+unwrappingWriter :: WrappedWriter m -> WritingOptions -> (FilePath -> m a) -> m a
+unwrappingWriter (WrappedWriter unwrapped) = unwrapped
+
 coordinateAccessing ::
   Traversable t =>
-  t (FilePath, Bool) ->
-  ReadingOptions ->
-  t (FilePath, Bool) ->
-  WritingOptions ->
-  ( t (ReadingOptions -> (FilePath -> IO ()) -> IO ()) ->
-    t (WritingOptions -> (FilePath -> IO ()) -> IO ()) ->
-    IO ()
+  FilesToCoordinate t ->
+  ( t (WrappedReader IO) ->
+    t (WrappedWriter IO) ->
+    IO a
   ) ->
-  IO ()
+  IO a
 #ifdef darwin_HOST_OS
-coordinateAccessing readingPaths blanketReadingOptions writingPaths blanketWritingOptions action =
+coordinateAccessing FilesToCoordinate{..} action =
   evalContT do
     readingUrls <- for readingPaths $ \(path, isDirectory) ->
       ContT $ withNSURL path isDirectory
@@ -303,11 +323,12 @@ coordinateAccessing readingPaths blanketReadingOptions writingPaths blanketWriti
     fileCoordinator <- ContT $ bracket nsFileCoordinator_init m_release
     errPtr <- ContT alloca
     let readingAccessors =
-          readingUrls <&> \url readingOptions readingAction ->
+          readingUrls <&> \url -> WrappedReader \readingOptions readingAction ->
             coordinateReading' fileCoordinator errPtr url readingOptions readingAction
     let writingAccessors =
-          writingUrls <&> \url writingOptions writingAction ->
+          writingUrls <&> \url -> WrappedWriter \writingOptions writingAction ->
             coordinateWriting' fileCoordinator errPtr url writingOptions writingAction
+    resultRef <- newIORef Nothing
     lift $
       m_NSFileCoordinator_prepareForReadingAndWritingItems
         fileCoordinator
@@ -316,9 +337,12 @@ coordinateAccessing readingPaths blanketReadingOptions writingPaths blanketWriti
         writingUrlsArray
         (fromWritingOptions blanketWritingOptions)
         errPtr
-        $ action readingAccessors writingAccessors
+        do
+          result <- action readingAccessors writingAccessors
+          writeIORef resultRef $ Just result
+    readIORef resultRef >>= maybe (throwIO NullResultException) pure
 #else
-coordinateAccessing readingPaths _ writingPaths _ action =
+coordinateAccessing FilesToCoordinate{..} action =
   let readingAccessors = readingPaths <&> \(path, _) _ readingAction -> readingAction path
       writingAccessors = writingPaths <&> \(path, _) _ writingAction -> writingAction path
    in action readingAccessors writingAccessors
