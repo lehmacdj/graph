@@ -18,6 +18,7 @@ import System.FilePath (makeValid, splitFileName)
 import Effect.UserError
 import Models.Connect
 import Models.Node
+import Effect.RawGraph
 
 -- | Like a DFS tree of the graph, but include duplciates unless they would form
 -- a cycle. Term Heterarchy comes from neuron zettelkasten

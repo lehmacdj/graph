@@ -97,6 +97,7 @@ default-extensions:
 - DisambiguateRecordFields
 - DuplicateRecordFields
 - FlexibleContexts
+- FlexibleInstances
 - GADTs
 - GeneralizedNewtypeDeriving
 - LambdaCase
@@ -118,6 +119,7 @@ default-extensions:
 - TypeApplications
 - TypeFamilies
 - TypeOperators
+- TypeSynonymInstances
 - ViewPatterns
 
 ghc-options:

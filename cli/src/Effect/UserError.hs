@@ -1,5 +1,3 @@
-{-# LANGUAGE ViewPatterns #-}
-
 module Effect.UserError
   ( module Effect.UserError,
     module Models.UserError,
@@ -59,14 +57,42 @@ subsumeUserError ::
   Sem r a
 subsumeUserError = (`handleError` (throw . toUserError))
 
-newtype Missing = Missing {unMissing :: NID}
+data Missing = Missing
+  { nid :: NID,
+    reason :: Maybe Text
+  }
   deriving (Show, Eq, Ord)
 
 instance ToUserError Missing where
-  toUserError (Missing nid) = MissingNode nid
+  toUserError (Missing nid reason) = MissingNode nid reason
 
 instance ToUserError IOException where
   toUserError = IOFail
 
 throwMissing :: Member (Error Missing) effs => NID -> Sem effs a
-throwMissing = throw . Missing
+throwMissing nid = throw $ Missing nid Nothing
+
+class TextRepresentableError a where
+  textRepresentation :: a -> Text
+
+instance TextRepresentableError String where
+  textRepresentation = pack
+
+instance TextRepresentableError Text where
+  textRepresentation = id
+
+instance TextRepresentableError SomeException where
+  textRepresentation = pack . displayException
+
+throwMissingIfLeft ::
+  (Member (Error Missing) effs, TextRepresentableError err) =>
+  NID -> Either err a -> Sem effs a
+throwMissingIfLeft _ (Right x) = pure x
+throwMissingIfLeft nid (Left e) =
+  throw $ Missing nid $ Just $ textRepresentation e
+
+throwMissingIfNothing ::
+  (Member (Error Missing) effs) =>
+  NID -> Maybe a -> Sem effs a
+throwMissingIfNothing _ (Just r) = pure r
+throwMissingIfNothing nid Nothing = throwMissing nid

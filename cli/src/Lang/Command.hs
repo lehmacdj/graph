@@ -45,6 +45,7 @@ import Polysemy.Readline
 import Polysemy.State
 import qualified Utils.Extensibility as Extensibility
 import Utils.Singleton
+import Effect.RawGraph
 
 data Command
   = -- | cd

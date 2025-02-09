@@ -17,7 +17,7 @@ data UserError
     OperationCancelled
   | OtherException SomeException
   | IOFail IOError
-  | MissingNode NID
+  | MissingNode NID (Maybe Text)
   | -- | report that the thing that has a given
     -- representation wasn't a singleton
     NotSingleton String
@@ -32,7 +32,9 @@ instance Show UserError where
   show (OtherException e) = show e
   show OperationCancelled = "cancelled!"
   show (IOFail e) = show e
-  show (MissingNode nid) = "node " ++ show nid ++ " is missing"
+  show (MissingNode nid reason) =
+    "node " ++ show nid ++ " is missing"
+    ++ maybe "" ((" for reason " ++) . unpack) reason
   show (NotSingleton xs) = xs ++ " was expected to be a singleton but wasn't"
   show (WebError e) = show e
   show (AesonDeserialize e) = "failed to deserialize JSON: " ++ e

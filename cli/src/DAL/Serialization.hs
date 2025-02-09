@@ -45,6 +45,7 @@ import System.Directory
 import System.FilePath (dropExtension, takeFileName)
 import qualified System.FilePath.Glob as Glob
 import Utils.Base62 (isBase62Char)
+import DAL.DirectoryFormat
 
 -- | all of the nodes accessible under a given path
 getAllNodeIds :: MonadIO m => FilePath -> m [NID]
@@ -54,12 +55,6 @@ getAllNodeIds base = do
       nodes = mapMaybe (readMay . dropExtension) linkFiles
   pure nodes
 
-linksFile :: FilePath -> NID -> FilePath
-linksFile base nid = base </> (show nid ++ ".json")
-
-nodeDataFile :: FilePath -> NID -> FilePath
-nodeDataFile base nid = base </> (show nid ++ ".data")
-
 serializeNodeEx ::
   (ToJSON (NodeDTO t), ValidTransition t) =>
   Node t (Maybe ByteString) ->
@@ -67,7 +62,7 @@ serializeNodeEx ::
   IO ()
 serializeNodeEx n base = do
   createDirectoryIfMissing True base
-  BL.writeFile (linksFile base (n ^. #nid)) (Aeson.encode . nodeToDTO $ n)
+  BL.writeFile (metadataFile base (n ^. #nid)) (Aeson.encode . nodeToDTO $ n)
   case n.rawData of
     Just d -> B.writeFile (nodeDataFile base (n ^. #nid)) d
     Nothing ->
@@ -103,7 +98,7 @@ deserializeNodeWithoutDataF ::
   NID ->
   Sem effs (Node t (Maybe ByteString))
 deserializeNodeWithoutDataF base nid = do
-  fileContents <- fromExceptionToUserError (B.readFile (linksFile base nid))
+  fileContents <- fromExceptionToUserError (B.readFile (metadataFile base nid))
   throwLeft
     . bimap AesonDeserialize (($> Nothing) . nodeFromDTO)
     . Aeson.eitherDecode
@@ -120,7 +115,7 @@ deserializeNode ::
   NID ->
   m (Either String (Node t (Maybe ByteString)))
 deserializeNode base nid = do
-  fileContents <- liftIO $ B.readFile (linksFile base nid)
+  fileContents <- liftIO $ B.readFile (metadataFile base nid)
   let node :: Either String (Node t (Maybe ByteString))
       node = second (($> Nothing) . nodeFromDTO) . Aeson.eitherDecode $ fromStrict fileContents
   d <- liftIO $ tryGetBinaryData base nid
@@ -130,7 +125,7 @@ doesNodeExist :: MonadIO m => FilePath -> NID -> m Bool
 doesNodeExist base nid = liftIO $ do
   whenM (not <$> doesDirectoryExist base) $
     error "doesNodeExist: graph directory doesn't exist"
-  doesFileExist (linksFile base nid)
+  doesFileExist (metadataFile base nid)
 
 -- | initializes graph with a single node with id 0 with no edges, if the
 -- directory doesn't exist, this creates one
@@ -141,7 +136,7 @@ initializeGraph base = liftIO $ do
 
 removeNode :: MonadIO m => FilePath -> NID -> m ()
 removeNode base nid = do
-  liftIO . removeFile $ linksFile base nid
+  liftIO . removeFile $ metadataFile base nid
   -- this file doesn't exist frequently so we want to ignore this error
   liftIO . ignoreIOError . removeFile $ nodeDataFile base nid
 

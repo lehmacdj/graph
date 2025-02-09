@@ -28,6 +28,7 @@ import Polysemy.State
 import System.Console.Haskeline (InputT)
 import qualified System.Console.Haskeline as H
 import System.Random
+import Effect.RawGraph
 
 data Env = Env
   { filePath :: IORef FilePath,

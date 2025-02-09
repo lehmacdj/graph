@@ -28,11 +28,6 @@ import MyPrelude
 import Polysemy.Input
 import Polysemy.State
 
--- | Effect for getting the filepath of the graph; useful for doing low level
--- operations together with Graph.Serialize* modules.
-data RawGraph m a where
-  GetGraphFilePath :: RawGraph m FilePath
-
 data ReadGraph t d m a where
   GetNode :: NID -> ReadGraph t d m (Maybe (Node t d))
   NodeManifest :: ReadGraph t d m [NID]
@@ -40,7 +35,6 @@ data ReadGraph t d m a where
 data ReadGraphDataless t m a where
   GetNodeDataless :: NID -> ReadGraphDataless t m (Maybe (Node t (Maybe ByteString)))
 
-makeSem ''RawGraph
 makeSem ''ReadGraph
 makeSem ''ReadGraphDataless
 
@@ -95,13 +89,6 @@ type HasGraph t effs =
     Member (WriteGraph t) effs,
     ValidTransition t
   )
-
-runRawGraphAsInput ::
-  Member (Input FilePath) r => Sem (RawGraph : r) a -> Sem r a
-runRawGraphAsInput = transform @_ @(Input FilePath) (\GetGraphFilePath -> Input)
-
-runRawGraphWithPath :: FilePath -> Sem (RawGraph : r) a -> Sem r a
-runRawGraphWithPath p = runInputConst p . runRawGraphAsInput . raiseUnder
 
 -- | Run a graph computation in the io monad, using a directory in the
 -- serialization format to access the graph
