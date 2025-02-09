@@ -24,11 +24,11 @@ source-repository head
 
 library
   exposed-modules:
-      DAL.DecodeJSON
       DAL.DirectoryFormat
       DAL.DTO
       DAL.DTOSpec
       DAL.FileSystemOperations
+      DAL.JSON
       DAL.Serialization
       Data.Set.Ordered.Orphans
       Effect.Console

@@ -15,11 +15,11 @@ throwString :: Member (Error UserError) effs => String -> Sem effs a
 throwString = throw . OtherError
 
 throwLeft ::
-  Member (Error UserError) effs =>
-  Either UserError a ->
+  (Member (Error UserError) effs, ToUserError err) =>
+  Either err a ->
   Sem effs a
 throwLeft (Right x) = pure x
-throwLeft (Left err) = throw err
+throwLeft (Left err) = throw $ toUserError err
 
 -- | capture errors and convert them to an error
 fromExceptionToUserError ::
@@ -68,6 +68,9 @@ instance ToUserError Missing where
 
 instance ToUserError IOException where
   toUserError = IOFail
+
+instance ToUserError UserError where
+  toUserError = id
 
 throwMissing :: Member (Error Missing) effs => NID -> Sem effs a
 throwMissing nid = throw $ Missing nid Nothing

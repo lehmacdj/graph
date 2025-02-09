@@ -1,7 +1,7 @@
 module DAL.FileSystemOperations where
 
 import DAL.DTO
-import DAL.DecodeJSON
+import DAL.JSON
 import DAL.DirectoryFormat
 import Effect.RawGraph
 import Error.Utils
@@ -20,3 +20,15 @@ readNodeMetadata nid = do
   serialized <- throwMissingIfLeft nid result
   dto <- decodeJSON serialized
   pure $ nodeFromDTO dto
+
+writeNodeMetadata ::
+  Members [RawGraph, Embed IO, Error UserError] effs =>
+  Node Text () ->
+  Sem effs ()
+writeNodeMetadata node = do
+  let dto = nodeToDTO node
+  let serialized = toStrict $ encodeJSON dto
+  path <- getMetadataFile node.nid
+  result <- embed $ coordinateWriting path False defaultWritingOptions $ \path' ->
+    try @IO @IOError $ writeFile path' serialized
+  throwLeft result
