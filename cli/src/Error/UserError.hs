@@ -10,6 +10,7 @@ import Control.Lens
 import Models.NID (NID)
 import MyPrelude
 import Network.HTTP.Conduit (HttpException)
+import System.MacOS.NSFileCoordinator (NSErrorException)
 
 -- | Blanket error type used by the app. This is called @UserError@ because
 -- generally we only want to intercept it when propagating errors to the user.
@@ -31,6 +32,7 @@ data UserError
   | WebError HttpException
   | -- | deserialization fails
     AesonDeserialize String
+  | FileCoordinationError NSErrorException
   | Multiple (NonEmpty UserError)
   deriving (Generic)
 
@@ -45,6 +47,7 @@ instance Show UserError where
   show (NotSingleton xs) = xs ++ " was expected to be a singleton but wasn't"
   show (WebError e) = show e
   show (AesonDeserialize e) = "failed to deserialize JSON: " ++ e
+  show (FileCoordinationError e) = "error while file coordinating: " ++ show e
   show (Multiple errs) = unlines $ map show errs
 
 -- | order preserving union of the errors in the different error types

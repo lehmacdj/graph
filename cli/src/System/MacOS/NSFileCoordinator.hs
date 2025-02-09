@@ -78,6 +78,7 @@ defaultWritingOptions = WritingOptions
     contentIndependentMetadataOnly = False
   }
 
+-- | This shouldn't be thrown unless something very fishy happens
 data NullResultException = NullResultException
   deriving (Show, Exception)
 

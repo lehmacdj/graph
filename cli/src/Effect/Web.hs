@@ -14,7 +14,7 @@ makeSem ''Web
 runWebIO ::
   (Members [Embed IO, Error UserError] effs) =>
   Sem (Web : effs) ~> Sem effs
-runWebIO = interpret $ \(GetHttp s) -> fromExceptionToUserError do
+runWebIO = interpret $ \(GetHttp s) -> embedCatchingErrors do
   let opts = defaults
   response <- getWith opts s
   pure . toStrict $ response ^. responseBody

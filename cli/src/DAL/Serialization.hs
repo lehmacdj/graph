@@ -98,7 +98,7 @@ deserializeNodeWithoutDataF ::
   NID ->
   Sem effs (Node t (Maybe ByteString))
 deserializeNodeWithoutDataF base nid = do
-  fileContents <- fromExceptionToUserError (B.readFile (metadataFile base nid))
+  fileContents <- embedCatchingErrors (B.readFile (metadataFile base nid))
   throwLeft
     . bimap AesonDeserialize (($> Nothing) . nodeFromDTO)
     . Aeson.eitherDecode
@@ -155,7 +155,7 @@ withSerializedNode ::
 withSerializedNode f base nid =
   runM . printErrors . withEffects @[Error UserError, Embed IO] $ do
     n <- deserializeNodeF @t @[Error UserError, Embed IO] base nid
-    fromExceptionToUserError $ serializeNodeEx (f n) base
+    embedCatchingErrors $ serializeNodeEx (f n) base
 
 readGraph :: MonadIO m => FilePath -> m (Either String (Graph String (Maybe ByteString)))
 readGraph base = do

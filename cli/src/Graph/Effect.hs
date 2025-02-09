@@ -265,7 +265,7 @@ runWriteGraphIODualizeable ::
 runWriteGraphIODualizeable dir = reinterpret $ \case
   TouchNode nid ->
     whenM (not <$> S2.doesNodeExist dir nid) $
-      fromExceptionToUserError $ S2.serializeNodeEx (emptyNode' nid :: Node t (Maybe ByteString)) dir
+      embedCatchingErrors $ S2.serializeNodeEx (emptyNode' nid :: Node t (Maybe ByteString)) dir
   DeleteNode nid -> do
     n <- S2.deserializeNodeF @t dir nid
     let del = Set.filter ((/= nid) . view #node) :: Set (Connect t) -> Set (Connect t)
@@ -275,7 +275,7 @@ runWriteGraphIODualizeable dir = reinterpret $ \case
         neighborsOut = toListOf (#outgoing . folded . #node) n
         neighbors = ordNub (neighborsIn ++ neighborsOut)
     liftIO $ forM_ neighbors $ S2.withSerializedNode (delIn . delOut) dir
-    convertError @UserError . fromExceptionToUserError $ S2.removeNode dir nid
+    convertError @UserError . embedCatchingErrors $ S2.removeNode dir nid
   InsertEdge e -> do
     dual <- input @IsDual
     let (Edge i t o) = ifDualized dual dualizeEdge e

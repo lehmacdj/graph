@@ -87,6 +87,7 @@ default-extensions:
 - CApiFFI
 - ConstraintKinds
 - DataKinds
+- DefaultSignatures
 - DeriveAnyClass
 - DeriveFoldable
 - DeriveFunctor

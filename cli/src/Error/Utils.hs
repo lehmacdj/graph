@@ -10,6 +10,7 @@ import Error.UserError
 import MyPrelude
 import Network.HTTP.Conduit (HttpException)
 import Polysemy.Error hiding (fromException, try)
+import System.MacOS.NSFileCoordinator (NSErrorException)
 
 throwString :: Member (Error UserError) effs => String -> Sem effs a
 throwString = throw . OtherError
@@ -22,13 +23,14 @@ throwLeft (Right x) = pure x
 throwLeft (Left err) = throw $ toUserError err
 
 -- | capture errors and convert them to an error
-fromExceptionToUserError ::
+embedCatchingErrors ::
   Members [Error UserError, Embed IO] r => IO a -> Sem r a
-fromExceptionToUserError = fromExceptionVia mapExceptionToUserError
+embedCatchingErrors = fromExceptionVia mapExceptionToUserError
   where
     mapExceptionToUserError = \case
       (fromException @IOError -> Just e) -> IOFail e
       (fromException @HttpException -> Just e) -> WebError e
+      (fromException @NSErrorException -> Just e) -> FileCoordinationError e
       e -> OtherException e
 
 printErrors ::
@@ -72,11 +74,22 @@ instance ToUserError IOException where
 instance ToUserError UserError where
   toUserError = id
 
+instance ToUserError SomeException where
+  toUserError = OtherException
+
+instance ToUserError HttpException where
+  toUserError = WebError
+
+instance ToUserError String where
+  toUserError = OtherError
+
 throwMissing :: Member (Error Missing) effs => NID -> Sem effs a
 throwMissing nid = throw $ Missing nid Nothing
 
 class TextRepresentableError a where
   textRepresentation :: a -> Text
+  default textRepresentation :: Exception a => a -> Text
+  textRepresentation = pack . displayException
 
 instance TextRepresentableError String where
   textRepresentation = pack
@@ -84,8 +97,9 @@ instance TextRepresentableError String where
 instance TextRepresentableError Text where
   textRepresentation = id
 
-instance TextRepresentableError SomeException where
-  textRepresentation = pack . displayException
+instance TextRepresentableError SomeException
+
+instance TextRepresentableError IOError
 
 throwMissingIfLeft ::
   (Member (Error Missing) effs, TextRepresentableError err) =>

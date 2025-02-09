@@ -102,6 +102,7 @@ library
       CApiFFI
       ConstraintKinds
       DataKinds
+      DefaultSignatures
       DeriveAnyClass
       DeriveFoldable
       DeriveFunctor
@@ -215,6 +216,7 @@ executable dump-graph
       CApiFFI
       ConstraintKinds
       DataKinds
+      DefaultSignatures
       DeriveAnyClass
       DeriveFoldable
       DeriveFunctor
@@ -323,6 +325,7 @@ executable ge
       CApiFFI
       ConstraintKinds
       DataKinds
+      DefaultSignatures
       DeriveAnyClass
       DeriveFoldable
       DeriveFunctor
@@ -431,6 +434,7 @@ executable scratch
       CApiFFI
       ConstraintKinds
       DataKinds
+      DefaultSignatures
       DeriveAnyClass
       DeriveFoldable
       DeriveFunctor
@@ -540,6 +544,7 @@ test-suite graph-test
       CApiFFI
       ConstraintKinds
       DataKinds
+      DefaultSignatures
       DeriveAnyClass
       DeriveFoldable
       DeriveFunctor
