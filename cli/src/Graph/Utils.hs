@@ -49,7 +49,7 @@ insertNode ::
 insertNode n = do
   let nid = n ^. #nid
   touchNode @t nid
-  setData @t nid (dataOf n)
+  setData @t nid n.rawData
   let esOut = toListOf (#outgoing . folded . to (outgoingEdge nid)) n
       esIn = toListOf (#incoming . folded . to (`incomingEdge` nid)) n
   forM_ esIn insertEdge
@@ -174,7 +174,7 @@ cloneNode nid = do
   n <- getNodeSem nid
   let i = selfLoopify nid nid' n.incoming
       o = selfLoopify nid nid' n.outgoing
-  insertNode @t (Node nid' i o (dataOf n))
+  insertNode @t (Node nid' i o n.rawData)
   pure nid'
 
 -- | Caution: using this function is unsafe if the number re-written to is
@@ -189,5 +189,5 @@ unsafeRenumberNode (nid, nid') = do
   n <- getNodeSem nid
   let i = selfLoopify nid nid' n.incoming
       o = selfLoopify nid nid' n.outgoing
-  insertNode @String (Node nid' i o (dataOf n))
+  insertNode @String (Node nid' i o n.rawData)
   deleteNode @String nid

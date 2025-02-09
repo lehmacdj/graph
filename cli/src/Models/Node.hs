@@ -11,6 +11,7 @@ import Models.Common
 import Models.Connect
 import Models.NID
 import MyPrelude
+import GHC.Records
 
 data Node t a = Node
   { nid :: NID,
@@ -29,17 +30,16 @@ instance (Show t, Ord t) => Show (Node t a) where
       ++ show (toList outgoing)
       ++ "}"
 
+-- | We implement special @HasField@ instances for specific types of
+-- augmentation so that we can refer to them in a more intuitive way.
+instance HasField "rawData" (Node t (Maybe ByteString)) (Maybe ByteString) where
+  getField = (.augmentation)
+
 indegree :: Getter (Node t a) Int
 indegree = #incoming . to Set.size
 
 outdegree :: Getter (Node t a) Int
 outdegree = #outgoing . to Set.size
-
-dataOf ::
-  ValidNode t a =>
-  Node t a ->
-  a
-dataOf = view #augmentation
 
 -- | Warning! It is up to the user of the graph to ensure that node ids are
 -- unique within the graph
