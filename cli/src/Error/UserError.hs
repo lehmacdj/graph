@@ -1,5 +1,5 @@
-module Models.UserError
-  ( module Models.UserError,
+module Error.UserError
+  ( module Error.UserError,
     left,
     (#),
   )

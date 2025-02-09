@@ -1,12 +1,12 @@
 module Effect.UserError
   ( module Effect.UserError,
-    module Models.UserError,
+    module Error.UserError,
     module Polysemy.Error,
   )
 where
 
 import Models.NID
-import Models.UserError
+import Error.UserError
 import MyPrelude
 import Network.HTTP.Conduit (HttpException)
 import Polysemy.Error hiding (fromException, try)
