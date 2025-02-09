@@ -87,7 +87,7 @@ reportMissingNode ::
   Sem (Error Missing : effs) () ->
   Sem effs ()
 reportMissingNode e = handleError e $ \case
-  Missing nid -> nodeMissing @t nid
+  Missing nid _ -> nodeMissing @t nid
 
 checkConnectExists ::
   forall t effs.
