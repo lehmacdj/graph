@@ -56,6 +56,10 @@ withJust :: Monad m => Maybe a -> (a -> m ()) -> m ()
 withJust (Just x) f = f x
 withJust Nothing _ = pure ()
 
+justIfTrue :: Bool -> a -> Maybe a
+justIfTrue True x = Just x
+justIfTrue False _ = Nothing
+
 -- | Copied from cabal codebase
 toSetOf :: Getting (Set a) s a -> s -> Set a
 toSetOf l s = getConst (l (Const . singleton) s)

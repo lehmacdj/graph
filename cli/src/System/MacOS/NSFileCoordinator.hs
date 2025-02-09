@@ -10,7 +10,9 @@ module System.MacOS.NSFileCoordinator
     coordinateWritingAndWriting,
     coordinateAccessing,
     ReadingOptions (..),
+    defaultReadingOptions,
     WritingOptions (..),
+    defaultWritingOptions,
     NullResultException (..),
     NSErrorException (..),
   )
@@ -30,9 +32,45 @@ import System.MacOS.NSFileCoordinator.RawBindings
 
 -- * Common types shared between Darwin and non-Darwin implementations
 
-data WritingOptions = WritingOptions
-
+-- | We don't provide forUploading, because there isn't a good way to use
+-- it with the current API exposed by this module (and we probably won't because
+-- it would require supporting concurrency).
 data ReadingOptions = ReadingOptions
+  { -- | This causes the file coordinator to skip notifying NSFilePresenters
+    -- that they should save their changes.
+    withoutChanges :: Bool,
+    -- | This causes the file coordinator to resolve symbolic links.
+    resolveSymbolicLinks :: Bool,
+    -- | For files stored in iCloud, this prevents the file from being
+    -- downloaded if it isn't already (some other metadata is also not
+    -- downloaded, e.g. thumbnails)
+    immediatelyAvailableMetadataOnly :: Bool
+  }
+
+defaultReadingOptions :: ReadingOptions
+defaultReadingOptions = ReadingOptions
+  { withoutChanges = False,
+    resolveSymbolicLinks = False,
+    immediatelyAvailableMetadataOnly = False
+  }
+
+data WritingOptions = WritingOptions
+  { forDeleting :: Bool,
+    forMoving :: Bool,
+    forMerging :: Bool,
+    forReplacing :: Bool,
+    -- | If non metadata for the file is set it might not be saved.
+    contentIndependentMetadataOnly :: Bool
+  }
+
+defaultWritingOptions :: WritingOptions
+defaultWritingOptions = WritingOptions
+  { forDeleting = False,
+    forMoving = False,
+    forMerging = False,
+    forReplacing = False,
+    contentIndependentMetadataOnly = False
+  }
 
 data NullResultException = NullResultException
   deriving (Show, Exception)
@@ -45,15 +83,31 @@ data NSErrorException = NSErrorException
 
 #ifdef darwin_HOST_OS
 
+-- * Utilities for Darwin
+
 withNSURL :: FilePath -> Bool -> (Ptr NSURL -> IO a) -> IO a
 withNSURL path isDirectory action = withCString path $ \pathPtr ->
   bracket (nsURL_initFileURL pathPtr (fromBool isDirectory)) m_release action
 
 fromWritingOptions :: WritingOptions -> NSFileCoordinatorWritingOptions
-fromWritingOptions _ = 0
+fromWritingOptions WritingOptions {..} =
+  [ justIfTrue forDeleting k_NSFileCoordinatorWritingForDeleting,
+    justIfTrue forMoving k_NSFileCoordinatorWritingForMoving,
+    justIfTrue forMerging k_NSFileCoordinatorWritingForMerging,
+    justIfTrue forReplacing k_NSFileCoordinatorWritingForReplacing,
+    justIfTrue contentIndependentMetadataOnly k_NSFileCoordinatorWritingContentIndependentMetadataOnly
+  ]
+    & catMaybes
+    & foldl' (.|.) 0
 
 fromReadingOptions :: ReadingOptions -> NSFileCoordinatorReadingOptions
-fromReadingOptions _ = 0
+fromReadingOptions ReadingOptions {..} =
+  [ justIfTrue withoutChanges k_NSFileCoordinatorReadingWithoutChanges,
+    justIfTrue resolveSymbolicLinks k_NSFileCoordinatorReadingResolvesSymbolicLink,
+    justIfTrue immediatelyAvailableMetadataOnly k_NSFileCoordinatorReadingImmediatelyAvailableMetadataOnly
+  ]
+    & catMaybes
+    & foldl' (.|.) 0
 
 filePathFromNSURL :: Ptr NSURL -> IO FilePath
 filePathFromNSURL url = do
@@ -76,6 +130,8 @@ withNSArray objects action = withArrayLen objects $ \len objectsPtr ->
     m_release
     action
 
+-- * Relatively raw darwin wrappers
+
 coordinateReading' ::
   Ptr NSFileCoordinator ->
   Ptr (Ptr NSError) ->
@@ -97,13 +153,6 @@ coordinateReading' fileCoordinator errPtr url options action = do
   when (errPtr /= nullPtr) $ peek errPtr >>= throwNSError
   readIORef resultRef >>= maybe (throwIO NullResultException) pure
 
-coordinateReading :: FilePath -> Bool -> ReadingOptions -> (FilePath -> IO a) -> IO a
-coordinateReading path isDirectory options action = evalContT do
-  fileCoordinator <- ContT $ bracket nsFileCoordinator_init m_release
-  errPtr <- ContT alloca
-  url <- ContT $ withNSURL path isDirectory
-  lift $ coordinateReading' fileCoordinator errPtr url options action
-
 coordinateWriting' ::
   Ptr NSFileCoordinator ->
   Ptr (Ptr NSError) ->
@@ -124,13 +173,6 @@ coordinateWriting' fileCoordinator errPtr url options action = do
       writeIORef resultRef (Just result)
   when (errPtr /= nullPtr) $ peek errPtr >>= throwNSError
   readIORef resultRef >>= maybe (throwIO NullResultException) pure
-
-coordinateWriting :: FilePath -> Bool -> WritingOptions -> (FilePath -> IO a) -> IO a
-coordinateWriting path isDirectory options action = evalContT do
-  fileCoordinator <- ContT $ bracket nsFileCoordinator_init m_release
-  errPtr <- ContT alloca
-  url <- ContT $ withNSURL path isDirectory
-  lift $ coordinateWriting' fileCoordinator errPtr url options action
 
 coordinateReadingThenWriting' ::
   Ptr NSFileCoordinator ->
@@ -157,14 +199,6 @@ coordinateReadingThenWriting' fileCoordinator errPtr readingUrl readingOptions w
       writeIORef resultRef (Just result)
   when (errPtr /= nullPtr) $ peek errPtr >>= throwNSError
   readIORef resultRef >>= maybe (throwIO NullResultException) pure
-
-coordinateReadingThenWriting :: FilePath -> Bool -> ReadingOptions -> FilePath -> Bool -> WritingOptions -> (FilePath -> FilePath -> IO a) -> IO a
-coordinateReadingThenWriting readingPath readingIsDirectory readingOptions writingPath writingIsDirectory writingOptions action = evalContT do
-  fileCoordinator <- ContT $ bracket nsFileCoordinator_init m_release
-  errPtr <- ContT alloca
-  readingUrl <- ContT $ withNSURL readingPath readingIsDirectory
-  writingUrl <- ContT $ withNSURL writingPath writingIsDirectory
-  lift $ coordinateReadingThenWriting' fileCoordinator errPtr readingUrl readingOptions writingUrl writingOptions action
 
 coordinateWritingAndWriting' ::
   Ptr NSFileCoordinator ->
@@ -196,13 +230,55 @@ coordinateWritingAndWriting' fileCoordinator errPtr writingUrl1 writingOptions1 
   when (errPtr /= nullPtr) $ peek errPtr >>= throwNSError
   readIORef resultRef >>= maybe (throwIO NullResultException) pure
 
+#endif
+
+-- * Implementations (no-op on non-Darwin)
+
+coordinateReading :: FilePath -> Bool -> ReadingOptions -> (FilePath -> IO a) -> IO a
+#ifdef darwin_HOST_OS
+coordinateReading path isDirectory options action = evalContT do
+  fileCoordinator <- ContT $ bracket nsFileCoordinator_init m_release
+  errPtr <- ContT alloca
+  url <- ContT $ withNSURL path isDirectory
+  lift $ coordinateReading' fileCoordinator errPtr url options action
+#else
+coordinateReading path _ _ action = action path
+#endif
+
+coordinateWriting :: FilePath -> Bool -> WritingOptions -> (FilePath -> IO a) -> IO a
+#ifdef darwin_HOST_OS
+coordinateWriting path isDirectory options action = evalContT do
+  fileCoordinator <- ContT $ bracket nsFileCoordinator_init m_release
+  errPtr <- ContT alloca
+  url <- ContT $ withNSURL path isDirectory
+  lift $ coordinateWriting' fileCoordinator errPtr url options action
+#else
+coordinateWriting path _ _ action = action path
+#endif
+
+coordinateReadingThenWriting :: FilePath -> Bool -> ReadingOptions -> FilePath -> Bool -> WritingOptions -> (FilePath -> FilePath -> IO a) -> IO a
+#ifdef darwin_HOST_OS
+coordinateReadingThenWriting readingPath readingIsDirectory readingOptions writingPath writingIsDirectory writingOptions action = evalContT do
+  fileCoordinator <- ContT $ bracket nsFileCoordinator_init m_release
+  errPtr <- ContT alloca
+  readingUrl <- ContT $ withNSURL readingPath readingIsDirectory
+  writingUrl <- ContT $ withNSURL writingPath writingIsDirectory
+  lift $ coordinateReadingThenWriting' fileCoordinator errPtr readingUrl readingOptions writingUrl writingOptions action
+#else
+coordinateReadingThenWriting readingPath _ _ writingPath _ _ action = action readingPath writingPath
+#endif
+
 coordinateWritingAndWriting :: FilePath -> Bool -> WritingOptions -> FilePath -> Bool -> WritingOptions -> (FilePath -> FilePath -> IO a) -> IO a
+#ifdef darwin_HOST_OS
 coordinateWritingAndWriting writingPath1 writingIsDirectory1 writingOptions1 writingPath2 writingIsDirectory2 writingOptions2 action = evalContT do
   fileCoordinator <- ContT $ bracket nsFileCoordinator_init m_release
   errPtr <- ContT alloca
   writingUrl1 <- ContT $ withNSURL writingPath1 writingIsDirectory1
   writingUrl2 <- ContT $ withNSURL writingPath2 writingIsDirectory2
   lift $ coordinateWritingAndWriting' fileCoordinator errPtr writingUrl1 writingOptions1 writingUrl2 writingOptions2 action
+#else
+coordinateWritingAndWriting writingPath1 _ _ writingPath2 _ _ action = action writingPath1 writingPath2
+#endif
 
 coordinateAccessing ::
   Traversable t =>
@@ -215,6 +291,7 @@ coordinateAccessing ::
     IO ()
   ) ->
   IO ()
+#ifdef darwin_HOST_OS
 coordinateAccessing readingPaths blanketReadingOptions writingPaths blanketWritingOptions action =
   evalContT do
     readingUrls <- for readingPaths $ \(path, isDirectory) ->
@@ -240,35 +317,9 @@ coordinateAccessing readingPaths blanketReadingOptions writingPaths blanketWriti
         (fromWritingOptions blanketWritingOptions)
         errPtr
         $ action readingAccessors writingAccessors
-
 #else
-
-coordinateReading :: FilePath -> Bool -> ReadingOptions -> (FilePath -> IO a) -> IO a
-coordinateReading path _ _ action = action path
-
-coordinateWriting :: FilePath -> Bool -> WritingOptions -> (FilePath -> IO a) -> IO a
-coordinateWriting path _ _ action = action path
-
-coordinateReadingThenWriting :: FilePath -> Bool -> ReadingOptions -> FilePath -> Bool -> WritingOptions -> (FilePath -> FilePath -> IO a) -> IO a
-coordinateReadingThenWriting readingPath _ _ writingPath _ _ action = action readingPath writingPath
-
-coordinateWritingAndWriting :: FilePath -> Bool -> WritingOptions -> FilePath -> Bool -> WritingOptions -> (FilePath -> FilePath -> IO a) -> IO a
-coordinateWritingAndWriting writingPath1 _ _ writingPath2 _ _ action = action writingPath1 writingPath2
-
-coordinateAccessing ::
-  Traversable t =>
-  t (FilePath, Bool) ->
-  ReadingOptions ->
-  t (FilePath, Bool) ->
-  WritingOptions ->
-  ( t (ReadingOptions -> (FilePath -> IO ()) -> IO ()) ->
-    t (WritingOptions -> (FilePath -> IO ()) -> IO ()) ->
-    IO ()
-  ) ->
-  IO ()
 coordinateAccessing readingPaths _ writingPaths _ action =
   let readingAccessors = readingPaths <&> \(path, _) _ readingAction -> readingAction path
       writingAccessors = writingPaths <&> \(path, _) _ writingAction -> writingAction path
    in action readingAccessors writingAccessors
-
 #endif
