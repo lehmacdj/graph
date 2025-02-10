@@ -80,7 +80,13 @@ library
       Models.NIDSpec
       Models.Node
       MyPrelude
+      MyPrelude.Collections
       MyPrelude.EarlyReturn
+      MyPrelude.Effect
+      MyPrelude.Function
+      MyPrelude.IO
+      MyPrelude.JSON
+      MyPrelude.MaybeEither
       Polysemy.MTL
       Spec
       System.Directory.Clone

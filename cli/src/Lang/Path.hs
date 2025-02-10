@@ -233,7 +233,7 @@ resolvePathSuccessesDetail nid p = resolvePathSuccessesDetail' nid p <&> OSet.to
 -- | Assert that the result of listifyNewPath is relative. This should be the
 -- case if the input path was relative.
 assertListifiedRelativePath :: (HasCallStack, Ord t) => Set (Maybe NID, [t]) -> Set [t]
-assertListifiedRelativePath = Set.map \case
+assertListifiedRelativePath = mapSet \case
   (Nothing, ts) -> ts
   (Just _, _) -> error "listified path is absolute not relative"
 
