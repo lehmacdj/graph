@@ -7,6 +7,7 @@ import Effect.RawGraph
 import Error.Utils
 import Models.NID
 import Models.Node
+import Models.Graph
 import MyPrelude
 import System.MacOS.NSFileCoordinator
 import System.Directory (removeFile)
@@ -61,3 +62,15 @@ writeNodeData nid mData = do
   path <- getNodeDataFile nid
   embedCatchingErrors $ coordinateWriting path False defaultWritingOptions $ \path' ->
     maybe (removeFile path') (writeFile path') mData
+
+-- I kind of want to do a function like this that writes the entire graph's metadata in one go
+-- It's a little tricky though, because we need to be very careful to make sure that
+-- we are updating everything necessary. i.e. backlinks naively might not be included
+-- writeGraphMetadata ::
+--   Members [RawGraph, Embed IO, Error UserError] effs =>
+--   Graph t () ->
+--   Sem effs ()
+-- writeGraphMetadata graph = do
+--   path <- getGraphMetadataFile
+--   embedCatchingErrors $ coordinateWriting path False defaultWritingOptions $ \path' ->
+--     writeFile path' serialized
