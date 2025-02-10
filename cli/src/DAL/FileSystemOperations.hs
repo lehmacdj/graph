@@ -4,24 +4,24 @@ import DAL.DTO
 import DAL.JSON
 import DAL.DirectoryFormat
 import Effect.RawGraph
-import Error.Utils
+import Error.Missing
+import Error.UserError
 import Models.NID
 import Models.Node
-import Models.Graph
 import MyPrelude
 import System.MacOS.NSFileCoordinator
 import System.Directory (removeFile)
 
 readNodeMetadata ::
   Members [RawGraph, Embed IO, Error Missing, Error UserError] effs =>
-  NID -> Sem effs (Node Text ())
-readNodeMetadata nid = do
+  NID -> Sem effs (Maybe (Node Text ()))
+readNodeMetadata nid = withEarlyReturn do
   path <- getMetadataFile nid
   result <- embedCatchingErrors $ coordinateReading path False defaultReadingOptions $ \path' ->
     try @IO @IOError $ readFile path'
-  serialized <- throwMissingIfLeft nid result
+  serialized <- either (const $ returnEarly Nothing) pure result
   dto <- decodeJSON serialized
-  pure $ nodeFromDTO dto
+  pure $ Just (nodeFromDTO dto)
 
 writeNodeMetadata ::
   Members [RawGraph, Embed IO, Error UserError] effs =>
@@ -62,15 +62,3 @@ writeNodeData nid mData = do
   path <- getNodeDataFile nid
   embedCatchingErrors $ coordinateWriting path False defaultWritingOptions $ \path' ->
     maybe (removeFile path') (writeFile path') mData
-
--- I kind of want to do a function like this that writes the entire graph's metadata in one go
--- It's a little tricky though, because we need to be very careful to make sure that
--- we are updating everything necessary. i.e. backlinks naively might not be included
--- writeGraphMetadata ::
---   Members [RawGraph, Embed IO, Error UserError] effs =>
---   Graph t () ->
---   Sem effs ()
--- writeGraphMetadata graph = do
---   path <- getGraphMetadataFile
---   embedCatchingErrors $ coordinateWriting path False defaultWritingOptions $ \path' ->
---     writeFile path' serialized

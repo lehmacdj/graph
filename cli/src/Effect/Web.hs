@@ -2,7 +2,7 @@
 
 module Effect.Web where
 
-import Error.Utils
+import Error.UserError
 import MyPrelude
 import Network.Wreq (defaults, getWith, responseBody)
 

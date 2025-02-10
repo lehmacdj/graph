@@ -7,12 +7,13 @@ module Graph.Check where
 
 import Control.Lens
 import Effect.Console
-import Error.Utils
+import Error.UserError
 import Graph.Effect
 import Graph.Utils
 import Models.Connect
 import Models.Edge
 import MyPrelude
+import Error.Missing
 
 data Direction = In | Out
   deriving (Eq, Ord)

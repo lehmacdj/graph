@@ -3,7 +3,7 @@
 -- | Functions for dealing with stuff that should be singletons
 module Utils.Singleton where
 
-import Error.Utils
+import Error.UserError
 import MyPrelude
 
 the' ::

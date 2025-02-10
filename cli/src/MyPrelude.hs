@@ -47,6 +47,7 @@ import Polysemy
 import Polysemy.Error
 import Polysemy.State
 import System.IO
+import MyPrelude.EarlyReturn as X
 
 -- | natural transformation
 type (~>) f g = forall x. f x -> g x
@@ -192,3 +193,11 @@ untry x =
   raise x >>= \case
     Left e -> throw e
     Right v -> pure v
+
+errorToLeft ::
+  Show e => Sem (Error e : effs) a -> Sem effs (Either String a)
+errorToLeft = (`handleError` pure . Left . show) . fmap Right
+
+errorToNothing ::
+  Sem (Error e : effs) a -> Sem effs (Maybe a)
+errorToNothing = (`handleError` const (pure Nothing)) . fmap Just

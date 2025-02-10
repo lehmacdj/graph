@@ -13,7 +13,7 @@ import Effect.Console
 import Effect.FileSystem
 import Effect.FreshNID
 import Effect.Time
-import Error.Utils
+import Error.UserError
 import Graph.Effect
 import Graph.Import.ByteString
 import Graph.Time (taggingFreshNodesWithTime)
@@ -21,6 +21,7 @@ import Graph.Utils
 import Models.Edge
 import MyPrelude
 import System.Directory.Tree hiding (readDirectory)
+import Error.Missing
 
 computeSHA :: ByteString -> String
 computeSHA = showDigest . sha512 . fromStrict

@@ -44,8 +44,8 @@ library
       Effect.UtilSpec
       Effect.Warn
       Effect.Web
+      Error.Missing
       Error.UserError
-      Error.Utils
       Executable.DumpGraph
       Executable.GraphEditor
       Executable.GraphEditor.Completion
@@ -80,6 +80,7 @@ library
       Models.NIDSpec
       Models.Node
       MyPrelude
+      MyPrelude.EarlyReturn
       Polysemy.MTL
       Spec
       System.Directory.Clone

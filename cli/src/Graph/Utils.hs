@@ -7,13 +7,14 @@ import Control.Lens
 import Data.Monoid (First (First))
 import Effect.FreshNID
 import Effect.NodeLocated
-import Error.Utils
+import Error.UserError
 import Graph.Effect
 import Models.Connect
 import Models.Edge
 import Models.Node
 import MyPrelude
 import Witherable
+import Error.Missing
 
 getNodes :: Member (ReadGraph t (Maybe ByteString)) effs => [NID] -> Sem effs [Node t (Maybe ByteString)]
 getNodes = wither getNode

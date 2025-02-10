@@ -2,7 +2,7 @@
 
 module Effect.Warn where
 
-import Error.Utils
+import Error.UserError
 import MyPrelude
 
 data Warn e m r where

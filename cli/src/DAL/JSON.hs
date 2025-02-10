@@ -5,7 +5,7 @@ module DAL.JSON (
 
 import MyPrelude
 import Data.Aeson (eitherDecode, FromJSON, encode, ToJSON)
-import Error.Utils
+import Error.UserError
 
 decodeJSON ::
   (FromJSON a, Member (Error UserError) effs) =>

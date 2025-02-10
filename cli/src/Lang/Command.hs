@@ -23,7 +23,7 @@ import Effect.FileTypeOracle
 import Effect.FreshNID
 import Effect.NodeLocated
 import Effect.Time
-import Error.Utils
+import Error.UserError
 import Effect.Warn
 import Effect.Web
 import GHC.Generics
@@ -46,6 +46,7 @@ import Polysemy.State
 import qualified Utils.Extensibility as Extensibility
 import Utils.Singleton
 import Effect.RawGraph
+import Error.Missing
 
 data Command
   = -- | cd
