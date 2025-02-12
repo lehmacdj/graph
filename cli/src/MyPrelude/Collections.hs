@@ -10,10 +10,7 @@ import qualified Data.Set as Set
 import GHC.Stack (HasCallStack)
 import Data.List.NonEmpty as X (NonEmpty (..))
 import Data.List as X (iterate)
-
-justIfTrue :: Bool -> a -> Maybe a
-justIfTrue True x = Just x
-justIfTrue False _ = Nothing
+import Control.Lens as X (over, set, view, (&), (.~), (<&>), (^.), at, to, ix, _Just, (?~), (%~), preview, (^?), has)
 
 -- | Copied from cabal codebase
 toSetOf :: Getting (Set a) s a -> s -> Set a

@@ -15,7 +15,10 @@ convertError ::
 convertError = (`handleError` warn)
 
 warnString :: Member (Warn UserError) r => String -> Sem r ()
-warnString = warn . OtherError
+warnString = warn . OtherError . pack
+
+warnText :: Member (Warn UserError) r => Text -> Sem r ()
+warnText = warn . OtherError
 
 printWarnings ::
   forall e r a.

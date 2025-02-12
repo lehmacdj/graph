@@ -25,6 +25,21 @@ instance (Show t, Ord t) => Show (Graph t a) where
     where
       unlines' = intercalate "\n"
 
+type instance Control.Lens.Index (Graph t a) = NID
+type instance Control.Lens.IxValue (Graph t a) = (Node t a)
+
+instance ValidNode t a => Ixed (Graph t a) where
+  ix nid f g = case maybeNodeLookup nid g of
+    Just n -> f n <&> \newNode -> updateNode g newNode
+    Nothing -> pure g
+
+instance ValidNode t a => At (Graph t a) where
+  at nid = lens (maybeNodeLookup nid) setter where
+    setter g Nothing = delNode' nid g
+    setter g (Just n) = case maybeNodeLookup nid g of
+      Just _ -> updateNode g n
+      Nothing -> insertNode n g
+
 withNodeMap :: Graph t a -> (Map NID (Node t a) -> Map NID (Node t a)) -> Graph t a
 withNodeMap = flip (over #nodeMap)
 
@@ -52,6 +67,9 @@ refreshNode ::
   Node t a ->
   Node t a
 refreshNode g = lookupNode g . view #nid
+
+maybeNodeLookup :: NID -> Graph t a -> Maybe (Node t a)
+maybeNodeLookup i = view $ #nodeMap . at i
 
 nodeLookup ::
   ValidNode t a =>
@@ -84,18 +102,18 @@ primeds ::
   ([NID] -> Graph t a -> x)
 primeds f i ig = f (nodeLookup <$> i <*> pure ig) ig
 
-delEdge :: ValidNode t a => Edge t -> Graph t a -> Graph t a
-delEdge e g =
+deleteEdge :: ValidNode t a => Edge t -> Graph t a -> Graph t a
+deleteEdge e g =
   withNodeMap g $
     adjustMap (over #outgoing (deleteSet (outConnect e))) (e ^. #source)
       . adjustMap (over #incoming (deleteSet (inConnect e))) (e ^. #sink)
 
-delEdges ::
+deleteEdges ::
   ValidNode t a =>
   [Edge t] ->
   Graph t a ->
   Graph t a
-delEdges = listify delEdge
+deleteEdges = listify deleteEdge
 
 -- | Remove a node from the graph; updating the cached data in the neighbors
 -- nodes as well.
@@ -146,6 +164,20 @@ insertEdges ::
   Graph t a
 insertEdges = listify insertEdge
 
+containsEdge ::
+  (HasCallStack, ValidNode t a) =>
+  Graph t a ->
+  Edge t ->
+  Bool
+g `containsEdge` e = withEarlyReturn_ do
+  source <- unwrapReturningDefault False $ g ^. at e.source
+  sink <- unwrapReturningDefault False $ g ^. at e.sink
+  let outConnectExists = outConnect e `member` source.outgoing
+  let inConnectExists = inConnect e `member` sink.incoming
+  when (outConnectExists /= inConnectExists) $
+    error $ "graph inconsistent, containsEdge " ++ show g ++ " " ++ show e
+  pure outConnectExists
+
 -- | Add a node, and all the edges it is associated with to the Graph.
 insertNode ::
   ValidNode t a =>
@@ -157,8 +189,28 @@ insertNode n g =
     withNodeMap g (insertMap nid n)
   where
     nid = n ^. #nid
-    incomingEs = map (`incomingEdge` nid) (toList (view #incoming n))
-    outgoingEs = map (outgoingEdge nid) (toList (view #outgoing n))
+    incomingEs = map (`incomingEdge` nid) (toList n.incoming)
+    outgoingEs = map (outgoingEdge nid) (toList n.outgoing)
+
+-- | Update a node in the graph so that it is consistent with the graph.
+-- This adds any edges that are missing and removes any edges that were in the
+-- graph before but are no longer in the node.
+-- If the node is not in the graph, the input graph is returned as is.
+updateNode :: ValidNode t a => Graph t a -> Node t a ->  Graph t a
+updateNode g n = withEarlyReturn_ do
+  let nid = n.nid
+  original <- unwrapReturningDefault g $ maybeNodeLookup nid g
+  let outgoingAdded = n.outgoing \\ original.outgoing
+      outgoingRemoved = original.outgoing \\ n.outgoing
+      incomingAdded = n.incoming \\ original.incoming
+      incomingRemoved = original.incoming \\ n.incoming
+      addedEdges =
+        mapSet (outgoingEdge nid) outgoingAdded
+        ++ mapSet (`incomingEdge` nid) incomingAdded
+      removedEdges =
+        mapSet (outgoingEdge nid) outgoingRemoved
+        ++ mapSet (`incomingEdge` nid) incomingRemoved
+  pure $ deleteEdges (toList removedEdges) $ insertEdges (toList addedEdges) g
 
 insertNodes ::
   ValidNode t a =>

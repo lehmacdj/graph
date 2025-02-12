@@ -14,9 +14,3 @@ the' ::
 the' toErr = \case
   (toList -> [x]) -> pure x
   xs -> throw (toErr xs)
-
-the ::
-  (MonoFoldable mono, Show mono, Member (Error UserError) effs) =>
-  mono ->
-  Sem effs (Element mono)
-the = the' (NotSingleton . show)

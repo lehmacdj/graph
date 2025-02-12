@@ -53,3 +53,21 @@ emptyNode' i = emptyNode i $> Nothing
 
 dualizeNode :: Node t a -> Node t a
 dualizeNode (Node nid i o x) = Node nid o i x
+
+mergeNodes ::
+  (Ord t, HasCallStack, Semigroup a) =>
+  Node t a -> Node t a -> Maybe (Node t a)
+mergeNodes n1 n2 =
+  justIfTrue (n1.nid == n2.nid) $
+    Node
+      { nid = n1.nid,
+        incoming = n1.incoming <> n2.incoming,
+        outgoing = n1.outgoing <> n2.outgoing,
+        augmentation = n1.augmentation <> n2.augmentation
+      }
+
+mergeNodesEx ::
+  (Ord t, HasCallStack, Semigroup a) =>
+  Node t a -> Node t a -> Node t a
+mergeNodesEx n1 n2 =
+  fromMaybe (error "mergeNodesEx: nodes don't match") $ mergeNodes n1 n2

@@ -12,6 +12,9 @@ data Edge t = Edge
   }
   deriving (Eq, Ord, Generic, NFData, Show)
 
+data EdgeSide = Source | Sink
+  deriving (Eq, Ord, Generic, NFData, Show)
+
 outConnect :: Edge t -> Connect t
 outConnect (Edge _ l t) = Connect l t
 

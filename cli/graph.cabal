@@ -87,6 +87,7 @@ library
       MyPrelude.IO
       MyPrelude.JSON
       MyPrelude.MaybeEither
+      MyPrelude.MonadApplicative
       Polysemy.MTL
       Spec
       System.Directory.Clone

@@ -9,7 +9,6 @@ where
 
 import ClassyPrelude hiding (throwString)
 import Control.DeepSeq as X
-import Control.Lens as X (over, set, view, (&), (.~), (<&>), (^.))
 import Data.Coerce as X (Coercible, coerce)
 import Data.Generics.Labels as X
 import Data.Set.Ordered.Orphans as X ()
@@ -22,3 +21,4 @@ import MyPrelude.IO as X
 import MyPrelude.JSON as X
 import MyPrelude.Function as X
 import MyPrelude.Effect as X
+import MyPrelude.MonadApplicative as X
