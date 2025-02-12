@@ -55,6 +55,7 @@ library
       Graph.Check
       Graph.Effect
       Graph.Export.FileSystem
+      Graph.GraphDataEditing
       Graph.GraphMetadataEditing
       Graph.Import.ByteString
       Graph.Import.FileSystem
