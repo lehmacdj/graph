@@ -45,7 +45,7 @@ graphHeterarchy (startName, start) = do
               toTree (Connect t nid') = do
                 dfAndE <- dataFileAndExtensionIfExists nid'
                 T.Node (dfAndE, t) <$> go visited' nid'
-          traverse toTree (toList (n.outgoing))
+          traverse toTree (toList n.outgoing)
   dfAndE <- dataFileAndExtensionIfExists start
   T.Node (dfAndE, startName) <$> go mempty start
 
@@ -111,7 +111,7 @@ exportToDirectory nid outputFp = do
           OtherError "some error occurred while exporting a directory tree:"
         failureToUserError = \case
           DT.Failed name e ->
-            OtherError ("faile while writing file: " <> name) <> IOFail e
+            OtherError ("failed while writing file: " <> pack name) <> IOFail e
           _ -> error "invariant of failures guarantes only failures are left"
     warn . Multiple . toNonEmpty . (overallDescription `ncons`) $
       failureToUserError <$> DT.failures results

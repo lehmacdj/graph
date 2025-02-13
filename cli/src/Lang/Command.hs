@@ -128,12 +128,12 @@ data Command
     Seq (TwoElemList Command)
   deriving (Eq, Show, Ord, Generic)
 
-singleErr :: String -> Set NID -> UserError
+singleErr :: Text -> Set NID -> UserError
 singleErr cmd xs =
   OtherError $
     cmd ++ " needs a path that resolves to a single node\n"
       ++ "but it resolved to: "
-      ++ show (setToList xs)
+      ++ tshow (setToList xs)
 
 printTransitions ::
   Member Console effs =>
@@ -193,7 +193,7 @@ interpretCommand = \case
     nid <- currentLocation
     nids <- subsumeUserError (resolvePathSuccessesDetail' nid p)
     whenNonNull (mapMaybe successfulDPathEndpoint $ toList nids) $ \xs -> do
-      nid' <- subsumeUserError (mergeNodes @String xs)
+      nid' <- subsumeUserError (Graph.Utils.mergeNodes @String xs)
       changeLocation nid'
   Remove p -> do
     nid <- currentLocation
@@ -213,14 +213,14 @@ interpretCommand = \case
     nid <- currentLocation
     nids <- subsumeUserError (resolvePathSuccesses nid p)
     nnid <- (subsumeUserError . taggingFreshNodesWithTime) (nid `transitionsFreshVia` t)
-    _ <- subsumeUserError (mergeNodes @String (nnid `ncons` toList nids))
+    _ <- subsumeUserError (Graph.Utils.mergeNodes @String (nnid `ncons` toList nids))
     pure ()
   Tag p q -> do
     nid <- currentLocation
     let err = singleErr "the last argument of tag"
     target <- the' err =<< subsumeUserError (resolvePathSuccesses nid q)
     nnids <- (subsumeUserError . taggingFreshNodesWithTime) (mkPath nid (p :/ Literal ""))
-    _ <- subsumeUserError (mergeNodes @String (target `ncons` toList nnids))
+    _ <- subsumeUserError (Graph.Utils.mergeNodes @String (target `ncons` toList nnids))
     pure ()
   Text t s -> do
     nid <- currentLocation
@@ -293,7 +293,7 @@ interpretCommand = \case
           OtherError $
             "the first argument to rn require the path to only resolve to "
               ++ "one node but they resolved to \n"
-              ++ (show . map endPoint . setToList $ xs)
+              ++ (tshow . map endPoint . setToList $ xs)
     c <- the' err =<< subsumeUserError (resolvePathSuccessesDetail nid p)
     subsumeUserError (renameDPath c nid q)
   Alias p q -> do
@@ -302,7 +302,7 @@ interpretCommand = \case
           OtherError $
             "the first argument to rn require the path to only resolve to "
               ++ "one node but they resolved to \n"
-              ++ (show . map endPoint . setToList $ xs)
+              ++ (tshow . map endPoint . setToList $ xs)
     c <- the' err =<< subsumeUserError (resolvePathSuccessesDetail nid p)
     subsumeUserError (aliasDPath c nid q)
   Edit -> do

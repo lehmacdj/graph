@@ -275,7 +275,7 @@ delPath ::
 delPath nid p = resolvePathSuccessesDetail nid p >>= mapM_ delDPath
   where
     delDPath (DPath _ xs@(_ : _) nid' []) = case lastEx xs of -- safe because list nonempty
-      FromVia nid2 t -> deleteEdge @t (Edge nid2 t nid')
+      FromVia nid2 t -> Graph.Effect.deleteEdge @t (Edge nid2 t nid')
     delDPath _ = pure ()
 
 mvPath ::
@@ -300,7 +300,7 @@ mvDPathTo ::
   Sem effs ()
 mvDPathTo target (DPath _ xs@(_ : _) nid []) = case lastEx xs of
   FromVia nid2 t -> do
-    deleteEdge (Edge nid2 t nid)
+    Graph.Effect.deleteEdge (Edge nid2 t nid)
     insertEdge (Edge target t nid)
 mvDPathTo _ _ = pure ()
 
@@ -322,10 +322,10 @@ renameDPath dpathFrom nidPathStart pathTo =
     successes <- resolvePathSuccessesDetail nidPathStart pathTo
     forM_ successes $ \case
       (DPath _ _ newRoot [t']) -> do
-        deleteEdge (Edge oldRoot t nid)
+        Graph.Effect.deleteEdge (Edge oldRoot t nid)
         insertEdge (Edge newRoot t' nid)
       (splitLast -> Just (DPath _ _ newRoot _, t', _)) -> do
-        deleteEdge (Edge oldRoot t nid)
+        Graph.Effect.deleteEdge (Edge oldRoot t nid)
         insertEdge (Edge newRoot t' nid)
       _ -> pure ()
 
