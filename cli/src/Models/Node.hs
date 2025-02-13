@@ -13,15 +13,26 @@ import Models.NID
 import MyPrelude
 import GHC.Records
 
-data Node t a = Node
+type ValidNode t a = (Show t, Eq t, Ord t, Eq a)
+
+type ValidNode' ti to a = (ValidTransition ti, ValidTransition to, Eq a)
+
+-- | A node in a graph. To allow separately mapping over the incoming and
+-- outgoing edges in a type changing way, we have two type parameters.
+-- In general we only use the typealias that fixes the type of the transitions
+-- to be the same.
+data Node' ti to a = Node
   { nid :: NID,
-    incoming :: Set (Connect t),
-    outgoing :: Set (Connect t),
+    incoming :: Set (Connect ti),
+    outgoing :: Set (Connect to),
     augmentation :: a
   }
   deriving (Eq, Ord, Generic, NFData, Functor)
 
-instance (Show t, Ord t) => Show (Node t a) where
+-- | A node in the graph. See 'Node'' for more information.
+type Node t a = Node' t t a
+
+instance (Show ti, Ord ti, Show to, Ord to) => Show (Node' ti to a) where
   show Node {..} =
     show nid ++ "{"
       ++ "in="
@@ -32,7 +43,7 @@ instance (Show t, Ord t) => Show (Node t a) where
 
 -- | We implement special @HasField@ instances for specific types of
 -- augmentation so that we can refer to them in a more intuitive way.
-instance HasField "rawData" (Node t (Maybe ByteString)) (Maybe ByteString) where
+instance HasField "rawData" (Node' ti to (Maybe ByteString)) (Maybe ByteString) where
   getField = (.augmentation)
 
 indegree :: Getter (Node t a) Int

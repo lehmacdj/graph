@@ -10,7 +10,53 @@ import qualified Data.Set as Set
 import GHC.Stack (HasCallStack)
 import Data.List.NonEmpty as X (NonEmpty (..))
 import Data.List as X (iterate)
-import Control.Lens as X (over, set, view, (&), (.~), (<&>), (^.), at, to, ix, _Just, (?~), (%~), preview, (^?), has)
+import Control.Lens.Extras as X (is)
+import Data.Set.Lens as X (setmapped)
+
+import Control.Lens as X
+    ( over,
+      set,
+      view,
+      (&),
+      (.~),
+      (<&>),
+      (^.),
+      at,
+      to,
+      ix,
+      _Just,
+      (?~),
+      (%~),
+      preview,
+      (^?),
+      has,
+      hasn't,
+      isn't,
+      folded,
+      filtered,
+      _Right,
+      _Left,
+      Lens,
+      Lens',
+      Traversal,
+      Traversal',
+      Prism,
+      Prism',
+      Iso,
+      Iso',
+      Getter,
+      Fold,
+      Setter,
+      Setter',
+      ALens,
+      ALens',
+      ASetter,
+      ASetter',
+      Getting,
+      Setting,
+      LensLike,
+      LensLike'
+    )
 
 -- | Copied from cabal codebase
 toSetOf :: Getting (Set a) s a -> s -> Set a

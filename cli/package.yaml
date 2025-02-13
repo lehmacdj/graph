@@ -102,6 +102,7 @@ default-extensions:
 - GADTs
 - GeneralizedNewtypeDeriving
 - LambdaCase
+- MultiParamTypeClasses
 - NamedFieldPuns
 - NoFieldSelectors
 - NoImplicitPrelude

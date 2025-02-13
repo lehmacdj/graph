@@ -59,6 +59,7 @@ library
       Graph.GraphMetadataEditing
       Graph.Import.ByteString
       Graph.Import.FileSystem
+      Graph.ResolvePath
       Graph.SystemNodes
       Graph.SystemNodes.Init
       Graph.Time
@@ -73,13 +74,16 @@ library
       Lang.PathSpec
       Models.Common
       Models.Connect
+      Models.DPath
       Models.Edge
+      Models.FocusedGraph
       Models.Graph
       Models.History
       Models.HistorySpec
       Models.NID
       Models.NIDSpec
       Models.Node
+      Models.Path
       MyPrelude
       MyPrelude.Collections
       MyPrelude.EarlyReturn
@@ -127,6 +131,7 @@ library
       GADTs
       GeneralizedNewtypeDeriving
       LambdaCase
+      MultiParamTypeClasses
       NamedFieldPuns
       NoFieldSelectors
       NoImplicitPrelude
@@ -241,6 +246,7 @@ executable dump-graph
       GADTs
       GeneralizedNewtypeDeriving
       LambdaCase
+      MultiParamTypeClasses
       NamedFieldPuns
       NoFieldSelectors
       NoImplicitPrelude
@@ -350,6 +356,7 @@ executable ge
       GADTs
       GeneralizedNewtypeDeriving
       LambdaCase
+      MultiParamTypeClasses
       NamedFieldPuns
       NoFieldSelectors
       NoImplicitPrelude
@@ -459,6 +466,7 @@ executable scratch
       GADTs
       GeneralizedNewtypeDeriving
       LambdaCase
+      MultiParamTypeClasses
       NamedFieldPuns
       NoFieldSelectors
       NoImplicitPrelude
@@ -569,6 +577,7 @@ test-suite graph-test
       GADTs
       GeneralizedNewtypeDeriving
       LambdaCase
+      MultiParamTypeClasses
       NamedFieldPuns
       NoFieldSelectors
       NoImplicitPrelude

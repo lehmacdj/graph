@@ -8,7 +8,11 @@
 --   starting node.
 --   Alternatively a path can be used as an action on a graph to add or equalize
 --   nodes, contingent on a source for new nodes potentially.
-module Lang.Path where
+module Lang.Path
+  ( module Lang.Path,
+    module X,
+  )
+where
 
 import Control.Lens hiding (pre, unsnoc)
 import Data.List (intersectBy)
@@ -26,119 +30,8 @@ import MyPrelude
 import Polysemy.State (evalState)
 import Models.Node
 import Error.Missing
-
--- breadcrumb in a trail in the graph
--- each piece denotes an edge from the specified via the transition
-data DPathComponent t = FromVia NID t
-  deriving (Show, Eq, Ord)
-
--- | a deterministic path is a list of path components
--- along with a start node, from which those path components are constructed
-data DPath t
-  = DPath
-      NID
-      [DPathComponent t] -- the nids/transitions that are in the graph from start
-      NID -- the nid of the last node in the graph
-      [t] -- transitions that could not be realized within the graph
-  deriving (Show, Eq, Ord)
-
-projPath :: Show t => [DPathComponent t] -> String
-projPath [] = "#"
-projPath [FromVia _ x] = show x
-projPath (FromVia _ x : xs) = show x ++ "/" ++ projPath xs
-
--- | Take a path and split off the last edge transition;
--- if the path has components that could not be realized in the graph;
--- then this returns nothing.
-splitLast :: DPath t -> Maybe (DPath t, t, NID)
-splitLast = \case
-  DPath start (unsnoc -> Just (xs, pnid `FromVia` t)) nid [] ->
-    Just (DPath start xs pnid [], t, nid)
-  _ -> Nothing
-
-endPoint :: DPath t -> NID
-endPoint (DPath _ _ x _) = x
-
-data Path t
-  = One
-  | Zero
-  | --  | Dual -- ^ a transition that dualizes the view of the graph
-    -- The correct way to implement Dual is simply make backlinks part of the
-    -- graph structure, as opposed to intrinsic. i.e. for each normal node have
-    -- a slightly special node that stores backlinks for that node.
-
-    --  | Path t :\ Path t -- ^ set minus (useful with wild to restrict)
-    --  | Negate (Path t) -- ^ negate a path, if included obsolesces other operators
-    --  | Star (Path t) -- ^ kleene iteration: technically top in algebra is top^*
-
-    -- | a transition matched by anything (top in the algebra)
-    Wild
-  | Literal t
-  | -- | this must not be before @:/@ in a @:+@. @:&@ acts as a scope that
-    -- allows another absolute node as long as at least one sibling is not
-    -- absolute. e.g.:
-    -- * @#10 + a/b@ is fine
-    -- * as is @a/(b & #10)@
-    -- * but @a/#10@ is not ok
-    --
-    -- 'isValidPath' checks this condition
-    --
-    -- This is in order to ensure that there aren't any jumps in the
-    -- deterministic paths that are created when resolving a path. We could
-    -- probably loosen this condition, but better to start stricter and then
-    -- loosen up later
-    Absolute NID
-  | -- | sequence
-    Path t :/ Path t
-  | -- | union
-    Path t :+ Path t
-  | -- | intersection
-    Path t :& Path t
-  deriving (Show, Eq, Ord)
-
--- make the operator precedence match how they are parsed
-
-infixl 7 :/
-
-infixl 5 :+
-
-infixl 6 :&
-
-isValidPath :: Path t -> Bool
-isValidPath = \case
-  Absolute _ -> True
-  Literal _ -> True
-  One -> True
-  Wild -> True
-  Zero -> True
-  p1 :& p2 -> isValidPath p1 && isValidPath p2
-  p1 :+ p2 -> isValidPath p1 && isValidPath p2
-  p1 :/ p2 -> isValidPath p1 && isValidChildPath p2
-    where
-      isValidChildPath = \case
-        Absolute _ -> False
-        Literal _ -> True
-        One -> True
-        Wild -> True
-        Zero -> True
-        p1 :+ p2 -> isValidChildPath p1 && isValidChildPath p2
-        p1 :/ p2 -> isValidChildPath p1 && isValidChildPath p2
-        p1 :& p2 ->
-          not (all isAbsolute (andSiblings p1 ++ andSiblings p2))
-            && isValidPath p1
-            && isValidPath p2
-      andSiblings = \case
-        p1 :& p2 -> andSiblings p1 ++ andSiblings p2
-        x -> [x]
-      isAbsolute = \case
-        Absolute _ -> True
-        Literal _ -> False
-        One -> False
-        Wild -> False
-        Zero -> False
-        _ :+ _ -> False
-        _ :& _ -> False
-        _ :/ _ -> False
+import Models.DPath as X
+import Models.Path as X
 
 isFullyRelativePath :: ValidTransition t => Path t -> Bool
 isFullyRelativePath = all (isNothing . fst) . setToList . listifyNewPath

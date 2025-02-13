@@ -5,6 +5,8 @@ module MyPrelude.EarlyReturn
     returnEarly,
     unwrapReturningDefault,
     unwrapReturningDefaultM,
+    unwrap,
+    unwrapM,
     withEarlyReturn,
     withEarlyReturn_,
   )
@@ -34,6 +36,18 @@ unwrapReturningDefaultM ::
   Sem r (Maybe a) ->
   Sem r a
 unwrapReturningDefaultM def = unwrapDefaultingM (returnEarly def)
+
+unwrap ::
+  Member (EarlyReturn (Maybe result)) r =>
+  Maybe a ->
+  Sem r a
+unwrap = unwrapReturningDefault Nothing
+
+unwrapM ::
+  Member (EarlyReturn (Maybe result)) r =>
+  Sem r (Maybe a) ->
+  Sem r a
+unwrapM = unwrapReturningDefaultM Nothing
 
 newtype EarlyReturnResult result = EarlyReturnResult {result :: result}
   deriving stock (Show, Eq, Ord, Generic)

@@ -15,6 +15,12 @@ import DAL.FileSystemOperations
 import Effect.Warn
 import Polysemy.Tagged
 
+-- | Marker indicating that something promises to only read the graph metadata.
+-- I gave up on trying to enforce this at the type level because it ended up
+-- being really hard to get type inference to infer all the things I wanted it
+-- to.
+type GraphMetadataReading t = GraphMetadataEditing t
+
 data GraphMetadataEditing t m a where
   GetNodeMetadata :: NID -> GraphMetadataEditing t m (Maybe (Node t ()))
   -- This barely needs to exist because InsertEdge can also be used to create
