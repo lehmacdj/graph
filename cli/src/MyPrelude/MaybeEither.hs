@@ -1,6 +1,7 @@
 module MyPrelude.MaybeEither where
 
 import ClassyPrelude
+import GHC.Stack (HasCallStack)
 
 -- | execute a computation only if it is Just
 withJust :: Applicative m => Maybe a -> (a -> m ()) -> m ()
@@ -38,6 +39,10 @@ unwrapDefaulting def = maybe def pure
 
 unwrapDefaultingM :: Monad m => m a -> m (Maybe a) -> m a
 unwrapDefaultingM def = (>>= unwrapDefaulting def)
+
+unwrapEx :: HasCallStack => String -> Maybe a -> a
+unwrapEx _ (Just x) = x
+unwrapEx s Nothing = error s
 
 describe :: String -> Maybe a -> Either String a
 describe s Nothing = Left s

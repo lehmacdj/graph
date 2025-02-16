@@ -76,7 +76,6 @@ library
       Models.Connect
       Models.DPath
       Models.Edge
-      Models.FocusedGraph
       Models.Graph
       Models.History
       Models.HistorySpec

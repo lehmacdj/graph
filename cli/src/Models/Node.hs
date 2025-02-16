@@ -1,3 +1,5 @@
+{-# LANGUAGE UndecidableInstances #-}
+
 module Models.Node
   ( module Models.Node,
     module Models.Common,

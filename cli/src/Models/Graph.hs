@@ -40,6 +40,13 @@ instance ValidNode t a => At (Graph t a) where
       Just _ -> updateNode g n
       Nothing -> insertNode n g
 
+instance ValidNode t a => Semigroup (Graph t a) where
+  g1 <> g2 = foldl' (flip insertNode) g1 (nodesOf g2)
+
+instance ValidNode t a => Monoid (Graph t a) where
+  mempty = emptyGraph
+  mappend = (<>)
+
 withNodeMap :: Graph t a -> (Map NID (Node t a) -> Map NID (Node t a)) -> Graph t a
 withNodeMap = flip (over #nodeMap)
 

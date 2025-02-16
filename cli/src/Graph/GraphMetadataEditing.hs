@@ -38,6 +38,26 @@ data GraphMetadataEditing t m a where
 
 makeSem ''GraphMetadataEditing
 
+-- | Makes it so all reads to a node will return the same result within the
+-- action by caching fetched nodes in memory
+cachingReadingInMemory ::
+  forall t a r.
+  (Member (GraphMetadataReading t) r, HasCallStack) =>
+  Sem (GraphMetadataReading t : r) a -> Sem r a
+cachingReadingInMemory = do
+  let interpreter = interpret \case
+        GetNodeMetadata nid -> withEarlyReturn do
+          cached <- gets @(Map NID (Maybe (Node t ()))) $ view $ at nid
+          withJust cached returnEarly
+          n <- getNodeMetadata nid
+          modify @(Map NID (Maybe (Node t ()))) $ at nid ?~ n
+          pure n
+        TouchNode _ -> error "TouchNode is unsafe while caching reading"
+        DeleteNode _ -> error "DeleteNode is unsafe while caching reading"
+        InsertEdge _ -> error "InsertEdge is unsafe while caching reading"
+        DeleteEdge _ -> error "DeleteEdge is unsafe while caching reading"
+  evalState mempty . interpreter . raiseUnder @(State (Map NID (Maybe (Node t ()))))
+
 runInMemoryGraphMetadataEditing ::
   forall t r a.
   (Member (State (Graph t ())) r, ValidTransition t) =>
