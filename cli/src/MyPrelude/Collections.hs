@@ -15,6 +15,7 @@ import Data.Set.Lens as X (setmapped)
 
 import Control.Lens as X
     ( over,
+      only,
       set,
       view,
       (&),
@@ -34,6 +35,7 @@ import Control.Lens as X
       isn't,
       folded,
       filtered,
+      filteredBy,
       _Right,
       _Left,
       Lens,

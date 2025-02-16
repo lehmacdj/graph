@@ -13,6 +13,7 @@ import Models.Edge
 import Models.NID
 import Models.Node
 import MyPrelude
+import Data.Monoid (First)
 
 newtype Graph t a = Graph
   { nodeMap :: Map NID (Node t a)
@@ -40,15 +41,41 @@ instance ValidNode t a => At (Graph t a) where
       Just _ -> updateNode g n
       Nothing -> insertNode n g
 
-instance ValidNode t a => Semigroup (Graph t a) where
-  g1 <> g2 = foldl' (flip insertNode) g1 (nodesOf g2)
+instance (ValidNode t a, Semigroup a) => Semigroup (Graph t a) where
+  g1 <> g2 = foldl' (flip mergeNodeInto) g1 (nodesOf g2)
 
-instance ValidNode t a => Monoid (Graph t a) where
+instance (ValidNode t a, Semigroup a) => Monoid (Graph t a) where
   mempty = emptyGraph
   mappend = (<>)
 
+type instance Element (Graph t a) = Node t a
+
+instance MonoFoldable (Graph t a) where
+  ofoldMap f = ofoldMap f . view #nodeMap
+  ofoldr f z = ofoldr f z . view #nodeMap
+  ofoldl' f z = ofoldl' f z . view #nodeMap
+  ofoldr1Ex f = ofoldr1Ex f . view #nodeMap
+  ofoldl1Ex' f = ofoldl1Ex' f . view #nodeMap
+
+instance MonoFunctor (Graph t a) where
+  omap f = over #nodeMap (omap f)
+
+instance MonoTraversable (Graph t a) where
+  otraverse f = fmap Graph . otraverse f . view #nodeMap
+
 withNodeMap :: Graph t a -> (Map NID (Node t a) -> Map NID (Node t a)) -> Graph t a
 withNodeMap = flip (over #nodeMap)
+
+nodesMatching ::
+  (Node t a -> Bool) ->
+  Traversal' (Graph t a) (Node t a)
+nodesMatching f = #nodeMap . traversed . filtered f
+
+nodesMatchedBy ::
+  (Indexable i p, Applicative f) =>
+  Getting (First i) (Node t a) i ->
+  p (Node t a) (f (Node t a)) -> Graph t a -> f (Graph t a)
+nodesMatchedBy g = #nodeMap . traversed . filteredBy g
 
 -- | Utility function for converting lookups into actual node values with error
 -- reporting.
@@ -199,6 +226,14 @@ insertNode n g =
     incomingEs = map (`incomingEdge` nid) (toList n.incoming)
     outgoingEs = map (outgoingEdge nid) (toList n.outgoing)
 
+mergeNodeInto ::
+  (Semigroup a, ValidNode t a, HasCallStack) =>
+  Node t a -> Graph t a -> Graph t a
+mergeNodeInto n g =
+  g & at n.nid %~ \case
+    Just original -> Just $ mergeNodesEx original n
+    Nothing -> Just n
+
 -- | Update a node in the graph so that it is consistent with the graph.
 -- This adds any edges that are missing and removes any edges that were in the
 -- graph before but are no longer in the node.
@@ -282,11 +317,5 @@ filterGraph f g = ofoldr maybeDelNode g (view #nodeMap g)
       | not $ f x = delNode x ig'
       | otherwise = ig'
 
-mapGraph ::
-  (Node t a -> Node t a) ->
-  Graph t a ->
-  Graph t a
-mapGraph f g = withNodeMap g $ \nm -> omap f nm
-
 dualizeGraph :: Graph t a -> Graph t a
-dualizeGraph = mapGraph dualizeNode
+dualizeGraph = omap dualizeNode

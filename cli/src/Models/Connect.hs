@@ -5,7 +5,6 @@ module Models.Connect
   )
 where
 
-import Control.Lens (filtered)
 import Data.Aeson
 import Data.Set.Lens
 import Models.Common
