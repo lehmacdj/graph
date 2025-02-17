@@ -146,17 +146,6 @@ mkPath nid p =
   fmap setFromList . forM (setToList (listifyNewPath p)) $
     \(m_nid, x) -> transitionsViaManyFresh (fromMaybe nid m_nid) x
 
--- | Construct a graph that contains only the edges passed through
--- by the literal edges in the path.
--- nids are the same as in the original graph
-tracePath ::
-  forall t a effs.
-  Members [FreshNID, Error Missing, ReadGraph t a] effs =>
-  NID ->
-  Path t ->
-  Sem effs (Graph t a)
-tracePath _ _ = error "unimplemented"
-
 delPath ::
   forall t effs.
   ( Members [FreshNID, Error Missing] effs,
