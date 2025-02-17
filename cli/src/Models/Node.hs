@@ -14,6 +14,7 @@ import Models.Connect
 import Models.NID
 import MyPrelude
 import GHC.Records
+import Models.Edge
 
 type ValidNode t a = (Show t, Eq t, Ord t, Eq a)
 
@@ -84,3 +85,8 @@ mergeNodesEx ::
   Node t a -> Node t a -> Node t a
 mergeNodesEx n1 n2 =
   fromMaybe (error "mergeNodesEx: nodes don't match") $ mergeNodes n1 n2
+
+withoutEdges :: ValidTransition t => Set (Edge t) -> Node t a -> Node t a
+withoutEdges deletedEdges n = n
+  & #incoming %~ (\\ mapSet inConnect deletedEdges)
+  & #outgoing %~ (\\ mapSet outConnect deletedEdges)

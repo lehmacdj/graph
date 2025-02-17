@@ -11,7 +11,8 @@ import qualified Models.Graph
 import Models.Graph (Graph)
 import Polysemy.State
 import Error.UserError
-import DAL.FileSystemOperations
+import DAL.FileSystemOperations.Metadata
+import DAL.FileSystemOperations.MetadataWriteDiff
 import Effect.Warn
 import Polysemy.Tagged
 
@@ -184,8 +185,7 @@ runGraphMetadataEditingTransactionally action = do
           -- we might already have a node in the cache even if we did not load
           -- because we create nodes for any changes we make
           let reconciledNode = liftA2 mergeNodesEx underlyingNode changesNode
-                & _Just . #incoming %~ (\\ mapSet inConnect deletedEdges)
-                & _Just . #outgoing %~ (\\ mapSet outConnect deletedEdges)
+                & _Just %~ withoutEdges deletedEdges
           tag @Changes $ modify $ at nid .~ reconciledNode
           pure reconciledNode
         TouchNode nid -> tag @Cache $ touchNode nid
@@ -203,8 +203,9 @@ runGraphMetadataEditingTransactionally action = do
           tag @Cache $ insertEdge edge
           tag @DeletedEdges $ modify $ deleteSet edge
         DeleteEdge edge -> do
+          hasEdge <- tag @Changes $ gets (`Models.Graph.containsEdge` edge)
           tag @Cache $ deleteEdge edge
-          tag @DeletedEdges $ modify $ insertSet edge
+          unless hasEdge $ tag @DeletedEdges $ modify $ insertSet edge
   let applyGraphDiff (deletedEdges, (loaded, (changes, result))) =
         writeGraphDiff loaded changes deletedEdges >> pure result
   action

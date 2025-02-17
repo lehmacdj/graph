@@ -27,13 +27,16 @@ library
       DAL.DirectoryFormat
       DAL.DTO
       DAL.DTOSpec
-      DAL.FileSystemOperations
+      DAL.FileSystemOperations.Data
+      DAL.FileSystemOperations.Metadata
+      DAL.FileSystemOperations.MetadataWriteDiff
+      DAL.Interpreters
       DAL.JSON
       DAL.Serialization
       Data.Set.Ordered.Orphans
       Effect.Console
       Effect.Editor
-      Effect.FileSystem
+      Effect.Filesystem
       Effect.FileTypeOracle
       Effect.FreshNID
       Effect.Interpreters
@@ -54,11 +57,11 @@ library
       Executable.Scratch
       Graph.Check
       Graph.Effect
-      Graph.Export.FileSystem
+      Graph.Export.Filesystem
       Graph.GraphDataEditing
       Graph.GraphMetadataEditing
       Graph.Import.ByteString
-      Graph.Import.FileSystem
+      Graph.Import.Filesystem
       Graph.ResolvePath
       Graph.SystemNodes
       Graph.SystemNodes.Init
@@ -144,6 +147,7 @@ library
       RecordWildCards
       ScopedTypeVariables
       StandaloneDeriving
+      StandaloneKindSignatures
       StrictData
       TupleSections
       TypeApplications
@@ -259,6 +263,7 @@ executable dump-graph
       RecordWildCards
       ScopedTypeVariables
       StandaloneDeriving
+      StandaloneKindSignatures
       StrictData
       TupleSections
       TypeApplications
@@ -369,6 +374,7 @@ executable ge
       RecordWildCards
       ScopedTypeVariables
       StandaloneDeriving
+      StandaloneKindSignatures
       StrictData
       TupleSections
       TypeApplications
@@ -479,6 +485,7 @@ executable scratch
       RecordWildCards
       ScopedTypeVariables
       StandaloneDeriving
+      StandaloneKindSignatures
       StrictData
       TupleSections
       TypeApplications
@@ -590,6 +597,7 @@ test-suite graph-test
       RecordWildCards
       ScopedTypeVariables
       StandaloneDeriving
+      StandaloneKindSignatures
       StrictData
       TupleSections
       TypeApplications

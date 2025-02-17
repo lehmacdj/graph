@@ -7,7 +7,7 @@ module MyPrelude
   )
 where
 
-import ClassyPrelude hiding (throwString)
+import ClassyPrelude hiding (throwString, fromException)
 import Control.DeepSeq as X
 import Data.Coerce as X (Coercible, coerce)
 import Data.Generics.Labels as X

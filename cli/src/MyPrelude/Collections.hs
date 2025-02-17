@@ -16,6 +16,8 @@ import Data.Set.Lens as X (setmapped)
 import Control.Lens as X
     ( over,
       only,
+      non,
+      non',
       set,
       view,
       (&),
@@ -30,6 +32,9 @@ import Control.Lens as X
       (%~),
       preview,
       (^?),
+      _1,
+      _2,
+      _3,
       has,
       hasn't,
       isn't,
@@ -59,6 +64,7 @@ import Control.Lens as X
       LensLike,
       LensLike'
     )
+import qualified Data.Map.Strict as Map
 
 -- | Copied from cabal codebase
 toSetOf :: Getting (Set a) s a -> s -> Set a
@@ -66,6 +72,12 @@ toSetOf l s = getConst (l (Const . singleton) s)
 
 mapSet :: Ord b => (a -> b) -> Set a -> Set b
 mapSet = Set.map
+
+mapFromSet :: Ord k => Set k -> Map k ()
+mapFromSet = Map.fromSet (const ())
+
+mapFromSetBy :: Ord k => (k -> v) -> Set k -> Map k v
+mapFromSetBy = Map.fromSet
 
 -- | do something when a mono is NonNull
 whenNonNull ::

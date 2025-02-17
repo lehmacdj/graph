@@ -319,8 +319,10 @@ coordinateAccessing FilesToCoordinate{..} action =
       ContT $ withNSURL path isDirectory
     writingUrls <- for writingPaths $ \(path, isDirectory) ->
       ContT $ withNSURL path isDirectory
-    readingUrlsArray <- ContT $ withNSArray (readingUrls ^.. folded)
-    writingUrlsArray <- ContT $ withNSArray (writingUrls ^.. folded)
+    -- using ordNub allows Haskell caller's to not need to worry about
+    -- specifying the same file multiple times
+    readingUrlsArray <- ContT $ withNSArray (ordNub $ readingUrls ^.. folded)
+    writingUrlsArray <- ContT $ withNSArray (ordNub $ writingUrls ^.. folded)
     fileCoordinator <- ContT $ bracket nsFileCoordinator_init m_release
     errPtr <- ContT alloca
     let readingAccessors =

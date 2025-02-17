@@ -13,6 +13,7 @@ import MyPrelude
 import Network.HTTP.Conduit (HttpException)
 import System.MacOS.NSFileCoordinator (NSErrorException)
 import Polysemy.Error hiding (fromException, try)
+import qualified Control.Exception as E
 
 -- | Blanket error type used by the app. This is called @UserError@ because
 -- generally we only want to intercept it when propagating errors to the user.
@@ -56,6 +57,8 @@ instance Semigroup UserError where
   Multiple e1s <> e2 = Multiple (e1s <> singleton e2)
   e1 <> e2 = Multiple (singleton e1 <> singleton e2)
 
+instance Exception UserError
+
 throwString :: Member (Error UserError) effs => String -> Sem effs a
 throwString = throwConvertible
 
@@ -80,9 +83,9 @@ embedCatchingErrors ::
 embedCatchingErrors = fromExceptionVia mapExceptionToUserError
   where
     mapExceptionToUserError = \case
-      (fromException @IOError -> Just e) -> IOFail e
-      (fromException @HttpException -> Just e) -> WebError e
-      (fromException @NSErrorException -> Just e) -> FileCoordinationError e
+      (E.fromException @IOError -> Just e) -> IOFail e
+      (E.fromException @HttpException -> Just e) -> WebError e
+      (E.fromException @NSErrorException -> Just e) -> FileCoordinationError e
       e -> OtherException e
 
 printErrors ::
