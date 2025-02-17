@@ -83,7 +83,7 @@ completePath env (i, _) = case getPartialPath (takeRelevantFromEnd i) of
   Nothing -> pure (i, [])
   Just (MissingSlash _) -> pure (i, [simpleCompletion "/"])
   Just (PartialPath pp end) ->
-    runMainEffectsIO
+    runAppEffects
       (failCompletionWithOriginalInputOnErrorOrWarning i)
       interpretTimeAsIO
       env

@@ -103,9 +103,6 @@ pBack = (command "back" $> Back) <*> number
 pMaterialize :: Parser Command
 pMaterialize = (command "materialize" $> Materialize) <*> some anySingle
 
-pExec :: Parser Command
-pExec = (commandFrom ["exec", "x"] $> Exec) <*> path
-
 pCollect :: Parser Command
 pCollect = (command "collect" $> Collect) <*> transition
 
@@ -142,7 +139,6 @@ pCommandTerm =
     <|> try pEdit
     <|> try pBack
     <|> try pMaterialize
-    <|> try pExec
     <|> try pCollect
     <|> try pAddText
     <|> try (braces pCommand)

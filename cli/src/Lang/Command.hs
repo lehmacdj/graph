@@ -44,7 +44,6 @@ import Models.Node
 import MyPrelude
 import Polysemy.Readline
 import Polysemy.State
-import qualified Utils.Extensibility as Extensibility
 import Utils.Singleton
 import DAL.RawGraph
 import Error.Missing
@@ -118,10 +117,6 @@ data Command
     -- to minimize disk footprint; takes a filepath to write the tree to as an
     -- argument.
     Materialize FilePath
-  | -- | Execute some arbitrary Haskell code that has access to the graph at
-    -- the current node. The Haskell code is given by the data at the node given
-    -- as an argument.
-    Exec (Path String)
   | -- | Collect same transitions into a transition to a single node that
     -- transitions to the nodes the previous transition used to
     Collect String
@@ -324,12 +319,6 @@ interpretCommand = \case
     nid <- subsumeUserError @Missing currentLocation
     fp' <- subsumeUserError @IOError . untry $ canonicalizePath fp
     exportToDirectory nid fp'
-  Exec p -> do
-    nid <- currentLocation
-    let err = singleErr "the argument to exec"
-    target <- the' err =<< subsumeUserError (resolvePathSuccesses nid p)
-    base <- getGraphFilePath
-    Extensibility.runScript (legacyNodeDataFile base target)
   Collect t -> do
     currentNid <- currentLocation
     nids <- subsumeUserError (resolvePathSuccesses currentNid (Literal t))

@@ -19,11 +19,10 @@ import Effect.IOWrapper.Web
 import Graph.Effect
 import Models.History
 import Models.NID
-import MyPrelude hiding (Reader, ask)
+import MyPrelude
 import Polysemy.Embed
 import Polysemy.Input
 import Polysemy.Output
-import Polysemy.Reader
 import Polysemy.Readline
 import Polysemy.State
 import System.Console.Haskeline (InputT)
@@ -83,30 +82,6 @@ printingErrorsAndWarnings ::
   Sem effs ()
 printingErrorsAndWarnings = printWarnings >>> printErrors
 
-type HasMainEffects effs =
-  ( Members
-      [ DisplayImage,
-        Echo,
-        Error UserError,
-        SetLocation,
-        GetLocation,
-        FreshNID,
-        Dualizeable,
-        FileSystem,
-        Web,
-        Warn UserError,
-        State History,
-        Editor,
-        GetTime,
-        Embed IO,
-        Readline,
-        FileTypeOracle,
-        RawGraph
-      ]
-      effs,
-    HasGraph String effs
-  )
-
 type family Concat (a :: [k]) (b :: [k]) :: [k] where
   Concat '[] b = b
   Concat (a ': as) b = a ': Concat as b
@@ -148,6 +123,7 @@ type IOWrapperEffects :: [Effect]
 type IOWrapperEffects =
   [ Web,
     FileSystem,
+    FileTypeOracle,
     GetTime,
     GraphMetadataFilesystemOperations,
     GraphMetadataFilesystemOperationsWriteDiff,
@@ -170,6 +146,7 @@ runIOWrapperEffects ::
 runIOWrapperEffects timeBehavior =
   runWebIO
     >>> runFileSystemIO
+    >>> runFileTypeOracle
     >>> timeBehavior
     >>> runGraphMetadataFilesystemOperationsIO
     >>> runGraphMetadataFilesystemOperationsWriteDiffIO
@@ -260,94 +237,14 @@ type AppEffects =
     `Concat` FinalEffects
 
 runAppEffects ::
-  Env ->
-  TimeBehavior ->
   ErrorHandlingBehavior a ->
+  TimeBehavior ->
+  Env ->
   Sem AppEffects a ->
   IO a
-runAppEffects env timeBehavior errorHandlingBehavior =
+runAppEffects errorHandlingBehavior timeBehavior env =
   runGraphEditorEffects
     >>> runIOWrapperEffects timeBehavior
     >>> runErrorEffects errorHandlingBehavior
     >>> runPermissiveDependencyEffectsEnv
     >>> runFinalEffects env
-
--- | general function for interpreting the entire stack of effects in terms of real world things
--- it takes a function that handles the errors, because that is necessary for
--- this to have an arbitrary return type
-runMainEffectsIO ::
-  forall a.
-  ErrorHandlingBehavior a ->
-  TimeBehavior ->
-  Env ->
-  (forall effs. HasMainEffects effs => Sem effs a) ->
-  IO a
-runMainEffectsIO errorHandlingBehavior timeBehavior env v = do
-  let handler =
-        runFreshNIDRandom
-          >>> applyInput2 (runWriteGraphDualizeableIO @String)
-          >>> applyInput2 (runReadGraphDatalessDualizeableIO @String)
-          >>> applyInput2 (runReadGraphDualizeableIO @String)
-          >>> runRawGraphAsInput
-          >>> contramapInputSem @FilePath (embed . readIORef . view #filePath)
-          >>> runWebIO
-          >>> runFileSystemIO
-          >>> runStateInputIORefOf @IsDual #isDualized
-          >>> interpretDisplayImageIO
-          >>> runEchoReadline
-          >>> timeBehavior
-          >>> interpretEditorAsIOVim
-          >>> runLocableHistoryState
-          >>> runStateInputIORefOf @History #history
-          >>> runStateInputIORefOf #randomGen
-          >>> errorHandlingBehavior
-          >>> runReadlineFinal
-          >>> runFileTypeOracle
-          >>> withEffects @[Input Env, Embed IO, Embed (InputT IO), Final (InputT IO)]
-          >>> runInputConst env
-          >>> runEmbedded liftIO
-          >>> withEffects @'[Embed (InputT IO), Final (InputT IO)]
-          >>> embedToFinal @(InputT IO)
-          >>> runFinal
-          >>> H.runInputT (view #replSettings env)
-  handler v
-
--- | Less capable, but less demanding interpreter.
-runReadWriteGraphIO ::
-  FilePath ->
-  Sem
-    [ WriteGraph String,
-      ReadGraph String (Maybe ByteString),
-      Warn UserError,
-      Error UserError,
-      FreshNID,
-      Embed IO
-    ]
-    () ->
-  IO ()
-runReadWriteGraphIO dir =
-  runWriteGraphIO dir
-    >>> runReadGraphIO dir
-    >>> printWarnings @UserError
-    >>> printErrors
-    >>> raiseUnder
-    >>> runFreshNIDRandom
-    >>> (\m -> initStdGen >>= \stdGen -> evalState stdGen m)
-    >>> runM
-
-runLocatedReadWriteGraphIO ::
-  FilePath ->
-  NID ->
-  Sem
-    [ GetLocation,
-      WriteGraph String,
-      ReadGraph String (Maybe ByteString),
-      Warn UserError,
-      Error UserError,
-      FreshNID,
-      Embed IO
-    ]
-    () ->
-  IO ()
-runLocatedReadWriteGraphIO base nid =
-  runReader nid >>> runReadWriteGraphIO base

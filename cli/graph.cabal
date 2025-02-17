@@ -107,7 +107,6 @@ library
       System.MacOS.NSFileCoordinator.Types
       TestPrelude
       Utils.Base62
-      Utils.Extensibility
       Utils.Singleton
   other-modules:
       Paths_graph

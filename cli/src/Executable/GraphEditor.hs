@@ -115,6 +115,6 @@ main = withOptions $ \options -> do
         | options ^. #_testOnlyMonotonicIncreasingDeterministicTime =
           interpretTimeAsMonotonicIncreasingUnixTime
         | otherwise = interpretTimeAsIO
-  runMainEffectsIO printingErrorsAndWarnings timeBehavior env do
+  runAppEffects printingErrorsAndWarnings timeBehavior env do
     createSystemNodes
     maybe repl interpretCommand (view #_executeExpression options)
