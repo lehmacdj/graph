@@ -23,9 +23,6 @@ module DAL.Serialization
     readGraph,
     initializeGraph,
     nodesWithPrefix,
-
-    -- * low level access to format information (to be used with caution)
-    nodeDataFile,
   )
 where
 
@@ -64,9 +61,9 @@ serializeNodeEx n base = do
   createDirectoryIfMissing True base
   BL.writeFile (metadataFile base (n ^. #nid)) (Aeson.encode . nodeToDTO $ n)
   case n.rawData of
-    Just d -> B.writeFile (nodeDataFile base (n ^. #nid)) d
+    Just d -> B.writeFile (legacyNodeDataFile base (n ^. #nid)) d
     Nothing ->
-      removeFile (nodeDataFile base (n ^. #nid)) `catch` \case
+      removeFile (legacyNodeDataFile base (n ^. #nid)) `catch` \case
         e | isDoesNotExistError e -> pure ()
         e -> throwIO e
 
@@ -138,7 +135,7 @@ removeNode :: MonadIO m => FilePath -> NID -> m ()
 removeNode base nid = do
   liftIO . removeFile $ metadataFile base nid
   -- this file doesn't exist frequently so we want to ignore this error
-  liftIO . ignoreIOError . removeFile $ nodeDataFile base nid
+  liftIO . ignoreIOError . removeFile $ legacyNodeDataFile base nid
 
 -- | Execute a function on a node stored in the filesystem at a specified location
 -- ignore nodes that don't exist or if an error occurs
@@ -174,4 +171,4 @@ nodesWithPrefix base base62Prefix
     pure $ unsafeNID . pack . takeWhile isBase62Char . takeFileName <$> results
 
 tryGetBinaryData :: FilePath -> NID -> IO (Maybe ByteString)
-tryGetBinaryData = (ioErrorToMaybe .) . (B.readFile .) . nodeDataFile
+tryGetBinaryData = (ioErrorToMaybe .) . (B.readFile .) . legacyNodeDataFile

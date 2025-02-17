@@ -19,6 +19,7 @@ import Error.UserError
 import Models.Connect
 import Models.Node
 import DAL.RawGraph
+import DAL.DirectoryFormat
 
 -- | Like a DFS tree of the graph, but include duplciates unless they would form
 -- a cycle. Term Heterarchy comes from neuron zettelkasten
@@ -31,7 +32,7 @@ graphHeterarchy (startName, start) = do
   fp <- getGraphFilePath
   let dataFileAndExtensionIfExists :: NID -> Sem r (Maybe (FilePath, String))
       dataFileAndExtensionIfExists nid = do
-        let ndf = S2.nodeDataFile fp nid
+        let ndf = legacyNodeDataFile fp nid
         fileExists <- embed $ doesFileExist ndf
         if fileExists
           then Just . (ndf,) . unpack <$> getExtension ndf

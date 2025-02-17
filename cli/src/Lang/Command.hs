@@ -15,8 +15,9 @@
 module Lang.Command where
 
 import Control.Monad (zipWithM_)
-import qualified DAL.Serialization as S2
-import Effect.Console
+import DAL.DirectoryFormat (legacyNodeDataFile)
+import Effect.IOWrapper.DisplayImage
+import Effect.IOWrapper.Echo
 import Effect.IOWrapper.Editor
 import Effect.IOWrapper.FileSystem
 import Effect.IOWrapper.FileTypeOracle
@@ -136,7 +137,7 @@ singleErr cmd xs =
       ++ tshow (setToList xs)
 
 printTransitions ::
-  Member Console effs =>
+  Member Echo effs =>
   Set (Connect String) ->
   Sem effs ()
 printTransitions = mapM_ (echo . dtransition)
@@ -166,7 +167,7 @@ guardDangerousDualizedOperation = do
     promptYesNo "proceed (y/n): " >>= bool (throw OperationCancelled) (pure ())
 
 interpretCommand ::
-  ( Members [Console, Error UserError, SetLocation, GetLocation, Dualizeable] effs,
+  ( Members [DisplayImage, Echo, Error UserError, SetLocation, GetLocation, Dualizeable] effs,
     Members [FileSystem, Web, FreshNID, GetTime, Editor, State History] effs,
     Members [FileTypeOracle, Readline, Warn UserError] effs,
     -- TODO: remove this inclusion of RawGraph + Embed IO here; probably the
@@ -327,7 +328,7 @@ interpretCommand = \case
     let err = singleErr "the argument to exec"
     target <- the' err =<< subsumeUserError (resolvePathSuccesses nid p)
     base <- getGraphFilePath
-    Extensibility.runScript (S2.nodeDataFile base target)
+    Extensibility.runScript (legacyNodeDataFile base target)
   Collect t -> do
     currentNid <- currentLocation
     nids <- subsumeUserError (resolvePathSuccesses currentNid (Literal t))

@@ -9,7 +9,7 @@
 module Graph.Import.FileSystem where
 
 import Data.Digest.Pure.SHA
-import Effect.Console
+import Effect.IOWrapper.Echo
 import Effect.IOWrapper.FileSystem
 import Effect.FreshNID
 import Effect.IOWrapper.GetTime
@@ -27,7 +27,7 @@ computeSHA :: ByteString -> String
 computeSHA = showDigest . sha512 . fromStrict
 
 importDirectory ::
-  ( Members [GetTime, FreshNID, FileSystem, Console, Error Missing] effs,
+  ( Members [GetTime, FreshNID, FileSystem, Echo, Error Missing] effs,
     HasGraph String effs
   ) =>
   FilePath ->

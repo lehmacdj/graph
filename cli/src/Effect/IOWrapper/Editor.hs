@@ -2,7 +2,7 @@
 
 module Effect.IOWrapper.Editor where
 
-import DAL.Serialization
+import DAL.DirectoryFormat
 import Models.NID (NID)
 import MyPrelude
 import System.Directory
@@ -26,4 +26,4 @@ interpretEditorAsIOVimFSGraph location = interpret $ \case
   InvokeEditor nids -> do
     editor <- embed $ getEnv "EDITOR"
     editorToUse <- fromMaybe "vim" <$> embed (findExecutable editor)
-    runProcess_ $ proc editorToUse (nodeDataFile location <$> nids)
+    runProcess_ $ proc editorToUse (legacyNodeDataFile location <$> nids)

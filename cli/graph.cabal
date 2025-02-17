@@ -38,6 +38,7 @@ library
       Effect.FreshNID
       Effect.Interpreters
       Effect.IOWrapper.DisplayImage
+      Effect.IOWrapper.Echo
       Effect.IOWrapper.Editor
       Effect.IOWrapper.FileSystem
       Effect.IOWrapper.FileTypeOracle

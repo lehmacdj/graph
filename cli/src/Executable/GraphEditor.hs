@@ -5,7 +5,8 @@ module Executable.GraphEditor where
 import Control.Lens hiding (index)
 import Control.Monad.Fix
 import DAL.Serialization (doesNodeExist, initializeGraph)
-import Effect.Console
+import Effect.IOWrapper.Echo
+import Effect.IOWrapper.DisplayImage
 import Effect.IOWrapper.Editor
 import Effect.IOWrapper.FileSystem
 import Effect.IOWrapper.FileTypeOracle
@@ -58,7 +59,7 @@ withDefaultQuitParser p s
   | otherwise = C <$> p s
 
 repl ::
-  ( Members [Console, SetLocation, GetLocation, Dualizeable, Readline, Embed IO] effs,
+  ( Members [Echo, DisplayImage, SetLocation, GetLocation, Dualizeable, Readline, Embed IO] effs,
     Members [FileSystem, Web, FreshNID, GetTime, Editor, State History] effs,
     Members '[FileTypeOracle] effs,
     HasGraph String effs,

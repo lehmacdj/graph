@@ -6,7 +6,7 @@
 module Graph.Check where
 
 import Control.Lens
-import Effect.Console
+import Effect.IOWrapper.Echo
 import Error.UserError
 import Graph.Effect
 import Graph.Utils
@@ -52,7 +52,7 @@ instance Show t => Show (ReportMissing t m r) where
 
 reportToConsole ::
   forall t effs.
-  (Member Console effs, Show t) =>
+  (Member Echo effs, Show t) =>
   Sem (ReportMissing t : effs) ~> Sem effs
 reportToConsole = interpret $ \case
   c@NodeMissing {} -> echo $ show c

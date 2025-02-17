@@ -2,9 +2,7 @@
 
 module DAL.FileSystemOperations.MetadataWriteDiff where
 
-import DAL.DTO
 import DAL.DirectoryFormat
-import DAL.JSON
 import DAL.RawGraph
 import Error.Missing
 import Error.UserError
@@ -13,7 +11,6 @@ import Models.Graph
 import Models.NID
 import Models.Node
 import MyPrelude
-import System.Directory (removeFile)
 import System.MacOS.NSFileCoordinator
 import Control.Lens (ifor, ifor_)
 import Control.Monad.Trans.Cont

@@ -6,6 +6,7 @@ import Control.Arrow ((>>>))
 import Control.Lens
 import Effect.IOWrapper.DisplayImage
 import Effect.IOWrapper.Editor
+import Effect.IOWrapper.Echo
 import Effect.IOWrapper.FileSystem
 import Effect.IOWrapper.FileTypeOracle
 import Effect.FreshNID
@@ -83,6 +84,7 @@ printingErrorsAndWarnings = printWarnings >>> printErrors
 type HasMainEffects effs =
   ( Members
       [ DisplayImage,
+        Echo,
         Error UserError,
         SetLocation,
         GetLocation,
@@ -159,6 +161,7 @@ runMainEffectsIO errorHandlingBehavior timeBehavior env v = do
           >>> runFileSystemIO
           >>> runStateInputIORefOf @IsDual #isDualized
           >>> interpretDisplayImageIO
+          >>> runEchoReadline
           >>> timeBehavior
           >>> runLocableHistoryState
           >>> runStateInputIORefOf @History #history
