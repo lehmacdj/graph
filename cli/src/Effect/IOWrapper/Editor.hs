@@ -2,15 +2,13 @@
 
 module Effect.IOWrapper.Editor where
 
-import DAL.DirectoryFormat
-import Models.NID (NID)
 import MyPrelude
 import System.Directory
 import System.Environment
 import System.Process.Typed
 
 data Editor m r where
-  InvokeEditor :: [NID] -> Editor m ()
+  InvokeEditor :: [FilePath] -> Editor m ()
 
 makeSem ''Editor
 
@@ -18,12 +16,10 @@ makeSem ''Editor
 -- structure with nid.json/nid.data for each node
 interpretEditorAsIOVimFSGraph ::
   (Member (Embed IO) effs) =>
-  -- | a filepath to find the graph under
-  FilePath ->
   -- | interprets effect
   Sem (Editor : effs) ~> Sem effs
-interpretEditorAsIOVimFSGraph location = interpret $ \case
-  InvokeEditor nids -> do
+interpretEditorAsIOVimFSGraph = interpret $ \case
+  InvokeEditor paths -> do
     editor <- embed $ getEnv "EDITOR"
     editorToUse <- fromMaybe "vim" <$> embed (findExecutable editor)
-    runProcess_ $ proc editorToUse (legacyNodeDataFile location <$> nids)
+    runProcess_ $ proc editorToUse paths

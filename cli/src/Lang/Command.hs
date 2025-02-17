@@ -308,7 +308,8 @@ interpretCommand = \case
     subsumeUserError (aliasDPath c nid q)
   Edit -> do
     n <- subsumeUserError @Missing currentLocation
-    invokeEditor [n]
+    path <- getGraphFilePath
+    invokeEditor [legacyNodeDataFile path n]
   Back n -> do
     history <- get @History
     let (_, history') = backInTime n history
