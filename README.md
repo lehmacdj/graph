@@ -8,5 +8,10 @@ This project is an attempt to construct a more expressive datastructure than a f
 ## cli
 The cli is the original implementation of the graph. It is implemented as a Haskell library, and comes with a few executables which allow editing graphs using a command line interface.
 
+Historical:
+- I used to support an `Extensibility` module with an `exec` command that allowed running Haskell scripts.
+  - It ran very slowly, and was a maintenance burden whenever rearranging/rearchitecting things so I removed it
+  - The last version of it in the git history is https://github.com/lehmacdj/graph/blob/2c837dbc6c867c71b8d236d61cf38690ef424af3/cli/src/Utils/Extensibility.hs#L1-L9
+
 ## Nodal
 This will be an implementation of an iOS graph that interops with the same graph format and displays it and has limited support for editing it. It is still under development.
