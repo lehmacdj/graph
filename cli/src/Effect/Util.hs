@@ -165,6 +165,12 @@ contramapInputSem ::
 contramapInputSem f = interpret $ \case
   Input -> f =<< input @i'
 
+supplyInputVia ::
+  forall i r.
+  Sem r i ->
+  Sem (Input i : r) ~> Sem r
+supplyInputVia supplier = interpret $ \Input -> supplier
+
 -- | Modify state returning the original value
 modifying :: forall s r. Member (State s) r => (s -> s) -> Sem r s
 modifying f = do

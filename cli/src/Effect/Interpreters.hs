@@ -33,6 +33,8 @@ import DAL.RawGraph
 import DAL.FileSystemOperations.Metadata
 import DAL.FileSystemOperations.MetadataWriteDiff
 import DAL.FileSystemOperations.Data
+import Graph.GraphMetadataEditing
+import Polysemy.Scoped
 
 data Env = Env
   { filePath :: IORef FilePath,
@@ -109,42 +111,174 @@ type family Concat (a :: [k]) (b :: [k]) :: [k] where
   Concat '[] b = b
   Concat (a ': as) b = a ': Concat as b
 
-type AppEffects :: [Effect]
-type AppEffects =
-  '[
+type GraphEditorEffects :: [Effect]
+type GraphEditorEffects =
+  [ FreshNID,
+    ReadGraph String (Maybe ByteString),
+    ReadGraphDataless String,
+    WriteGraph String,
+    Scoped_ (GraphMetadataEditing Text),
+    -- GraphDataEditing,
+    Dualizeable,
+    GetLocation,
+    SetLocation,
+    State History
   ]
+
+runGraphEditorEffects ::
+  ( Members PermissiveDependencyEffects r,
+    Members IOWrapperEffects r,
+    Members ErrorEffects r
+  ) => Sem (Concat GraphEditorEffects r) ~> Sem r
+runGraphEditorEffects =
+  raiseUnder @(State StdGen)
+    >>> runFreshNIDRandom
+    >>> subsume
+    >>> raise3Under @(Input FilePath)
+    >>> applyInput2 (runReadGraphDualizeableIO @String)
+    >>> applyInput2 (runReadGraphDatalessDualizeableIO @String)
+    >>> applyInput2 (runWriteGraphDualizeableIO @String)
+    >>> supplyInputVia getGraphFilePath
+    >>> runScopedGraphMetadataEditingTransactionally
+    >>> subsume
+    >>> runLocableHistoryState
+    >>> subsume
 
 type IOWrapperEffects :: [Effect]
 type IOWrapperEffects =
-  [
-    Web,
+  [ Web,
     FileSystem,
     GetTime,
     GraphMetadataFilesystemOperations,
     GraphMetadataFilesystemOperationsWriteDiff,
-    GraphDataFilesystemOperations
+    GraphDataFilesystemOperations,
+    Echo,
+    Editor,
+    DisplayImage
   ]
 
-type FinalEffects :: [Effect]
+type TimeBehavior =
+  forall r. Member (Embed IO) r =>
+  Sem (GetTime : r) ~> Sem r
+
+runIOWrapperEffects ::
+  ( Members PermissiveDependencyEffects r,
+    Members ErrorEffects r
+  ) =>
+  TimeBehavior ->
+  Sem (Concat IOWrapperEffects r) ~> Sem r
+runIOWrapperEffects timeBehavior =
+  runWebIO
+    >>> runFileSystemIO
+    >>> timeBehavior
+    >>> runGraphMetadataFilesystemOperationsIO
+    >>> runGraphMetadataFilesystemOperationsWriteDiffIO
+    >>> runGraphDataFilesystemOperationsIO
+    >>> subsume
+    >>> interpretEditorAsIOVim
+    >>> interpretDisplayImageIO
+
+type ErrorEffects :: [Effect]
+type ErrorEffects =
+  [ Warn UserError,
+    Error UserError
+  ]
+
+type ErrorHandlingBehavior a =
+  forall r. Member (Embed IO) r =>
+  Sem (Warn UserError : Error UserError : r) a -> Sem r a
+
+runErrorEffects ::
+  Members PermissiveDependencyEffects r =>
+  ErrorHandlingBehavior a ->
+  Sem (Concat ErrorEffects r) a -> Sem r a
+runErrorEffects errorHandlingBehavior = errorHandlingBehavior
+
+type PermissiveDependencyEffects :: [Effect]
+type PermissiveDependencyEffects =
+  [ Echo,
+    Dualizeable,
+    State StdGen,
+    Embed IO,
+    State History,
+    RawGraph
+  ]
+
+runPermisiveDependencyEffects ::
+  ( Member (Embed IO) r
+  ) =>
+  FilePath ->
+  Sem (Concat PermissiveDependencyEffects r) ~> Sem r
+runPermisiveDependencyEffects path =
+  runEchoIO
+    >>> evalState (IsDual False)
+    >>> (\m -> initStdGen >>= \stdGen -> evalState stdGen m)
+    >>> subsume
+    >>> evalState (History [] nilNID [])
+    >>> runRawGraphWithPath path
+
+runPermissiveDependencyEffectsEnv ::
+  ( Members FinalEffects r
+  ) =>
+  Sem (Concat PermissiveDependencyEffects r) ~> Sem r
+runPermissiveDependencyEffectsEnv =
+    runEchoReadline
+      >>> runStateInputIORefOf #isDualized
+      >>> runStateInputIORefOf #randomGen
+      >>> subsume
+      >>> runStateInputIORefOf @History #history
+      >>> raiseUnder
+      >>> runRawGraphAsInput
+      >>> contramapInputSem @FilePath (embed @IO . readIORef . view #filePath)
+
 type FinalEffects =
-  [
+  [ Readline,
     Input Env,
     Embed IO,
     Embed (InputT IO),
     Final (InputT IO)
   ]
 
+runFinalEffects ::
+  Env ->
+  Sem FinalEffects ~> IO
+runFinalEffects env =
+  runReadlineFinal
+    >>> runInputConst env
+    >>> runEmbedded liftIO
+    >>> withEffects @'[Embed (InputT IO), Final (InputT IO)]
+    >>> embedToFinal @(InputT IO)
+    >>> runFinal
+    >>> H.runInputT env.replSettings
+
+type AppEffects :: [Effect]
+type AppEffects =
+  GraphEditorEffects
+    `Concat` IOWrapperEffects
+    `Concat` ErrorEffects
+    `Concat` PermissiveDependencyEffects
+    `Concat` FinalEffects
+
+runAppEffects ::
+  Env ->
+  TimeBehavior ->
+  ErrorHandlingBehavior a ->
+  Sem AppEffects a ->
+  IO a
+runAppEffects env timeBehavior errorHandlingBehavior =
+  runGraphEditorEffects
+    >>> runIOWrapperEffects timeBehavior
+    >>> runErrorEffects errorHandlingBehavior
+    >>> runPermissiveDependencyEffectsEnv
+    >>> runFinalEffects env
+
 -- | general function for interpreting the entire stack of effects in terms of real world things
 -- it takes a function that handles the errors, because that is necessary for
 -- this to have an arbitrary return type
 runMainEffectsIO ::
   forall a.
-  ( forall effs.
-    Members [Input Env, Embed IO] effs =>
-    Sem (Warn UserError : Error UserError : effs) a ->
-    Sem effs a
-  ) ->
-  (forall effs. (Member (Embed IO) effs) => Sem (GetTime : effs) ~> Sem effs) ->
+  ErrorHandlingBehavior a ->
+  TimeBehavior ->
   Env ->
   (forall effs. HasMainEffects effs => Sem effs a) ->
   IO a
@@ -154,7 +288,6 @@ runMainEffectsIO errorHandlingBehavior timeBehavior env v = do
           >>> applyInput2 (runWriteGraphDualizeableIO @String)
           >>> applyInput2 (runReadGraphDatalessDualizeableIO @String)
           >>> applyInput2 (runReadGraphDualizeableIO @String)
-          >>> applyInput2 interpretEditorAsIOVimFSGraph
           >>> runRawGraphAsInput
           >>> contramapInputSem @FilePath (embed . readIORef . view #filePath)
           >>> runWebIO
@@ -163,6 +296,7 @@ runMainEffectsIO errorHandlingBehavior timeBehavior env v = do
           >>> interpretDisplayImageIO
           >>> runEchoReadline
           >>> timeBehavior
+          >>> interpretEditorAsIOVim
           >>> runLocableHistoryState
           >>> runStateInputIORefOf @History #history
           >>> runStateInputIORefOf #randomGen

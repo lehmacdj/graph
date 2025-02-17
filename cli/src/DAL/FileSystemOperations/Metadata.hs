@@ -50,11 +50,11 @@ deleteNodeMetadata_ path = do
   embedCatchingErrors $ coordinateWriting path False defaultWritingOptions $ \path' ->
     removeFile path'
 
-runGraphMetadataFilesystemOperations ::
+runGraphMetadataFilesystemOperationsIO ::
   Members [RawGraph, Embed IO, Error UserError] r =>
   Sem (GraphMetadataFilesystemOperations : r) a ->
   Sem r a
-runGraphMetadataFilesystemOperations = interpret \case
+runGraphMetadataFilesystemOperationsIO = interpret \case
   ReadNodeMetadata nid -> readNodeMetadata_ =<< getMetadataFile nid
   WriteNodeMetadata node -> (`writeNodeMetadata_` node) =<< getMetadataFile node.nid
   DeleteNodeMetadata nid -> deleteNodeMetadata_ =<< getMetadataFile nid

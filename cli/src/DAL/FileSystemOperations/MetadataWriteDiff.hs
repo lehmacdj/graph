@@ -103,10 +103,10 @@ writeGraphDiff_ loaded changes deletedEdges = do
           -- node never existed and still doesn't exist
           pure ()
 
-runGraphMetadataFilesystemOperationsWriteDiff ::
+runGraphMetadataFilesystemOperationsWriteDiffIO ::
   Members [RawGraph, Embed IO, Error UserError] effs =>
   Sem (GraphMetadataFilesystemOperationsWriteDiff ': effs) a ->
   Sem effs a
-runGraphMetadataFilesystemOperationsWriteDiff = interpret \case
+runGraphMetadataFilesystemOperationsWriteDiffIO = interpret \case
   WriteGraphDiff loaded changes deletedEdges ->
     writeGraphDiff_ loaded changes deletedEdges

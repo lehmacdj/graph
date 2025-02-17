@@ -14,11 +14,11 @@ makeSem ''Editor
 
 -- | Makes the assumption that the graph is implemented using the filesystem
 -- structure with nid.json/nid.data for each node
-interpretEditorAsIOVimFSGraph ::
+interpretEditorAsIOVim ::
   (Member (Embed IO) effs) =>
   -- | interprets effect
   Sem (Editor : effs) ~> Sem effs
-interpretEditorAsIOVimFSGraph = interpret $ \case
+interpretEditorAsIOVim = interpret $ \case
   InvokeEditor paths -> do
     editor <- embed $ getEnv "EDITOR"
     editorToUse <- fromMaybe "vim" <$> embed (findExecutable editor)
