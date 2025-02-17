@@ -1,6 +1,11 @@
-module MyPrelude.Function where
+module MyPrelude.Function
+  ( module MyPrelude.Function,
+    module X,
+  )
+where
 
 import ClassyPrelude
+import Control.Arrow as X ((>>>))
 
 -- | natural transformation
 type (~>) f g = forall x. f x -> g x

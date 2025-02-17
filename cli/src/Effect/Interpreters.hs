@@ -2,7 +2,6 @@
 -- make sense to use while using this library.
 module Effect.Interpreters where
 
-import Control.Arrow ((>>>))
 import Control.Lens
 import Effect.IOWrapper.DisplayImage
 import Effect.IOWrapper.Editor
@@ -22,7 +21,6 @@ import Models.NID
 import MyPrelude
 import Polysemy.Embed
 import Polysemy.Input
-import Polysemy.Output
 import Polysemy.Readline
 import Polysemy.State
 import System.Console.Haskeline (InputT)
@@ -58,28 +56,7 @@ initEnv graphDir nidGenerator _replSettings =
     <*> newIORef (IsDual False)
     <*> pure _replSettings
 
-runLocableHistoryState ::
-  Member (State History) effs =>
-  Sem (GetLocation : SetLocation : effs) ~> Sem effs
-runLocableHistoryState = subsumeReaderState (view #now) >>> runSetLocationHistoryState
-
-runSetLocationHistoryState ::
-  Member (State History) r => Sem (SetLocation : r) ~> Sem r
-runSetLocationHistoryState = interpret $ \case
-  Output nid -> modify @History (addToHistory nid)
-
-errorOnNoInput ::
-  Member (Error UserError) r =>
-  String ->
-  Sem (Error NoInputProvided : r) a ->
-  Sem r a
-errorOnNoInput msg v =
-  v `handleError` \NoInputProvided -> throwString msg
-
-printingErrorsAndWarnings ::
-  Member (Embed IO) effs =>
-  Sem (Warn UserError : Error UserError : effs) () ->
-  Sem effs ()
+printingErrorsAndWarnings :: ErrorHandlingBehavior ()
 printingErrorsAndWarnings = printWarnings >>> printErrors
 
 type family Concat (a :: [k]) (b :: [k]) :: [k] where
