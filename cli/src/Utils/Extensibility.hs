@@ -17,7 +17,7 @@ import Graph.Effect
 import MyPrelude
 import System.IO.Temp
 import System.Process.Typed
-import Effect.RawGraph
+import DAL.RawGraph
 
 -- | Provide a convenient interface for writing stack scripts that interface
 -- with the graph that can be run from the graph directory.

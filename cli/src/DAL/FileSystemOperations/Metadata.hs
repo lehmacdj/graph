@@ -5,7 +5,7 @@ module DAL.FileSystemOperations.Metadata where
 import DAL.DTO
 import DAL.JSON
 import DAL.DirectoryFormat
-import Effect.RawGraph
+import DAL.RawGraph
 import Error.Missing
 import Error.UserError
 import Models.NID

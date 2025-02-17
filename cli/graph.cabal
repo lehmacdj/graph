@@ -32,21 +32,21 @@ library
       DAL.FileSystemOperations.MetadataWriteDiff
       DAL.Interpreters
       DAL.JSON
+      DAL.RawGraph
       DAL.Serialization
       Data.Set.Ordered.Orphans
-      Effect.Console
-      Effect.Editor
-      Effect.Filesystem
-      Effect.FileTypeOracle
       Effect.FreshNID
       Effect.Interpreters
+      Effect.IOWrapper.DisplayImage
+      Effect.IOWrapper.Editor
+      Effect.IOWrapper.FileSystem
+      Effect.IOWrapper.FileTypeOracle
+      Effect.IOWrapper.GetTime
+      Effect.IOWrapper.Web
       Effect.NodeLocated
-      Effect.RawGraph
-      Effect.Time
       Effect.Util
       Effect.UtilSpec
       Effect.Warn
-      Effect.Web
       Error.Missing
       Error.UserError
       Executable.DumpGraph
@@ -57,11 +57,11 @@ library
       Executable.Scratch
       Graph.Check
       Graph.Effect
-      Graph.Export.Filesystem
+      Graph.Export.FileSystem
       Graph.GraphDataEditing
       Graph.GraphMetadataEditing
       Graph.Import.ByteString
-      Graph.Import.Filesystem
+      Graph.Import.FileSystem
       Graph.ResolvePath
       Graph.SystemNodes
       Graph.SystemNodes.Init

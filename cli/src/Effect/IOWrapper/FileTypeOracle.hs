@@ -3,7 +3,7 @@
 -- |
 -- Effect for testing the filetype of a data file. Underlyingly uses file(1)
 -- shell command.
-module Effect.FileTypeOracle
+module Effect.IOWrapper.FileTypeOracle
   ( runFileTypeOracle,
     getExtension,
     FileTypeOracle (..),

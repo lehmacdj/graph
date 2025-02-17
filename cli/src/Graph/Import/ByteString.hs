@@ -2,9 +2,9 @@ module Graph.Import.ByteString where
 
 import Data.Digest.Pure.SHA
 import Effect.FreshNID
-import Effect.Time
+import Effect.IOWrapper.GetTime
 import Error.UserError
-import Effect.Web
+import Effect.IOWrapper.Web
 import Graph.Effect
 import Graph.SystemNodes
 import Graph.Time

@@ -1,6 +1,6 @@
 {-# LANGUAGE TemplateHaskell #-}
 
-module Effect.FileSystem where
+module Effect.IOWrapper.FileSystem where
 
 import Error.UserError
 import MyPrelude

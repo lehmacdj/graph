@@ -17,15 +17,15 @@ module Lang.Command where
 import Control.Monad (zipWithM_)
 import qualified DAL.Serialization as S2
 import Effect.Console
-import Effect.Editor
-import Effect.FileSystem
-import Effect.FileTypeOracle
+import Effect.IOWrapper.Editor
+import Effect.IOWrapper.FileSystem
+import Effect.IOWrapper.FileTypeOracle
 import Effect.FreshNID
 import Effect.NodeLocated
-import Effect.Time
+import Effect.IOWrapper.GetTime
 import Error.UserError
 import Effect.Warn
-import Effect.Web
+import Effect.IOWrapper.Web
 import GHC.Generics
 import Graph.Check
 import Graph.Effect
@@ -45,7 +45,7 @@ import Polysemy.Readline
 import Polysemy.State
 import qualified Utils.Extensibility as Extensibility
 import Utils.Singleton
-import Effect.RawGraph
+import DAL.RawGraph
 import Error.Missing
 
 data Command

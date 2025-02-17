@@ -3,7 +3,7 @@
 module DAL.FileSystemOperations.Data where
 
 import DAL.DirectoryFormat
-import Effect.RawGraph
+import DAL.RawGraph
 import Error.Missing
 import Error.UserError
 import Models.NID

@@ -6,7 +6,7 @@ import Control.Lens
 import DAL.Serialization (nodesWithPrefix)
 import Effect.Interpreters
 import Effect.NodeLocated
-import Effect.Time
+import Effect.IOWrapper.GetTime
 import Error.UserError
 import Effect.Warn
 import Graph.Utils

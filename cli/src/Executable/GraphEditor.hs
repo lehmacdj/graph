@@ -6,14 +6,14 @@ import Control.Lens hiding (index)
 import Control.Monad.Fix
 import DAL.Serialization (doesNodeExist, initializeGraph)
 import Effect.Console
-import Effect.Editor
-import Effect.FileSystem
-import Effect.FileTypeOracle
+import Effect.IOWrapper.Editor
+import Effect.IOWrapper.FileSystem
+import Effect.IOWrapper.FileTypeOracle
 import Effect.FreshNID
 import Effect.Interpreters
 import Effect.NodeLocated
-import Effect.Time
-import Effect.Web
+import Effect.IOWrapper.GetTime
+import Effect.IOWrapper.Web
 import Executable.GraphEditor.Completion
 import Executable.GraphEditor.Options
 import Graph.Effect
@@ -29,7 +29,7 @@ import qualified System.Console.Haskeline as H
 import System.Directory (createDirectoryIfMissing, doesDirectoryExist)
 import System.Environment.XDG.BaseDir (getUserDataDir)
 import System.Random (initStdGen, mkStdGen)
-import Effect.RawGraph
+import DAL.RawGraph
 
 ioExceptionHandler :: IOError -> IO (Maybe a)
 ioExceptionHandler _ = pure Nothing

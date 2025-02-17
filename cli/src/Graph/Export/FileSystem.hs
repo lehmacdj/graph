@@ -5,7 +5,7 @@ where
 
 import Data.Tree (Tree)
 import qualified Data.Tree as T
-import Effect.FileTypeOracle
+import Effect.IOWrapper.FileTypeOracle
 import Graph.Effect
 import Effect.Warn
 import qualified DAL.Serialization as S2
@@ -18,7 +18,7 @@ import System.FilePath (makeValid, splitFileName)
 import Error.UserError
 import Models.Connect
 import Models.Node
-import Effect.RawGraph
+import DAL.RawGraph
 
 -- | Like a DFS tree of the graph, but include duplciates unless they would form
 -- a cycle. Term Heterarchy comes from neuron zettelkasten

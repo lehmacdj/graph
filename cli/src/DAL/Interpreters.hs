@@ -1,7 +1,7 @@
 module DAL.Interpreters where
 
 import qualified Control.Exception as E
-import Effect.RawGraph
+import DAL.RawGraph
 import Error.UserError
 import MyPrelude
 import Polysemy.Error

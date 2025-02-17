@@ -1,6 +1,6 @@
 {-# LANGUAGE TemplateHaskell #-}
 
-module Effect.RawGraph where
+module DAL.RawGraph where
 
 import MyPrelude
 import Polysemy.Input

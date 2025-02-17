@@ -1,6 +1,6 @@
 {-# LANGUAGE TemplateHaskell #-}
 
-module Effect.Editor where
+module Effect.IOWrapper.Editor where
 
 import DAL.Serialization
 import Models.NID (NID)

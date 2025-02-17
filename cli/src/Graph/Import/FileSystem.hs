@@ -10,9 +10,9 @@ module Graph.Import.FileSystem where
 
 import Data.Digest.Pure.SHA
 import Effect.Console
-import Effect.FileSystem
+import Effect.IOWrapper.FileSystem
 import Effect.FreshNID
-import Effect.Time
+import Effect.IOWrapper.GetTime
 import Error.UserError
 import Graph.Effect
 import Graph.Import.ByteString

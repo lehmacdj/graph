@@ -1,6 +1,6 @@
 {-# LANGUAGE TemplateHaskell #-}
 
-module Effect.Web where
+module Effect.IOWrapper.Web where
 
 import Error.UserError
 import MyPrelude

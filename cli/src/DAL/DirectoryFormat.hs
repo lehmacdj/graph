@@ -2,7 +2,7 @@ module DAL.DirectoryFormat where
 
 import MyPrelude
 import Models.NID
-import Effect.RawGraph
+import DAL.RawGraph
 
 metadataFile :: FilePath -> NID -> FilePath
 metadataFile base nid = base </> (show nid ++ ".json")

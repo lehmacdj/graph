@@ -4,17 +4,17 @@ module Effect.Interpreters where
 
 import Control.Arrow ((>>>))
 import Control.Lens
-import Effect.Console
-import Effect.Editor
-import Effect.FileSystem
-import Effect.FileTypeOracle
+import Effect.IOWrapper.DisplayImage
+import Effect.IOWrapper.Editor
+import Effect.IOWrapper.FileSystem
+import Effect.IOWrapper.FileTypeOracle
 import Effect.FreshNID
 import Effect.NodeLocated
-import Effect.Time
+import Effect.IOWrapper.GetTime
 import Error.UserError
 import Effect.Util
 import Effect.Warn
-import Effect.Web
+import Effect.IOWrapper.Web
 import Graph.Effect
 import Models.History
 import Models.NID
@@ -28,7 +28,10 @@ import Polysemy.State
 import System.Console.Haskeline (InputT)
 import qualified System.Console.Haskeline as H
 import System.Random
-import Effect.RawGraph
+import DAL.RawGraph
+import DAL.FileSystemOperations.Metadata
+import DAL.FileSystemOperations.MetadataWriteDiff
+import DAL.FileSystemOperations.Data
 
 data Env = Env
   { filePath :: IORef FilePath,
@@ -79,7 +82,7 @@ printingErrorsAndWarnings = printWarnings >>> printErrors
 
 type HasMainEffects effs =
   ( Members
-      [ Console,
+      [ DisplayImage,
         Error UserError,
         SetLocation,
         GetLocation,
@@ -99,6 +102,35 @@ type HasMainEffects effs =
       effs,
     HasGraph String effs
   )
+
+type family Concat (a :: [k]) (b :: [k]) :: [k] where
+  Concat '[] b = b
+  Concat (a ': as) b = a ': Concat as b
+
+type AppEffects :: [Effect]
+type AppEffects =
+  '[
+  ]
+
+type IOWrapperEffects :: [Effect]
+type IOWrapperEffects =
+  [
+    Web,
+    FileSystem,
+    GetTime,
+    GraphMetadataFilesystemOperations,
+    GraphMetadataFilesystemOperationsWriteDiff,
+    GraphDataFilesystemOperations
+  ]
+
+type FinalEffects :: [Effect]
+type FinalEffects =
+  [
+    Input Env,
+    Embed IO,
+    Embed (InputT IO),
+    Final (InputT IO)
+  ]
 
 -- | general function for interpreting the entire stack of effects in terms of real world things
 -- it takes a function that handles the errors, because that is necessary for
@@ -126,7 +158,7 @@ runMainEffectsIO errorHandlingBehavior timeBehavior env v = do
           >>> runWebIO
           >>> runFileSystemIO
           >>> runStateInputIORefOf @IsDual #isDualized
-          >>> interpretConsoleIO
+          >>> interpretDisplayImageIO
           >>> timeBehavior
           >>> runLocableHistoryState
           >>> runStateInputIORefOf @History #history

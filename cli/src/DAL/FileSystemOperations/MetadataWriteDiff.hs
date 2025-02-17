@@ -5,7 +5,7 @@ module DAL.FileSystemOperations.MetadataWriteDiff where
 import DAL.DTO
 import DAL.DirectoryFormat
 import DAL.JSON
-import Effect.RawGraph
+import DAL.RawGraph
 import Error.Missing
 import Error.UserError
 import Models.Edge

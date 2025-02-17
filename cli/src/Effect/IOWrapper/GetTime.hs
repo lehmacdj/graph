@@ -1,6 +1,6 @@
 {-# LANGUAGE TemplateHaskell #-}
 
-module Effect.Time where
+module Effect.IOWrapper.GetTime where
 
 import Data.Time.Clock.POSIX
 import MyPrelude
