@@ -1,6 +1,6 @@
 {-# LANGUAGE AllowAmbiguousTypes #-}
 
-module Effect.Util where
+module Polysemy.Util where
 
 import Control.Lens
 import MyPrelude hiding (Reader, ask, fromEither)

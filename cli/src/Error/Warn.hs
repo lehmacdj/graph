@@ -1,6 +1,6 @@
 {-# LANGUAGE TemplateHaskell #-}
 
-module Effect.Warn where
+module Error.Warn where
 
 import Error.UserError
 import MyPrelude

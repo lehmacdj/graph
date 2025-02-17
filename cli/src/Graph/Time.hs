@@ -1,7 +1,7 @@
 module Graph.Time where
 
 import qualified Data.Set as Set
-import Effect.FreshNID
+import Graph.FreshNID
 import Effect.IOWrapper.GetTime
 import Error.UserError
 import Graph.Effect

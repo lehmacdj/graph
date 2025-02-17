@@ -1,6 +1,6 @@
 -- | Interpreters for running various large stacks of effects that it might
 -- make sense to use while using this library.
-module Effect.Interpreters where
+module Graph.AppInterpreters where
 
 import Control.Lens
 import Effect.IOWrapper.DisplayImage
@@ -8,12 +8,12 @@ import Effect.IOWrapper.Editor
 import Effect.IOWrapper.Echo
 import Effect.IOWrapper.FileSystem
 import Effect.IOWrapper.FileTypeOracle
-import Effect.FreshNID
-import Effect.NodeLocated
+import Graph.FreshNID
+import Graph.NodeLocated
 import Effect.IOWrapper.GetTime
 import Error.UserError
-import Effect.Util
-import Effect.Warn
+import Polysemy.Util
+import Error.Warn
 import Effect.IOWrapper.Web
 import Graph.Effect
 import Models.History

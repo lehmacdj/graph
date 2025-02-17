@@ -1,5 +1,5 @@
-module Effect.NodeLocated
-  ( module Effect.NodeLocated,
+module Graph.NodeLocated
+  ( module Graph.NodeLocated,
     -- | for use in overriding location temporarily
     local,
   )
@@ -11,7 +11,7 @@ import Polysemy.Output
 import Polysemy.Reader
 import Models.History (History, addToHistory)
 import Polysemy.State
-import Effect.Util
+import Polysemy.Util
 
 type GetLocation = Reader NID
 

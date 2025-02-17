@@ -21,11 +21,11 @@ import Effect.IOWrapper.Echo
 import Effect.IOWrapper.Editor
 import Effect.IOWrapper.FileSystem
 import Effect.IOWrapper.FileTypeOracle
-import Effect.FreshNID
-import Effect.NodeLocated
+import Graph.FreshNID
+import Graph.NodeLocated
 import Effect.IOWrapper.GetTime
 import Error.UserError
-import Effect.Warn
+import Error.Warn
 import Effect.IOWrapper.Web
 import GHC.Generics
 import Graph.Check

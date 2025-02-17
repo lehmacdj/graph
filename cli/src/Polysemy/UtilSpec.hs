@@ -1,6 +1,6 @@
-module Effect.UtilSpec where
+module Polysemy.UtilSpec where
 
-import Effect.Util
+import Polysemy.Util
 import Polysemy.Input
 import Polysemy.State
 import TestPrelude

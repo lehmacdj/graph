@@ -10,9 +10,9 @@ import Effect.IOWrapper.DisplayImage
 import Effect.IOWrapper.Editor
 import Effect.IOWrapper.FileSystem
 import Effect.IOWrapper.FileTypeOracle
-import Effect.FreshNID
-import Effect.Interpreters
-import Effect.NodeLocated
+import Graph.FreshNID
+import Graph.AppInterpreters
+import Graph.NodeLocated
 import Effect.IOWrapper.GetTime
 import Effect.IOWrapper.Web
 import Executable.GraphEditor.Completion

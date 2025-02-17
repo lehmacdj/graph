@@ -3,7 +3,7 @@
 -- |
 -- Effect for generating unique identifiers. To be implemented by random
 -- generation of UUIDs or sequencial indicies for example.
-module Effect.FreshNID
+module Graph.FreshNID
   ( runFreshNIDRandom,
     freshNID,
     FreshNID (..),

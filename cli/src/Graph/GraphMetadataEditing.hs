@@ -13,7 +13,7 @@ import Polysemy.State
 import Error.UserError
 import DAL.FileSystemOperations.Metadata
 import DAL.FileSystemOperations.MetadataWriteDiff
-import Effect.Warn
+import Error.Warn
 import Polysemy.Tagged
 
 -- | Marker indicating that something promises to only read the graph metadata.

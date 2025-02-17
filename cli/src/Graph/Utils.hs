@@ -5,8 +5,8 @@ module Graph.Utils where
 
 import Control.Lens
 import Data.Monoid (First (First))
-import Effect.FreshNID
-import Effect.NodeLocated
+import Graph.FreshNID
+import Graph.NodeLocated
 import Error.UserError
 import Graph.Effect
 import Models.Connect

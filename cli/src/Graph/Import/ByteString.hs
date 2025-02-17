@@ -1,7 +1,7 @@
 module Graph.Import.ByteString where
 
 import Data.Digest.Pure.SHA
-import Effect.FreshNID
+import Graph.FreshNID
 import Effect.IOWrapper.GetTime
 import Error.UserError
 import Effect.IOWrapper.Web

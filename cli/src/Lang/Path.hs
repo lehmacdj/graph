@@ -19,7 +19,7 @@ import Data.List (intersectBy)
 import qualified Data.Set as Set
 import Data.Set.Ordered (OSet)
 import qualified Data.Set.Ordered as OSet
-import Effect.FreshNID
+import Graph.FreshNID
 import Error.UserError
 import Graph.Effect
 import Graph.Utils

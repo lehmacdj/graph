@@ -11,7 +11,7 @@ module Graph.Import.FileSystem where
 import Data.Digest.Pure.SHA
 import Effect.IOWrapper.Echo
 import Effect.IOWrapper.FileSystem
-import Effect.FreshNID
+import Graph.FreshNID
 import Effect.IOWrapper.GetTime
 import Error.UserError
 import Graph.Effect

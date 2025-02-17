@@ -7,7 +7,7 @@ import Data.Tree (Tree)
 import qualified Data.Tree as T
 import Effect.IOWrapper.FileTypeOracle
 import Graph.Effect
-import Effect.Warn
+import Error.Warn
 import qualified DAL.Serialization as S2
 import MyPrelude
 import Polysemy.Error
