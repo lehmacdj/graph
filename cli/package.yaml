@@ -27,7 +27,7 @@ dependencies:
 - base64-bytestring
 - bytestring
 - classy-prelude
-- conduit
+- comonad
 - conduit
 - conduit-extra
 - containers
@@ -75,8 +75,10 @@ dependencies:
 - Glob
 # below are test dependencies which are collapsed into main dependencies due to
 # God module structure
+- hspec
 - tasty
 - tasty-hunit
+- tasty-hspec
 - tasty-discover
 - tasty-golden
 - tasty-quickcheck
@@ -138,6 +140,8 @@ library:
       then:
         extra-libraries: [ objc ]
         frameworks: [ Foundation ]
+        # this makes inline-c work in GHCi
+        ghc-options: -fobject-code
       else:
         extra-libraries: []
         frameworks: []
