@@ -66,13 +66,15 @@ nodeConsistentWithGraph _ n = n
 
 -- * Instances
 
-instance (Show t, Ord t) => CompactNodeShow (Graph t a) a where
+instance (ValidNode t a, Show t, ShowableAugmentation a) =>
+  CompactNodeShow (Graph t a) a where
   minimumNidLength settings g =
     fromMaybe maxBound . maximumMay $ minimumNidLength settings <$> nodesOf g
-  compactNodeShow settings g =
+  compactNodeShow settings (checkedGraphInvariant -> g) =
     intercalate "\n" $ compactNodeShow settings <$> nodesOf g
 
-instance (Show t, Ord t) => Show (Graph t a) where
+instance (Show t, ValidNode t a, ShowableAugmentation a) =>
+  Show (Graph t a) where
   show = unpack . compactNodeShowDefault @(Graph t a) @a
 
 type instance Control.Lens.Index (Graph t a) = NID

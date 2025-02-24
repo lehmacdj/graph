@@ -1,4 +1,5 @@
 {-# LANGUAGE UndecidableInstances #-}
+{-# LANGUAGE AllowAmbiguousTypes #-}
 
 module Models.Node
   ( module Models.Node,
@@ -48,7 +49,7 @@ instance Comonad (Node' ti to) where
 -- | A node in the graph. See 'Node'' for more information.
 type Node t a = Node' t t a
 
-instance forall ti to a. (Show ti, Ord ti, Show to, Ord to) => CompactNodeShow (Node' ti to a) a where
+instance forall ti to a. (Show ti, Ord ti, Show to, Ord to, ShowableAugmentation a) => CompactNodeShow (Node' ti to a) a where
   minimumNidLength settings@CompactNodeShowSettings{..} n =
     maximum . ncons (getMinLen n.nid) $ toList $ incomingLens <> outgoingLens
       where
@@ -72,7 +73,7 @@ instance forall ti to a. (Show ti, Ord ti, Show to, Ord to) => CompactNodeShow (
         augmentationRepr = showAugmentation <&> \(name, showAug) ->
           name ++ "=" ++ showAug augmentation
 
-instance {-# OVERLAPPABLE #-} (Show ti, Ord ti, Show to, Ord to) =>
+instance {-# OVERLAPPABLE #-} (Show ti, Ord ti, Show to, Ord to, ShowableAugmentation a) =>
   Show (Node' ti to a) where
     show = unpack . compactNodeShowDefault @(Node' ti to a) @a
 

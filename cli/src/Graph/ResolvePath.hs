@@ -25,6 +25,9 @@ data MaterializedPathInfo t = MaterializedPathInfo
   }
   deriving (Show, Eq, Ord, Generic)
 
+instance Show t => ShowableAugmentation (MaterializedPathInfo t) where
+  defaultShowAugmentation = Just ("materializedPathInfo", tshow)
+
 instance HasField "leftoverPath" (Node' ti to (MaterializedPathInfo t)) (Maybe (Path t)) where
   getField = (.augmentation.leftoverPath)
 

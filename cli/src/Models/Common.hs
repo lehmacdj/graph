@@ -23,20 +23,27 @@ data CompactNodeShowSettings a = CompactNodeShowSettings
     showAugmentation :: Maybe (Text, a -> Text)
   }
 
-defaultCompactNodeShowSettings :: CompactNodeShowSettings a
+class ShowableAugmentation a where
+  defaultShowAugmentation :: Maybe (Text, a -> Text)
+
+instance {-# OVERLAPPABLE #-} ShowableAugmentation a where
+  defaultShowAugmentation = Nothing
+
+defaultCompactNodeShowSettings ::
+  ShowableAugmentation a => CompactNodeShowSettings a
 defaultCompactNodeShowSettings =
   CompactNodeShowSettings
     { nidLength = maxBound,
       showNidAtSign = True,
       showIncoming = False,
-      showAugmentation = Nothing
+      showAugmentation = defaultShowAugmentation
     }
 
 class CompactNodeShow n a where
   minimumNidLength :: CompactNodeShowSettings a -> n -> Int
   compactNodeShow :: CompactNodeShowSettings a -> n -> Text
 
-compactNodeShowDefault :: forall n a. CompactNodeShow n a => n -> Text
+compactNodeShowDefault :: forall n a. (CompactNodeShow n a, ShowableAugmentation a) => n -> Text
 compactNodeShowDefault n =
   let defSettings = defaultCompactNodeShowSettings
       settings = defSettings{nidLength = minimumNidLength @n @a defSettings n}

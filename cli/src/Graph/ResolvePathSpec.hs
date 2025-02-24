@@ -48,7 +48,8 @@ spec_materializePathAsGraph = do
         materializesPath (smallNID 0) p g where
           f n = mempty @(MaterializedPathInfo Text) &
             #isTarget .~ (m ^. at n.nid . non False)
-          g = additiveFilterGraph (\n -> has (ix n.nid) m) testGraph & mapGraph f
+          g = traceShowId . mapGraph f $
+            additiveFilterGraph (\n -> has (ix n.nid) m) testGraph
   One `materializesTo` [(0, True)]
   Zero `materializesTo` [(0, False)]
   Literal "zero-to-one" `materializesTo` [(0, False), (1, True)]
