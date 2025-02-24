@@ -36,28 +36,28 @@ test_path =
       testCase "pathIntersectSum" pathIntersectSum
     ]
   where
-    resolvePath' = primed . resolvePath
+    resolvePath = unprimed . resolvePath'
     pathLit =
       OSet.fromList
         [ DPath (smallNID 0) [fromVia 0 "a", fromVia 1 "b"] (smallNID 0) [],
           DPath (smallNID 0) [fromVia 0 "a", fromVia 1 "b"] (smallNID 2) []
         ]
-        @=? resolvePath' (Literal "a" :/ Literal "b") (smallNID 0) testGraph
+        @=? resolvePath (Literal "a" :/ Literal "b") (smallNID 0) testGraph
     pathLitNondet =
       OSet.fromList [DPath (smallNID 0) [fromVia 0 "a", fromVia 1 "c"] (smallNID 2) []]
-        @=? resolvePath' (Literal "a" :/ Literal "c") (smallNID 0) testGraph
+        @=? resolvePath (Literal "a" :/ Literal "c") (smallNID 0) testGraph
     pathSum =
       OSet.fromList
         [ DPath (smallNID 0) [fromVia 0 "d"] (smallNID 2) [],
           DPath (smallNID 0) [fromVia 0 "a"] (smallNID 1) []
         ]
-        @=? resolvePath' (Literal "d" :+ Literal "a") (smallNID 0) testGraph
+        @=? resolvePath (Literal "d" :+ Literal "a") (smallNID 0) testGraph
     pathIntersectSum =
       OSet.fromList
         [ DPath (smallNID 0) [fromVia 0 "e"] (smallNID 0) [],
           DPath (smallNID 0) [fromVia 0 "e"] (smallNID 1) []
         ]
-        @=? resolvePath'
+        @=? resolvePath
           (Literal "e" :& (Literal "f" :+ Literal "a"))
           (smallNID 0)
           testGraph

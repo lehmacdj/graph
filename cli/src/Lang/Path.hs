@@ -267,13 +267,13 @@ listifyNewPath = \case
 --
 -- In a graph with 0 -a> 1 the same path a/b + c resolves at 0 to
 -- [(a, 1, b), (#, 0, c)]
-resolvePath ::
+resolvePath' ::
   ValidNode t a =>
   Path t ->
   Node t a ->
   Graph t a ->
   OSet (DPath t)
-resolvePath p n g =
+resolvePath' p n g =
   nodeConsistentWithGraph g n
     `seq` fromMaybe
       (error "node is from graph")

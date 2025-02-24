@@ -17,7 +17,11 @@ data MaterializedPathInfo t = MaterializedPathInfo
     -- | Whether this node is a target of the path. We may need to extend this
     -- to include the exact path(s) taken to support more advanced stuff in the
     -- future but I think this is good enough for our purposes for now
-    isTarget :: Bool
+    isTarget :: Bool,
+    -- | Whether this node is thin. Thin nodes are nodes that were not fetched
+    -- from the underlying graph but rather were created due to an edge leading
+    -- to them existing
+    isThin :: Bool
   }
   deriving (Show, Eq, Ord, Generic)
 
@@ -30,12 +34,18 @@ instance HasField "jumps" (Node' ti to (MaterializedPathInfo t)) (Set NID) where
 instance HasField "isTarget" (Node' ti to (MaterializedPathInfo t)) Bool where
   getField = (.augmentation.isTarget)
 
+instance HasField "isThin" (Node' ti to (MaterializedPathInfo t)) Bool where
+  getField = (.augmentation.isThin)
+
 instance Semigroup (MaterializedPathInfo t) where
-  MaterializedPathInfo p1 j1 t1 <> MaterializedPathInfo p2 j2 t2 =
-    MaterializedPathInfo (liftA2 (:+) p1 p2) (j1 <> j2) (t1 || t2)
+  MaterializedPathInfo p1 j1 ta1 th1  <> MaterializedPathInfo p2 j2 ta2 th2 =
+    MaterializedPathInfo (liftA2 (:+) p1 p2) (j1 <> j2) (ta1 || ta2) (th1 || th2)
+
+instance DefaultAugmentation (MaterializedPathInfo t) where
+  defaultAugmentation = MaterializedPathInfo Nothing mempty False True
 
 instance Monoid (MaterializedPathInfo t) where
-  mempty = MaterializedPathInfo Nothing mempty False
+  mempty = defaultAugmentation
 
 leftoverPath ::
   Lens

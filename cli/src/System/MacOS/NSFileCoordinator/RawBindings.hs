@@ -1,5 +1,4 @@
 {-# LANGUAGE CPP #-}
-
 #ifdef darwin_HOST_OS
 {-# LANGUAGE TemplateHaskell #-}
 #endif

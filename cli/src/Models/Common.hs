@@ -1,5 +1,11 @@
+{-# LANGUAGE CPP #-}
+
 module Models.Common where
 
 import MyPrelude
 
-type ValidTransition t = (Show t, Eq t, Ord t)
+#ifdef DEBUG
+type ValidTransition t = (Eq t, Ord t, Show t, HasCallStack)
+#else
+type ValidTransition t = (Eq t, Ord t)
+#endif

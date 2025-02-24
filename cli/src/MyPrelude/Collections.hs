@@ -9,7 +9,7 @@ import Control.Lens hiding (op)
 import qualified Data.Set as Set
 import GHC.Stack (HasCallStack)
 import Data.List.NonEmpty as X (NonEmpty (..))
-import Data.List as X (iterate)
+import Data.List as X (iterate, tails)
 import Control.Lens.Extras as X (is)
 import Data.Set.Lens as X (setmapped)
 
@@ -128,3 +128,9 @@ chunksOf n xs
   | otherwise =
     let (chunk, rest) = splitAt n xs
      in chunk : chunksOf n rest
+
+allPairs :: [a] -> [(a, a)]
+allPairs xs = [(x, y) | (x : ys) <- tails xs, y <- ys]
+
+allAnyOrderPairs :: [a] -> [(a, a)]
+allAnyOrderPairs xs = allPairs xs ++ map swap (allPairs xs)

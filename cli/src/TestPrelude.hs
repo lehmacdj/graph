@@ -5,9 +5,13 @@ module TestPrelude
     withEmptyTempGraph,
     representedByJson,
     runTests,
+    runSpec,
     connect,
     edge,
     edge',
+    node,
+    disconnectedGraph,
+    stronglyConnectedGraph,
   )
 where
 
@@ -16,7 +20,7 @@ import Data.Aeson
 import Models.Connect
 import Models.Edge
 import Models.NID
-import MyPrelude hiding (assert)
+import MyPrelude hiding (assert, describe)
 import System.Directory (copyFile)
 import System.Directory.Tree (AnchoredDirTree ((:/)))
 import qualified System.Directory.Tree as DT
@@ -24,6 +28,10 @@ import Test.Hspec.Expectations as X
 import Test.Tasty as X
 import Test.Tasty.HUnit as X
 import Test.Tasty.QuickCheck as X
+import Test.Hspec as X (Spec, describe, it)
+import Test.Tasty.Hspec (testSpec)
+import Models.Node (emptyNode, Node)
+import Models.Graph (emptyGraph, Graph, insertNodes, insertEdges)
 
 -- | initializes a graph that is either empty, or based on a template graph
 -- at the specified location
@@ -64,11 +72,24 @@ representedByJson x j =
 runTests :: TestTree -> IO ()
 runTests = defaultMain
 
-connect :: Int -> Int -> Connect NID
-connect t n = Connect (smallNID t) (smallNID n)
+runSpec :: Spec -> IO ()
+runSpec s = defaultMain =<< testSpec "<interactive>" s
 
-edge :: Int -> Int -> Int -> Edge NID
-edge i t o = Edge (smallNID i) (smallNID t) (smallNID o)
+connect :: Int -> Connect ()
+connect n = Connect () (smallNID n)
+
+edge :: Int -> Int -> Edge ()
+edge i o = Edge (smallNID i) () (smallNID o)
 
 edge' :: Int -> a -> Int -> Edge a
 edge' i t o = Edge (smallNID i) t (smallNID o)
+
+node :: ValidTransition t => Int -> Node t ()
+node i = emptyNode (smallNID i)
+
+disconnectedGraph :: [Int] -> Graph () ()
+disconnectedGraph nids = insertNodes (node <$> nids) emptyGraph
+
+stronglyConnectedGraph :: [Int] -> Graph () ()
+stronglyConnectedGraph nids =
+  disconnectedGraph nids & insertEdges (uncurry edge <$> allAnyOrderPairs nids)

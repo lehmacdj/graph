@@ -16,9 +16,18 @@ import MyPrelude
 import GHC.Records
 import Models.Edge
 
-type ValidNode t a = (Show t, Eq t, Ord t, Eq a)
+type ValidNode t a = (ValidTransition t, Eq a)
 
 type ValidNode' ti to a = (ValidTransition ti, ValidTransition to, Eq a)
+
+class DefaultAugmentation a where
+  defaultAugmentation :: a
+
+instance DefaultAugmentation (Maybe a) where
+  defaultAugmentation = Nothing
+
+instance DefaultAugmentation () where
+  defaultAugmentation = ()
 
 -- | A node in a graph. To allow separately mapping over the incoming and
 -- outgoing edges in a type changing way, we have two type parameters.
@@ -31,6 +40,10 @@ data Node' ti to a = Node
     augmentation :: a
   }
   deriving (Eq, Ord, Generic, NFData, Functor)
+
+instance Comonad (Node' ti to) where
+  extract = (.augmentation)
+  duplicate n = n {augmentation = n}
 
 -- | A node in the graph. See 'Node'' for more information.
 type Node t a = Node' t t a
@@ -57,13 +70,19 @@ outdegree = #outgoing . to Set.size
 
 -- | Warning! It is up to the user of the graph to ensure that node ids are
 -- unique within the graph
-emptyNode :: Ord t => NID -> Node t ()
-emptyNode i = Node i mempty mempty ()
+emptyNode :: (Ord t, DefaultAugmentation a) => NID -> Node t a
+emptyNode i = Node i mempty mempty defaultAugmentation
 
 -- | Warning! It is up to the user of the graph to ensure that node ids are
 -- unique within the graph
-emptyNode' :: Ord t => NID -> Node t (Maybe ByteString)
-emptyNode' i = emptyNode i $> Nothing
+emptyNode' :: Ord t => NID -> Node t (Maybe a)
+emptyNode' = emptyNode
+
+inStubNode :: (Ord t, DefaultAugmentation a) => Edge t -> Node t a
+inStubNode e = Node e.sink (singleton $ inConnect e) mempty defaultAugmentation
+
+outStubNode :: (Ord t, DefaultAugmentation a) => Edge t -> Node t a
+outStubNode e = Node e.source mempty (singleton $ outConnect e) defaultAugmentation
 
 dualizeNode :: Node t a -> Node t a
 dualizeNode (Node nid i o x) = Node nid o i x
@@ -90,3 +109,8 @@ withoutEdges :: ValidTransition t => Set (Edge t) -> Node t a -> Node t a
 withoutEdges deletedEdges n = n
   & #incoming %~ (\\ mapSet inConnect deletedEdges)
   & #outgoing %~ (\\ mapSet outConnect deletedEdges)
+
+withEdge :: ValidTransition t => Edge t -> Node t a -> Node t a
+withEdge e n = n
+  & #incoming %~ maybe id insertSet (justIfTrue (e.sink == n.nid) (inConnect e))
+  & #outgoing %~ maybe id insertSet (justIfTrue (e.source == n.nid) (outConnect e))

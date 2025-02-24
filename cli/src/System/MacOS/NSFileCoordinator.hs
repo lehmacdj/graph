@@ -346,7 +346,7 @@ coordinateAccessing FilesToCoordinate{..} action =
     readIORef resultRef >>= maybe (throwIO NullResultException) pure
 #else
 coordinateAccessing FilesToCoordinate{..} action =
-  let readingAccessors = readingPaths <&> \(path, _) _ readingAction -> readingAction path
-      writingAccessors = writingPaths <&> \(path, _) _ writingAction -> writingAction path
+  let readingAccessors = readingPaths <&> \(path, _) -> WrappedReader \_ readingAction -> readingAction path
+      writingAccessors = writingPaths <&> \(path, _) -> WrappedWriter \_ writingAction -> writingAction path
    in action readingAccessors writingAccessors
 #endif

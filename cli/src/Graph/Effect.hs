@@ -201,10 +201,10 @@ runWriteGraphState ::
   Sem (WriteGraph t ': effs) ~> Sem effs
 runWriteGraphState = interpret $ \case
   TouchNode nid -> modify (G.insertNode (emptyNode' nid) :: Graph t (Maybe ByteString) -> Graph t (Maybe ByteString))
-  DeleteNode nid -> modify (G.delNode' nid :: Graph t (Maybe ByteString) -> Graph t (Maybe ByteString))
+  DeleteNode nid -> modify (G.delNode nid :: Graph t (Maybe ByteString) -> Graph t (Maybe ByteString))
   InsertEdge e -> modify (G.insertEdge e)
   DeleteEdge e -> modify (G.deleteEdge e)
-  SetData nid d -> modify (G.setData' d nid :: Graph t (Maybe ByteString) -> Graph t (Maybe ByteString))
+  SetData nid d -> modify (G.setData d nid :: Graph t (Maybe ByteString) -> Graph t (Maybe ByteString))
 
 -- | Run a graph computation in the io monad, using a directory in the
 -- serialization format to access the graph

@@ -18,8 +18,8 @@ test_addToHistory =
       ath 0 (history [1, 0] 2 [3]) (history [2, 1, 0] 0 [])
     ]
   where
-    ath node h expected =
-      testCase name $ addToHistory (smallNID node) h @?= expected
+    ath n h expected =
+      testCase name $ addToHistory (smallNID n) h @?= expected
       where
         name = show h
 

@@ -22,4 +22,5 @@ import MyPrelude.JSON as X
 import MyPrelude.Function as X
 import MyPrelude.Effect as X
 import MyPrelude.MonadApplicative as X
+import Control.Comonad as X
 import Data.Kind as X (Type)
