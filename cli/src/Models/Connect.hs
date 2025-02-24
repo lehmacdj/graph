@@ -20,8 +20,13 @@ data Connect t = Connect
   }
   deriving (Eq, Ord, Generic, NFData)
 
+instance Show t => CompactNodeShow (Connect t) a where
+  minimumNidLength settings c = minimumNidLength settings c.node
+  compactNodeShow nidLength (Connect t nid) =
+    compactNodeShow nidLength nid ++ " via " ++ tshow t
+
 instance Show t => Show (Connect t) where
-  show (Connect t nid) = show nid ++ " via " ++ show t
+  show = unpack . compactNodeShowDefault
 
 instance (FromJSON t, ValidTransition t) => FromJSON (Connect t)
 

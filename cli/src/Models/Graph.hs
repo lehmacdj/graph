@@ -66,10 +66,14 @@ nodeConsistentWithGraph _ n = n
 
 -- * Instances
 
+instance (Show t, Ord t) => CompactNodeShow (Graph t a) a where
+  minimumNidLength settings g =
+    fromMaybe maxBound . maximumMay $ minimumNidLength settings <$> nodesOf g
+  compactNodeShow settings g =
+    intercalate "\n" $ compactNodeShow settings <$> nodesOf g
+
 instance (Show t, Ord t) => Show (Graph t a) where
-  show = unlines' . map show . toList . (.nodeMap)
-    where
-      unlines' = intercalate "\n"
+  show = unpack . compactNodeShowDefault @(Graph t a) @a
 
 type instance Control.Lens.Index (Graph t a) = NID
 type instance Control.Lens.IxValue (Graph t a) = (Node t a)
@@ -160,7 +164,7 @@ subtractiveFilterMapGraph ::
   Graph t a ->
   Graph t b
 subtractiveFilterMapGraph f =
-  map (unwrapEx "all just by subtractive filter")
+  map (unwrapEx "all just by filter")
   . subtractiveFilterGraph (isJust . (.augmentation))
   . mapGraph f
 

@@ -101,6 +101,7 @@ default-extensions:
 - DuplicateRecordFields
 - FlexibleContexts
 - FlexibleInstances
+- FunctionalDependencies
 - GADTs
 - GeneralizedNewtypeDeriving
 - LambdaCase

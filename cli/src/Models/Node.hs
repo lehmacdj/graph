@@ -48,14 +48,33 @@ instance Comonad (Node' ti to) where
 -- | A node in the graph. See 'Node'' for more information.
 type Node t a = Node' t t a
 
-instance (Show ti, Ord ti, Show to, Ord to) => Show (Node' ti to a) where
-  show Node {..} =
-    show nid ++ "{"
-      ++ "in="
-      ++ show (toList incoming)
-      ++ ", out="
-      ++ show (toList outgoing)
-      ++ "}"
+instance forall ti to a. (Show ti, Ord ti, Show to, Ord to) => CompactNodeShow (Node' ti to a) a where
+  minimumNidLength settings@CompactNodeShowSettings{..} n =
+    maximum . ncons (getMinLen n.nid) $ toList $ incomingLens <> outgoingLens
+      where
+        getMinLen :: forall x. CompactNodeShow x a => x -> Int
+        getMinLen = minimumNidLength @x @a settings
+        incomingLens
+          | showIncoming = mapSet getMinLen n.incoming
+          | otherwise = mempty
+        outgoingLens = mapSet getMinLen n.outgoing
+  compactNodeShow settings@CompactNodeShowSettings{..} Node{..} =
+    compactNodeShow settings nid ++ "{" ++ intercalate ", " reprParts ++ "}"
+      where
+        reprParts = catMaybes [outgoingRepr, incomingRepr, augmentationRepr]
+        incomingRepr :: Maybe Text
+        incomingRepr = justIfTrue showIncoming $
+          "in=[" ++ intercalate ", " (compactNodeShow settings <$> toList incoming) ++ "]"
+        outgoingRepr :: Maybe Text
+        outgoingRepr = Just $
+          "out=[" ++ intercalate ", " (compactNodeShow settings <$> toList outgoing) ++ "]"
+        augmentationRepr :: Maybe Text
+        augmentationRepr = showAugmentation <&> \(name, showAug) ->
+          name ++ "=" ++ showAug augmentation
+
+instance {-# OVERLAPPABLE #-} (Show ti, Ord ti, Show to, Ord to) =>
+  Show (Node' ti to a) where
+    show = unpack . compactNodeShowDefault @(Node' ti to a) @a
 
 -- | We implement special @HasField@ instances for specific types of
 -- augmentation so that we can refer to them in a more intuitive way.

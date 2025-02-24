@@ -133,6 +133,7 @@ library
       DuplicateRecordFields
       FlexibleContexts
       FlexibleInstances
+      FunctionalDependencies
       GADTs
       GeneralizedNewtypeDeriving
       LambdaCase
@@ -253,6 +254,7 @@ executable dump-graph
       DuplicateRecordFields
       FlexibleContexts
       FlexibleInstances
+      FunctionalDependencies
       GADTs
       GeneralizedNewtypeDeriving
       LambdaCase
@@ -367,6 +369,7 @@ executable ge
       DuplicateRecordFields
       FlexibleContexts
       FlexibleInstances
+      FunctionalDependencies
       GADTs
       GeneralizedNewtypeDeriving
       LambdaCase
@@ -481,6 +484,7 @@ executable scratch
       DuplicateRecordFields
       FlexibleContexts
       FlexibleInstances
+      FunctionalDependencies
       GADTs
       GeneralizedNewtypeDeriving
       LambdaCase
@@ -596,6 +600,7 @@ test-suite graph-test
       DuplicateRecordFields
       FlexibleContexts
       FlexibleInstances
+      FunctionalDependencies
       GADTs
       GeneralizedNewtypeDeriving
       LambdaCase
