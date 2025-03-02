@@ -104,16 +104,18 @@ default-extensions:
 - FunctionalDependencies
 - GADTs
 - GeneralizedNewtypeDeriving
+- ImportQualifiedPost
 - LambdaCase
 - MultiParamTypeClasses
 - NamedFieldPuns
 - NoFieldSelectors
 - NoImplicitPrelude
 - OverloadedLabels
-- OverloadedStrings
 - OverloadedRecordDot
+- OverloadedStrings
 - PatternSynonyms
 - PolyKinds
+- QuantifiedConstraints
 - QuasiQuotes
 - RankNTypes
 - RecordWildCards
@@ -121,6 +123,7 @@ default-extensions:
 - StandaloneDeriving
 - StandaloneKindSignatures
 - StrictData
+- TemplateHaskellQuotes
 - TupleSections
 - TypeApplications
 - TypeFamilies

@@ -136,16 +136,18 @@ library
       FunctionalDependencies
       GADTs
       GeneralizedNewtypeDeriving
+      ImportQualifiedPost
       LambdaCase
       MultiParamTypeClasses
       NamedFieldPuns
       NoFieldSelectors
       NoImplicitPrelude
       OverloadedLabels
-      OverloadedStrings
       OverloadedRecordDot
+      OverloadedStrings
       PatternSynonyms
       PolyKinds
+      QuantifiedConstraints
       QuasiQuotes
       RankNTypes
       RecordWildCards
@@ -153,6 +155,7 @@ library
       StandaloneDeriving
       StandaloneKindSignatures
       StrictData
+      TemplateHaskellQuotes
       TupleSections
       TypeApplications
       TypeFamilies
@@ -257,16 +260,18 @@ executable dump-graph
       FunctionalDependencies
       GADTs
       GeneralizedNewtypeDeriving
+      ImportQualifiedPost
       LambdaCase
       MultiParamTypeClasses
       NamedFieldPuns
       NoFieldSelectors
       NoImplicitPrelude
       OverloadedLabels
-      OverloadedStrings
       OverloadedRecordDot
+      OverloadedStrings
       PatternSynonyms
       PolyKinds
+      QuantifiedConstraints
       QuasiQuotes
       RankNTypes
       RecordWildCards
@@ -274,6 +279,7 @@ executable dump-graph
       StandaloneDeriving
       StandaloneKindSignatures
       StrictData
+      TemplateHaskellQuotes
       TupleSections
       TypeApplications
       TypeFamilies
@@ -372,16 +378,18 @@ executable ge
       FunctionalDependencies
       GADTs
       GeneralizedNewtypeDeriving
+      ImportQualifiedPost
       LambdaCase
       MultiParamTypeClasses
       NamedFieldPuns
       NoFieldSelectors
       NoImplicitPrelude
       OverloadedLabels
-      OverloadedStrings
       OverloadedRecordDot
+      OverloadedStrings
       PatternSynonyms
       PolyKinds
+      QuantifiedConstraints
       QuasiQuotes
       RankNTypes
       RecordWildCards
@@ -389,6 +397,7 @@ executable ge
       StandaloneDeriving
       StandaloneKindSignatures
       StrictData
+      TemplateHaskellQuotes
       TupleSections
       TypeApplications
       TypeFamilies
@@ -487,16 +496,18 @@ executable scratch
       FunctionalDependencies
       GADTs
       GeneralizedNewtypeDeriving
+      ImportQualifiedPost
       LambdaCase
       MultiParamTypeClasses
       NamedFieldPuns
       NoFieldSelectors
       NoImplicitPrelude
       OverloadedLabels
-      OverloadedStrings
       OverloadedRecordDot
+      OverloadedStrings
       PatternSynonyms
       PolyKinds
+      QuantifiedConstraints
       QuasiQuotes
       RankNTypes
       RecordWildCards
@@ -504,6 +515,7 @@ executable scratch
       StandaloneDeriving
       StandaloneKindSignatures
       StrictData
+      TemplateHaskellQuotes
       TupleSections
       TypeApplications
       TypeFamilies
@@ -603,16 +615,18 @@ test-suite graph-test
       FunctionalDependencies
       GADTs
       GeneralizedNewtypeDeriving
+      ImportQualifiedPost
       LambdaCase
       MultiParamTypeClasses
       NamedFieldPuns
       NoFieldSelectors
       NoImplicitPrelude
       OverloadedLabels
-      OverloadedStrings
       OverloadedRecordDot
+      OverloadedStrings
       PatternSynonyms
       PolyKinds
+      QuantifiedConstraints
       QuasiQuotes
       RankNTypes
       RecordWildCards
@@ -620,6 +634,7 @@ test-suite graph-test
       StandaloneDeriving
       StandaloneKindSignatures
       StrictData
+      TemplateHaskellQuotes
       TupleSections
       TypeApplications
       TypeFamilies
