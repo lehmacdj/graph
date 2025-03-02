@@ -2,18 +2,18 @@
 
 module Graph.GraphMetadataEditing where
 
+import DAL.FileSystemOperations.Metadata
+import DAL.FileSystemOperations.MetadataWriteDiff
+import Error.UserError
+import Error.Warn
 import Models.Edge
+import Models.Graph (Graph)
+import qualified Models.Graph
 import Models.NID
 import Models.Node
 import MyPrelude
 import Polysemy.Scoped
-import qualified Models.Graph
-import Models.Graph (Graph)
 import Polysemy.State
-import Error.UserError
-import DAL.FileSystemOperations.Metadata
-import DAL.FileSystemOperations.MetadataWriteDiff
-import Error.Warn
 import Polysemy.Tagged
 
 -- | Marker indicating that something promises to only read the graph metadata.
@@ -44,7 +44,8 @@ makeSem ''GraphMetadataEditing
 cachingReadingInMemory ::
   forall t a r.
   (Member (GraphMetadataReading t) r, HasCallStack) =>
-  Sem (GraphMetadataReading t : r) a -> Sem r a
+  Sem (GraphMetadataReading t : r) a ->
+  Sem r a
 cachingReadingInMemory = do
   let interpreter = interpret \case
         GetNodeMetadata nid -> withEarlyReturn do
@@ -85,39 +86,34 @@ runGraphMetadataEditing ::
   Sem r a
 runGraphMetadataEditing = interpret \case
   GetNodeMetadata nid -> readNodeMetadata nid
-
   TouchNode nid -> withEarlyReturn do
     n <- readNodeMetadata nid
     whenJust n $ returnEarly ()
     writeNodeMetadata $ emptyNode nid
-
   DeleteNode nid -> withEarlyReturn do
     n <- readNodeMetadata nid
     whenNothing n $ returnEarly ()
     deleteNodeMetadata nid
-
   InsertEdge edge -> withEarlyReturn do
-    source <- readNodeMetadata edge.source
-    let outConnectExists = source <&> \s -> outConnect edge `member` s.outgoing
-    sink <- readNodeMetadata edge.sink
-    let inConnectExists = sink <&> \s -> inConnect edge `member` s.incoming
+    source <- readNodeMetadata edge . source
+    let outConnectExists = source <&> \s -> outConnect edge `member` s . outgoing
+    sink <- readNodeMetadata edge . sink
+    let inConnectExists = sink <&> \s -> inConnect edge `member` s . incoming
     when (outConnectExists == Just True && inConnectExists == Just True) do
       returnEarly ()
     when (outConnectExists == Just True) do
       warnText $ "inconsistent edge: " ++ tshow edge ++ ", sink: " ++ tshow sink
     when (inConnectExists == Just True) do
       warnText $ "inconsistent edge: " ++ tshow edge ++ ", source: " ++ tshow source
-    let source' = fromMaybe (emptyNode edge.source) source
-    let sink' = fromMaybe (emptyNode edge.sink) sink
+    let source' = fromMaybe (emptyNode edge . source) source
+    let sink' = fromMaybe (emptyNode edge . sink) sink
     writeNodeMetadata (source' & #outgoing %~ insertSet (outConnect edge))
     writeNodeMetadata (sink' & #incoming %~ insertSet (inConnect edge))
-
-
   DeleteEdge edge -> withEarlyReturn do
-    source <- readNodeMetadata edge.source
-    let outConnectExists = source <&> \s -> outConnect edge `member` s.outgoing
-    sink <- readNodeMetadata edge.sink
-    let inConnectExists = sink <&> \s -> inConnect edge `member` s.incoming
+    source <- readNodeMetadata edge . source
+    let outConnectExists = source <&> \s -> outConnect edge `member` s . outgoing
+    sink <- readNodeMetadata edge . sink
+    let inConnectExists = sink <&> \s -> inConnect edge `member` s . incoming
     when (outConnectExists /= Just False && inConnectExists == outConnectExists) do
       -- either both nodes exist or neither node contains the edge
       returnEarly ()
@@ -162,12 +158,14 @@ runGraphMetadataEditingTransactionally action = do
   -- is called @runUnitOfWork@
   let runUnitOfWork ::
         forall q b.
-        Members [ Tagged Cache (GraphMetadataEditing Text)
-                , Tagged Underlying GraphMetadataFilesystemOperations
-                , Tagged AsLoaded (State (Map NID (Maybe (Node Text ()))))
-                , Tagged Changes (State (Graph Text ()))
-                , Tagged DeletedEdges (State (Set (Edge Text)))
-                ] q =>
+        Members
+          [ Tagged Cache (GraphMetadataEditing Text),
+            Tagged Underlying GraphMetadataFilesystemOperations,
+            Tagged AsLoaded (State (Map NID (Maybe (Node Text ())))),
+            Tagged Changes (State (Graph Text ())),
+            Tagged DeletedEdges (State (Set (Edge Text)))
+          ]
+          q =>
         Sem (GraphMetadataEditing Text : q) b ->
         Sem q b
       runUnitOfWork = interpret @(GraphMetadataEditing Text) \case
@@ -184,8 +182,9 @@ runGraphMetadataEditingTransactionally action = do
           deletedEdges <- tag @DeletedEdges $ get
           -- we might already have a node in the cache even if we did not load
           -- because we create nodes for any changes we make
-          let reconciledNode = liftA2 mergeNodesEx underlyingNode changesNode
-                & _Just %~ withoutEdges deletedEdges
+          let reconciledNode =
+                liftA2 mergeNodesEx underlyingNode changesNode
+                  & _Just %~ withoutEdges deletedEdges
           tag @Changes $ modify $ at nid .~ reconciledNode
           pure reconciledNode
         TouchNode nid -> tag @Cache $ touchNode nid
@@ -196,9 +195,10 @@ runGraphMetadataEditingTransactionally action = do
           -- deferring the read would just make our lives harder so we do it now
           maybeLoadedNode <- runUnitOfWork (getNodeMetadata nid)
           loadedNode <- unwrapReturningDefault () maybeLoadedNode
-          tag @DeletedEdges $ modify $
-            union (mapSet (nid `outgoingEdge`) loadedNode.outgoing)
-              . union (mapSet (`incomingEdge` nid) loadedNode.incoming)
+          tag @DeletedEdges $
+            modify $
+              union (mapSet (nid `outgoingEdge`) loadedNode . outgoing)
+                . union (mapSet (`incomingEdge` nid) loadedNode . incoming)
         InsertEdge edge -> do
           tag @Cache $ insertEdge edge
           tag @DeletedEdges $ modify $ deleteSet edge
@@ -215,9 +215,9 @@ runGraphMetadataEditingTransactionally action = do
     -- state that we use to save up the "unit of work" that we will write back
     -- to the disk at once later
     & raiseUnder3
-        @(Tagged Changes (State (Graph Text ())))
-        @(Tagged AsLoaded (State (Map NID (Maybe (Node Text ())))))
-        @(Tagged DeletedEdges (State (Set (Edge Text))))
+      @(Tagged Changes (State (Graph Text ())))
+      @(Tagged AsLoaded (State (Map NID (Maybe (Node Text ())))))
+      @(Tagged DeletedEdges (State (Set (Edge Text))))
     -- this just exists so that we can avoid duplicating the implementation of
     -- runInMemoryGraphMetadataEditing
     & raiseUnder @(Tagged Cache (GraphMetadataEditing Text))

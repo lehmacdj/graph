@@ -1,15 +1,15 @@
 module Graph.Time where
 
 import qualified Data.Set as Set
-import Graph.FreshNID
 import Effect.IOWrapper.GetTime
+import Error.Missing
 import Error.UserError
 import Graph.Effect
+import Graph.FreshNID
 import Graph.SystemNodes
 import Graph.Utils
 import MyPrelude
 import Polysemy.State
-import Error.Missing
 
 timeToDateStrings :: UTCTime -> NonNull [String]
 timeToDateStrings time =

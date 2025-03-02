@@ -3,16 +3,16 @@
 module DAL.FileSystemOperations.Metadata where
 
 import DAL.DTO
-import DAL.JSON
 import DAL.DirectoryFormat
+import DAL.JSON
 import DAL.RawGraph
 import Error.Missing
 import Error.UserError
 import Models.NID
 import Models.Node
 import MyPrelude
-import System.MacOS.NSFileCoordinator
 import System.Directory (removeFile)
+import System.MacOS.NSFileCoordinator
 
 data GraphMetadataFilesystemOperations m a where
   ReadNodeMetadata :: NID -> GraphMetadataFilesystemOperations m (Maybe (Node Text ()))
@@ -23,10 +23,12 @@ makeSem ''GraphMetadataFilesystemOperations
 
 readNodeMetadata_ ::
   Members [Embed IO, Error UserError] effs =>
-  FilePath -> Sem effs (Maybe (Node Text ()))
+  FilePath ->
+  Sem effs (Maybe (Node Text ()))
 readNodeMetadata_ path = withEarlyReturn do
-  result <- embedCatchingErrors $ coordinateReading path False defaultReadingOptions $ \path' ->
-    try @IO @IOError $ readFile path'
+  result <- embedCatchingErrors $
+    coordinateReading path False defaultReadingOptions $ \path' ->
+      try @IO @IOError $ readFile path'
   serialized <- either (const $ returnEarly Nothing) pure result
   dto <- decodeJSON serialized
   pure $ Just (nodeFromDTO dto)
@@ -36,19 +38,21 @@ writeNodeMetadata_ ::
   FilePath ->
   Node Text () ->
   Sem effs ()
-writeNodeMetadata_ path node  = do
+writeNodeMetadata_ path node = do
   let dto = nodeToDTO node
   let serialized = toStrict $ encodeJSON dto
-  embedCatchingErrors $ coordinateWriting path False defaultWritingOptions $ \path' ->
-    writeFile path' serialized
+  embedCatchingErrors $
+    coordinateWriting path False defaultWritingOptions $ \path' ->
+      writeFile path' serialized
 
 deleteNodeMetadata_ ::
   Members [RawGraph, Embed IO, Error UserError] effs =>
   FilePath ->
   Sem effs ()
 deleteNodeMetadata_ path = do
-  embedCatchingErrors $ coordinateWriting path False defaultWritingOptions $ \path' ->
-    removeFile path'
+  embedCatchingErrors $
+    coordinateWriting path False defaultWritingOptions $ \path' ->
+      removeFile path'
 
 runGraphMetadataFilesystemOperationsIO ::
   Members [RawGraph, Embed IO, Error UserError] r =>
@@ -56,5 +60,5 @@ runGraphMetadataFilesystemOperationsIO ::
   Sem r a
 runGraphMetadataFilesystemOperationsIO = interpret \case
   ReadNodeMetadata nid -> readNodeMetadata_ =<< getMetadataFile nid
-  WriteNodeMetadata node -> (`writeNodeMetadata_` node) =<< getMetadataFile node.nid
+  WriteNodeMetadata node -> (`writeNodeMetadata_` node) =<< getMetadataFile node . nid
   DeleteNodeMetadata nid -> deleteNodeMetadata_ =<< getMetadataFile nid

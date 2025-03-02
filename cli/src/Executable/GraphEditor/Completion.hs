@@ -4,11 +4,11 @@ module Executable.GraphEditor.Completion where
 import Control.Arrow
 import Control.Lens
 import DAL.Serialization (nodesWithPrefix)
-import Graph.AppInterpreters
-import Graph.NodeLocated
 import Effect.IOWrapper.GetTime
 import Error.UserError
 import Error.Warn
+import Graph.AppInterpreters
+import Graph.NodeLocated
 import Graph.Utils
 import Lang.Parsing
 import Lang.Path

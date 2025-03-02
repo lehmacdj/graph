@@ -1,8 +1,8 @@
 module Polysemy.UtilSpec where
 
-import Polysemy.Util
 import Polysemy.Input
 import Polysemy.State
+import Polysemy.Util
 import TestPrelude
 
 -- | even after modifying the state variable used to initialize the Input

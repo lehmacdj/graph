@@ -7,12 +7,12 @@ module Lang.Path.Partial
   )
 where
 
+import Graph.SystemNodes (tagsNID)
 import Lang.Parsing
 import Lang.ParsingSpec
 import Lang.Path
 import Lang.Path.Parse
 import MyPrelude hiding (many, try)
-import Graph.SystemNodes (tagsNID)
 import TestPrelude hiding (many, try)
 import Text.Megaparsec
 import Text.Megaparsec.Char

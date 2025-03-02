@@ -17,4 +17,3 @@ ioErrorToMaybe = (`ClassyPrelude.catch` ioHandler) . (Just <$>)
 
 ignoreIOError :: IO a -> IO ()
 ignoreIOError a = ioErrorToMaybe a $> ()
-

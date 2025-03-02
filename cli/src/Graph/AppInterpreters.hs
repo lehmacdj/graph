@@ -3,35 +3,35 @@
 module Graph.AppInterpreters where
 
 import Control.Lens
+import DAL.FileSystemOperations.Data
+import DAL.FileSystemOperations.Metadata
+import DAL.FileSystemOperations.MetadataWriteDiff
+import DAL.RawGraph
 import Effect.IOWrapper.DisplayImage
-import Effect.IOWrapper.Editor
 import Effect.IOWrapper.Echo
+import Effect.IOWrapper.Editor
 import Effect.IOWrapper.FileSystem
 import Effect.IOWrapper.FileTypeOracle
-import Graph.FreshNID
-import Graph.NodeLocated
 import Effect.IOWrapper.GetTime
-import Error.UserError
-import Polysemy.Util
-import Error.Warn
 import Effect.IOWrapper.Web
+import Error.UserError
+import Error.Warn
 import Graph.Effect
+import Graph.FreshNID
+import Graph.GraphMetadataEditing
+import Graph.NodeLocated
 import Models.History
 import Models.NID
 import MyPrelude
 import Polysemy.Embed
 import Polysemy.Input
 import Polysemy.Readline
+import Polysemy.Scoped
 import Polysemy.State
+import Polysemy.Util
 import System.Console.Haskeline (InputT)
 import qualified System.Console.Haskeline as H
 import System.Random
-import DAL.RawGraph
-import DAL.FileSystemOperations.Metadata
-import DAL.FileSystemOperations.MetadataWriteDiff
-import DAL.FileSystemOperations.Data
-import Graph.GraphMetadataEditing
-import Polysemy.Scoped
 
 data Env = Env
   { filePath :: IORef FilePath,
@@ -81,7 +81,8 @@ runGraphEditorEffects ::
   ( Members PermissiveDependencyEffects r,
     Members IOWrapperEffects r,
     Members ErrorEffects r
-  ) => Sem (Concat GraphEditorEffects r) ~> Sem r
+  ) =>
+  Sem (Concat GraphEditorEffects r) ~> Sem r
 runGraphEditorEffects =
   raiseUnder @(State StdGen)
     >>> runFreshNIDRandom
@@ -111,7 +112,8 @@ type IOWrapperEffects =
   ]
 
 type TimeBehavior =
-  forall r. Member (Embed IO) r =>
+  forall r.
+  Member (Embed IO) r =>
   Sem (GetTime : r) ~> Sem r
 
 runIOWrapperEffects ::
@@ -139,13 +141,16 @@ type ErrorEffects =
   ]
 
 type ErrorHandlingBehavior a =
-  forall r. Member (Embed IO) r =>
-  Sem (Warn UserError : Error UserError : r) a -> Sem r a
+  forall r.
+  Member (Embed IO) r =>
+  Sem (Warn UserError : Error UserError : r) a ->
+  Sem r a
 
 runErrorEffects ::
   Members PermissiveDependencyEffects r =>
   ErrorHandlingBehavior a ->
-  Sem (Concat ErrorEffects r) a -> Sem r a
+  Sem (Concat ErrorEffects r) a ->
+  Sem r a
 runErrorEffects errorHandlingBehavior = errorHandlingBehavior
 
 type PermissiveDependencyEffects :: [Effect]
@@ -176,14 +181,14 @@ runPermissiveDependencyEffectsEnv ::
   ) =>
   Sem (Concat PermissiveDependencyEffects r) ~> Sem r
 runPermissiveDependencyEffectsEnv =
-    runEchoReadline
-      >>> runStateInputIORefOf #isDualized
-      >>> runStateInputIORefOf #randomGen
-      >>> subsume
-      >>> runStateInputIORefOf @History #history
-      >>> raiseUnder
-      >>> runRawGraphAsInput
-      >>> contramapInputSem @FilePath (embed @IO . readIORef . view #filePath)
+  runEchoReadline
+    >>> runStateInputIORefOf #isDualized
+    >>> runStateInputIORefOf #randomGen
+    >>> subsume
+    >>> runStateInputIORefOf @History #history
+    >>> raiseUnder
+    >>> runRawGraphAsInput
+    >>> contramapInputSem @FilePath (embed @IO . readIORef . view #filePath)
 
 type FinalEffects =
   [ Readline,
@@ -203,7 +208,7 @@ runFinalEffects env =
     >>> withEffects @'[Embed (InputT IO), Final (InputT IO)]
     >>> embedToFinal @(InputT IO)
     >>> runFinal
-    >>> H.runInputT env.replSettings
+    >>> H.runInputT env . replSettings
 
 type AppEffects :: [Effect]
 type AppEffects =

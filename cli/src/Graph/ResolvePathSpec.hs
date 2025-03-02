@@ -1,13 +1,13 @@
 module Graph.ResolvePathSpec where
 
+import Graph.GraphMetadataEditing (GraphMetadataEditing, runInMemoryGraphMetadataEditing)
 import Graph.ResolvePath
 import Models.Graph
-import Models.Node
 import Models.NID
-import TestPrelude
-import Graph.GraphMetadataEditing (GraphMetadataEditing, runInMemoryGraphMetadataEditing)
-import Polysemy.State
+import Models.Node
 import Models.Path
+import Polysemy.State
+import TestPrelude
 
 -- | Graph that has the following structure:
 -- @0:
@@ -42,14 +42,17 @@ spec_materializePathAsGraph = do
         NID -> Path Text -> Graph Text (MaterializedPathInfo Text) -> Spec
       materializesPath from p expected =
         it ("materialize " ++ show p ++ " from " ++ show from) do
-         runWithTestGraph (materializePathAsGraph from p) `shouldBe` Just expected
+          runWithTestGraph (materializePathAsGraph from p) `shouldBe` Just expected
   let materializesTo :: Path Text -> [(Int, Bool)] -> Spec
       materializesTo p (asMap . mapFromList . over (traverse . _1) smallNID -> m) =
-        materializesPath (smallNID 0) p g where
-          f n = mempty @(MaterializedPathInfo Text) &
-            #isTarget .~ (m ^. at n.nid . non False)
-          g = traceShowId . mapGraph f $
-            additiveFilterGraph (\n -> has (ix n.nid) m) testGraph
+        materializesPath (smallNID 0) p g
+        where
+          f n =
+            mempty @(MaterializedPathInfo Text)
+              & #isTarget .~ (m ^. at n . nid . non False)
+          g =
+            traceShowId . mapGraph f $
+              additiveFilterGraph (\n -> has (ix n . nid) m) testGraph
   One `materializesTo` [(0, True)]
   Zero `materializesTo` [(0, False)]
   Literal "zero-to-one" `materializesTo` [(0, False), (1, True)]

@@ -11,12 +11,13 @@ printNodeDebugRepresentation :: FilePath -> NID -> IO ()
 printNodeDebugRepresentation base nid = do
   result :: Either String (Node String (Maybe ByteString)) <- deserializeNode base nid
   case result of
-    Right n -> say $
-      compactNodeShow
-        @(Node String (Maybe ByteString))
-        @(Maybe ByteString)
-        defaultCompactNodeShowSettings{showIncoming=True}
-        n
+    Right n ->
+      say $
+        compactNodeShow
+          @(Node String (Maybe ByteString))
+          @(Maybe ByteString)
+          defaultCompactNodeShowSettings {showIncoming = True}
+          n
     Left e ->
       say $
         "couldn't deserialize node " <> tshow nid

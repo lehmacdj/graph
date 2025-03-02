@@ -1,6 +1,6 @@
 module Error.Missing
   ( module Error.Missing,
-    module Polysemy.Error
+    module Polysemy.Error,
   )
 where
 

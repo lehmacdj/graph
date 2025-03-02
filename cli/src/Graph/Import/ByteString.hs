@@ -1,17 +1,17 @@
 module Graph.Import.ByteString where
 
 import Data.Digest.Pure.SHA
-import Graph.FreshNID
 import Effect.IOWrapper.GetTime
-import Error.UserError
 import Effect.IOWrapper.Web
+import Error.Missing
+import Error.UserError
 import Graph.Effect
+import Graph.FreshNID
 import Graph.SystemNodes
 import Graph.Time
 import Graph.Utils
 import Models.Edge (Edge (..))
 import MyPrelude
-import Error.Missing
 
 computeSHA :: ByteString -> String
 computeSHA = showDigest . sha512 . fromStrict

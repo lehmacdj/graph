@@ -6,65 +6,64 @@ where
 
 import ClassyPrelude
 import Control.Lens hiding (op)
-import qualified Data.Set as Set
-import GHC.Stack (HasCallStack)
-import Data.List.NonEmpty as X (NonEmpty (..))
-import Data.List as X (iterate, tails)
-import Control.Lens.Extras as X (is)
-import Data.Set.Lens as X (setmapped)
-
 import Control.Lens as X
-    ( over,
-      only,
-      non,
-      non',
-      set,
-      view,
-      (&),
-      (.~),
-      (<&>),
-      (^.),
-      at,
-      to,
-      ix,
-      _Just,
-      (?~),
-      (%~),
-      preview,
-      (^?),
-      _1,
-      _2,
-      _3,
-      has,
-      hasn't,
-      isn't,
-      folded,
-      filtered,
-      filteredBy,
-      _Right,
-      _Left,
-      Lens,
-      Lens',
-      Traversal,
-      Traversal',
-      Prism,
-      Prism',
-      Iso,
-      Iso',
-      Getter,
-      Fold,
-      Setter,
-      Setter',
-      ALens,
-      ALens',
-      ASetter,
-      ASetter',
-      Getting,
-      Setting,
-      LensLike,
-      LensLike'
-    )
+  ( ALens,
+    ALens',
+    ASetter,
+    ASetter',
+    Fold,
+    Getter,
+    Getting,
+    Iso,
+    Iso',
+    Lens,
+    Lens',
+    LensLike,
+    LensLike',
+    Prism,
+    Prism',
+    Setter,
+    Setter',
+    Setting,
+    Traversal,
+    Traversal',
+    at,
+    filtered,
+    filteredBy,
+    folded,
+    has,
+    hasn't,
+    isn't,
+    ix,
+    non,
+    non',
+    only,
+    over,
+    preview,
+    set,
+    to,
+    view,
+    (%~),
+    (&),
+    (.~),
+    (<&>),
+    (?~),
+    (^.),
+    (^?),
+    _1,
+    _2,
+    _3,
+    _Just,
+    _Left,
+    _Right,
+  )
+import Control.Lens.Extras as X (is)
+import Data.List as X (iterate, tails)
+import Data.List.NonEmpty as X (NonEmpty (..))
 import qualified Data.Map.Strict as Map
+import qualified Data.Set as Set
+import Data.Set.Lens as X (setmapped)
+import GHC.Stack (HasCallStack)
 
 -- | Copied from cabal codebase
 toSetOf :: Getting (Set a) s a -> s -> Set a

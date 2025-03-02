@@ -13,7 +13,6 @@ import qualified DAL.Serialization as S2
 import Data.Aeson (FromJSON (..), ToJSON (..))
 import qualified Data.Set as Set
 import Error.UserError
-import Polysemy.Util
 import Error.Warn
 import Models.Connect
 import Models.Edge
@@ -24,6 +23,7 @@ import Models.Node
 import MyPrelude
 import Polysemy.Input
 import Polysemy.State
+import Polysemy.Util
 
 data ReadGraph t d m a where
   GetNode :: NID -> ReadGraph t d m (Maybe (Node t d))

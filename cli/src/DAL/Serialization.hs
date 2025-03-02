@@ -28,6 +28,7 @@ where
 
 import Control.Lens
 import DAL.DTO
+import DAL.DirectoryFormat
 import Data.Aeson (FromJSON, ToJSON)
 import qualified Data.Aeson as Aeson
 import qualified Data.ByteString as B
@@ -42,7 +43,6 @@ import System.Directory
 import System.FilePath (dropExtension, takeFileName)
 import qualified System.FilePath.Glob as Glob
 import Utils.Base62 (isBase62Char)
-import DAL.DirectoryFormat
 
 -- | all of the nodes accessible under a given path
 getAllNodeIds :: MonadIO m => FilePath -> m [NID]
@@ -60,7 +60,7 @@ serializeNodeEx ::
 serializeNodeEx n base = do
   createDirectoryIfMissing True base
   BL.writeFile (metadataFile base (n ^. #nid)) (Aeson.encode . nodeToDTO $ n)
-  case n.rawData of
+  case n . rawData of
     Just d -> B.writeFile (legacyNodeDataFile base (n ^. #nid)) d
     Nothing ->
       removeFile (legacyNodeDataFile base (n ^. #nid)) `catch` \case

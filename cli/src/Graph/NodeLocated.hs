@@ -5,11 +5,11 @@ module Graph.NodeLocated
   )
 where
 
+import Models.History (History, addToHistory)
 import Models.NID (NID)
 import MyPrelude hiding (Reader, ask)
 import Polysemy.Output
 import Polysemy.Reader
-import Models.History (History, addToHistory)
 import Polysemy.State
 import Polysemy.Util
 

@@ -54,11 +54,12 @@ data ReadingOptions = ReadingOptions
   }
 
 defaultReadingOptions :: ReadingOptions
-defaultReadingOptions = ReadingOptions
-  { withoutChanges = False,
-    resolveSymbolicLinks = False,
-    immediatelyAvailableMetadataOnly = False
-  }
+defaultReadingOptions =
+  ReadingOptions
+    { withoutChanges = False,
+      resolveSymbolicLinks = False,
+      immediatelyAvailableMetadataOnly = False
+    }
 
 data WritingOptions = WritingOptions
   { forDeleting :: Bool,
@@ -70,13 +71,14 @@ data WritingOptions = WritingOptions
   }
 
 defaultWritingOptions :: WritingOptions
-defaultWritingOptions = WritingOptions
-  { forDeleting = False,
-    forMoving = False,
-    forMerging = False,
-    forReplacing = False,
-    contentIndependentMetadataOnly = False
-  }
+defaultWritingOptions =
+  WritingOptions
+    { forDeleting = False,
+      forMoving = False,
+      forMerging = False,
+      forReplacing = False,
+      contentIndependentMetadataOnly = False
+    }
 
 -- | This shouldn't be thrown unless something very fishy happens
 data NullResultException = NullResultException

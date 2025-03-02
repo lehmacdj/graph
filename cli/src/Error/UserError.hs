@@ -7,13 +7,13 @@ module Error.UserError
 where
 
 import Control.Arrow (left)
+import qualified Control.Exception as E
 import Control.Lens
 import Models.NID (NID)
 import MyPrelude
 import Network.HTTP.Conduit (HttpException)
-import System.MacOS.NSFileCoordinator (NSErrorException)
 import Polysemy.Error hiding (fromException, try)
-import qualified Control.Exception as E
+import System.MacOS.NSFileCoordinator (NSErrorException)
 
 -- | Blanket error type used by the app. This is called @UserError@ because
 -- generally we only want to intercept it when propagating errors to the user.
@@ -44,7 +44,7 @@ instance Show UserError where
   show (IOFail e) = show e
   show (MissingNode nid reason) =
     "node " ++ show nid ++ " is missing"
-    ++ maybe "" ((" for reason " ++) . unpack) reason
+      ++ maybe "" ((" for reason " ++) . unpack) reason
   show (WebError e) = show e
   show (AesonDeserialize e) = "failed to deserialize JSON: " ++ e
   show (FileCoordinationError e) = "error while file coordinating: " ++ show e
@@ -67,7 +67,8 @@ throwText = throwConvertible
 
 throwConvertible ::
   (ToUserError e, Member (Error UserError) effs) =>
-  e -> Sem effs a
+  e ->
+  Sem effs a
 throwConvertible = throw . toUserError
 
 throwLeft ::

@@ -19,19 +19,19 @@ import DAL.Serialization (initializeGraph)
 import Data.Aeson
 import Models.Connect
 import Models.Edge
+import Models.Graph (Graph, emptyGraph, insertEdges, insertNodes)
 import Models.NID
+import Models.Node (Node, emptyNode)
 import MyPrelude hiding (assert, describe)
 import System.Directory (copyFile)
 import System.Directory.Tree (AnchoredDirTree ((:/)))
 import qualified System.Directory.Tree as DT
+import Test.Hspec as X (Spec, describe, it)
 import Test.Hspec.Expectations as X
 import Test.Tasty as X
 import Test.Tasty.HUnit as X
-import Test.Tasty.QuickCheck as X
-import Test.Hspec as X (Spec, describe, it)
 import Test.Tasty.Hspec (testSpec)
-import Models.Node (emptyNode, Node)
-import Models.Graph (emptyGraph, Graph, insertNodes, insertEdges)
+import Test.Tasty.QuickCheck as X
 
 -- | initializes a graph that is either empty, or based on a template graph
 -- at the specified location

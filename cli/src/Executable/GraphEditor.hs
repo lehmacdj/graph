@@ -4,20 +4,21 @@ module Executable.GraphEditor where
 
 import Control.Lens hiding (index)
 import Control.Monad.Fix
+import DAL.RawGraph
 import DAL.Serialization (doesNodeExist, initializeGraph)
-import Effect.IOWrapper.Echo
 import Effect.IOWrapper.DisplayImage
+import Effect.IOWrapper.Echo
 import Effect.IOWrapper.Editor
 import Effect.IOWrapper.FileSystem
 import Effect.IOWrapper.FileTypeOracle
-import Graph.FreshNID
-import Graph.AppInterpreters
-import Graph.NodeLocated
 import Effect.IOWrapper.GetTime
 import Effect.IOWrapper.Web
 import Executable.GraphEditor.Completion
 import Executable.GraphEditor.Options
+import Graph.AppInterpreters
 import Graph.Effect
+import Graph.FreshNID
+import Graph.NodeLocated
 import Graph.SystemNodes.Init (createSystemNodes)
 import Lang.Command hiding (printTransitions)
 import Lang.Command.Parse
@@ -30,7 +31,6 @@ import qualified System.Console.Haskeline as H
 import System.Directory (createDirectoryIfMissing, doesDirectoryExist)
 import System.Environment.XDG.BaseDir (getUserDataDir)
 import System.Random (initStdGen, mkStdGen)
-import DAL.RawGraph
 
 ioExceptionHandler :: IOError -> IO (Maybe a)
 ioExceptionHandler _ = pure Nothing

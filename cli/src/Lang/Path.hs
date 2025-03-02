@@ -19,19 +19,19 @@ import Data.List (intersectBy)
 import qualified Data.Set as Set
 import Data.Set.Ordered (OSet)
 import qualified Data.Set.Ordered as OSet
-import Graph.FreshNID
+import Error.Missing
 import Error.UserError
 import Graph.Effect
+import Graph.FreshNID
 import Graph.Utils
 import Models.Connect
+import Models.DPath as X
 import Models.Edge
 import Models.Graph hiding (insertEdge)
+import Models.Node
+import Models.Path as X
 import MyPrelude
 import Polysemy.State (evalState)
-import Models.Node
-import Error.Missing
-import Models.DPath as X
-import Models.Path as X
 
 isFullyRelativePath :: ValidTransition t => Path t -> Bool
 isFullyRelativePath = all (isNothing . fst) . setToList . listifyNewPath
@@ -52,10 +52,10 @@ resolvePathSuccesses nid = \case
   One -> pure $ singleton nid
   Wild -> do
     n <- getNodeSem nid
-    pure $ toSetOf (folded . #node) n.outgoing
+    pure $ toSetOf (folded . #node) n . outgoing
   Literal x -> do
     n <- getNodeSem nid
-    pure . setFromList $ matchConnect x n.outgoing
+    pure . setFromList $ matchConnect x n . outgoing
   Absolute nid -> pure $ singleton nid
   p :/ q -> do
     pResolved <- toList <$> resolvePathSuccesses nid p
@@ -88,7 +88,7 @@ resolvePathSuccessesDetail' nid = \case
       pure $ DPath nid [view #nid n `FromVia` t] nid' []
   Literal t ->
     getNodeSem nid <&> \n ->
-      case matchConnect t n.outgoing of
+      case matchConnect t n . outgoing of
         [] -> OSet.singleton (DPath nid [] nid [t])
         ms -> OSet.fromList (DPath nid [view #nid n `FromVia` t] <$> ms <*> pure [])
   p1 :/ p2 -> do

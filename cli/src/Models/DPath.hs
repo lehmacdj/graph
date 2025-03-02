@@ -7,8 +7,8 @@ module Models.DPath
   )
 where
 
-import MyPrelude
 import Models.NID
+import MyPrelude
 
 -- breadcrumb in a trail in the graph
 -- each piece denotes an edge from the specified via the transition

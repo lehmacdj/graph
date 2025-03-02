@@ -11,17 +11,17 @@ module Graph.Import.FileSystem where
 import Data.Digest.Pure.SHA
 import Effect.IOWrapper.Echo
 import Effect.IOWrapper.FileSystem
-import Graph.FreshNID
 import Effect.IOWrapper.GetTime
+import Error.Missing
 import Error.UserError
 import Graph.Effect
+import Graph.FreshNID
 import Graph.Import.ByteString
 import Graph.Time (taggingFreshNodesWithTime)
 import Graph.Utils
 import Models.Edge
 import MyPrelude
 import System.Directory.Tree hiding (readDirectory)
-import Error.Missing
 
 computeSHA :: ByteString -> String
 computeSHA = showDigest . sha512 . fromStrict

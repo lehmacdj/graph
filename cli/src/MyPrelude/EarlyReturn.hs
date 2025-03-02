@@ -13,10 +13,10 @@ module MyPrelude.EarlyReturn
 where
 
 import GHC.Generics
+import MyPrelude.MaybeEither
 import Polysemy
 import Polysemy.Error
 import Prelude
-import MyPrelude.MaybeEither
 
 data EarlyReturn result m a where
   ReturnEarly :: result -> EarlyReturn result m a

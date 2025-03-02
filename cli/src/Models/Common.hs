@@ -1,5 +1,5 @@
-{-# LANGUAGE CPP #-}
 {-# LANGUAGE AllowAmbiguousTypes #-}
+{-# LANGUAGE CPP #-}
 
 module Models.Common where
 
@@ -46,5 +46,5 @@ class CompactNodeShow n a where
 compactNodeShowDefault :: forall n a. (CompactNodeShow n a, ShowableAugmentation a) => n -> Text
 compactNodeShowDefault n =
   let defSettings = defaultCompactNodeShowSettings
-      settings = defSettings{nidLength = minimumNidLength @n @a defSettings n}
+      settings = defSettings {nidLength = minimumNidLength @n @a defSettings n}
    in compactNodeShow @n @a settings n

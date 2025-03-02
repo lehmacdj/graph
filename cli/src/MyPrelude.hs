@@ -7,20 +7,20 @@ module MyPrelude
   )
 where
 
-import ClassyPrelude hiding (throwString, fromException)
+import ClassyPrelude hiding (fromException, throwString)
+import Control.Comonad as X
 import Control.DeepSeq as X
 import Data.Coerce as X (Coercible, coerce)
 import Data.Generics.Labels as X
+import Data.Kind as X (Type)
 import Data.Set.Ordered.Orphans as X ()
 import GHC.Generics as X (Generic, Rep)
 import GHC.Stack as X (HasCallStack)
-import MyPrelude.EarlyReturn as X
 import MyPrelude.Collections as X
-import MyPrelude.MaybeEither as X
+import MyPrelude.EarlyReturn as X
+import MyPrelude.Effect as X
+import MyPrelude.Function as X
 import MyPrelude.IO as X
 import MyPrelude.JSON as X
-import MyPrelude.Function as X
-import MyPrelude.Effect as X
+import MyPrelude.MaybeEither as X
 import MyPrelude.MonadApplicative as X
-import Control.Comonad as X
-import Data.Kind as X (Type)

@@ -7,12 +7,12 @@ where
 import Control.Arrow (left)
 import Data.Either (isLeft)
 import Data.Functor
+import Graph.SystemNodes (tagsNID)
 import Lang.Command
 import Lang.Parsing
 import Lang.Path
 import Lang.Path.Parse
 import MyPrelude hiding (some, try)
-import Graph.SystemNodes (tagsNID)
 import TestPrelude hiding (some, try)
 import Text.Megaparsec
 

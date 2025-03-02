@@ -16,23 +16,25 @@ module Lang.Command where
 
 import Control.Monad (zipWithM_)
 import DAL.DirectoryFormat (legacyNodeDataFile)
+import DAL.RawGraph
 import Effect.IOWrapper.DisplayImage
 import Effect.IOWrapper.Echo
 import Effect.IOWrapper.Editor
 import Effect.IOWrapper.FileSystem
 import Effect.IOWrapper.FileTypeOracle
-import Graph.FreshNID
-import Graph.NodeLocated
 import Effect.IOWrapper.GetTime
+import Effect.IOWrapper.Web
+import Error.Missing
 import Error.UserError
 import Error.Warn
-import Effect.IOWrapper.Web
 import GHC.Generics
 import Graph.Check
 import Graph.Effect
 import Graph.Export.FileSystem (exportToDirectory)
+import Graph.FreshNID
 import Graph.Import.ByteString
 import Graph.Import.FileSystem
+import Graph.NodeLocated
 import Graph.Time (taggingFreshNodesWithTime)
 import Graph.Utils
 import Lang.Path
@@ -45,8 +47,6 @@ import MyPrelude
 import Polysemy.Readline
 import Polysemy.State
 import Utils.Singleton
-import DAL.RawGraph
-import Error.Missing
 
 data Command
   = -- | cd
@@ -250,10 +250,10 @@ interpretCommand = \case
     for_ [Edge nid t nid' | nid' <- toList nodesToFlatten] insertEdge
   ListOut -> do
     n <- subsumeUserError currentNode
-    printTransitions n.outgoing
+    printTransitions n . outgoing
   ShowImage -> do
     n <- subsumeUserError (currentNode @String)
-    forM_ n.rawData $ subsumeUserError @Missing . displayImage . fromStrict
+    forM_ n . rawData $ subsumeUserError @Missing . displayImage . fromStrict
   -- it probably would make sense to factor these commands out into separate
   -- layers of commands that can be handled at different levels
   Import fp -> do
