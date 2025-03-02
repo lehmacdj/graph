@@ -10,7 +10,7 @@ module Effect.IOWrapper.FileTypeOracle
   )
 where
 
-import qualified Data.Text as T
+import Data.Text qualified as T
 import MyPrelude
 import System.Process.Typed
 
@@ -25,7 +25,7 @@ makeSem ''FileTypeOracle
 -- return empty string for files that "file" can't determine the extension for?
 -- Maybe need to alter type signature of effect to handle missing files better
 -- though
-runFileTypeOracle :: Member (Embed IO) r => Sem (FileTypeOracle : r) a -> Sem r a
+runFileTypeOracle :: (Member (Embed IO) r) => Sem (FileTypeOracle : r) a -> Sem r a
 runFileTypeOracle = interpret \case
   GetExtension fp ->
     fmap

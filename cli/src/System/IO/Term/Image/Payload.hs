@@ -73,7 +73,10 @@ data Payload = Payload
 
 instance BinarySerialize Payload where
   intoBuilder p =
-    charUtf8 '\x1b' <> "]" <> "1337" <> ";"
+    charUtf8 '\x1b'
+      <> "]"
+      <> "1337"
+      <> ";"
       <> "File=["
       <> intoBuilder (view #_payloadArgs p)
       <> "]"

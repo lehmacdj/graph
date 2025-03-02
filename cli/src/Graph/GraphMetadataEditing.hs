@@ -8,7 +8,7 @@ import Error.UserError
 import Error.Warn
 import Models.Edge
 import Models.Graph (Graph)
-import qualified Models.Graph
+import Models.Graph qualified
 import Models.NID
 import Models.Node
 import MyPrelude
@@ -68,10 +68,13 @@ runInMemoryGraphMetadataEditing ::
 runInMemoryGraphMetadataEditing = interpret \case
   GetNodeMetadata nid -> gets @(Graph t ()) $ view (at nid)
   TouchNode nid ->
-    modify @(Graph t ()) $
+    modify @(Graph t ())
+      $
       -- it is important that we only write emptyNode if the node does not exist
       -- otherwise we will overwrite the node with an empty node
-      at nid . _Just .~ emptyNode nid
+      at nid
+      . _Just
+      .~ emptyNode nid
   DeleteNode nid -> modify @(Graph t ()) $ at nid .~ Nothing
   InsertEdge edge -> modify $ Models.Graph.insertEdge edge
   DeleteEdge edge -> modify $ Models.Graph.deleteEdge edge
@@ -158,14 +161,15 @@ runGraphMetadataEditingTransactionally action = do
   -- is called @runUnitOfWork@
   let runUnitOfWork ::
         forall q b.
-        Members
-          [ Tagged Cache (GraphMetadataEditing Text),
-            Tagged Underlying GraphMetadataFilesystemOperations,
-            Tagged AsLoaded (State (Map NID (Maybe (Node Text ())))),
-            Tagged Changes (State (Graph Text ())),
-            Tagged DeletedEdges (State (Set (Edge Text)))
-          ]
-          q =>
+        ( Members
+            [ Tagged Cache (GraphMetadataEditing Text),
+              Tagged Underlying GraphMetadataFilesystemOperations,
+              Tagged AsLoaded (State (Map NID (Maybe (Node Text ())))),
+              Tagged Changes (State (Graph Text ())),
+              Tagged DeletedEdges (State (Set (Edge Text)))
+            ]
+            q
+        ) =>
         Sem (GraphMetadataEditing Text : q) b ->
         Sem q b
       runUnitOfWork = interpret @(GraphMetadataEditing Text) \case
@@ -184,7 +188,8 @@ runGraphMetadataEditingTransactionally action = do
           -- because we create nodes for any changes we make
           let reconciledNode =
                 liftA2 mergeNodesEx underlyingNode changesNode
-                  & _Just %~ withoutEdges deletedEdges
+                  & _Just
+                  %~ withoutEdges deletedEdges
           tag @Changes $ modify $ at nid .~ reconciledNode
           pure reconciledNode
         TouchNode nid -> tag @Cache $ touchNode nid
@@ -195,10 +200,10 @@ runGraphMetadataEditingTransactionally action = do
           -- deferring the read would just make our lives harder so we do it now
           maybeLoadedNode <- runUnitOfWork (getNodeMetadata nid)
           loadedNode <- unwrapReturningDefault () maybeLoadedNode
-          tag @DeletedEdges $
-            modify $
-              union (mapSet (nid `outgoingEdge`) loadedNode . outgoing)
-                . union (mapSet (`incomingEdge` nid) loadedNode . incoming)
+          tag @DeletedEdges
+            $ modify
+            $ union (mapSet (nid `outgoingEdge`) loadedNode . outgoing)
+            . union (mapSet (`incomingEdge` nid) loadedNode . incoming)
         InsertEdge edge -> do
           tag @Cache $ insertEdge edge
           tag @DeletedEdges $ modify $ deleteSet edge
@@ -225,22 +230,29 @@ runGraphMetadataEditingTransactionally action = do
     & runUnitOfWork
     -- run the Cache GraphMetadataEditing effect
     & raiseUnder @(State (Graph Text ()))
-    & tag @Changes . runInMemoryGraphMetadataEditing . untag @Cache
-    & runState Models.Graph.emptyGraph . untag @Changes
-    & runState mempty . untag @AsLoaded
-    & runState mempty . untag @DeletedEdges
-    & subsume . untag @Underlying
+    & tag @Changes
+    . runInMemoryGraphMetadataEditing
+    . untag @Cache
+    & runState Models.Graph.emptyGraph
+    . untag @Changes
+    & runState mempty
+    . untag @AsLoaded
+    & runState mempty
+    . untag @DeletedEdges
+    & subsume
+    . untag @Underlying
     & (>>= applyGraphDiff)
 
 -- | If I move to Effectful there is Effectful.Provider_ that does something
 -- very similar to Scoped_
 -- It should be pretty easy to support this in in-other-words as well.
 runScopedGraphMetadataEditingTransactionally ::
-  Members
-    [ GraphMetadataFilesystemOperations,
-      GraphMetadataFilesystemOperationsWriteDiff
-    ]
-    r =>
+  ( Members
+      [ GraphMetadataFilesystemOperations,
+        GraphMetadataFilesystemOperationsWriteDiff
+      ]
+      r
+  ) =>
   Sem (Scoped_ (GraphMetadataEditing Text) : r) a ->
   Sem r a
 runScopedGraphMetadataEditingTransactionally =

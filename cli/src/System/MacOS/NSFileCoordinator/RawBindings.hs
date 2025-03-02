@@ -9,12 +9,12 @@ module System.MacOS.NSFileCoordinator.RawBindings
   )
 where
 
-import qualified Data.ByteString.Unsafe as ByteString
+import Data.ByteString.Unsafe qualified as ByteString
 import Foreign.C.String
 import Foreign.C.Types
 import Foreign.Ptr
-import qualified Language.C.Inline as C
-import qualified Language.C.Inline.ObjC as C
+import Language.C.Inline qualified as C
+import Language.C.Inline.ObjC qualified as C
 import MyPrelude
 import System.MacOS.NSFileCoordinator.Types
 import System.MacOS.NSFileCoordinator.Types as X hiding (foundationCtx)

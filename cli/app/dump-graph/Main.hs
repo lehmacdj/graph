@@ -1,6 +1,6 @@
 module Main (main) where
 
-import qualified Executable.DumpGraph as DumpGraph
+import Executable.DumpGraph qualified as DumpGraph
 import MyPrelude
 
 main :: IO ()

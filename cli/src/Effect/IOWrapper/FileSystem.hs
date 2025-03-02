@@ -4,7 +4,7 @@ module Effect.IOWrapper.FileSystem where
 
 import Error.UserError
 import MyPrelude
-import qualified System.Directory as Directory
+import System.Directory qualified as Directory
 import System.Directory.Tree
 
 data FileSystem m r where

@@ -1,7 +1,7 @@
 module Main (main) where
 
 import MyPrelude
-import qualified Spec
+import Spec qualified
 
 main :: IO ()
 main = Spec.main

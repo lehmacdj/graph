@@ -9,7 +9,7 @@ where
 
 import Control.DeepSeq
 import Control.Lens
-import qualified Data.Set as Set
+import Data.Set qualified as Set
 import GHC.Records
 import Models.Common
 import Models.Connect
@@ -53,7 +53,7 @@ instance forall ti to a. (Show ti, Ord ti, Show to, Ord to, ShowableAugmentation
   minimumNidLength settings@CompactNodeShowSettings {..} n =
     maximum . ncons (getMinLen n . nid) $ toList $ incomingLens <> outgoingLens
     where
-      getMinLen :: forall x. CompactNodeShow x a => x -> Int
+      getMinLen :: forall x. (CompactNodeShow x a) => x -> Int
       getMinLen = minimumNidLength @x @a settings
       incomingLens
         | showIncoming = mapSet getMinLen n . incoming
@@ -65,12 +65,16 @@ instance forall ti to a. (Show ti, Ord ti, Show to, Ord to, ShowableAugmentation
       reprParts = catMaybes [outgoingRepr, incomingRepr, augmentationRepr]
       incomingRepr :: Maybe Text
       incomingRepr =
-        justIfTrue showIncoming $
-          "in=[" ++ intercalate ", " (compactNodeShow settings <$> toList incoming) ++ "]"
+        justIfTrue showIncoming
+          $ "in=["
+          ++ intercalate ", " (compactNodeShow settings <$> toList incoming)
+          ++ "]"
       outgoingRepr :: Maybe Text
       outgoingRepr =
-        Just $
-          "out=[" ++ intercalate ", " (compactNodeShow settings <$> toList outgoing) ++ "]"
+        Just
+          $ "out=["
+          ++ intercalate ", " (compactNodeShow settings <$> toList outgoing)
+          ++ "]"
       augmentationRepr :: Maybe Text
       augmentationRepr =
         showAugmentation <&> \(name, showAug) ->
@@ -101,7 +105,7 @@ emptyNode i = Node i mempty mempty defaultAugmentation
 
 -- | Warning! It is up to the user of the graph to ensure that node ids are
 -- unique within the graph
-emptyNode' :: Ord t => NID -> Node t (Maybe a)
+emptyNode' :: (Ord t) => NID -> Node t (Maybe a)
 emptyNode' = emptyNode
 
 inStubNode :: (Ord t, DefaultAugmentation a) => Edge t -> Node t a
@@ -119,8 +123,8 @@ mergeNodes ::
   Node t a ->
   Maybe (Node t a)
 mergeNodes n1 n2 =
-  justIfTrue (n1 . nid == n2 . nid) $
-    Node
+  justIfTrue (n1 . nid == n2 . nid)
+    $ Node
       { nid = n1 . nid,
         incoming = n1 . incoming <> n2 . incoming,
         outgoing = n1 . outgoing <> n2 . outgoing,
@@ -135,13 +139,13 @@ mergeNodesEx ::
 mergeNodesEx n1 n2 =
   fromMaybe (error "mergeNodesEx: nodes don't match") $ mergeNodes n1 n2
 
-withoutEdges :: ValidTransition t => Set (Edge t) -> Node t a -> Node t a
+withoutEdges :: (ValidTransition t) => Set (Edge t) -> Node t a -> Node t a
 withoutEdges deletedEdges n =
   n
     & #incoming %~ (\\ mapSet inConnect deletedEdges)
     & #outgoing %~ (\\ mapSet outConnect deletedEdges)
 
-withEdge :: ValidTransition t => Edge t -> Node t a -> Node t a
+withEdge :: (ValidTransition t) => Edge t -> Node t a -> Node t a
 withEdge e n =
   n
     & #incoming %~ maybe id insertSet (justIfTrue (e . sink == n . nid) (inConnect e))

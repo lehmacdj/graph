@@ -16,9 +16,9 @@ where
 
 import Control.Lens hiding (pre, unsnoc)
 import Data.List (intersectBy)
-import qualified Data.Set as Set
+import Data.Set qualified as Set
 import Data.Set.Ordered (OSet)
-import qualified Data.Set.Ordered as OSet
+import Data.Set.Ordered qualified as OSet
 import Error.Missing
 import Error.UserError
 import Graph.Effect
@@ -33,7 +33,7 @@ import Models.Path as X
 import MyPrelude
 import Polysemy.State (evalState)
 
-isFullyRelativePath :: ValidTransition t => Path t -> Bool
+isFullyRelativePath :: (ValidTransition t) => Path t -> Bool
 isFullyRelativePath = all (isNothing . fst) . setToList . listifyNewPath
 
 -- | A deterministic path is successful if it ends at a node in the graph
@@ -143,8 +143,9 @@ mkPath ::
   Path t ->
   Sem effs (Set NID)
 mkPath nid p =
-  fmap setFromList . forM (setToList (listifyNewPath p)) $
-    \(m_nid, x) -> transitionsViaManyFresh (fromMaybe nid m_nid) x
+  fmap setFromList
+    . forM (setToList (listifyNewPath p))
+    $ \(m_nid, x) -> transitionsViaManyFresh (fromMaybe nid m_nid) x
 
 delPath ::
   forall t effs.
@@ -239,7 +240,7 @@ aliasDPath dpathFrom nidPathStart pathTo =
 -- Transitions are asumed to behave deterministically in this translation.
 listifyNewPath ::
   forall t.
-  ValidTransition t =>
+  (ValidTransition t) =>
   Path t ->
   Set (Maybe NID, [t])
 listifyNewPath = \case
@@ -268,7 +269,7 @@ listifyNewPath = \case
 -- In a graph with 0 -a> 1 the same path a/b + c resolves at 0 to
 -- [(a, 1, b), (#, 0, c)]
 resolvePath' ::
-  ValidNode t a =>
+  (ValidNode t a) =>
   Path t ->
   Node t a ->
   Graph t a ->
@@ -281,7 +282,7 @@ resolvePath' p n g =
 
 resolvePathInConcreteGraph ::
   forall t a.
-  ValidNode t a =>
+  (ValidNode t a) =>
   NID ->
   Path t ->
   Graph t a ->

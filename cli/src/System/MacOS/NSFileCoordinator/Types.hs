@@ -35,9 +35,9 @@ where
 import Foreign
 import Language.C.Inline
 import Language.C.Inline.Context
-import qualified Language.C.Inline.ObjC as C
-import qualified Language.C.Types as CT
-import qualified Language.Haskell.TH.Syntax as TH
+import Language.C.Inline.ObjC qualified as C
+import Language.C.Types qualified as CT
+import Language.Haskell.TH.Syntax qualified as TH
 import MyPrelude
 
 -- | Marker typeclass for Objective-C types

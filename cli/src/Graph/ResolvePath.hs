@@ -25,7 +25,7 @@ data MaterializedPathInfo t = MaterializedPathInfo
   }
   deriving (Show, Eq, Ord, Generic)
 
-instance Show t => ShowableAugmentation (MaterializedPathInfo t) where
+instance (Show t) => ShowableAugmentation (MaterializedPathInfo t) where
   defaultShowAugmentation = Just ("materializedPathInfo", tshow)
 
 instance HasField "leftoverPath" (Node' ti to (MaterializedPathInfo t)) (Maybe (Path t)) where
@@ -83,8 +83,9 @@ materializePathAsGraph ::
   Sem r (Maybe (Graph t (MaterializedPathInfo t)))
 materializePathAsGraph nid path = withEarlyReturn do
   n <-
-    unwrapM $
-      getNodeMetadata nid <&> (_Just . #augmentation .~ mempty)
+    unwrapM
+      $ getNodeMetadata nid
+      <&> (_Just . #augmentation .~ mempty)
   case path of
     One -> do
       let n' = n & isTarget .~ True
@@ -103,18 +104,24 @@ materializePathAsGraph nid path = withEarlyReturn do
       pure $ Just g'
     Absolute nid2 -> do
       n2 <- unwrapMaybeM (getNodeMetadata nid2) do
-        returnEarly $
-          Just $
-            emptyGraph & at nid ?~ (n & leftoverPath ?~ Absolute nid2)
+        returnEarly
+          $ Just
+          $ emptyGraph
+          & at nid
+          ?~ (n & leftoverPath ?~ Absolute nid2)
       let n2' =
             n2
-              & #augmentation .~ mempty
-              & isTarget .~ True
-      pure $
-        Just $
-          emptyGraph
-            & at nid ?~ (n & jumps %~ insertSet nid2)
-            & at nid2 ?~ n2'
+              & #augmentation
+              .~ mempty
+              & isTarget
+              .~ True
+      pure
+        $ Just
+        $ emptyGraph
+        & at nid
+        ?~ (n & jumps %~ insertSet nid2)
+        & at nid2
+        ?~ n2'
     p1 :/ p2 -> do
       g1 <- unwrapM $ materializePathAsGraph nid p1
       let g1Targets = toList $ toSetOf targetsInGraph g1
@@ -133,7 +140,14 @@ materializePathAsGraph nid path = withEarlyReturn do
       let g1Targets = toSetOf (_Just . targetsInGraph) g1
           g2Targets = toSetOf (_Just . targetsInGraph) g2
           targets = g1Targets `intersection` g2Targets
-      pure $
-        g1 <> g2
-          & _Just . otraverse . isTarget .~ False
-          & _Just . nodesMatchedBy (#nid . filtered (`member` targets)) . isTarget .~ True
+      pure
+        $ g1
+        <> g2
+        & _Just
+        . otraverse
+        . isTarget
+        .~ False
+        & _Just
+        . nodesMatchedBy (#nid . filtered (`member` targets))
+        . isTarget
+        .~ True

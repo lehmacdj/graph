@@ -34,7 +34,7 @@ newtype Graph t a = Graph
 -- i.e. if you do @insertEdge e g@, then @maybeLookupNode g e.source == Just _@
 -- regardless of whether @e.source@ was in the graph before.
 checkedGraphInvariant ::
-  ValidNode t a =>
+  (ValidNode t a) =>
   Graph t a ->
   Graph t a
 #ifdef DEBUG
@@ -49,7 +49,7 @@ checkedGraphInvariant g = g
 -- generally only expected to be used internally, but it is okay to use them
 -- externally.
 nodeConsistentWithGraph ::
-  ValidNode t a =>
+  (ValidNode t a) =>
   Graph t a ->
   Node t a ->
   Node t a
@@ -153,7 +153,7 @@ isEmptyGraph :: Graph t a -> Bool
 isEmptyGraph = null . (. nodeMap)
 
 mapGraph ::
-  ValidNode t a =>
+  (ValidNode t a) =>
   (Node t a -> b) ->
   Graph t a ->
   Graph t b
@@ -163,7 +163,7 @@ mapGraph f = Graph . fmap (extend f) . (. nodeMap) . checkedGraphInvariant
 -- It is guaranteed that the resulting graph doesn't contain the nodes for which
 -- the predicate returns false.
 subtractiveFilterGraph ::
-  ValidNode t a =>
+  (ValidNode t a) =>
   (Node t a -> Bool) ->
   Graph t a ->
   Graph t a
@@ -218,10 +218,10 @@ assertNodeInGraph _ (Just n) = n
 assertNodeInGraph i Nothing =
   error $ "expected " ++ show i ++ " to be in the graph"
 
-nodeLookupEx :: ValidNode t a => NID -> Graph t a -> Node t a
+nodeLookupEx :: (ValidNode t a) => NID -> Graph t a -> Node t a
 nodeLookupEx i = assertNodeInGraph i . maybeNodeLookup i
 
-lookupNodeEx :: ValidNode t a => Graph t a -> NID -> Node t a
+lookupNodeEx :: (ValidNode t a) => Graph t a -> NID -> Node t a
 lookupNodeEx = flip nodeLookupEx
 
 -- * Utility functions
@@ -229,7 +229,7 @@ lookupNodeEx = flip nodeLookupEx
 -- | Utility function for constructing a primed version of a function operating
 -- on ids instead of nodes
 unprimed ::
-  ValidNode t a =>
+  (ValidNode t a) =>
   (Node t a -> Graph t a -> x) ->
   (NID -> Graph t a -> x)
 unprimed f i ig = f (lookupNodeEx ig i) ig
@@ -240,7 +240,7 @@ listify ::
 listify f nodes ig = foldl' (flip f) ig nodes
 
 unprimeds ::
-  ValidNode t a =>
+  (ValidNode t a) =>
   ([Node t a] -> Graph t a -> x) ->
   ([NID] -> Graph t a -> x)
 unprimeds f i ig = f (nodeLookupEx <$> i <*> pure ig) ig
@@ -257,8 +257,14 @@ containsEdge ::
   sink <- unwrapReturningDefault False $ maybeLookupNode g e . sink
   let outConnectExists = outConnect e `member` source . outgoing
   let inConnectExists = inConnect e `member` sink . incoming
-  when (outConnectExists /= inConnectExists) $
-    error $ "graph inconsistent, containsEdge" ++ show e . source ++ " " ++ show e . sink
+  when (outConnectExists /= inConnectExists)
+    $ error
+    $ "graph inconsistent, containsEdge"
+    ++ show e
+    . source
+    ++ " "
+    ++ show e
+    . sink
   pure outConnectExists
 
 insertEdge ::
@@ -267,10 +273,11 @@ insertEdge ::
   Graph t a ->
   Graph t a
 insertEdge e (checkedGraphInvariant -> g) =
-  g & #nodeMap
-    %~ ( (at e . source %~ Just . maybe (outStubNode e) (withEdge e))
-           . (at e . sink %~ Just . maybe (inStubNode e) (withEdge e))
-       )
+  g
+    & #nodeMap
+      %~ ( (at e . source %~ Just . maybe (outStubNode e) (withEdge e))
+             . (at e . sink %~ Just . maybe (inStubNode e) (withEdge e))
+         )
 
 insertEdges ::
   (ValidNode t a, DefaultAugmentation a) =>
@@ -279,15 +286,17 @@ insertEdges ::
   Graph t a
 insertEdges = listify insertEdge
 
-deleteEdge :: ValidNode t a => Edge t -> Graph t a -> Graph t a
+deleteEdge :: (ValidNode t a) => Edge t -> Graph t a -> Graph t a
 deleteEdge e (checkedGraphInvariant -> g) =
-  g & #nodeMap
-    %~ adjustMap (over #outgoing (deleteSet (outConnect e))) e . source
-      . adjustMap (over #incoming (deleteSet (inConnect e))) e
-      . sink
+  g
+    & #nodeMap
+      %~ adjustMap (over #outgoing (deleteSet (outConnect e))) e
+        . source
+        . adjustMap (over #incoming (deleteSet (inConnect e))) e
+        . sink
 
 deleteEdges ::
-  ValidNode t a =>
+  (ValidNode t a) =>
   [Edge t] ->
   Graph t a ->
   Graph t a
@@ -306,7 +315,8 @@ insertNode ::
   Graph t a ->
   Graph t a
 insertNode n (checkedGraphInvariant -> g) =
-  g & #nodeMap . at n . nid %~ ensureNodeExists
+  g
+    & #nodeMap . at n . nid %~ ensureNodeExists
     & updateNode n
     & checkedGraphInvariant
   where
@@ -355,18 +365,19 @@ mergeNodeInto ::
   Graph t a ->
   Graph t a
 mergeNodeInto n g =
-  g & at n . nid %~ \case
-    Just original -> Just $ mergeNodesEx original n
-    Nothing -> Just n
+  g
+    & at n . nid %~ \case
+      Just original -> Just $ mergeNodesEx original n
+      Nothing -> Just n
 
 -- | Remove a node from the graph; updating the cached data in the neighbors
 -- nodes as well.
-delNode' :: Ord t => Node t a -> Graph t a -> Graph t a
+delNode' :: (Ord t) => Node t a -> Graph t a -> Graph t a
 delNode' n g =
-  withNodeMap g $
-    omap deleteIncoming
-      . omap deleteOutgoing
-      . deleteMap nid
+  withNodeMap g
+    $ omap deleteIncoming
+    . omap deleteOutgoing
+    . deleteMap nid
   where
     nid = n ^. #nid
     del = filterSet ((/= nid) . view #node)
@@ -374,18 +385,18 @@ delNode' n g =
     deleteOutgoing = over #outgoing del
 
 delNode ::
-  ValidNode t a =>
+  (ValidNode t a) =>
   NID ->
   Graph t a ->
   Graph t a
 delNode = unprimed delNode'
 
 delNodes' ::
-  Ord t => [Node t a] -> Graph t a -> Graph t a
+  (Ord t) => [Node t a] -> Graph t a -> Graph t a
 delNodes' = listify delNode'
 
 delNodes ::
-  ValidNode t a =>
+  (ValidNode t a) =>
   [NID] ->
   Graph t a ->
   Graph t a
@@ -404,7 +415,7 @@ setData' ::
 setData' d n g = g & #nodeMap %~ (at n . nid ?~ n {augmentation = d})
 
 setData ::
-  ValidNode t a =>
+  (ValidNode t a) =>
   a ->
   NID ->
   Graph t a ->

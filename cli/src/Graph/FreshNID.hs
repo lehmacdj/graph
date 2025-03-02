@@ -24,7 +24,7 @@ makeSem ''FreshNID
 -- use for a Fresh NID.
 runFreshNIDRandom ::
   forall r a.
-  Member (State StdGen) r =>
+  (Member (State StdGen) r) =>
   Sem (FreshNID : r) a ->
   Sem r a
 runFreshNIDRandom = interpret $ \FreshNID -> embedStateful uniform

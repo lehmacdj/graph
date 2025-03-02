@@ -13,7 +13,7 @@ data RawGraph m a where
 makeSem ''RawGraph
 
 runRawGraphAsInput ::
-  Member (Input FilePath) r => Sem (RawGraph : r) a -> Sem r a
+  (Member (Input FilePath) r) => Sem (RawGraph : r) a -> Sem r a
 runRawGraphAsInput = transform @_ @(Input FilePath) (\GetGraphFilePath -> Input)
 
 runRawGraphWithPath :: FilePath -> Sem (RawGraph : r) a -> Sem r a

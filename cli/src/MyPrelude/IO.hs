@@ -6,7 +6,7 @@ import System.IO
 eputStr :: String -> IO ()
 eputStr = hPutStrLn stderr
 
-eprint :: Show a => a -> IO ()
+eprint :: (Show a) => a -> IO ()
 eprint = eputStr . show
 
 ioErrorToMaybe :: IO a -> IO (Maybe a)

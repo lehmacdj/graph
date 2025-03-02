@@ -14,5 +14,5 @@ decodeJSON ::
   Sem effs a
 decodeJSON = throwLeft . left AesonDeserialize . eitherDecode . fromStrict
 
-encodeJSON :: ToJSON a => a -> LByteString
+encodeJSON :: (ToJSON a) => a -> LByteString
 encodeJSON = encode

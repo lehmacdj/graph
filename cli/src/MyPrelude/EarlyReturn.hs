@@ -24,27 +24,27 @@ data EarlyReturn result m a where
 makeSem ''EarlyReturn
 
 unwrapReturningDefault ::
-  Member (EarlyReturn result) r =>
+  (Member (EarlyReturn result) r) =>
   result ->
   Maybe a ->
   Sem r a
 unwrapReturningDefault def = unwrapDefaulting (returnEarly def)
 
 unwrapReturningDefaultM ::
-  Member (EarlyReturn result) r =>
+  (Member (EarlyReturn result) r) =>
   result ->
   Sem r (Maybe a) ->
   Sem r a
 unwrapReturningDefaultM def = unwrapDefaultingM (returnEarly def)
 
 unwrap ::
-  Member (EarlyReturn (Maybe result)) r =>
+  (Member (EarlyReturn (Maybe result)) r) =>
   Maybe a ->
   Sem r a
 unwrap = unwrapReturningDefault Nothing
 
 unwrapM ::
-  Member (EarlyReturn (Maybe result)) r =>
+  (Member (EarlyReturn (Maybe result)) r) =>
   Sem r (Maybe a) ->
   Sem r a
 unwrapM = unwrapReturningDefaultM Nothing

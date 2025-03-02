@@ -27,7 +27,7 @@ import Models.NID
 import MyPrelude
 import Polysemy.Readline
 import Polysemy.State
-import qualified System.Console.Haskeline as H
+import System.Console.Haskeline qualified as H
 import System.Directory (createDirectoryIfMissing, doesDirectoryExist)
 import System.Environment.XDG.BaseDir (getUserDataDir)
 import System.Random (initStdGen, mkStdGen)
@@ -39,8 +39,8 @@ defReplSettings :: Env -> IO (Settings IO)
 defReplSettings env = do
   dataDir <- getUserDataDir "ge"
   createDirectoryIfMissing True dataDir
-  pure $
-    H.Settings
+  pure
+    $ H.Settings
       { H.complete = completionFunction env,
         H.historyFile = Just $ dataDir </> "history.txt",
         H.autoAddHistory = True
@@ -90,30 +90,34 @@ graphDirInitialization graphDir options = do
     then
       if graphDirExists
         then
-          whenM (not <$> doesNodeExist graphDir nilNID) $
-            initializeGraph graphDir
+          whenM (not <$> doesNodeExist graphDir nilNID)
+            $ initializeGraph graphDir
         else initializeGraph graphDir
     else do
-      unless graphDirExists $
-        error $ "graph in directory " ++ graphDir ++ " doesn't exist"
-      unlessM (doesNodeExist graphDir nilNID) $
-        error "couldn't find origin node in graph "
+      unless graphDirExists
+        $ error
+        $ "graph in directory "
+        ++ graphDir
+        ++ " doesn't exist"
+      unlessM (doesNodeExist graphDir nilNID)
+        $ error "couldn't find origin node in graph "
 
 main :: IO ()
 main = withOptions $ \options -> do
   let graphDir = view #_graphLocation options
   graphDirInitialization graphDir options
   nidGenerator <-
-    maybe initStdGen (pure . mkStdGen) $
-      options ^. #_testOnlyNidGenerationSeed
+    maybe initStdGen (pure . mkStdGen)
+      $ options
+      ^. #_testOnlyNidGenerationSeed
   -- because we need the Env for the repl's completionFunction this is pretty
   -- fancy and uses mfix to tie the knot; it would probably be a better idea to
   -- break the cycle somehow to make this easier to reason about
   env <- mfix (initEnv graphDir nidGenerator <=< defReplSettings)
-  let timeBehavior :: Member (Embed IO) effs => Sem (GetTime : effs) ~> Sem effs
+  let timeBehavior :: (Member (Embed IO) effs) => Sem (GetTime : effs) ~> Sem effs
       timeBehavior
         | options ^. #_testOnlyMonotonicIncreasingDeterministicTime =
-          interpretTimeAsMonotonicIncreasingUnixTime
+            interpretTimeAsMonotonicIncreasingUnixTime
         | otherwise = interpretTimeAsIO
   runAppEffects printingErrorsAndWarnings timeBehavior env do
     createSystemNodes

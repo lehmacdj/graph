@@ -28,8 +28,9 @@ interpretTimeAsIO = interpret $ \case
 
 interpretTimeAsMonotonicIncreasingUnixTime ::
   Sem (GetTime : effs) a -> Sem effs a
-interpretTimeAsMonotonicIncreasingUnixTime x = evalState (0 :: Int) $
-  (`interpret` raiseUnder x) $ \case
+interpretTimeAsMonotonicIncreasingUnixTime x = evalState (0 :: Int)
+  $ (`interpret` raiseUnder x)
+  $ \case
     CurrentTime -> posixSecondsToUTCTime . fromIntegral <$> get <* modify' (+ 1)
 
 collapsingTimeToInstant ::

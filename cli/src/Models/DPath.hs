@@ -25,7 +25,7 @@ data DPath t
       [t] -- transitions that could not be realized within the graph
   deriving (Show, Eq, Ord)
 
-projPath :: Show t => [DPathComponent t] -> String
+projPath :: (Show t) => [DPathComponent t] -> String
 projPath [] = "#"
 projPath [FromVia _ x] = show x
 projPath (FromVia _ x : xs) = show x ++ "/" ++ projPath xs

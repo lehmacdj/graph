@@ -12,9 +12,9 @@ unit_runInputConstSem_alwaysSame :: Assertion
 unit_runInputConstSem_alwaysSame =
   (run . runState 0 . runInputConstSem initAction) action @=? (0, 0)
   where
-    initAction :: Member (State Int) r => Sem r Int
+    initAction :: (Member (State Int) r) => Sem r Int
     initAction = get @Int
-    action :: Members [State Int, Input Int] r => Sem r Int
+    action :: (Members [State Int, Input Int] r) => Sem r Int
     action = do
       orig <- input @Int
       modify @Int (+ 1)

@@ -4,11 +4,11 @@ import Control.Monad.Fail
 import Data.Char
 import Data.Void
 import Models.NID
-import qualified Models.NID as BigNID
+import Models.NID qualified as BigNID
 import MyPrelude hiding (many, some, try)
 import Text.Megaparsec
 import Text.Megaparsec.Char
-import qualified Text.Megaparsec.Char.Lexer as L
+import Text.Megaparsec.Char.Lexer qualified as L
 
 type Parser = Parsec Void String
 

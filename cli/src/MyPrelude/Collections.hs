@@ -60,8 +60,8 @@ import Control.Lens as X
 import Control.Lens.Extras as X (is)
 import Data.List as X (iterate, tails)
 import Data.List.NonEmpty as X (NonEmpty (..))
-import qualified Data.Map.Strict as Map
-import qualified Data.Set as Set
+import Data.Map.Strict qualified as Map
+import Data.Set qualified as Set
 import Data.Set.Lens as X (setmapped)
 import GHC.Stack (HasCallStack)
 
@@ -69,13 +69,13 @@ import GHC.Stack (HasCallStack)
 toSetOf :: Getting (Set a) s a -> s -> Set a
 toSetOf l s = getConst (l (Const . singleton) s)
 
-mapSet :: Ord b => (a -> b) -> Set a -> Set b
+mapSet :: (Ord b) => (a -> b) -> Set a -> Set b
 mapSet = Set.map
 
-mapFromSet :: Ord k => Set k -> Map k ()
+mapFromSet :: (Ord k) => Set k -> Map k ()
 mapFromSet = Map.fromSet (const ())
 
-mapFromSetBy :: Ord k => (k -> v) -> Set k -> Map k v
+mapFromSetBy :: (Ord k) => (k -> v) -> Set k -> Map k v
 mapFromSetBy = Map.fromSet
 
 -- | do something when a mono is NonNull
@@ -100,10 +100,10 @@ interleave [] ys = ys
 interleave (x : xs) ys = x : interleave ys xs
 
 -- | Taken from extras-1.6.17
-concatMapM :: Monad m => (a -> m [b]) -> [a] -> m [b]
+concatMapM :: (Monad m) => (a -> m [b]) -> [a] -> m [b]
 concatMapM op = foldr f (return [])
   where
-    f x xs = do x' <- op x; if null x' then xs else do { xs' <- xs; return $ x' ++ xs' }
+    f x xs = do x' <- op x; if null x' then xs else do xs' <- xs; return $ x' ++ xs'
 
 -- | A newtype wrapper for a list that contains at least two elements
 newtype TwoElemList a = UnsafeTwoElemList {unTwoElemList :: [a]}
@@ -116,7 +116,7 @@ type instance Element (TwoElemList a) = a
 twoElemList :: a -> a -> [a] -> TwoElemList a
 twoElemList x x' xs = UnsafeTwoElemList (x : x' : xs)
 
-intoElems :: HasCallStack => TwoElemList a -> (a, NonEmpty a)
+intoElems :: (HasCallStack) => TwoElemList a -> (a, NonEmpty a)
 intoElems (UnsafeTwoElemList (x : x' : xs)) = (x, x' :| xs)
 intoElems (UnsafeTwoElemList _) = error "intoElems: broken invariant"
 
@@ -125,8 +125,8 @@ chunksOf _ [] = []
 chunksOf n xs
   | length xs < n = [xs]
   | otherwise =
-    let (chunk, rest) = splitAt n xs
-     in chunk : chunksOf n rest
+      let (chunk, rest) = splitAt n xs
+       in chunk : chunksOf n rest
 
 allPairs :: [a] -> [(a, a)]
 allPairs xs = [(x, y) | (x : ys) <- tails xs, y <- ys]

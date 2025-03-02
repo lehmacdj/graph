@@ -182,8 +182,10 @@ test_parseCommand =
     ]
   where
     parsesTo string expected =
-      testCase ("parse: " ++ show string) $
-        Right expected @=? parseCommand string
+      testCase ("parse: " ++ show string)
+        $ Right expected
+        @=? parseCommand string
     parseFails string =
-      testCase ("doesn't parse: " ++ show string) $
-        isLeft (parseCommand string) @? "parseCommand didn't fail"
+      testCase ("doesn't parse: " ++ show string)
+        $ isLeft (parseCommand string)
+        @? "parseCommand didn't fail"

@@ -1,6 +1,6 @@
 module Main (main) where
 
-import qualified Executable.Scratch as Scratch
+import Executable.Scratch qualified as Scratch
 import MyPrelude
 
 main :: IO ()

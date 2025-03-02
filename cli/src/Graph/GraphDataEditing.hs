@@ -17,7 +17,7 @@ makeSem ''GraphDataEditing
 
 runInMemoryGraphDataEditing ::
   forall t r a.
-  ValidTransition t =>
+  (ValidTransition t) =>
   (Member (State (Graph t (Maybe ByteString))) r) =>
   Sem (GraphDataEditing : r) a ->
   Sem r a

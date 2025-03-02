@@ -19,20 +19,21 @@ data GraphDataFilesystemOperations m a where
 makeSem ''GraphDataFilesystemOperations
 
 readNodeData_ ::
-  Members [RawGraph, Embed IO, Error UserError] effs =>
+  (Members [RawGraph, Embed IO, Error UserError] effs) =>
   NID ->
   -- | File extension for the node's data
   String ->
   Sem effs (Maybe ByteString)
 readNodeData_ nid fileExtension = do
   path <- getNodeDataFile nid fileExtension
-  result <- embed $
-    coordinateReading path False defaultReadingOptions $ \path' ->
+  result <- embed
+    $ coordinateReading path False defaultReadingOptions
+    $ \path' ->
       try @IO @IOError $ readFile path'
   pure $ either (const Nothing) Just result
 
 writeNodeData_ ::
-  Members [RawGraph, Embed IO, Error UserError] effs =>
+  (Members [RawGraph, Embed IO, Error UserError] effs) =>
   NID ->
   -- | File extension for the node's data
   String ->
@@ -40,23 +41,24 @@ writeNodeData_ ::
   Sem effs ()
 writeNodeData_ nid extension rawData = do
   path <- getNodeDataFile nid extension
-  embedCatchingErrors $
-    coordinateWriting path False defaultWritingOptions $ \path' ->
+  embedCatchingErrors
+    $ coordinateWriting path False defaultWritingOptions
+    $ \path' ->
       writeFile path' rawData
 
 deleteNodeData_ ::
-  Members [RawGraph, Embed IO, Error UserError] effs =>
+  (Members [RawGraph, Embed IO, Error UserError] effs) =>
   NID ->
   -- | File extension for the node's data
   String ->
   Sem effs ()
 deleteNodeData_ nid extension = do
   path <- getNodeDataFile nid extension
-  embedCatchingErrors $
-    coordinateWriting path False defaultWritingOptions removeFile
+  embedCatchingErrors
+    $ coordinateWriting path False defaultWritingOptions removeFile
 
 runGraphDataFilesystemOperationsIO ::
-  Members [RawGraph, Embed IO, Error UserError] r =>
+  (Members [RawGraph, Embed IO, Error UserError] r) =>
   Sem (GraphDataFilesystemOperations : r) a ->
   Sem r a
 runGraphDataFilesystemOperationsIO = interpret \case

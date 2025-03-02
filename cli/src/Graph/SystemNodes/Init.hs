@@ -9,7 +9,7 @@ import Models.Edge
 import Models.NID
 import MyPrelude
 
-createSystemNodes :: HasGraph String effs => Sem effs ()
+createSystemNodes :: (HasGraph String effs) => Sem effs ()
 createSystemNodes = do
   touchNode systemNodeNID
   touchNode nilNID

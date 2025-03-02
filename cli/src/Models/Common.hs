@@ -30,7 +30,7 @@ instance {-# OVERLAPPABLE #-} ShowableAugmentation a where
   defaultShowAugmentation = Nothing
 
 defaultCompactNodeShowSettings ::
-  ShowableAugmentation a => CompactNodeShowSettings a
+  (ShowableAugmentation a) => CompactNodeShowSettings a
 defaultCompactNodeShowSettings =
   CompactNodeShowSettings
     { nidLength = maxBound,

@@ -3,29 +3,29 @@ module Graph.Export.FileSystem
   )
 where
 
+import DAL.DirectoryFormat
+import DAL.RawGraph
+import DAL.Serialization qualified as S2
 import Data.Tree (Tree)
-import qualified Data.Tree as T
+import Data.Tree qualified as T
 import Effect.IOWrapper.FileTypeOracle
-import Graph.Effect
+import Error.UserError
 import Error.Warn
-import qualified DAL.Serialization as S2
+import Graph.Effect
+import Models.Connect
+import Models.Node
 import MyPrelude
 import Polysemy.Error
 import System.Directory (doesFileExist)
 import System.Directory.Clone (cloneFile)
-import qualified System.Directory.Tree as DT
+import System.Directory.Tree qualified as DT
 import System.FilePath (makeValid, splitFileName)
-import Error.UserError
-import Models.Connect
-import Models.Node
-import DAL.RawGraph
-import DAL.DirectoryFormat
 
 -- | Like a DFS tree of the graph, but include duplciates unless they would form
 -- a cycle. Term Heterarchy comes from neuron zettelkasten
 graphHeterarchy ::
   forall r.
-  Members [Embed IO, RawGraph, Error UserError, FileTypeOracle] r =>
+  (Members [Embed IO, RawGraph, Error UserError, FileTypeOracle] r) =>
   (String, NID) ->
   Sem r (Tree (Maybe (FilePath, String), String))
 graphHeterarchy (startName, start) = do
@@ -41,12 +41,12 @@ graphHeterarchy (startName, start) = do
       go visited nid
         | nid `member` visited = pure []
         | otherwise = do
-          n :: Node String (Maybe ByteString) <- S2.deserializeNodeWithoutDataF fp nid
-          let visited' = singleton nid <> visited
-              toTree (Connect t nid') = do
-                dfAndE <- dataFileAndExtensionIfExists nid'
-                T.Node (dfAndE, t) <$> go visited' nid'
-          traverse toTree (toList n.outgoing)
+            n :: Node String (Maybe ByteString) <- S2.deserializeNodeWithoutDataF fp nid
+            let visited' = singleton nid <> visited
+                toTree (Connect t nid') = do
+                  dfAndE <- dataFileAndExtensionIfExists nid'
+                  T.Node (dfAndE, t) <$> go visited' nid'
+            traverse toTree (toList n.outgoing)
   dfAndE <- dataFileAndExtensionIfExists start
   T.Node (dfAndE, startName) <$> go mempty start
 
@@ -57,9 +57,9 @@ heterarchyToDirTree = DT.Dir "." . T.foldTree toNodes
   where
     toNodes ::
       (Maybe (FilePath, String), String) ->
-      -- | A inner list consisting of a max of 2 elements consisting of:
-      -- * a file if the data for that node is non null
-      -- * a directory if that node has children
+      -- \| A inner list consisting of a max of 2 elements consisting of:
+      -- \* a file if the data for that node is non null
+      -- \* a directory if that node has children
       [[DT.DirTree FilePath]] ->
       [DT.DirTree FilePath]
     toNodes (dfAndE, n) children =
@@ -95,7 +95,7 @@ heterarchyToDirTree = DT.Dir "." . T.foldTree toNodes
 -- as a hacky thing, but anyways we'll cross that bridge when we get there.
 exportToDirectory ::
   forall r.
-  Members [RawGraph, Embed IO, Error UserError, FileTypeOracle, Warn UserError] r =>
+  (Members [RawGraph, Embed IO, Error UserError, FileTypeOracle, Warn UserError] r) =>
   NID ->
   FilePath ->
   Sem r ()
@@ -114,5 +114,9 @@ exportToDirectory nid outputFp = do
           DT.Failed name e ->
             OtherError ("failed while writing file: " <> pack name) <> IOFail e
           _ -> error "invariant of failures guarantes only failures are left"
-    warn . Multiple . toNonEmpty . (overallDescription `ncons`) $
-      failureToUserError <$> DT.failures results
+    warn
+      . Multiple
+      . toNonEmpty
+      . (overallDescription `ncons`)
+      $ failureToUserError
+      <$> DT.failures results

@@ -3,7 +3,7 @@
 module Executable.GraphEditor.GoldenSpec where
 
 import Data.Attoparsec.ByteString
-import qualified Data.ByteString as B
+import Data.ByteString qualified as B
 import System.FilePath
 import System.FilePath.Glob
 import System.Process.Typed
@@ -84,18 +84,18 @@ runGraphEditor :: GoldenTest -> IO GoldenTest
 runGraphEditor test@GoldenTest {..} =
   withTempGraph (pathForTemplate <$> template) $ \tmpGraph -> do
     (stdOut', stdErr') <-
-      readProcess_ $
-        proc
+      readProcess_
+        $ proc
           "ge"
           [ "--test-only-nid-generation-seed",
             "0",
             "--test-only-monotonic-increasing-deterministic-time",
             tmpGraph
           ]
-          & setStdin (byteStringInput (fromStrict input))
+        & setStdin (byteStringInput (fromStrict input))
     (graphDump', _) <- readProcess_ $ proc "dump-graph" [tmpGraph]
-    pure $
-      test
+    pure
+      $ test
         { stdOut = toStrict stdOut',
           stdErr = toStrict stdErr',
           graphDump = toStrict graphDump'

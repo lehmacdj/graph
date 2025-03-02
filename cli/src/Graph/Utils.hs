@@ -16,11 +16,11 @@ import Models.Node
 import MyPrelude
 import Witherable
 
-getNodes :: Member (ReadGraph t (Maybe ByteString)) effs => [NID] -> Sem effs [Node t (Maybe ByteString)]
+getNodes :: (Member (ReadGraph t (Maybe ByteString)) effs) => [NID] -> Sem effs [Node t (Maybe ByteString)]
 getNodes = wither getNode
 
 getNodeSem ::
-  Members [ReadGraph t a, Error Missing] effs =>
+  (Members [ReadGraph t a, Error Missing] effs) =>
   NID ->
   Sem effs (Node t a)
 getNodeSem nid =
@@ -29,7 +29,7 @@ getNodeSem nid =
     Just n -> pure n
 
 getNodeDatalessSem ::
-  Members [ReadGraphDataless t, Error Missing] effs =>
+  (Members [ReadGraphDataless t, Error Missing] effs) =>
   NID ->
   Sem effs (Node t (Maybe ByteString))
 getNodeDatalessSem nid =
@@ -57,7 +57,7 @@ insertNode n = do
   forM_ esOut insertEdge
 
 currentNode ::
-  Members [ReadGraph t (Maybe ByteString), GetLocation, Error Missing] effs =>
+  (Members [ReadGraph t (Maybe ByteString), GetLocation, Error Missing] effs) =>
   Sem effs (Node t (Maybe ByteString))
 currentNode = currentLocation >>= getNodeSem
 

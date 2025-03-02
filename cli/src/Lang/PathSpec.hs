@@ -1,6 +1,6 @@
 module Lang.PathSpec where
 
-import qualified Data.Set.Ordered as OSet
+import Data.Set.Ordered qualified as OSet
 import Lang.Path
 import Models.Graph
 import Models.NID

@@ -1,6 +1,6 @@
 module Main (main) where
 
-import qualified Executable.GraphEditor as GraphEditor
+import Executable.GraphEditor qualified as GraphEditor
 import MyPrelude
 
 main :: IO ()

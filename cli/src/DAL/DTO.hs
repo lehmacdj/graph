@@ -20,7 +20,7 @@ data NodeDTO t = NodeDTO
   deriving (ToJSON, FromJSON) via FastGenericEncoding (NodeDTO t)
   deriving anyclass (NFData)
 
-nodeToDTO :: Ord t => Node t a -> NodeDTO t
+nodeToDTO :: (Ord t) => Node t a -> NodeDTO t
 nodeToDTO Node {..} =
   NodeDTO
     { id = nid,
@@ -28,7 +28,7 @@ nodeToDTO Node {..} =
       outgoing = mapSet connectToDTO outgoing
     }
 
-nodeFromDTO :: Ord t => NodeDTO t -> Node t ()
+nodeFromDTO :: (Ord t) => NodeDTO t -> Node t ()
 nodeFromDTO NodeDTO {id = nid, ..} =
   Node
     { augmentation = (),

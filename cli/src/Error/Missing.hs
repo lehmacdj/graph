@@ -18,5 +18,5 @@ data Missing = Missing
 instance ToUserError Missing where
   toUserError (Missing nid reason) = MissingNode nid reason
 
-throwMissing :: Member (Error Missing) effs => NID -> Sem effs a
+throwMissing :: (Member (Error Missing) effs) => NID -> Sem effs a
 throwMissing nid = throw $ Missing nid Nothing

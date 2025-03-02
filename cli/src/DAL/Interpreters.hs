@@ -1,6 +1,6 @@
 module DAL.Interpreters where
 
-import qualified Control.Exception as E
+import Control.Exception qualified as E
 import DAL.RawGraph
 import Error.UserError
 import MyPrelude
@@ -22,13 +22,13 @@ newtype UnliftRawGraphUserErrorIO = UnliftRawGraphUserErrorIO
   }
 
 withUnliftIORawGraphUserError ::
-  Members [RawGraph, Error UserError, Embed IO] r =>
+  (Members [RawGraph, Error UserError, Embed IO] r) =>
   (UnliftRawGraphUserErrorIO -> IO a) ->
   Sem r a
 withUnliftIORawGraphUserError f = do
   graphPath <- getGraphFilePath
-  fromException @UserError $
-    f
+  fromException @UserError
+    $ f
       ( UnliftRawGraphUserErrorIO $ \action -> do
           result <- runRawGraphUserErrorIO graphPath action
           either E.throw pure result

@@ -23,7 +23,7 @@ handleError action handler = do
     Right x -> pure x
     Left e -> handler e
 
-embedStateful :: forall s r a. Member (State s) r => (s -> (a, s)) -> Sem r a
+embedStateful :: forall s r a. (Member (State s) r) => (s -> (a, s)) -> Sem r a
 embedStateful f = do
   state <- get
   let (result, newState) = f state
@@ -31,7 +31,7 @@ embedStateful f = do
   pure result
 
 errorToLeft ::
-  Show e => Sem (Error e : effs) a -> Sem effs (Either e a)
+  (Show e) => Sem (Error e : effs) a -> Sem effs (Either e a)
 errorToLeft = (`handleError` pure . Left) . fmap Right
 
 errorToNothing ::

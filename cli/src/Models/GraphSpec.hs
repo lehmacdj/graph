@@ -23,7 +23,8 @@ spec_at = do
   let n1 :: Node Text ()
       n1 =
         emptyNode (smallNID 1)
-          & #incoming .~ setFromList [Connect "0->1" (smallNID 0)]
+          & #incoming
+          .~ setFromList [Connect "0->1" (smallNID 0)]
   it "adds outgoing edges" do
     (minimalGraph & at (smallNID 0) ?~ n0') `shouldBe` insertNode n1 minimalGraph
   it "adds incoming edges" do

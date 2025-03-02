@@ -65,7 +65,7 @@ mkTransitionCompleter xs x =
       | otherwise = [show z, z]
 
 failCompletionWithOriginalInputOnErrorOrWarning ::
-  Member (Embed IO) effs =>
+  (Member (Embed IO) effs) =>
   -- | The original input
   String ->
   Sem (Warn UserError : Error UserError : effs) (String, [Completion]) ->

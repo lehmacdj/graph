@@ -20,12 +20,12 @@ data Connect t = Connect
   }
   deriving (Eq, Ord, Generic, NFData)
 
-instance Show t => CompactNodeShow (Connect t) a where
+instance (Show t) => CompactNodeShow (Connect t) a where
   minimumNidLength settings c = minimumNidLength settings c . node
   compactNodeShow nidLength (Connect t nid) =
     compactNodeShow nidLength nid ++ " via " ++ tshow t
 
-instance Show t => Show (Connect t) where
+instance (Show t) => Show (Connect t) where
   show = unpack . compactNodeShowDefault
 
 instance (FromJSON t, ValidTransition t) => FromJSON (Connect t)
@@ -47,7 +47,7 @@ pairOfConnect (Connect x nid) = (x, nid)
 --
 -- And outN0 is the @outgoingConnectsOf n0@, then @matchConnect "a" n0 = n2@.
 -- TODO: make this return (Set NID)
-matchConnect :: ValidTransition t => t -> Set (Connect t) -> [NID]
+matchConnect :: (ValidTransition t) => t -> Set (Connect t) -> [NID]
 matchConnect x cs =
   map (view #node)
     . filter ((== x) . view #transition)
@@ -55,7 +55,7 @@ matchConnect x cs =
 
 -- | selfLoopify n1 n2 is a function that makes self loops on n1 self loops on n2
 selfLoopify ::
-  ValidTransition t =>
+  (ValidTransition t) =>
   NID ->
   NID ->
   Set (Connect t) ->

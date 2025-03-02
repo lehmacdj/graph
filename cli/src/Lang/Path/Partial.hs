@@ -54,7 +54,10 @@ pPartialPath = do
 pLastPartialPath :: Parser PartialPath
 pLastPartialPath =
   try (c *> pPartialPath <* eof)
-    <|> c *> pPath transition *> pPartialPath <* eof
+    <|> c
+    *> pPath transition
+    *> pPartialPath
+    <* eof
   where
     c = lexeme (many (oneOf (":.-_" :: String) <|> alphaNumChar) <* lookAhead s)
 

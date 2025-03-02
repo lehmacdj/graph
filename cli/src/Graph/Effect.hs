@@ -9,15 +9,15 @@ module Graph.Effect
 where
 
 import Control.Lens hiding (transform)
-import qualified DAL.Serialization as S2
+import DAL.Serialization qualified as S2
 import Data.Aeson (FromJSON (..), ToJSON (..))
-import qualified Data.Set as Set
+import Data.Set qualified as Set
 import Error.UserError
 import Error.Warn
 import Models.Connect
 import Models.Edge
 import Models.Graph (Graph)
-import qualified Models.Graph as G
+import Models.Graph qualified as G
 import Models.NID
 import Models.Node
 import MyPrelude
@@ -53,7 +53,7 @@ ifDualized dual f
 
 type Dualizeable = State IsDual
 
-dualize :: Member Dualizeable effs => Sem effs ()
+dualize :: (Member Dualizeable effs) => Sem effs ()
 dualize = modify @IsDual (omap not)
 
 data WriteGraph t m a where
@@ -114,7 +114,8 @@ runReadGraphIODualizeable ::
 runReadGraphIODualizeable dir = reinterpret $ \case
   GetNode nid -> do
     maybeN <-
-      errorToNothing $
+      errorToNothing
+        $
         -- writing type level lists in your code is not fun :(
         -- kids: be careful when you choose haskell
         S2.deserializeNodeF @t @(Error UserError : Input IsDual : effs) dir nid
@@ -134,7 +135,8 @@ runReadGraphDatalessIODualizeable ::
 runReadGraphDatalessIODualizeable dir = reinterpret $ \case
   GetNodeDataless nid -> do
     maybeN <-
-      errorToNothing $
+      errorToNothing
+        $
         -- writing type level lists in your code is not fun :(
         -- kids: be careful when you choose haskell
         S2.deserializeNodeWithoutDataF @t @(Error UserError : Input IsDual : effs) dir nid
@@ -222,13 +224,14 @@ runWriteGraphIO dir = runInputConst (IsDual False) . runWriteGraphIODualizeable 
 -- the strings stick around until they are gc-ed
 runWriteStringGraph ::
   forall r a.
-  Members
-    [ WriteGraph NID,
-      Error UserError,
-      Warn UserError,
-      Input IsDual
-    ]
-    r =>
+  ( Members
+      [ WriteGraph NID,
+        Error UserError,
+        Warn UserError,
+        Input IsDual
+      ]
+      r
+  ) =>
   Sem (WriteGraph String : r) a ->
   Sem r a
 runWriteStringGraph = interpret $ \case
@@ -261,8 +264,9 @@ runWriteGraphIODualizeable ::
   Sem (WriteGraph t : effs) ~> Sem (Input IsDual : effs)
 runWriteGraphIODualizeable dir = reinterpret $ \case
   TouchNode nid ->
-    whenM (not <$> S2.doesNodeExist dir nid) $
-      embedCatchingErrors $ S2.serializeNodeEx (emptyNode' nid :: Node t (Maybe ByteString)) dir
+    whenM (not <$> S2.doesNodeExist dir nid)
+      $ embedCatchingErrors
+      $ S2.serializeNodeEx (emptyNode' nid :: Node t (Maybe ByteString)) dir
   DeleteNode nid -> do
     n <- S2.deserializeNodeF @t dir nid
     let del = Set.filter ((/= nid) . view #node) :: Set (Connect t) -> Set (Connect t)

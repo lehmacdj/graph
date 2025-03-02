@@ -29,15 +29,19 @@ data ReportMissing t m r where
 
 makeSem ''ReportMissing
 
-deriving instance Eq t => Eq (ReportMissing t m r)
+deriving instance (Eq t) => Eq (ReportMissing t m r)
 
-deriving instance Ord t => Ord (ReportMissing t m r)
+deriving instance (Ord t) => Ord (ReportMissing t m r)
 
-instance Show t => Show (ReportMissing t m r) where
+instance (Show t) => Show (ReportMissing t m r) where
   show = \case
     NodeMissing nid -> "node " ++ show nid ++ " is missing from the graph"
     ConnectMissing d nid' (Connect t nid) ->
-      show nid ++ " has a" ++ dir1 ++ " edge " ++ show t
+      show nid
+        ++ " has a"
+        ++ dir1
+        ++ " edge "
+        ++ show t
         ++ " "
         ++ dir2
         ++ " "
@@ -84,7 +88,7 @@ fsck = do
 
 reportMissingNode ::
   forall t effs.
-  Member (ReportMissing t) effs =>
+  (Member (ReportMissing t) effs) =>
   Sem (Error Missing : effs) () ->
   Sem effs ()
 reportMissingNode e = handleError e $ \case

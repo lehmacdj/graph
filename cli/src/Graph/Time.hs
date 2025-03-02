@@ -1,6 +1,6 @@
 module Graph.Time where
 
-import qualified Data.Set as Set
+import Data.Set qualified as Set
 import Effect.IOWrapper.GetTime
 import Error.Missing
 import Error.UserError

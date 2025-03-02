@@ -7,7 +7,7 @@ module Error.UserError
 where
 
 import Control.Arrow (left)
-import qualified Control.Exception as E
+import Control.Exception qualified as E
 import Control.Lens
 import Models.NID (NID)
 import MyPrelude
@@ -43,7 +43,9 @@ instance Show UserError where
   show OperationCancelled = "cancelled!"
   show (IOFail e) = show e
   show (MissingNode nid reason) =
-    "node " ++ show nid ++ " is missing"
+    "node "
+      ++ show nid
+      ++ " is missing"
       ++ maybe "" ((" for reason " ++) . unpack) reason
   show (WebError e) = show e
   show (AesonDeserialize e) = "failed to deserialize JSON: " ++ e
@@ -59,10 +61,10 @@ instance Semigroup UserError where
 
 instance Exception UserError
 
-throwString :: Member (Error UserError) effs => String -> Sem effs a
+throwString :: (Member (Error UserError) effs) => String -> Sem effs a
 throwString = throwConvertible
 
-throwText :: Member (Error UserError) effs => Text -> Sem effs a
+throwText :: (Member (Error UserError) effs) => Text -> Sem effs a
 throwText = throwConvertible
 
 throwConvertible ::
@@ -80,7 +82,7 @@ throwLeft (Left err) = throw $ toUserError err
 
 -- | capture errors and convert them to an error
 embedCatchingErrors ::
-  Members [Error UserError, Embed IO] r => IO a -> Sem r a
+  (Members [Error UserError, Embed IO] r) => IO a -> Sem r a
 embedCatchingErrors = fromExceptionVia mapExceptionToUserError
   where
     mapExceptionToUserError = \case
@@ -90,7 +92,7 @@ embedCatchingErrors = fromExceptionVia mapExceptionToUserError
       e -> OtherException e
 
 printErrors ::
-  Member (Embed IO) effs =>
+  (Member (Embed IO) effs) =>
   Sem (Error UserError ': effs) () ->
   Sem effs ()
 printErrors = (`handleError` liftIO . eprint)

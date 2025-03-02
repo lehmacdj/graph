@@ -30,7 +30,7 @@ import Polysemy.Scoped
 import Polysemy.State
 import Polysemy.Util
 import System.Console.Haskeline (InputT)
-import qualified System.Console.Haskeline as H
+import System.Console.Haskeline qualified as H
 import System.Random
 
 data Env = Env
@@ -113,7 +113,7 @@ type IOWrapperEffects =
 
 type TimeBehavior =
   forall r.
-  Member (Embed IO) r =>
+  (Member (Embed IO) r) =>
   Sem (GetTime : r) ~> Sem r
 
 runIOWrapperEffects ::
@@ -142,12 +142,12 @@ type ErrorEffects =
 
 type ErrorHandlingBehavior a =
   forall r.
-  Member (Embed IO) r =>
+  (Member (Embed IO) r) =>
   Sem (Warn UserError : Error UserError : r) a ->
   Sem r a
 
 runErrorEffects ::
-  Members PermissiveDependencyEffects r =>
+  (Members PermissiveDependencyEffects r) =>
   ErrorHandlingBehavior a ->
   Sem (Concat ErrorEffects r) a ->
   Sem r a
@@ -164,8 +164,7 @@ type PermissiveDependencyEffects =
   ]
 
 runPermisiveDependencyEffects ::
-  ( Member (Embed IO) r
-  ) =>
+  (Member (Embed IO) r) =>
   FilePath ->
   Sem (Concat PermissiveDependencyEffects r) ~> Sem r
 runPermisiveDependencyEffects path =
@@ -177,8 +176,7 @@ runPermisiveDependencyEffects path =
     >>> runRawGraphWithPath path
 
 runPermissiveDependencyEffectsEnv ::
-  ( Members FinalEffects r
-  ) =>
+  (Members FinalEffects r) =>
   Sem (Concat PermissiveDependencyEffects r) ~> Sem r
 runPermissiveDependencyEffectsEnv =
   runEchoReadline
@@ -208,7 +206,8 @@ runFinalEffects env =
     >>> withEffects @'[Embed (InputT IO), Final (InputT IO)]
     >>> embedToFinal @(InputT IO)
     >>> runFinal
-    >>> H.runInputT env . replSettings
+    >>> H.runInputT env
+    . replSettings
 
 type AppEffects :: [Effect]
 type AppEffects =

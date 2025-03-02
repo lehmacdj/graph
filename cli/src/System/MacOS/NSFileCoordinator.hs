@@ -307,7 +307,7 @@ unwrappingWriter :: WrappedWriter m -> WritingOptions -> (FilePath -> m a) -> m 
 unwrappingWriter (WrappedWriter unwrapped) = unwrapped
 
 coordinateAccessing ::
-  Traversable t =>
+  (Traversable t) =>
   FilesToCoordinate t ->
   ( t (WrappedReader IO) ->
     t (WrappedWriter IO) ->

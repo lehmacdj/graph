@@ -2,8 +2,8 @@
 --   Interpreters for polysemy effects into MonadIO, MonadState, or MonadReader
 module Polysemy.MTL where
 
-import qualified Control.Monad.Reader as MTL
-import qualified Control.Monad.State as MTL
+import Control.Monad.Reader qualified as MTL
+import Control.Monad.State qualified as MTL
 import MyPrelude
 import Polysemy.Input
 import Polysemy.State

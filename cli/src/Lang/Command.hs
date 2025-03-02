@@ -126,13 +126,14 @@ data Command
 
 singleErr :: Text -> Set NID -> UserError
 singleErr cmd xs =
-  OtherError $
-    cmd ++ " needs a path that resolves to a single node\n"
-      ++ "but it resolved to: "
-      ++ tshow (setToList xs)
+  OtherError
+    $ cmd
+    ++ " needs a path that resolves to a single node\n"
+    ++ "but it resolved to: "
+    ++ tshow (setToList xs)
 
 printTransitions ::
-  Member Echo effs =>
+  (Member Echo effs) =>
   Set (Connect String) ->
   Sem effs ()
 printTransitions = mapM_ (echo . dtransition)
@@ -140,7 +141,7 @@ printTransitions = mapM_ (echo . dtransition)
     dtransition (Connect t nid) = show t ++ " at " ++ show nid
 
 promptYesNo ::
-  Member Readline r =>
+  (Member Readline r) =>
   String ->
   Sem r Bool
 promptYesNo prompt = do
@@ -153,7 +154,7 @@ promptYesNo prompt = do
 
 -- | Check to make sure that the current state of the graph is not dualized
 guardDangerousDualizedOperation ::
-  Members [Readline, Error UserError, Dualizeable] r => Sem r ()
+  (Members [Readline, Error UserError, Dualizeable] r) => Sem r ()
 guardDangerousDualizedOperation = do
   isDual' <- view #isDual <$> get @IsDual
   when isDual' do
@@ -242,8 +243,9 @@ interpretCommand = \case
   Flatten t -> do
     nid <- currentLocation
     let err =
-          const . OtherError $
-            "flatten only works if there is only a single node that the literal resolves to"
+          const
+            . OtherError
+            $ "flatten only works if there is only a single node that the literal resolves to"
     nodeToFlattenFrom <- the' err =<< subsumeUserError (resolvePathSuccesses nid (Literal t))
     nodesToFlatten <- subsumeUserError $ resolvePathSuccesses nodeToFlattenFrom Wild
     deleteEdge (Edge nid t nodeToFlattenFrom)
@@ -286,19 +288,19 @@ interpretCommand = \case
   Rename p q -> do
     nid <- currentLocation
     let err xs =
-          OtherError $
-            "the first argument to rn require the path to only resolve to "
-              ++ "one node but they resolved to \n"
-              ++ (tshow . map endPoint . setToList $ xs)
+          OtherError
+            $ "the first argument to rn require the path to only resolve to "
+            ++ "one node but they resolved to \n"
+            ++ (tshow . map endPoint . setToList $ xs)
     c <- the' err =<< subsumeUserError (resolvePathSuccessesDetail nid p)
     subsumeUserError (renameDPath c nid q)
   Alias p q -> do
     nid <- currentLocation
     let err xs =
-          OtherError $
-            "the first argument to rn require the path to only resolve to "
-              ++ "one node but they resolved to \n"
-              ++ (tshow . map endPoint . setToList $ xs)
+          OtherError
+            $ "the first argument to rn require the path to only resolve to "
+            ++ "one node but they resolved to \n"
+            ++ (tshow . map endPoint . setToList $ xs)
     c <- the' err =<< subsumeUserError (resolvePathSuccessesDetail nid p)
     subsumeUserError (aliasDPath c nid q)
   Edit -> do

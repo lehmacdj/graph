@@ -25,7 +25,7 @@ import Models.Node (Node, emptyNode)
 import MyPrelude hiding (assert, describe)
 import System.Directory (copyFile)
 import System.Directory.Tree (AnchoredDirTree ((:/)))
-import qualified System.Directory.Tree as DT
+import System.Directory.Tree qualified as DT
 import Test.Hspec as X (Spec, describe, it)
 import Test.Hspec.Expectations as X
 import Test.Tasty as X
@@ -84,7 +84,7 @@ edge i o = Edge (smallNID i) () (smallNID o)
 edge' :: Int -> a -> Int -> Edge a
 edge' i t o = Edge (smallNID i) t (smallNID o)
 
-node :: ValidTransition t => Int -> Node t ()
+node :: (ValidTransition t) => Int -> Node t ()
 node i = emptyNode (smallNID i)
 
 disconnectedGraph :: [Int] -> Graph () ()

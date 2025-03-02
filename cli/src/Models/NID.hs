@@ -46,7 +46,8 @@ newtype NID = UnsafeNID {representation :: Text}
 
 instance Uniform NID where
   uniformM g =
-    UnsafeNID . pack
+    UnsafeNID
+      . pack
       <$> replicateM nidDigits ((base62Chars `indexEx`) <$> uniformRM (0, 61) g)
 
 -- | zero NID which represents the origin
@@ -63,15 +64,16 @@ smallNID = UnsafeNID . pack . reverse . go nidDigits . (`rem` (62 ^ nidDigits))
     go digitsLeft n
       | digitsLeft == 0 = []
       | otherwise =
-        base62Chars `indexEx` (n `rem` 62) :
-        go (digitsLeft - 1) (n `quot` 62)
+          base62Chars `indexEx` (n `rem` 62)
+            : go (digitsLeft - 1) (n `quot` 62)
 
 instance CompactNodeShow NID a where
   minimumNidLength _ =
     max 1 . (nidDigits -) . length . takeWhile (== '0') . (. representation)
   compactNodeShow CompactNodeShowSettings {..} nid =
     (if showNidAtSign then "@" else "")
-      ++ drop (max (nidDigits - nidLength) 0) nid . representation
+      ++ drop (max (nidDigits - nidLength) 0) nid
+      . representation
 
 instance Show NID where
   -- kind of a hack: but we rely on NID's show/read for serialization so it
@@ -109,7 +111,7 @@ instance FromJSONKey NID where
 -- A-Z a-z 0-9) this should still be avoided except for 'SystemNodes' because
 -- it violates random generation of ids (which is important for avoiding
 -- collisions)
-unsafeNID :: HasCallStack => Text -> NID
+unsafeNID :: (HasCallStack) => Text -> NID
 unsafeNID t =
-  fromMaybe (error $ show t <> " doesn't meet precondition") $
-    readMay t
+  fromMaybe (error $ show t <> " doesn't meet precondition")
+    $ readMay t

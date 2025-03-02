@@ -12,7 +12,7 @@ import Foreign.C.Types (CInt (..))
 import MyPrelude
 import System.Directory (copyFile)
 
-cloneFile :: HasCallStack => FilePath -> FilePath -> IO ()
+cloneFile :: (HasCallStack) => FilePath -> FilePath -> IO ()
 
 #ifdef darwin_HOST_OS
 
