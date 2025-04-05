@@ -27,12 +27,12 @@ whenNothing (Just _) _ = pure ()
 whenNothingM :: (Monad m) => m (Maybe a) -> m () -> m ()
 whenNothingM v action = v >>= (`whenNothing` action)
 
-unwrapMaybe :: (Monad m) => Maybe a -> m a -> m a
-unwrapMaybe Nothing action = action
-unwrapMaybe (Just v) _ = pure v
+onNothing :: (Monad m) => Maybe a -> m a -> m a
+onNothing Nothing action = action
+onNothing (Just v) _ = pure v
 
-unwrapMaybeM :: (Monad m) => m (Maybe a) -> m a -> m a
-unwrapMaybeM v action = v >>= (`unwrapMaybe` action)
+onNothingM :: (Monad m) => m (Maybe a) -> m a -> m a
+onNothingM v action = v >>= (`onNothing` action)
 
 unwrapDefaulting :: (Applicative m) => m a -> Maybe a -> m a
 unwrapDefaulting def = maybe def pure
@@ -43,10 +43,6 @@ unwrapDefaultingM def = (>>= unwrapDefaulting def)
 unwrapEx :: (HasCallStack) => String -> Maybe a -> a
 unwrapEx _ (Just x) = x
 unwrapEx s Nothing = error s
-
-describe :: String -> Maybe a -> Either String a
-describe s Nothing = Left s
-describe _ (Just x) = Right x
 
 forgetLeft :: Either e a -> Maybe a
 forgetLeft (Right x) = Just x
