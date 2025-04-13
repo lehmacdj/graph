@@ -8,7 +8,6 @@ module Graph.Check where
 import Control.Lens
 import Effect.IOWrapper.Echo
 import Error.Missing
-import Error.UserError
 import Graph.Effect
 import Graph.Utils
 import Models.Connect

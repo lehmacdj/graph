@@ -20,17 +20,18 @@ data Connect t = Connect
   }
   deriving (Eq, Ord, Generic, NFData)
 
-instance (Show t) => CompactNodeShow (Connect t) a where
-  minimumNidLength settings c = minimumNidLength settings c . node
-  compactNodeShow nidLength (Connect t nid) =
-    compactNodeShow nidLength nid ++ " via " ++ tshow t
+instance (Show t) => CompactNodeShow (Connect t) where
+  type Augmentation (Connect t) = Void
+  minimumNidLength settings c = minimumNidLength settings c.node
+  nshowSettings settings (Connect t nid) =
+    nshowSettings settings nid ++ " via " ++ tshow t
 
 instance (Show t) => Show (Connect t) where
-  show = unpack . compactNodeShowDefault
+  show = unpack . nshowDefault
 
-instance (FromJSON t, ValidTransition t) => FromJSON (Connect t)
+instance (FromJSON t, ValidTransitionNCS t) => FromJSON (Connect t)
 
-instance (ToJSON t, ValidTransition t) => ToJSON (Connect t) where
+instance (ToJSON t, ValidTransitionNCS t) => ToJSON (Connect t) where
   toEncoding = genericToEncoding defaultOptions
 
 pairOfConnect :: Connect t -> (t, NID)

@@ -56,6 +56,13 @@ import Control.Lens as X
     _Just,
     _Left,
     _Right,
+    ifolded,
+    (^..),
+    (^@..),
+    foldOf,
+    ifiltered,
+    nearly,
+    IndexedFold
   )
 import Control.Lens.Extras as X (is)
 import Data.List as X (iterate, tails)

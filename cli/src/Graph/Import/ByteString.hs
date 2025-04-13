@@ -4,7 +4,6 @@ import Data.Digest.Pure.SHA
 import Effect.IOWrapper.GetTime
 import Effect.IOWrapper.Web
 import Error.Missing
-import Error.UserError
 import Graph.Effect
 import Graph.FreshNID
 import Graph.SystemNodes

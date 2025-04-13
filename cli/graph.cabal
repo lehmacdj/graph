@@ -1,6 +1,6 @@
 cabal-version: 1.12
 
--- This file has been generated from package.yaml by hpack version 0.35.2.
+-- This file has been generated from package.yaml by hpack version 0.37.0.
 --
 -- see: https://github.com/sol/hpack
 
@@ -83,6 +83,7 @@ library
       Models.GraphSpec
       Models.History
       Models.HistorySpec
+      Models.MiscSpec
       Models.NID
       Models.NIDSpec
       Models.Node
@@ -163,6 +164,7 @@ library
       TypeSynonymInstances
       ViewPatterns
   ghc-options: -Wall -fplugin=Polysemy.Plugin -flate-specialise -fspecialise-aggressively
+  cpp-options: -DDEBUG
   build-depends:
       Glob
     , SHA
@@ -176,6 +178,7 @@ library
     , comonad
     , conduit
     , conduit-extra
+    , constraints
     , containers
     , deepseq
     , directory
@@ -287,6 +290,7 @@ executable dump-graph
       TypeSynonymInstances
       ViewPatterns
   ghc-options: -Wall -fplugin=Polysemy.Plugin -flate-specialise -fspecialise-aggressively -threaded -rtsopts -with-rtsopts=-N
+  cpp-options: -DDEBUG
   build-depends:
       Glob
     , SHA
@@ -300,6 +304,7 @@ executable dump-graph
     , comonad
     , conduit
     , conduit-extra
+    , constraints
     , containers
     , deepseq
     , directory
@@ -405,6 +410,7 @@ executable ge
       TypeSynonymInstances
       ViewPatterns
   ghc-options: -Wall -fplugin=Polysemy.Plugin -flate-specialise -fspecialise-aggressively -threaded -rtsopts -with-rtsopts=-N
+  cpp-options: -DDEBUG
   build-depends:
       Glob
     , SHA
@@ -418,6 +424,7 @@ executable ge
     , comonad
     , conduit
     , conduit-extra
+    , constraints
     , containers
     , deepseq
     , directory
@@ -523,6 +530,7 @@ executable scratch
       TypeSynonymInstances
       ViewPatterns
   ghc-options: -Wall -fplugin=Polysemy.Plugin -flate-specialise -fspecialise-aggressively -threaded -rtsopts -with-rtsopts=-N
+  cpp-options: -DDEBUG
   build-depends:
       Glob
     , SHA
@@ -536,6 +544,7 @@ executable scratch
     , comonad
     , conduit
     , conduit-extra
+    , constraints
     , containers
     , deepseq
     , directory
@@ -642,6 +651,7 @@ test-suite graph-test
       TypeSynonymInstances
       ViewPatterns
   ghc-options: -Wall -fplugin=Polysemy.Plugin -flate-specialise -fspecialise-aggressively -threaded -rtsopts -with-rtsopts=-N -Wall
+  cpp-options: -DDEBUG
   build-depends:
       Glob
     , SHA
@@ -655,6 +665,7 @@ test-suite graph-test
     , comonad
     , conduit
     , conduit-extra
+    , constraints
     , containers
     , deepseq
     , directory

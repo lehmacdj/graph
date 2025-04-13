@@ -13,7 +13,6 @@ import Effect.IOWrapper.Echo
 import Effect.IOWrapper.FileSystem
 import Effect.IOWrapper.GetTime
 import Error.Missing
-import Error.UserError
 import Graph.Effect
 import Graph.FreshNID
 import Graph.Import.ByteString

@@ -67,20 +67,20 @@ smallNID = UnsafeNID . pack . reverse . go nidDigits . (`rem` (62 ^ nidDigits))
           base62Chars `indexEx` (n `rem` 62)
             : go (digitsLeft - 1) (n `quot` 62)
 
-instance CompactNodeShow NID a where
+instance CompactNodeShow NID where
+  type Augmentation NID = Void
   minimumNidLength _ =
-    max 1 . (nidDigits -) . length . takeWhile (== '0') . (. representation)
-  compactNodeShow CompactNodeShowSettings {..} nid =
+    max 1 . (nidDigits -) . length . takeWhile (== '0') . (.representation)
+  nshowSettings CompactNodeShowSettings {..} nid =
     (if showNidAtSign then "@" else "")
-      ++ drop (max (nidDigits - nidLength) 0) nid
-      . representation
+      ++ drop (max (nidDigits - nidLength) 0) nid.representation
 
 instance Show NID where
   -- kind of a hack: but we rely on NID's show/read for serialization so it
   -- must always consistently be the max length
   -- we should stop using Read for deserialization and then include the @ sign
   -- here
-  show = unpack . compactNodeShow defaultCompactNodeShowSettings {showNidAtSign = False}
+  show = unpack . nshowSettings defaultCompactNodeShowSettings {showNidAtSign = False}
 
 instance Read NID where
   readsPrec _ x
@@ -88,7 +88,7 @@ instance Read NID where
     | otherwise = []
 
 instance ToJSON NID where
-  toEncoding = toEncoding . (. representation)
+  toEncoding = toEncoding . (.representation)
 
 instance FromJSON NID where
   parseJSON = withText "NID" $ \t ->
@@ -97,7 +97,7 @@ instance FromJSON NID where
       Just x -> pure x
 
 instance ToJSONKey NID where
-  toJSONKey = toJSONKeyText (. representation)
+  toJSONKey = toJSONKeyText (.representation)
 
 instance FromJSONKey NID where
   fromJSONKey = FromJSONKeyTextParser p

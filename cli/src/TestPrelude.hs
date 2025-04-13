@@ -22,7 +22,7 @@ import Models.Edge
 import Models.Graph (Graph, emptyGraph, insertEdges, insertNodes)
 import Models.NID
 import Models.Node (Node, emptyNode)
-import MyPrelude hiding (assert, describe)
+import MyPrelude hiding (assert)
 import System.Directory (copyFile)
 import System.Directory.Tree (AnchoredDirTree ((:/)))
 import System.Directory.Tree qualified as DT

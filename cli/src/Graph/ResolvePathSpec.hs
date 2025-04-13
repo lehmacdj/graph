@@ -1,3 +1,5 @@
+{-# LANGUAGE CPP #-}
+
 module Graph.ResolvePathSpec where
 
 import Graph.GraphMetadataEditing (GraphMetadataEditing, runInMemoryGraphMetadataEditing)
@@ -36,33 +38,52 @@ runWithTestGraph :: Sem '[GraphMetadataEditing Text] a -> a
 runWithTestGraph =
   run . evalState testGraph . runInMemoryGraphMetadataEditing . raiseUnder
 
+data ResultExpectation = Target | Thin
+  deriving (Show, Eq, Ord)
+
+shouldBeTarget :: Maybe [ResultExpectation] -> Bool
+shouldBeTarget = maybe False (elem Target)
+
+shouldBeThin :: Maybe [ResultExpectation] -> Bool
+shouldBeThin = maybe True (elem Thin)
+
 spec_materializePathAsGraph :: Spec
 spec_materializePathAsGraph = do
   let materializesPath ::
         NID -> Path Text -> Graph Text (MaterializedPathInfo Text) -> Spec
       materializesPath from p expected =
         it ("materialize " ++ show p ++ " from " ++ show from) do
-          runWithTestGraph (materializePathAsGraph from p) `shouldBe` Just expected
-  let materializesTo :: Path Text -> [(Int, Bool)] -> Spec
-      materializesTo p (asMap . mapFromList . over (traverse . _1) smallNID -> m) =
-        materializesPath (smallNID 0) p g
+          runWithTestGraph (materializePathAsGraph from p) `shouldBe` expected
+  let restrictToExpected :: Graph Text () -> [(Int, [ResultExpectation])] -> Graph Text (MaterializedPathInfo Text)
+      restrictToExpected graph expectedTemplate =
+        mapGraph expectedInfoEx
+          $ (<> concat thinNodes)
+          $ additiveFilterGraph (\n -> has (ix n.nid . filtered (notElem Thin)) infoMap) graph
         where
-          f n =
-            mempty @(MaterializedPathInfo Text)
-              & #isTarget
-              .~ (m ^. at n . nid . non False)
-          g =
-            traceShowId
-              . mapGraph f
-              $ additiveFilterGraph (\n -> has (ix n . nid) m) testGraph
-  One `materializesTo` [(0, True)]
-  Zero `materializesTo` [(0, False)]
-  Literal "zero-to-one" `materializesTo` [(0, False), (1, True)]
+          infoMap = asMap . mapFromList . over (traverse . _1) smallNID $ expectedTemplate
+          expectedInfoEx n =
+            let info = infoMap ^. at n.nid
+             in mempty @(MaterializedPathInfo Text)
+                  & (#isTarget .~ shouldBeTarget info)
+                  & (#isThin .~ shouldBeThin info)
+          thinNodes =
+            (infoMap ^@.. (ifolded . filtered (elem Thin)))
+              & map (singletonGraph . emptyNode . fst)
+  let materializesTo :: Path Text -> [(Int, [ResultExpectation])] -> Spec
+      materializesTo p expectedTemplate =
+        materializesPath
+          (smallNID 0)
+          p
+          (testGraph `restrictToExpected` expectedTemplate)
+  One `materializesTo` [(0, [Target, Thin])]
+  Zero `materializesTo` []
+  Literal "zero-to-one" `materializesTo` [(0, []), (1, [Target, Thin])]
   (Literal "zero-to-one" :/ Literal "one-to-others")
-    `materializesTo` [(0, True), (1, False), (2, True)]
+    `materializesTo` [(0, [Target]), (1, []), (2, [Target, Thin])]
   (Literal "zero-to-one" :/ Literal "one-to-two")
-    `materializesTo` [(0, False), (1, False), (2, True)]
+    `materializesTo` [(0, []), (1, []), (2, [Target, Thin])]
   (Literal "zero-to-two" :+ Literal "zero-to-one")
-    `materializesTo` [(0, False), (1, True), (2, True)]
+    `materializesTo` [(0, []), (1, [Target, Thin]), (2, [Target, Thin])]
   (Literal "zero-to-all" :& (Literal "zero-to-zero" :+ Literal "zero-to-one"))
-    `materializesTo` [(0, True), (1, True), (2, False)]
+    `materializesTo` [(0, [Target]), (1, [Target, Thin]), (2, [Thin])]
+  Wild `materializesTo` [(0, [Target]), (1, [Target, Thin]), (2, [Target, Thin])]

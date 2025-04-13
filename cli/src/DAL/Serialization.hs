@@ -60,7 +60,7 @@ serializeNodeEx ::
 serializeNodeEx n base = do
   createDirectoryIfMissing True base
   BL.writeFile (metadataFile base (n ^. #nid)) (Aeson.encode . nodeToDTO $ n)
-  case n . rawData of
+  case n.rawData of
     Just d -> B.writeFile (legacyNodeDataFile base (n ^. #nid)) d
     Nothing ->
       removeFile (legacyNodeDataFile base (n ^. #nid)) `catch` \case

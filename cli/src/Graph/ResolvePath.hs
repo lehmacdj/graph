@@ -2,7 +2,7 @@ module Graph.ResolvePath where
 
 import GHC.Records
 import Graph.GraphMetadataEditing
-import Models.Graph (Graph, emptyGraph, nodesMatchedBy)
+import Models.Graph (Graph, emptyGraph, nodesMatchedBy, singletonGraph)
 import Models.NID
 import Models.Node
 import Models.Path
@@ -29,16 +29,16 @@ instance (Show t) => ShowableAugmentation (MaterializedPathInfo t) where
   defaultShowAugmentation = Just ("materializedPathInfo", tshow)
 
 instance HasField "leftoverPath" (Node' ti to (MaterializedPathInfo t)) (Maybe (Path t)) where
-  getField = (. augmentation . leftoverPath)
+  getField = (.augmentation.leftoverPath)
 
 instance HasField "jumps" (Node' ti to (MaterializedPathInfo t)) (Set NID) where
-  getField = (. augmentation . jumps)
+  getField = (.augmentation.jumps)
 
 instance HasField "isTarget" (Node' ti to (MaterializedPathInfo t)) Bool where
-  getField = (. augmentation . isTarget)
+  getField = (.augmentation.isTarget)
 
 instance HasField "isThin" (Node' ti to (MaterializedPathInfo t)) Bool where
-  getField = (. augmentation . isThin)
+  getField = (.augmentation.isThin)
 
 instance Semigroup (MaterializedPathInfo t) where
   MaterializedPathInfo p1 j1 ta1 th1 <> MaterializedPathInfo p2 j2 ta2 th2 =
@@ -67,7 +67,6 @@ isTarget = #augmentation . #isTarget
 targetsInGraph :: Fold (Graph t1 (MaterializedPathInfo t2)) NID
 targetsInGraph = #nodeMap . traverse . filtered (view isTarget) . #nid
 
--- | Resolve a path to a node into a graph. The resulting graph encodes which
 -- transitions were travers_ed by the path + which transitions were not possible
 -- to traverse.
 materializePathAsGraph ::
@@ -80,74 +79,50 @@ materializePathAsGraph ::
   -- | Nothing if passed in node isn't in the graph or Just a graph containing
   -- the node where the value on the node is a path that wasn't possible to
   -- resolve further starting from that node
-  Sem r (Maybe (Graph t (MaterializedPathInfo t)))
-materializePathAsGraph nid path = withEarlyReturn do
-  n <-
-    unwrapM
-      $ getNodeMetadata nid
-      <&> (_Just . #augmentation .~ mempty)
+  Sem r (Graph t (MaterializedPathInfo t))
+materializePathAsGraph nid path = do
   case path of
-    One -> do
-      let n' = n & isTarget .~ True
-      pure $ Just $ emptyGraph & at nid ?~ n'
-    Zero -> pure $ Just $ emptyGraph & at nid ?~ n
-    Wild -> do
-      let g = emptyGraph & at nid ?~ n
+    One -> pure $ singletonGraph (emptyNode nid & isTarget .~ True)
+    Zero -> pure emptyGraph
+    Wild -> withEarlyReturn do
+      n <- onNothingM (getNodeMetadata nid) $ returnEarly emptyGraph
+      let n' :: Node t (MaterializedPathInfo t)
+          n' = n & #augmentation .~ ((mempty :: MaterializedPathInfo t) & #isThin .~ False)
+          g = emptyGraph & at nid ?~ n'
           outgoingNids = toSetOf (#outgoing . folded . #node) n
           g' = g & nodesMatchedBy (#nid . filtered (`member` outgoingNids)) . isTarget .~ True
-      pure $ Just g'
-    Literal t -> do
-      let g = emptyGraph & at nid ?~ n
-          matchedNids = toSetOf (#outgoing . folded . filteredBy (#transition . only t) . #node) n
-      when (null matchedNids) $ returnEarly $ Just $ g & at nid ?~ (n & leftoverPath ?~ Literal t)
+      pure g'
+    Literal t -> withEarlyReturn do
+      n <- onNothingM (getNodeMetadata nid) $ returnEarly emptyGraph
+      let n' :: Node t (MaterializedPathInfo t)
+          n' = n & #augmentation .~ traceShowId ((mempty :: MaterializedPathInfo t) & #isThin .~ False)
+          g = traceShowId (emptyGraph & at nid ?~ traceShowId n')
+      traceM $ "literal: " <> show g
+      let matchedNids = toSetOf (#outgoing . folded . filteredBy (#transition . only t) . #node) n'
+      traceM $ "matched nids: " <> show matchedNids
       let g' = g & nodesMatchedBy (#nid . filtered (`member` matchedNids)) . isTarget .~ True
-      pure $ Just g'
-    Absolute nid2 -> do
-      n2 <- unwrapMaybeM (getNodeMetadata nid2) do
-        returnEarly
-          $ Just
-          $ emptyGraph
-          & at nid
-          ?~ (n & leftoverPath ?~ Absolute nid2)
-      let n2' =
-            n2
-              & #augmentation
-              .~ mempty
-              & isTarget
-              .~ True
-      pure
-        $ Just
-        $ emptyGraph
-        & at nid
-        ?~ (n & jumps %~ insertSet nid2)
-        & at nid2
-        ?~ n2'
-    p1 :/ p2 -> do
-      g1 <- unwrapM $ materializePathAsGraph nid p1
-      let g1Targets = toList $ toSetOf targetsInGraph g1
-          g1Targetless = g1 & otraverse . isTarget .~ False
-      g2s <- forM (toList g1Targets) \nid1 -> do
-        materialized <- materializePathAsGraph nid1 p2
-        pure $ unwrapEx "impossible: already fetched targets" materialized
-      pure $ Just $ g1Targetless <> mconcat g2s
-    p1 :+ p2 -> do
-      g1 <- materializePathAsGraph nid p1
-      g2 <- materializePathAsGraph nid p2
-      pure $ g1 <> g2
-    p1 :& p2 -> do
-      g1 <- materializePathAsGraph nid p1
-      g2 <- materializePathAsGraph nid p2
-      let g1Targets = toSetOf (_Just . targetsInGraph) g1
-          g2Targets = toSetOf (_Just . targetsInGraph) g2
-          targets = g1Targets `intersection` g2Targets
-      pure
-        $ g1
-        <> g2
-        & _Just
-        . otraverse
-        . isTarget
-        .~ False
-        & _Just
-        . nodesMatchedBy (#nid . filtered (`member` targets))
-        . isTarget
-        .~ True
+      pure g'
+    Absolute targetNid -> pure $ singletonGraph (emptyNode targetNid & isTarget .~ True)
+
+-- p1 :/ p2 -> do
+--   g1 <- unwrapM $ materializePathAsGraph nid p1
+--   let g1Targets = toList $ toSetOf targetsInGraph g1
+--       g1Targetless = g1 & otraverse . isTarget .~ False
+--   g2s <- forM (toList g1Targets) \nid1 -> do
+--     materialized <- materializePathAsGraph nid1 p2
+--     pure $ unwrapEx "impossible: already fetched targets" materialized
+--   pure $ Just $ g1Targetless <> mconcat g2s
+-- p1 :+ p2 -> do
+--   g1 <- materializePathAsGraph nid p1
+--   g2 <- materializePathAsGraph nid p2
+--   pure $ g1 <> g2
+-- p1 :& p2 -> do
+--   g1 <- materializePathAsGraph nid p1
+--   g2 <- materializePathAsGraph nid p2
+--   let g1Targets = toSetOf (_Just . targetsInGraph) g1
+--       g2Targets = toSetOf (_Just . targetsInGraph) g2
+--       targets = g1Targets `intersection` g2Targets
+--   pure
+--     $ (g1 <> g2)
+--     & (_Just . otraverse . isTarget .~ False)
+--     & (_Just . nodesMatchedBy (#nid . filtered (`member` targets)) . isTarget .~ True)

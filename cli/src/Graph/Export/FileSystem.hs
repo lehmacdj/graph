@@ -15,7 +15,6 @@ import Graph.Effect
 import Models.Connect
 import Models.Node
 import MyPrelude
-import Polysemy.Error
 import System.Directory (doesFileExist)
 import System.Directory.Clone (cloneFile)
 import System.Directory.Tree qualified as DT

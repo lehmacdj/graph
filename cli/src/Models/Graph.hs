@@ -49,16 +49,17 @@ checkedGraphInvariant g = g
 -- generally only expected to be used internally, but it is okay to use them
 -- externally.
 nodeConsistentWithGraph ::
+  forall t a.
   (ValidNode t a) =>
   Graph t a ->
   Node t a ->
   Node t a
 #ifdef DEBUG
 nodeConsistentWithGraph g n
-  | lookupNode g n.nid == n = n
+  | lookupNodeEx g n.nid == n = n
   | otherwise = error $
-    "node " ++ show n ++ " is inconsistent with the state of the graph:\n"
-    ++ show g
+    "node " ++ snshow n ++ " is inconsistent with the state of the graph:\n"
+    ++ snshow g
 #else
 nodeConsistentWithGraph _ n = n
 #endif
@@ -67,27 +68,28 @@ nodeConsistentWithGraph _ n = n
 -- * Instances
 
 instance
-  (ValidNode t a, Show t, ShowableAugmentation a) =>
-  CompactNodeShow (Graph t a) a
+  (ValidNodeNCS t a, Show t) =>
+  CompactNodeShow (Graph t a)
   where
+  type Augmentation (Graph t a) = a
   minimumNidLength settings g =
     fromMaybe maxBound . maximumMay $ minimumNidLength settings <$> nodesOf g
-  compactNodeShow settings (checkedGraphInvariant -> g) =
-    intercalate "\n" $ compactNodeShow settings <$> nodesOf g
+  nshowSettings settings (checkedGraphInvariant -> g) =
+    intercalate "\n" $ nshowSettings settings <$> nodesOf g
 
 instance
-  (Show t, ValidNode t a, ShowableAugmentation a) =>
+  (Show t, ValidNodeNCS t a, ShowableAugmentation a) =>
   Show (Graph t a)
   where
-  show = unpack . compactNodeShowDefault @(Graph t a) @a
+  show = unpack . nshowDefault
 
 type instance Control.Lens.Index (Graph t a) = NID
 
 type instance Control.Lens.IxValue (Graph t a) = (Node t a)
 
-instance (ValidNode t a, DefaultAugmentation a) => Ixed (Graph t a)
+instance (ValidNodeNCS t a, DefaultAugmentation a) => Ixed (Graph t a)
 
-instance (ValidNode t a, DefaultAugmentation a) => At (Graph t a) where
+instance (ValidNodeNCS t a, DefaultAugmentation a) => At (Graph t a) where
   at nid = lens (maybeNodeLookup nid) setter
     where
       setter g Nothing = delNode nid g
@@ -96,13 +98,13 @@ instance (ValidNode t a, DefaultAugmentation a) => At (Graph t a) where
         Nothing -> insertNode n g
 
 instance
-  (ValidNode t a, Semigroup a, DefaultAugmentation a) =>
+  (ValidNodeNCS t a, Semigroup a, DefaultAugmentation a) =>
   Semigroup (Graph t a)
   where
   g1 <> g2 = foldl' (flip mergeNodeInto) g1 (nodesOf g2)
 
 instance
-  (ValidNode t a, Semigroup a, DefaultAugmentation a) =>
+  (ValidNodeNCS t a, Semigroup a, DefaultAugmentation a) =>
   Monoid (Graph t a)
   where
   mempty = emptyGraph
@@ -121,7 +123,7 @@ instance MonoFunctor (Graph t a) where
   omap f = over #nodeMap (omap f)
 
 instance Functor (Graph t) where
-  fmap f = Graph . fmap (fmap f) . (. nodeMap)
+  fmap f = Graph . fmap (fmap f) . (.nodeMap)
 
 instance MonoTraversable (Graph t a) where
   otraverse f = fmap Graph . otraverse f . view #nodeMap
@@ -149,15 +151,18 @@ nodesMatchedBy g = #nodeMap . traversed . filteredBy g
 emptyGraph :: Graph t a
 emptyGraph = Graph mempty
 
+singletonGraph :: Node t a -> Graph t a
+singletonGraph n = Graph $ singletonMap n.nid n
+
 isEmptyGraph :: Graph t a -> Bool
-isEmptyGraph = null . (. nodeMap)
+isEmptyGraph = null . (.nodeMap)
 
 mapGraph ::
   (ValidNode t a) =>
   (Node t a -> b) ->
   Graph t a ->
   Graph t b
-mapGraph f = Graph . fmap (extend f) . (. nodeMap) . checkedGraphInvariant
+mapGraph f = Graph . fmap (extend f) . (.nodeMap) . checkedGraphInvariant
 
 -- | Semantically removes nodes from the graph which don't meet the predicate.
 -- It is guaranteed that the resulting graph doesn't contain the nodes for which
@@ -168,7 +173,7 @@ subtractiveFilterGraph ::
   Graph t a ->
   Graph t a
 subtractiveFilterGraph f (checkedGraphInvariant -> g) =
-  foldl' maybeDelNode g g . nodeMap
+  foldl' maybeDelNode g g.nodeMap
   where
     maybeDelNode wg x
       | not $ f x = delNode' x wg
@@ -182,7 +187,7 @@ subtractiveFilterMapGraph ::
   Graph t b
 subtractiveFilterMapGraph f =
   map (unwrapEx "all just by filter")
-    . subtractiveFilterGraph (isJust . (. augmentation))
+    . subtractiveFilterGraph (isJust . (.augmentation))
     . mapGraph f
 
 -- | Semantically builds a new graph by inserting the nodes that meet the
@@ -253,18 +258,16 @@ containsEdge ::
   Edge t ->
   Bool
 (checkedGraphInvariant -> g) `containsEdge` e = withEarlyReturn_ do
-  source <- unwrapReturningDefault False $ maybeLookupNode g e . source
-  sink <- unwrapReturningDefault False $ maybeLookupNode g e . sink
-  let outConnectExists = outConnect e `member` source . outgoing
-  let inConnectExists = inConnect e `member` sink . incoming
+  source <- unwrapReturningDefault False $ maybeLookupNode g e.source
+  sink <- unwrapReturningDefault False $ maybeLookupNode g e.sink
+  let outConnectExists = outConnect e `member` source.outgoing
+  let inConnectExists = inConnect e `member` sink.incoming
   when (outConnectExists /= inConnectExists)
     $ error
     $ "graph inconsistent, containsEdge"
-    ++ show e
-    . source
+    ++ show e.source
     ++ " "
-    ++ show e
-    . sink
+    ++ show e.sink
   pure outConnectExists
 
 insertEdge ::
@@ -275,8 +278,8 @@ insertEdge ::
 insertEdge e (checkedGraphInvariant -> g) =
   g
     & #nodeMap
-      %~ ( (at e . source %~ Just . maybe (outStubNode e) (withEdge e))
-             . (at e . sink %~ Just . maybe (inStubNode e) (withEdge e))
+      %~ ( (at e.source %~ Just . maybe (outStubNode e) (withEdge e))
+             . (at e.sink %~ Just . maybe (inStubNode e) (withEdge e))
          )
 
 insertEdges ::
@@ -290,10 +293,8 @@ deleteEdge :: (ValidNode t a) => Edge t -> Graph t a -> Graph t a
 deleteEdge e (checkedGraphInvariant -> g) =
   g
     & #nodeMap
-      %~ adjustMap (over #outgoing (deleteSet (outConnect e))) e
-        . source
-        . adjustMap (over #incoming (deleteSet (inConnect e))) e
-        . sink
+      %~ adjustMap (over #outgoing (deleteSet (outConnect e))) e.source
+        . adjustMap (over #incoming (deleteSet (inConnect e))) e.sink
 
 deleteEdges ::
   (ValidNode t a) =>
@@ -316,12 +317,12 @@ insertNode ::
   Graph t a
 insertNode n (checkedGraphInvariant -> g) =
   g
-    & #nodeMap . at n . nid %~ ensureNodeExists
+    & #nodeMap . at n.nid %~ ensureNodeExists
     & updateNode n
     & checkedGraphInvariant
   where
     ensureNodeExists = \case
-      Nothing -> Just (emptyNode n . nid)
+      Nothing -> Just (emptyNode n.nid)
       Just original -> Just original
 
 insertNodes ::
@@ -341,19 +342,22 @@ updateNode ::
   Graph t a ->
   Graph t a
 updateNode n g = withEarlyReturn_ do
-  let nid = n . nid
+  let nid = n.nid
   original <- unwrapReturningDefault g $ maybeNodeLookup nid g
-  let outgoingAdded = n . outgoing \\ original . outgoing
-      outgoingRemoved = original . outgoing \\ n . outgoing
-      incomingAdded = n . incoming \\ original . incoming
-      incomingRemoved = original . incoming \\ n . incoming
+  let outgoingAdded = n.outgoing \\ original.outgoing
+      outgoingRemoved = original.outgoing \\ n.outgoing
+      incomingAdded = n.incoming \\ original.incoming
+      incomingRemoved = original.incoming \\ n.incoming
       addedEdges =
         mapSet (outgoingEdge nid) outgoingAdded
           ++ mapSet (`incomingEdge` nid) incomingAdded
       removedEdges =
         mapSet (outgoingEdge nid) outgoingRemoved
           ++ mapSet (`incomingEdge` nid) incomingRemoved
-  pure $ deleteEdges (toList removedEdges) $ insertEdges (toList addedEdges) g
+  pure $ g
+    & insertEdges (toList addedEdges)
+    & deleteEdges (toList removedEdges)
+    & #nodeMap . ix n.nid . #augmentation .~ n.augmentation
 
 -- | Somewhat bespoke operation that merges a node into the graph. This is
 -- used by the semigroup operation on Graphs. This is like @insertNode@ but
@@ -366,7 +370,7 @@ mergeNodeInto ::
   Graph t a
 mergeNodeInto n g =
   g
-    & at n . nid %~ \case
+    & at n.nid %~ \case
       Just original -> Just $ mergeNodesEx original n
       Nothing -> Just n
 
@@ -412,7 +416,7 @@ setData' ::
   Node t a ->
   Graph t a ->
   Graph t a
-setData' d n g = g & #nodeMap %~ (at n . nid ?~ n {augmentation = d})
+setData' d n g = g & #nodeMap %~ (at n.nid ?~ n {augmentation = d})
 
 setData ::
   (ValidNode t a) =>

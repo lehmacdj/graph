@@ -63,5 +63,5 @@ runGraphMetadataFilesystemOperationsIO ::
   Sem r a
 runGraphMetadataFilesystemOperationsIO = interpret \case
   ReadNodeMetadata nid -> readNodeMetadata_ =<< getMetadataFile nid
-  WriteNodeMetadata node -> (`writeNodeMetadata_` node) =<< getMetadataFile node . nid
+  WriteNodeMetadata node -> (`writeNodeMetadata_` node) =<< getMetadataFile node.nid
   DeleteNodeMetadata nid -> deleteNodeMetadata_ =<< getMetadataFile nid

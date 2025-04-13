@@ -19,7 +19,11 @@ import MyPrelude
 
 type ValidNode t a = (ValidTransition t, Eq a)
 
+type ValidNodeNCS t a = (ValidTransitionNCS t, Eq a)
+
 type ValidNode' ti to a = (ValidTransition ti, ValidTransition to, Eq a)
+
+type ValidNode'NCS ti to a = (ValidTransitionNCS ti, ValidTransitionNCS to, Eq a)
 
 class DefaultAugmentation a where
   defaultAugmentation :: a
@@ -43,37 +47,42 @@ data Node' ti to a = Node
   deriving (Eq, Ord, Generic, NFData, Functor)
 
 instance Comonad (Node' ti to) where
-  extract = (. augmentation)
+  extract = (.augmentation)
   duplicate n = n {augmentation = n}
 
 -- | A node in the graph. See 'Node'' for more information.
 type Node t a = Node' t t a
 
-instance forall ti to a. (Show ti, Ord ti, Show to, Ord to, ShowableAugmentation a) => CompactNodeShow (Node' ti to a) a where
+instance
+  forall ti to a.
+  (Show ti, Ord ti, Show to, Ord to) =>
+  CompactNodeShow (Node' ti to a)
+  where
+  type Augmentation (Node' ti to a) = a
   minimumNidLength settings@CompactNodeShowSettings {..} n =
-    maximum . ncons (getMinLen n . nid) $ toList $ incomingLens <> outgoingLens
+    maximum . ncons (getMinLen n.nid) $ toList $ incomingLens <> outgoingLens
     where
-      getMinLen :: forall x. (CompactNodeShow x a) => x -> Int
-      getMinLen = minimumNidLength @x @a settings
+      getMinLen :: forall x. (CompactNodeShow x) => x -> Int
+      getMinLen = minimumNidLength settings
       incomingLens
-        | showIncoming = mapSet getMinLen n . incoming
+        | showIncoming = mapSet getMinLen n.incoming
         | otherwise = mempty
-      outgoingLens = mapSet getMinLen n . outgoing
-  compactNodeShow settings@CompactNodeShowSettings {..} Node {..} =
-    compactNodeShow settings nid ++ "{" ++ intercalate ", " reprParts ++ "}"
+      outgoingLens = mapSet getMinLen n.outgoing
+  nshowSettings settings@CompactNodeShowSettings {..} Node {..} =
+    nshowSettings (unconsumed settings) nid ++ "{" ++ intercalate ", " reprParts ++ "}"
     where
       reprParts = catMaybes [outgoingRepr, incomingRepr, augmentationRepr]
       incomingRepr :: Maybe Text
       incomingRepr =
         justIfTrue showIncoming
           $ "in=["
-          ++ intercalate ", " (compactNodeShow settings <$> toList incoming)
+          ++ intercalate ", " (nshowSettings (unconsumed settings) <$> toList incoming)
           ++ "]"
       outgoingRepr :: Maybe Text
       outgoingRepr =
         Just
           $ "out=["
-          ++ intercalate ", " (compactNodeShow settings <$> toList outgoing)
+          ++ intercalate ", " (nshowSettings (unconsumed settings) <$> toList outgoing)
           ++ "]"
       augmentationRepr :: Maybe Text
       augmentationRepr =
@@ -85,12 +94,12 @@ instance
   (Show ti, Ord ti, Show to, Ord to, ShowableAugmentation a) =>
   Show (Node' ti to a)
   where
-  show = unpack . compactNodeShowDefault @(Node' ti to a) @a
+  show = unpack . nshowDefault
 
 -- | We implement special @HasField@ instances for specific types of
 -- augmentation so that we can refer to them in a more intuitive way.
 instance HasField "rawData" (Node' ti to (Maybe ByteString)) (Maybe ByteString) where
-  getField = (. augmentation)
+  getField = (.augmentation)
 
 indegree :: Getter (Node t a) Int
 indegree = #incoming . to Set.size
@@ -109,10 +118,10 @@ emptyNode' :: (Ord t) => NID -> Node t (Maybe a)
 emptyNode' = emptyNode
 
 inStubNode :: (Ord t, DefaultAugmentation a) => Edge t -> Node t a
-inStubNode e = Node e . sink (singleton $ inConnect e) mempty defaultAugmentation
+inStubNode e = Node e.sink (singleton $ inConnect e) mempty defaultAugmentation
 
 outStubNode :: (Ord t, DefaultAugmentation a) => Edge t -> Node t a
-outStubNode e = Node e . source mempty (singleton $ outConnect e) defaultAugmentation
+outStubNode e = Node e.source mempty (singleton $ outConnect e) defaultAugmentation
 
 dualizeNode :: Node t a -> Node t a
 dualizeNode (Node nid i o x) = Node nid o i x
@@ -123,12 +132,12 @@ mergeNodes ::
   Node t a ->
   Maybe (Node t a)
 mergeNodes n1 n2 =
-  justIfTrue (n1 . nid == n2 . nid)
+  justIfTrue (n1.nid == n2.nid)
     $ Node
-      { nid = n1 . nid,
-        incoming = n1 . incoming <> n2 . incoming,
-        outgoing = n1 . outgoing <> n2 . outgoing,
-        augmentation = n1 . augmentation <> n2 . augmentation
+      { nid = n1.nid,
+        incoming = n1.incoming <> n2.incoming,
+        outgoing = n1.outgoing <> n2.outgoing,
+        augmentation = n1.augmentation <> n2.augmentation
       }
 
 mergeNodesEx ::
@@ -148,5 +157,5 @@ withoutEdges deletedEdges n =
 withEdge :: (ValidTransition t) => Edge t -> Node t a -> Node t a
 withEdge e n =
   n
-    & #incoming %~ maybe id insertSet (justIfTrue (e . sink == n . nid) (inConnect e))
-    & #outgoing %~ maybe id insertSet (justIfTrue (e . source == n . nid) (outConnect e))
+    & #incoming %~ maybe id insertSet (justIfTrue (e.sink == n.nid) (inConnect e))
+    & #outgoing %~ maybe id insertSet (justIfTrue (e.source == n.nid) (outConnect e))

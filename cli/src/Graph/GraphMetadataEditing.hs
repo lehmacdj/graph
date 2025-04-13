@@ -98,25 +98,25 @@ runGraphMetadataEditing = interpret \case
     whenNothing n $ returnEarly ()
     deleteNodeMetadata nid
   InsertEdge edge -> withEarlyReturn do
-    source <- readNodeMetadata edge . source
-    let outConnectExists = source <&> \s -> outConnect edge `member` s . outgoing
-    sink <- readNodeMetadata edge . sink
-    let inConnectExists = sink <&> \s -> inConnect edge `member` s . incoming
+    source <- readNodeMetadata edge.source
+    let outConnectExists = source <&> \s -> outConnect edge `member` s.outgoing
+    sink <- readNodeMetadata edge.sink
+    let inConnectExists = sink <&> \s -> inConnect edge `member` s.incoming
     when (outConnectExists == Just True && inConnectExists == Just True) do
       returnEarly ()
     when (outConnectExists == Just True) do
       warnText $ "inconsistent edge: " ++ tshow edge ++ ", sink: " ++ tshow sink
     when (inConnectExists == Just True) do
       warnText $ "inconsistent edge: " ++ tshow edge ++ ", source: " ++ tshow source
-    let source' = fromMaybe (emptyNode edge . source) source
-    let sink' = fromMaybe (emptyNode edge . sink) sink
+    let source' = fromMaybe (emptyNode edge.source) source
+    let sink' = fromMaybe (emptyNode edge.sink) sink
     writeNodeMetadata (source' & #outgoing %~ insertSet (outConnect edge))
     writeNodeMetadata (sink' & #incoming %~ insertSet (inConnect edge))
   DeleteEdge edge -> withEarlyReturn do
-    source <- readNodeMetadata edge . source
-    let outConnectExists = source <&> \s -> outConnect edge `member` s . outgoing
-    sink <- readNodeMetadata edge . sink
-    let inConnectExists = sink <&> \s -> inConnect edge `member` s . incoming
+    source <- readNodeMetadata edge.source
+    let outConnectExists = source <&> \s -> outConnect edge `member` s.outgoing
+    sink <- readNodeMetadata edge.sink
+    let inConnectExists = sink <&> \s -> inConnect edge `member` s.incoming
     when (outConnectExists /= Just False && inConnectExists == outConnectExists) do
       -- either both nodes exist or neither node contains the edge
       returnEarly ()
@@ -202,8 +202,8 @@ runGraphMetadataEditingTransactionally action = do
           loadedNode <- unwrapReturningDefault () maybeLoadedNode
           tag @DeletedEdges
             $ modify
-            $ union (mapSet (nid `outgoingEdge`) loadedNode . outgoing)
-            . union (mapSet (`incomingEdge` nid) loadedNode . incoming)
+            $ union (mapSet (nid `outgoingEdge`) loadedNode.outgoing)
+            . union (mapSet (`incomingEdge` nid) loadedNode.incoming)
         InsertEdge edge -> do
           tag @Cache $ insertEdge edge
           tag @DeletedEdges $ modify $ deleteSet edge

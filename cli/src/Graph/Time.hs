@@ -3,7 +3,6 @@ module Graph.Time where
 import Data.Set qualified as Set
 import Effect.IOWrapper.GetTime
 import Error.Missing
-import Error.UserError
 import Graph.Effect
 import Graph.FreshNID
 import Graph.SystemNodes

@@ -44,7 +44,7 @@ spec_subtractiveFilterGraph = do
     subtractiveFilterGraph (const False) (disconnectedGraph [0, 1, 2])
       `shouldBe` emptyGraph
   it "filters out edges" do
-    subtractiveFilterGraph ((== smallNID 0) . (. nid)) (stronglyConnectedGraph [0, 1, 2])
+    subtractiveFilterGraph ((== smallNID 0) . (.nid)) (stronglyConnectedGraph [0, 1, 2])
       `shouldBe` stronglyConnectedGraph [0]
 
 spec_additiveFilterGraph :: Spec
@@ -57,6 +57,6 @@ spec_additiveFilterGraph = do
     let expected =
           emptyGraph
             & insertNode (k3 ^. at (smallNID 0) . non (error "impossible"))
-    additiveFilterGraph ((== smallNID 0) . (. nid)) k3 `shouldBe` expected
+    additiveFilterGraph ((== smallNID 0) . (.nid)) k3 `shouldBe` expected
   it "filters out only irrelevant edges" do
-    additiveFilterGraph ((/= smallNID 2) . (. nid)) k3 `shouldBe` k3
+    additiveFilterGraph ((/= smallNID 2) . (.nid)) k3 `shouldBe` k3

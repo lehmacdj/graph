@@ -47,7 +47,7 @@ writeGraphDiff_ loaded changes deletedEdges = do
         mapFromSet
           $
           -- if a node is still the same as when it was loaded, it wasn't changed
-          mapSet (. nid) (finalNodes \\ loadedNodes)
+          mapSet (.nid) (finalNodes \\ loadedNodes)
           -- any node which had an edge deleted may have changed
           <> toSetOf (folded . #source <> folded . #sink) deletedEdges
       -- we need to read every node we write to, plus any node that was loaded

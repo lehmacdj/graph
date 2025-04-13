@@ -252,10 +252,10 @@ interpretCommand = \case
     for_ [Edge nid t nid' | nid' <- toList nodesToFlatten] insertEdge
   ListOut -> do
     n <- subsumeUserError currentNode
-    printTransitions n . outgoing
+    printTransitions n.outgoing
   ShowImage -> do
     n <- subsumeUserError (currentNode @String)
-    forM_ n . rawData $ subsumeUserError @Missing . displayImage . fromStrict
+    forM_ n.rawData $ subsumeUserError @Missing . displayImage . fromStrict
   -- it probably would make sense to factor these commands out into separate
   -- layers of commands that can be handled at different levels
   Import fp -> do
@@ -273,7 +273,7 @@ interpretCommand = \case
     changeLocation nid
   Debug -> do
     echo "current node:"
-    currentLocation >>= subsumeUserError . getNodeSem >>= echo . show @(Node String (Maybe ByteString))
+    currentLocation >>= subsumeUserError . getNodeSem >>= echo . unpack . nshow
     echo "history:"
     get @History >>= echo . show
   -- echo "node-ids in the graph:"

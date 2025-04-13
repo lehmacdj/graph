@@ -30,6 +30,7 @@ dependencies:
 - comonad
 - conduit
 - conduit-extra
+- constraints
 - containers
 - deepseq
 - directory
@@ -136,6 +137,9 @@ ghc-options:
 - -fplugin=Polysemy.Plugin
 - -flate-specialise
 - -fspecialise-aggressively
+
+cpp-options:
+- -DDEBUG
 
 library:
   source-dirs: src

@@ -14,8 +14,8 @@ instance
   (Generic a, GToJSON' Encoding Zero (Rep a), GToJSON' Value Zero (Rep a)) =>
   ToJSON (FastGenericEncoding a)
   where
-  toJSON = genericToJSON defaultOptions . (. underlying)
-  toEncoding = genericToEncoding defaultOptions . (. underlying)
+  toJSON = genericToJSON defaultOptions . (.underlying)
+  toEncoding = genericToEncoding defaultOptions . (.underlying)
 
 instance
   (Generic a, GFromJSON Zero (Rep a)) =>

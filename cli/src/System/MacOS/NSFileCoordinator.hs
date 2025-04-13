@@ -28,7 +28,6 @@ import MyPrelude
 
 #ifdef darwin_HOST_OS
 
-import Control.Lens
 import Control.Monad.Trans.Cont
 import Foreign
 import Foreign.C.String

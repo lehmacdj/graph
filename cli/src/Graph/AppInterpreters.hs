@@ -206,8 +206,7 @@ runFinalEffects env =
     >>> withEffects @'[Embed (InputT IO), Final (InputT IO)]
     >>> embedToFinal @(InputT IO)
     >>> runFinal
-    >>> H.runInputT env
-    . replSettings
+    >>> H.runInputT env.replSettings
 
 type AppEffects :: [Effect]
 type AppEffects =

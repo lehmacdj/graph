@@ -3,12 +3,16 @@
 
 module Models.Common where
 
-import MyPrelude
+import Data.Constraint
+import Data.Constraint.Unsafe
+import MyPrelude hiding ((\\))
 
 #ifdef DEBUG
 type ValidTransition t = (Eq t, Ord t, Show t, HasCallStack)
+type ValidTransitionNCS t = (Eq t, Ord t, Show t)
 #else
 type ValidTransition t = (Eq t, Ord t)
+type ValidTransitionNCS t = (Eq t, Ord t)
 #endif
 
 data CompactNodeShowSettings a = CompactNodeShowSettings
@@ -23,28 +27,70 @@ data CompactNodeShowSettings a = CompactNodeShowSettings
     showAugmentation :: Maybe (Text, a -> Text)
   }
 
-class ShowableAugmentation a where
-  defaultShowAugmentation :: Maybe (Text, a -> Text)
+instance Contravariant CompactNodeShowSettings where
+  contramap f (CompactNodeShowSettings {..}) =
+    CompactNodeShowSettings
+      { nidLength = nidLength,
+        showNidAtSign = showNidAtSign,
+        showIncoming = showIncoming,
+        showAugmentation = fmap (fmap (. f)) showAugmentation
+      }
 
-instance {-# OVERLAPPABLE #-} ShowableAugmentation a where
-  defaultShowAugmentation = Nothing
-
-defaultCompactNodeShowSettings ::
-  (ShowableAugmentation a) => CompactNodeShowSettings a
+defaultCompactNodeShowSettings :: CompactNodeShowSettings a
 defaultCompactNodeShowSettings =
   CompactNodeShowSettings
     { nidLength = maxBound,
       showNidAtSign = True,
       showIncoming = False,
-      showAugmentation = defaultShowAugmentation
+      showAugmentation = Nothing
     }
 
-class CompactNodeShow n a where
+class CompactNodeShow n where
+  type Augmentation n
   minimumNidLength :: CompactNodeShowSettings a -> n -> Int
-  compactNodeShow :: CompactNodeShowSettings a -> n -> Text
+  nshowSettings :: CompactNodeShowSettings (Augmentation n) -> n -> Text
 
-compactNodeShowDefault :: forall n a. (CompactNodeShow n a, ShowableAugmentation a) => n -> Text
-compactNodeShowDefault n =
-  let defSettings = defaultCompactNodeShowSettings
-      settings = defSettings {nidLength = minimumNidLength @n @a defSettings n}
-   in compactNodeShow @n @a settings n
+class ShowableAugmentation a where
+  defaultShowAugmentation :: Maybe (Text, a -> Text)
+
+instance ShowableAugmentation Void where
+  defaultShowAugmentation = Nothing
+
+instance ShowableAugmentation () where
+  defaultShowAugmentation = Nothing
+
+newtype UnshownAugmentation a = UnshownAugmentation a
+
+instance ShowableAugmentation (UnshownAugmentation a) where
+  defaultShowAugmentation = Nothing
+
+withoutShowingAugmentations :: forall a b. ((ShowableAugmentation a) => b) -> b
+withoutShowingAugmentations x = x \\ e
+  where
+    e =
+      mapDict
+        (unsafeUnderive UnshownAugmentation)
+        (Dict :: Dict (ShowableAugmentation (UnshownAugmentation a)))
+
+nshowWith ::
+  (CompactNodeShow n) => Maybe (Text, Augmentation n -> Text) -> n -> Text
+nshowWith showAugmentation n =
+  let minNidLength = minimumNidLength defaultCompactNodeShowSettings n
+      settings =
+        defaultCompactNodeShowSettings
+          { nidLength = minNidLength,
+            showAugmentation
+          }
+   in nshowSettings settings n
+
+nshow ::
+  (CompactNodeShow n) => n -> Text
+nshow = nshowWith Nothing
+
+snshow :: (CompactNodeShow n) => n -> String
+snshow = unpack . nshow
+
+-- | Default implementation of show for things that implement CompactNodeShow
+nshowDefault ::
+  (ShowableAugmentation a, CompactNodeShow n, Augmentation n ~ a) => n -> Text
+nshowDefault = nshowWith defaultShowAugmentation
