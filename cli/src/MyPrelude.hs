@@ -15,7 +15,6 @@ import Control.Comonad as X
 import Control.DeepSeq as X
 import Data.Coerce as X (Coercible, coerce)
 import Data.Functor.Contravariant as X
-import Data.Generics.Labels as X
 import Data.Kind as X (Type)
 import Data.Set.Ordered.Orphans as X ()
 import Data.Void as X

@@ -87,9 +87,9 @@ type instance Control.Lens.Index (Graph t a) = NID
 
 type instance Control.Lens.IxValue (Graph t a) = (Node t a)
 
-instance (ValidNodeNCS t a, DefaultAugmentation a) => Ixed (Graph t a)
+instance (ValidNodeNCS t a, MonoidAugmentation a) => Ixed (Graph t a)
 
-instance (ValidNodeNCS t a, DefaultAugmentation a) => At (Graph t a) where
+instance (ValidNodeNCS t a, MonoidAugmentation a) => At (Graph t a) where
   at nid = lens (maybeNodeLookup nid) setter
     where
       setter g Nothing = delNode nid g
@@ -98,13 +98,13 @@ instance (ValidNodeNCS t a, DefaultAugmentation a) => At (Graph t a) where
         Nothing -> insertNode n g
 
 instance
-  (ValidNodeNCS t a, Semigroup a, DefaultAugmentation a) =>
+  (ValidNodeNCS t a, MonoidAugmentation a) =>
   Semigroup (Graph t a)
   where
   g1 <> g2 = foldl' (flip mergeNodeInto) g1 (nodesOf g2)
 
 instance
-  (ValidNodeNCS t a, Semigroup a, DefaultAugmentation a) =>
+  (ValidNodeNCS t a, MonoidAugmentation a) =>
   Monoid (Graph t a)
   where
   mempty = emptyGraph
@@ -195,7 +195,7 @@ subtractiveFilterMapGraph f =
 -- the resulting graph may contain nodes that are not connected to the rest of
 -- the graph.
 additiveFilterGraph ::
-  (ValidNode t a, DefaultAugmentation a) =>
+  (ValidNode t a, MonoidAugmentation a) =>
   (Node t a -> Bool) ->
   Graph t a ->
   Graph t a
@@ -311,7 +311,7 @@ nodesOf = (^.. #nodeMap . folded)
 -- | Add a node to the graph. The resulting graph is made consistent with the
 -- provided node. Edges are added/removed to maintain the invariant.
 insertNode ::
-  (ValidNode t a, DefaultAugmentation a) =>
+  (ValidNode t a, MonoidAugmentation a) =>
   Node t a ->
   Graph t a ->
   Graph t a
@@ -326,7 +326,7 @@ insertNode n (checkedGraphInvariant -> g) =
       Just original -> Just original
 
 insertNodes ::
-  (ValidNode t a, DefaultAugmentation a) =>
+  (ValidNode t a, MonoidAugmentation a) =>
   [Node t a] ->
   Graph t a ->
   Graph t a
@@ -337,7 +337,7 @@ insertNodes = listify insertNode
 -- graph before but are no longer in the node.
 -- If the node is not in the graph, the input graph is returned as is.
 updateNode ::
-  (ValidNode t a, DefaultAugmentation a) =>
+  (ValidNode t a, MonoidAugmentation a) =>
   Node t a ->
   Graph t a ->
   Graph t a
@@ -357,14 +357,14 @@ updateNode n g = withEarlyReturn_ do
   pure $ g
     & insertEdges (toList addedEdges)
     & deleteEdges (toList removedEdges)
-    & #nodeMap . ix n.nid . #augmentation .~ n.augmentation
+    & #nodeMap . ix n.nid . #augmentation %~ (<> n.augmentation)
 
 -- | Somewhat bespoke operation that merges a node into the graph. This is
 -- used by the semigroup operation on Graphs. This is like @insertNode@ but
 -- includes all edges in the graph / the provided node instead of deleting edges
 -- in the graph that aren't in the newly inserted node.
 mergeNodeInto ::
-  (Semigroup a, ValidNode t a, HasCallStack, DefaultAugmentation a) =>
+  (ValidNode t a, HasCallStack, MonoidAugmentation a) =>
   Node t a ->
   Graph t a ->
   Graph t a

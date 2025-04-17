@@ -28,11 +28,18 @@ type ValidNode'NCS ti to a = (ValidTransitionNCS ti, ValidTransitionNCS to, Eq a
 class DefaultAugmentation a where
   defaultAugmentation :: a
 
+-- | This requires that @mempty == defaultAugmentation@
+class (DefaultAugmentation a, Monoid a) => MonoidAugmentation a
+
 instance DefaultAugmentation (Maybe a) where
   defaultAugmentation = Nothing
 
+instance (Semigroup a) => MonoidAugmentation (Maybe a)
+
 instance DefaultAugmentation () where
   defaultAugmentation = ()
+
+instance MonoidAugmentation ()
 
 -- | A node in a graph. To allow separately mapping over the incoming and
 -- outgoing edges in a type changing way, we have two type parameters.

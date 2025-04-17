@@ -14,6 +14,7 @@ import Control.Lens as X
     Fold,
     Getter,
     Getting,
+    IndexedFold,
     Iso,
     Iso',
     Lens,
@@ -27,14 +28,21 @@ import Control.Lens as X
     Setting,
     Traversal,
     Traversal',
+    ala,
     at,
+    au,
     filtered,
     filteredBy,
+    foldOf,
     folded,
     has,
     hasn't,
+    ifiltered,
+    ifolded,
     isn't,
     ix,
+    mapping,
+    nearly,
     non,
     non',
     only,
@@ -49,22 +57,19 @@ import Control.Lens as X
     (<&>),
     (?~),
     (^.),
+    (^..),
     (^?),
+    (^@..),
     _1,
     _2,
     _3,
     _Just,
     _Left,
     _Right,
-    ifolded,
-    (^..),
-    (^@..),
-    foldOf,
-    ifiltered,
-    nearly,
-    IndexedFold
   )
 import Control.Lens.Extras as X (is)
+import Data.Generics.Labels as X
+import Data.Generics.Wrapped as X (_Unwrapped, _Wrapped)
 import Data.List as X (iterate, tails)
 import Data.List.NonEmpty as X (NonEmpty (..))
 import Data.Map.Strict qualified as Map
