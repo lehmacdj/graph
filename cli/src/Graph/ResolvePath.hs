@@ -94,6 +94,8 @@ targetsInGraph = #nodeMap . traverse . filtered (view isTarget) . #nid
 
 -- transitions were travers_ed by the path + which transitions were not possible
 -- to traverse.
+-- TODO: there's some stuff to fix here to make sure that the leftoverPath is correct
+-- probably best to start by writing more tests...
 materializePathAsGraph ::
   forall t r.
   ( Member (GraphMetadataReading t) r,
