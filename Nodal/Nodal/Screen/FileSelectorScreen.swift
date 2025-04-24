@@ -10,7 +10,7 @@ import SwiftUI
 struct FileSelectorScreen: View {
     @State var fileUrl: URL? = nil
 
-    @SceneStorage("fileUrlBookmark") var fileUrlBookmark: Data?
+    @AppStorage("fileUrlBookmark") var fileUrlBookmark: Data?
 
     // start out false so that we don't present the file importer and then immediately
     // hide it in the case that we have saved bookmark data
