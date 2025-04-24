@@ -141,7 +141,8 @@ func parseTime(string: String) -> Date? {
 }
 
 func makeDate(year: Int, month: Int, day: Int, time: Date) -> Date {
-    let calendar = Calendar(identifier: .iso8601)
+    var calendar = Calendar(identifier: .iso8601)
+    calendar.timeZone = .gmt
     let timeComponents = calendar.dateComponents(
         [.hour, .minute, .second, .nanosecond],
         from: time
