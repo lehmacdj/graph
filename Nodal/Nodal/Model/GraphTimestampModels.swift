@@ -127,9 +127,11 @@ func parseTime(string: String) -> Date? {
     let nonFractional = stringParts[0]
     let fractionalSeconds = stringParts[1]
 
-    let dateFormatter = DateFormatter()
-    dateFormatter.dateFormat = "HH:mm:ss"
-    guard let time = dateFormatter.date(from: String(nonFractional)) else {
+    let formatter = DateFormatter()
+    formatter.dateFormat = "HH:mm:ss"
+    formatter.timeZone = .gmt
+    formatter.calendar = .iso8601
+    guard let time = formatter.date(from: String(nonFractional)) else {
         return nil
     }
 

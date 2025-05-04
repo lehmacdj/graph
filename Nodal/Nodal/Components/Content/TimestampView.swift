@@ -14,7 +14,7 @@ struct TimestampView: View {
 
     private var formattedTimestamp: String {
         let now = dateProvider.now
-        let components = Calendar.current.dateComponents([.minute, .hour], from: timestamp, to: now)
+        let components = Calendar.iso8601.dateComponents([.minute, .hour], from: timestamp, to: now)
 
         if let minutes = components.minute,
            let hours = components.hour,
