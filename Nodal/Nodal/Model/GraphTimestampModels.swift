@@ -130,7 +130,7 @@ func parseTime(string: String) -> Date? {
     let formatter = DateFormatter()
     formatter.dateFormat = "HH:mm:ss"
     formatter.timeZone = .gmt
-    formatter.calendar = .iso8601
+    formatter.calendar = .utcISO8601
     guard let time = formatter.date(from: String(nonFractional)) else {
         return nil
     }

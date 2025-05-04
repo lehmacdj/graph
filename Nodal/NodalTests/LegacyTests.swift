@@ -44,7 +44,7 @@ class NodalTests: XCTestCase {
     let nanosecondPowerOf10Precision = 3
 
     func testParseTime() throws {
-        let actual = Calendar.iso8601.dateComponents(
+        let actual = Calendar.utcISO8601.dateComponents(
             [.hour, .minute, .second, .nanosecond],
             from: try XCTUnwrap(parseTime(string: "04:14:28.417274000000"))
         )
@@ -58,7 +58,7 @@ class NodalTests: XCTestCase {
     }
 
     func testMakeDate() throws {
-        let actual = Calendar.iso8601.dateComponents(
+        let actual = Calendar.utcISO8601.dateComponents(
             [.year, .month, .day, .hour, .minute, .second, .nanosecond],
             from: try XCTUnwrap(makeDate(
                 year: 2021,

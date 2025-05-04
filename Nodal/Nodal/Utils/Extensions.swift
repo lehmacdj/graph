@@ -138,6 +138,10 @@ public extension Int {
 }
 
 extension Calendar {
-    static let iso8601 = Calendar(identifier: .iso8601)
+    static let utcISO8601 = {
+        var calendar = Calendar(identifier: .iso8601)
+        calendar.timeZone = .gmt
+        return calendar
+    }()
 }
 
