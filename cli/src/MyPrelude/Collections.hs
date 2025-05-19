@@ -145,3 +145,12 @@ allPairs xs = [(x, y) | (x : ys) <- tails xs, y <- ys]
 
 allAnyOrderPairs :: [a] -> [(a, a)]
 allAnyOrderPairs xs = allPairs xs ++ map swap (allPairs xs)
+
+assertSingleton :: (HasCallStack, Show a) => [a] -> a
+assertSingleton [x] = x
+assertSingleton xs = error $ "assertSingleton: not a singleton: " <> show xs
+
+assertMaxOne :: (HasCallStack, Show a) => [a] -> Maybe a
+assertMaxOne [] = Nothing
+assertMaxOne [x] = Just x
+assertMaxOne xs = error $ "assertMaxOne: not at most one: " <> show xs

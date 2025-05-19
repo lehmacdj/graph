@@ -38,14 +38,24 @@ runWithTestGraph :: Sem '[GraphMetadataEditing Text] a -> a
 runWithTestGraph =
   run . evalState testGraph . runInMemoryGraphMetadataEditing . raiseUnder
 
-data ResultExpectation = Target | Thin
-  deriving (Show, Eq, Ord)
+data ResultExpectation = Target | Thin | Leftover (Path Text)
+  deriving (Show, Eq, Ord, Generic)
 
 shouldBeTarget :: Maybe [ResultExpectation] -> Bool
 shouldBeTarget = maybe False (elem Target)
 
 shouldBeThin :: Maybe [ResultExpectation] -> Bool
 shouldBeThin = maybe True (elem Thin)
+
+leftovers :: Maybe [ResultExpectation] -> Maybe (Path Text)
+leftovers Nothing = Nothing
+leftovers (Just es) =
+  es
+    & filter (has #_Leftover)
+    & assertMaxOne
+    & fmap \case
+      Leftover p -> p
+      _ -> error "impossible"
 
 spec_materializePathAsGraph :: Spec
 spec_materializePathAsGraph = do
@@ -54,7 +64,10 @@ spec_materializePathAsGraph = do
       materializesPath from p expected =
         it ("materialize " ++ show p ++ " from " ++ show from) do
           runWithTestGraph (materializePathAsGraph from p) `shouldBe` expected
-  let restrictToExpected :: Graph Text () -> [(Int, [ResultExpectation])] -> Graph Text (MaterializedPathInfo Text)
+  let restrictToExpected ::
+        Graph Text () ->
+        [(Int, [ResultExpectation])] ->
+        Graph Text (MaterializedPathInfo Text)
       restrictToExpected graph expectedTemplate =
         mapGraph expectedInfoEx
           $ (<> concat thinNodes)
@@ -66,6 +79,7 @@ spec_materializePathAsGraph = do
              in mempty @(MaterializedPathInfo Text)
                   & (#isTarget .~ shouldBeTarget info)
                   & (#isThin .~ shouldBeThin info)
+                  & (#leftoverPath .~ leftovers info)
           thinNodes =
             (infoMap ^@.. (ifolded . filtered (elem Thin)))
               & map (singletonGraph . emptyNode . fst)
