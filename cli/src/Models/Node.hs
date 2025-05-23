@@ -9,6 +9,7 @@ where
 
 import Control.DeepSeq
 import Control.Lens
+import Data.Semigroup qualified as Semigroup (Last (Last))
 import Data.Set qualified as Set
 import GHC.Records
 import Models.Common
@@ -19,17 +20,21 @@ import MyPrelude
 
 type ValidNode t a = (ValidTransition t, Eq a)
 
+-- | variant of ValidNode that doesn't impose HasCallStack
+-- to be used in instances/places where we don't want to impose that
 type ValidNodeNCS t a = (ValidTransitionNCS t, Eq a)
 
 type ValidNode' ti to a = (ValidTransition ti, ValidTransition to, Eq a)
 
+-- | variant of ValidNode' that doesn't impose HasCallStack
+-- to be used in instances/places where we don't want to impose that
 type ValidNode'NCS ti to a = (ValidTransitionNCS ti, ValidTransitionNCS to, Eq a)
 
 class DefaultAugmentation a where
   defaultAugmentation :: a
 
--- | This requires that @mempty == defaultAugmentation@
-class (DefaultAugmentation a, Monoid a) => MonoidAugmentation a
+-- | This requires that @mempty == defaultAugmentation@ if @Monoid a@
+class (DefaultAugmentation a, Semigroup a) => MonoidAugmentation a
 
 instance DefaultAugmentation (Maybe a) where
   defaultAugmentation = Nothing
@@ -40,6 +45,11 @@ instance DefaultAugmentation () where
   defaultAugmentation = ()
 
 instance MonoidAugmentation ()
+
+instance (DefaultAugmentation a) => DefaultAugmentation (Semigroup.Last a) where
+  defaultAugmentation = Semigroup.Last defaultAugmentation
+
+instance (DefaultAugmentation a) => MonoidAugmentation (Semigroup.Last a)
 
 -- | A node in a graph. To allow separately mapping over the incoming and
 -- outgoing edges in a type changing way, we have two type parameters.

@@ -5,6 +5,7 @@ module Models.Common where
 
 import Data.Constraint
 import Data.Constraint.Unsafe
+import Data.Functor.Classes
 import MyPrelude hiding ((\\))
 
 #ifdef DEBUG
@@ -51,18 +52,38 @@ class CompactNodeShow n where
   nshowSettings :: CompactNodeShowSettings (Augmentation n) -> n -> Text
 
 class ShowableAugmentation a where
-  defaultShowAugmentation :: Maybe (Text, a -> Text)
+  augmentationLabel :: Text
+  defaultShowAugmentation :: a -> Text
+  shouldShowStandaloneAugmentation :: Bool
 
 instance ShowableAugmentation Void where
-  defaultShowAugmentation = Nothing
+  augmentationLabel = "void"
+  defaultShowAugmentation = const "!"
+  shouldShowStandaloneAugmentation = False
 
 instance ShowableAugmentation () where
-  defaultShowAugmentation = Nothing
+  augmentationLabel = "unit"
+  defaultShowAugmentation = const "()"
+  shouldShowStandaloneAugmentation = False
+
+instance (ShowableAugmentation a) => ShowableAugmentation (Maybe a) where
+  augmentationLabel = augmentationLabel @a
+  defaultShowAugmentation maybeX =
+    pack
+      $ liftShowsPrec
+        (\_ x -> (unpack (defaultShowAugmentation x :: Text) ++))
+        (error "shouldn't need showList")
+        0
+        maybeX
+        ""
+  shouldShowStandaloneAugmentation = True
 
 newtype UnshownAugmentation a = UnshownAugmentation a
 
 instance ShowableAugmentation (UnshownAugmentation a) where
-  defaultShowAugmentation = Nothing
+  augmentationLabel = "unshown"
+  defaultShowAugmentation = const ""
+  shouldShowStandaloneAugmentation = False
 
 withoutShowingAugmentations :: forall a b. ((ShowableAugmentation a) => b) -> b
 withoutShowingAugmentations x = x \\ e
@@ -92,5 +113,12 @@ snshow = unpack . nshow
 
 -- | Default implementation of show for things that implement CompactNodeShow
 nshowDefault ::
-  (ShowableAugmentation a, CompactNodeShow n, Augmentation n ~ a) => n -> Text
-nshowDefault = nshowWith defaultShowAugmentation
+  forall a n.
+  (ShowableAugmentation a, CompactNodeShow n, Augmentation n ~ a) =>
+  n ->
+  Text
+nshowDefault =
+  nshowWith
+    $ justIfTrue
+      (shouldShowStandaloneAugmentation @a)
+      (augmentationLabel @a, defaultShowAugmentation @a)

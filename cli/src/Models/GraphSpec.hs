@@ -6,11 +6,31 @@ import Models.NID
 import Models.Node
 import TestPrelude
 
+newtype TestTextAugmentation = TestTextAugmentation Text
+  deriving stock (Eq, Show)
+  deriving newtype (Semigroup, Monoid)
+
+instance IsString TestTextAugmentation where
+  fromString = TestTextAugmentation . fromString
+
+instance DefaultAugmentation TestTextAugmentation where
+  defaultAugmentation = TestTextAugmentation ""
+
+instance MonoidAugmentation TestTextAugmentation
+
+instance ShowableAugmentation TestTextAugmentation where
+  augmentationLabel = "testText"
+  defaultShowAugmentation = coerce
+  shouldShowStandaloneAugmentation = True
+
 spec_at :: Spec
 spec_at = do
   let n0 = node 0
   let minimalGraph :: Graph Text ()
       minimalGraph = insertNode n0 emptyGraph
+  let t_n0 = emptyNode (smallNID 0)
+  let t_minimalGraph :: Graph Text TestTextAugmentation
+      t_minimalGraph = insertNode t_n0 emptyGraph
   it "fails to fetch a node not in the graph" do
     emptyGraph @Text @() ^. at (smallNID 0) `shouldBe` Nothing
   it "fetches a node" do
@@ -37,6 +57,25 @@ spec_at = do
   it "removes incoming edges" do
     (dualizeGraph oneEdgeGraph & at (smallNID 0) ?~ dualizeNode n0)
       `shouldBe` noEdgeGraph
+  let foobarGraph :: Graph Text TestTextAugmentation
+      foobarGraph = singletonGraph (Node (smallNID 0) mempty mempty "foobar")
+  it "replaces augmentation" do
+    (t_minimalGraph & at (smallNID 0) ?~ t_n0 & ix (smallNID 0) . #augmentation .~ "foobar")
+      `shouldBe` foobarGraph
+  it "modifies augmentation" do
+    ( t_minimalGraph
+        & (at (smallNID 0) ?~ t_n0)
+        & (ix (smallNID 0) . #augmentation .~ "foo")
+        & (ix (smallNID 0) . #augmentation %~ (++ "bar"))
+      )
+      `shouldBe` foobarGraph
+  it "overwrites augmentation" do
+    ( t_minimalGraph
+        & (at (smallNID 0) ?~ t_n0)
+        & (ix (smallNID 0) . #augmentation .~ "Hello world!")
+        & (ix (smallNID 0) . #augmentation .~ "foobar")
+      )
+      `shouldBe` foobarGraph
 
 spec_subtractiveFilterGraph :: Spec
 spec_subtractiveFilterGraph = do

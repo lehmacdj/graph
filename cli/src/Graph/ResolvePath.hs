@@ -1,17 +1,17 @@
 module Graph.ResolvePath where
 
 import GHC.Records
+import Graph.FreshNID
 import Graph.GraphMetadataEditing
-import Models.Graph (Graph, emptyGraph, nodesMatchedBy, singletonGraph)
+import Models.Connect (Connect (..))
+import Models.Graph (Graph, emptyGraph, insertNode, nodesMatchedBy, nodesMatching, singletonGraph)
 import Models.NID
 import Models.Node
 import Models.Path
 import MyPrelude hiding ((\\))
 
 data MaterializedPathInfo t = MaterializedPathInfo
-  { -- | Path that wasn't possible to materialize further from this node
-    leftoverPath :: Maybe (Path t),
-    -- | NIDs that were "jumped" to by the path
+  { -- | NIDs that were "jumped" to by the path from this node
     -- (this happens when Absolute is materialized at this node)
     jumps :: Set NID,
     -- | Whether this node is a target of the path. We may need to extend this
@@ -21,15 +21,20 @@ data MaterializedPathInfo t = MaterializedPathInfo
     -- | Whether this node is thin. Thin nodes are nodes that were not fetched
     -- from the underlying graph but rather were created due to an edge leading
     -- to them existing
-    isThin :: Bool
+    -- Invariant: a node may not be new & thin at the same time.
+    isThin :: Bool,
+    -- | Whether this node is new. New nodes are nodes that are added to the
+    -- graph while resolving the path to represent parts of the path that
+    -- don't exist in the underlying graph.
+    -- Invariant: a node may not be new & thin at the same time.
+    isNew :: Bool
   }
   deriving (Show, Eq, Ord, Generic)
 
 instance (Show t) => ShowableAugmentation (MaterializedPathInfo t) where
-  defaultShowAugmentation = Just ("materializedPathInfo", tshow)
-
-instance HasField "leftoverPath" (Node' ti to (MaterializedPathInfo t)) (Maybe (Path t)) where
-  getField = (.augmentation.leftoverPath)
+  augmentationLabel = "materializedPathInfo"
+  defaultShowAugmentation = tshow
+  shouldShowStandaloneAugmentation = True
 
 instance HasField "jumps" (Node' ti to (MaterializedPathInfo t)) (Set NID) where
   getField = (.augmentation.jumps)
@@ -40,12 +45,20 @@ instance HasField "isTarget" (Node' ti to (MaterializedPathInfo t)) Bool where
 instance HasField "isThin" (Node' ti to (MaterializedPathInfo t)) Bool where
   getField = (.augmentation.isThin)
 
+instance HasField "isNew" (Node' ti to (MaterializedPathInfo t)) Bool where
+  getField = (.augmentation.isNew)
+
 instance DefaultAugmentation (MaterializedPathInfo t) where
-  defaultAugmentation = MaterializedPathInfo Nothing mempty False True
+  defaultAugmentation = MaterializedPathInfo mempty False True False
+
+errorIfMergingNew :: Bool -> Bool -> Bool
+errorIfMergingNew n1 n2
+  | n1 || n2 = error "Cannot merge nodes that are new"
+  | otherwise = False
 
 instance Semigroup (MaterializedPathInfo t) where
-  MaterializedPathInfo p1 j1 ta1 th1 <> MaterializedPathInfo p2 j2 ta2 th2 =
-    MaterializedPathInfo (liftA2 (:+) p1 p2) (j1 <> j2) (ta1 || ta2) (th1 && th2)
+  MaterializedPathInfo j1 ta1 th1 n1 <> MaterializedPathInfo j2 ta2 th2 n2 =
+    MaterializedPathInfo (j1 <> j2) (ta1 || ta2) (th1 && th2) (errorIfMergingNew n1 n2)
 
 instance Monoid (MaterializedPathInfo t) where
   mempty = defaultAugmentation
@@ -65,23 +78,15 @@ instance forall t. DefaultAugmentation (IntersectingTargets t) where
       ((defaultAugmentation @(MaterializedPathInfo t)) & #isTarget .~ True)
 
 instance Semigroup (IntersectingTargets t) where
-  IntersectingTargets (MaterializedPathInfo p1 j1 ta1 th1)
-    <> IntersectingTargets (MaterializedPathInfo p2 j2 ta2 th2) =
+  IntersectingTargets (MaterializedPathInfo j1 ta1 th1 n1)
+    <> IntersectingTargets (MaterializedPathInfo j2 ta2 th2 n2) =
       IntersectingTargets
-        (MaterializedPathInfo (liftA2 (:+) p1 p2) (j1 <> j2) (ta1 && ta2) (th1 && th2))
+        (MaterializedPathInfo (j1 <> j2) (ta1 && ta2) (th1 && th2) (errorIfMergingNew n1 n2))
 
 instance Monoid (IntersectingTargets t) where
   mempty = defaultAugmentation
 
 instance MonoidAugmentation (IntersectingTargets t)
-
-leftoverPath ::
-  Lens
-    (Node' ti to (MaterializedPathInfo t))
-    (Node' ti to (MaterializedPathInfo t'))
-    (Maybe (Path t))
-    (Maybe (Path t'))
-leftoverPath = #augmentation . #leftoverPath
 
 jumps :: Lens' (Node' ti to (MaterializedPathInfo t)) (Set NID)
 jumps = #augmentation . #jumps
@@ -89,22 +94,31 @@ jumps = #augmentation . #jumps
 isTarget :: Lens' (Node' ti to (MaterializedPathInfo t)) Bool
 isTarget = #augmentation . #isTarget
 
+isThin :: Lens' (Node' ti to (MaterializedPathInfo t)) Bool
+isThin = #augmentation . #isThin
+
+isNew :: Lens' (Node' ti to (MaterializedPathInfo t)) Bool
+isNew = #augmentation . #isNew
+
 targetsInGraph :: Fold (Graph t1 (MaterializedPathInfo t2)) NID
 targetsInGraph = #nodeMap . traverse . filtered (view isTarget) . #nid
 
 -- Transitions were traversed by the path + which transitions were not possible
 -- to traverse. See 'MaterializedPathInfo' for details on the info returned by
 -- this function.
+-- This minimally accesses the underlying graph to get the metadata necessary
+-- to materialize the path. The resulting graph may require some additional
+-- accesses to the underlying graph to access full metadata for the nodes
+-- returned (such nodes are marked as thin in the resulting graph).
 materializePathAsGraph ::
   forall t r.
-  ( Member (GraphMetadataReading t) r,
+  ( Members [GraphMetadataReading t, FreshNID] r,
     ValidTransition t
   ) =>
   NID ->
   Path t ->
-  -- | Nothing if passed in node isn't in the graph or Just a graph containing
-  -- the node where the value on the node is a path that wasn't possible to
-  -- resolve further starting from that node
+  -- | TODO bring back (Either t t) as the type of the transition to be able to
+  -- mark whether edges are new or were part of the original graph
   Sem r (Graph t (MaterializedPathInfo t))
 materializePathAsGraph nid path = do
   case path of
@@ -122,23 +136,57 @@ materializePathAsGraph nid path = do
       let n' = n & #augmentation .~ (mempty @(MaterializedPathInfo t) & #isThin .~ False)
           g = emptyGraph & at nid ?~ n'
       let matchedNids = toSetOf (#outgoing . folded . filteredBy (#transition . only t) . #node) n'
-      let g' = g & nodesMatchedBy (#nid . filtered (`member` matchedNids)) . isTarget .~ True
-      pure g'
+          noMatches = null matchedNids
+      unless noMatches . returnEarly $
+        g & nodesMatchedBy (#nid . filtered (`member` matchedNids)) . isTarget .~ True
+      newNID <- freshNID
+      let newNode =
+            emptyNode newNID
+              & isNew .~ True
+              & isTarget .~ True
+              -- TODO: make edge left-ed
+              & #incoming .~ singletonSet (Connect t nid)
+      pure $ insertNode newNode g
     Absolute targetNid ->
-      pure
-        $ singletonGraph (emptyNode nid & jumps .~ singletonSet targetNid)
-        <> singletonGraph (emptyNode targetNid & isTarget .~ True)
+      pure $
+        singletonGraph (emptyNode nid & jumps .~ singletonSet targetNid)
+          <> singletonGraph (emptyNode targetNid & isTarget .~ True)
     p1 :/ p2 -> do
       g1 <- materializePathAsGraph nid p1
       let g1Targets = toList $ toSetOf targetsInGraph g1
           g1Targetless = g1 & otraverse . isTarget .~ False
+
+      -- TODO: run this materializePathAsGraph in an environment where
+      -- we use the already materialized graph as a cache to avoid duplicating
+      -- things + be able to add on to the underlying graph
+      -- I guess this might take rearchitecting this function to take the
+      -- graph as an accumulator + have a version that starts with an empty
+      -- accumulator as the entry point from outside this module?
+      -- it is not ok to generate the same node twice, because we need to avoid creating duplicated paths
+      -- so we don't accidentally create too many nodes
       g2s <- forM (toList g1Targets) (`materializePathAsGraph` p2)
+
       pure $ g1Targetless <> mconcat g2s
     p1 :+ p2 -> do
       g1 <- materializePathAsGraph nid p1
+      -- it is not ok to generate the same node twice, because we need to avoid creating duplicated paths
+      -- so we don't accidentally create too many nodes
       g2 <- materializePathAsGraph nid p2
       pure $ g1 <> g2
     p1 :& p2 -> do
       g1 <- materializePathAsGraph nid p1
+      -- it is not ok to generate the same node twice, because we need to avoid creating duplicated paths
+      -- so we don't accidentally create too many nodes
       g2 <- materializePathAsGraph nid p2
+      let g1NonNewTargets = toSetOf (nodesMatching (\x -> not x.isNew && x.isTarget)) g1
+          g2NonNewTargets = toSetOf (nodesMatching (\x -> not x.isNew && x.isTarget)) g2
+          g1NewTargets = toSetOf (nodesMatching (\x -> x.isNew && x.isTarget)) g1
+          g2NewTargets = toSetOf (nodesMatching (\x -> x.isNew && x.isTarget)) g2
+      -- the resulting graph should have the targets:
+      -- - the non new nodes that were targets in both g1 and g2
+      let commonNonNewTargets = g1NonNewTargets `intersection` g2NonNewTargets
+          -- - g1NonNewTargets with each having each of g2NewTargets' new in-edges added to it (if there is at least one g2NewTargets node)
+          g1PlusNewTargets = g1NonNewTargets
+      -- - g2NonNewTargets with each having each of g1NewTargets' new in-edges added to it (if there is at least one g1NewTargets node)
+      -- - one extra new node with all of g1NewTargets' and g2NewTargets' in-edges added to it (if there is at least one of each)
       pure $ au (mapping (_Unwrapped @(IntersectingTargets t))) foldMap [g1, g2]

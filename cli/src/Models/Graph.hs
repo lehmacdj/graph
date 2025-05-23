@@ -7,6 +7,7 @@ where
 
 import Control.Lens
 import Data.Monoid (First)
+import Data.Semigroup (Last (Last, getLast))
 import GHC.Stack
 import Models.Edge
 import Models.NID
@@ -87,15 +88,23 @@ type instance Control.Lens.Index (Graph t a) = NID
 
 type instance Control.Lens.IxValue (Graph t a) = (Node t a)
 
-instance (ValidNodeNCS t a, MonoidAugmentation a) => Ixed (Graph t a)
+instance (ValidNodeNCS t a, DefaultAugmentation a) => Ixed (Graph t a)
 
-instance (ValidNodeNCS t a, MonoidAugmentation a) => At (Graph t a) where
+instance (ValidNodeNCS t a, DefaultAugmentation a) => At (Graph t a) where
   at nid = lens (maybeNodeLookup nid) setter
     where
       setter g Nothing = delNode nid g
       setter g (Just n) = case maybeNodeLookup nid g of
-        Just _ -> updateNode n g
-        Nothing -> insertNode n g
+        Just _ ->
+          g
+            & mapGraph (Last . (.augmentation))
+            & updateNode (fmap Last n)
+            & mapGraph (getLast . (.augmentation))
+        Nothing ->
+          g
+            & mapGraph (Last . (.augmentation))
+            & insertNode (fmap Last n)
+            & mapGraph (getLast . (.augmentation))
 
 instance
   (ValidNodeNCS t a, MonoidAugmentation a) =>

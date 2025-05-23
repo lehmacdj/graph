@@ -1,9 +1,9 @@
 module Models.MiscSpec where
 
-import TestPrelude
 import Models.Common
-import Models.Node
 import Models.NID
+import Models.Node
+import TestPrelude
 
 data Unshowable = Unshowable
   deriving (Eq)
@@ -12,7 +12,9 @@ data Showable = Showable
   deriving (Eq)
 
 instance ShowableAugmentation Showable where
-  defaultShowAugmentation = Just ("showable", const "shown")
+  augmentationLabel = "showable"
+  defaultShowAugmentation = const "shown"
+  shouldShowStandaloneAugmentation = True
 
 spec_withoutShowingAugmentations :: Spec
 spec_withoutShowingAugmentations = do

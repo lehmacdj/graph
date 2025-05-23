@@ -101,3 +101,12 @@ spec_materializePathAsGraph = do
   (Literal "zero-to-all" :& (Literal "zero-to-zero" :+ Literal "zero-to-one"))
     `materializesTo` [(0, [Target]), (1, [Target, Thin]), (2, [Thin])]
   Wild `materializesTo` [(0, [Target]), (1, [Target, Thin]), (2, [Target, Thin])]
+  Literal "non-existent" `materializesTo` [(0, [Leftover (Literal "non-existent")])]
+  (Literal "zero-to-one" :/ Literal "non-existent")
+    `materializesTo` [(0, []), (1, [Leftover (Literal "non-existent")])]
+  (Literal "zero-to-one" :/ (Literal "one-to-two" :/ Literal "non-existent"))
+    `materializesTo` [(0, []), (1, []), (2, [Leftover (Literal "non-existent")])]
+  (Literal "non-existent-1" :+ Literal "non-existent-2")
+    `materializesTo` [(0, [Leftover (Literal "non-existent-1" :+ Literal "non-existent-2")])]
+  (Literal "non-existent-1" :/ Literal "non-existent-2")
+    `materializesTo` [(0, [Leftover (Literal "non-existent-1" :/ Literal "non-existent-2")])]
