@@ -40,6 +40,7 @@ import Control.Lens as X
     ifiltered,
     ifolded,
     isn't,
+    iso,
     ix,
     mapping,
     nearly,
@@ -98,6 +99,9 @@ whenNonNull ::
   f ()
 whenNonNull mono = for_ (fromNullable mono)
 
+singletonNNSet :: (IsSet s) => Element s -> NonNull s
+singletonNNSet = impureNonNull . singletonSet
+
 -- | generalized foldl1 monadically
 foldlM1 ::
   (IsSequence mono, Monad m) =>
@@ -146,6 +150,13 @@ allPairs xs = [(x, y) | (x : ys) <- tails xs, y <- ys]
 allAnyOrderPairs :: [a] -> [(a, a)]
 allAnyOrderPairs xs = allPairs xs ++ map swap (allPairs xs)
 
+cartesianProduct :: [a] -> [b] -> [(a, b)]
+cartesianProduct xs ys = [(x, y) | x <- xs, y <- ys]
+
+cartesianProductSet :: (Ord a, Ord b) => Set a -> Set b -> Set (a, b)
+cartesianProductSet xs ys =
+  setFromList $ cartesianProduct (toList xs) (toList ys)
+
 assertSingleton :: (HasCallStack, Show a) => [a] -> a
 assertSingleton [x] = x
 assertSingleton xs = error $ "assertSingleton: not a singleton: " <> show xs
@@ -154,3 +165,7 @@ assertMaxOne :: (HasCallStack, Show a) => [a] -> Maybe a
 assertMaxOne [] = Nothing
 assertMaxOne [x] = Just x
 assertMaxOne xs = error $ "assertMaxOne: not at most one: " <> show xs
+
+traverseSet ::
+  (Applicative f, Ord b, Ord (f b)) => (a -> f b) -> Set a -> f (Set b)
+traverseSet f s = setFromList <$> sequenceA (toList (mapSet f s))

@@ -87,6 +87,7 @@ library
       Models.NID
       Models.NIDSpec
       Models.Node
+      Models.NormalizedPath
       Models.Path
       MyPrelude
       MyPrelude.Collections
@@ -209,6 +210,7 @@ library
     , polysemy-zoo
     , random
     , random-shuffle
+    , semigroupoids
     , tasty
     , tasty-discover
     , tasty-golden
@@ -336,6 +338,7 @@ executable dump-graph
     , polysemy-zoo
     , random
     , random-shuffle
+    , semigroupoids
     , tasty
     , tasty-discover
     , tasty-golden
@@ -456,6 +459,7 @@ executable ge
     , polysemy-zoo
     , random
     , random-shuffle
+    , semigroupoids
     , tasty
     , tasty-discover
     , tasty-golden
@@ -576,6 +580,7 @@ executable scratch
     , polysemy-zoo
     , random
     , random-shuffle
+    , semigroupoids
     , tasty
     , tasty-discover
     , tasty-golden
@@ -697,6 +702,7 @@ test-suite graph-test
     , polysemy-zoo
     , random
     , random-shuffle
+    , semigroupoids
     , tasty
     , tasty-discover
     , tasty-golden
