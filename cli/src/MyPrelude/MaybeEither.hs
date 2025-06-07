@@ -1,7 +1,12 @@
 module MyPrelude.MaybeEither where
 
 import ClassyPrelude
+import Data.Bifoldable (Bifoldable)
+import Data.Bitraversable (Bitraversable (bitraverse))
+import Data.Functor.Alt (Alt ((<!>)))
+import Data.Functor.Apply (Apply ((<.>)))
 import GHC.Stack (HasCallStack)
+import MyPrelude.Collections
 
 -- | execute a computation only if it is Just
 withJust :: (Applicative m) => Maybe a -> (a -> m ()) -> m ()
@@ -51,3 +56,50 @@ forgetLeft (Left _) = Nothing
 justIfTrue :: Bool -> a -> Maybe a
 justIfTrue True x = Just x
 justIfTrue False _ = Nothing
+
+combineErrors ::
+  Either (NonEmpty e) a ->
+  Either (NonEmpty e) b ->
+  Either (NonEmpty e) (a, b)
+combineErrors (Left e1) (Left e2) = Left (e1 <> e2)
+combineErrors (Left e1) (Right _) = Left e1
+combineErrors (Right _) (Left e2) = Left e2
+combineErrors (Right x) (Right y) = Right (x, y)
+
+(<!>) ::
+  (Monoid m) =>
+  Either (NonEmpty e) m ->
+  Either (NonEmpty e) m ->
+  Either (NonEmpty e) m
+e1 <!> e2 = uncurry (<>) <$> combineErrors e1 e2
+
+-- * Validation
+
+newtype Validation err a = Validation {either :: Either err a}
+  deriving stock (Eq, Generic, Ord, Show, Typeable)
+  deriving newtype (Functor, Foldable, NFData, MonoFoldable, Bifunctor, Bifoldable)
+
+type instance Element (Validation err a) = a
+
+instance (Semigroup err) => Apply (Validation err) where
+  Validation (Left e1) <.> Validation (Left e2) = Validation (Left (e1 <> e2))
+  Validation (Left e1) <.> Validation (Right _) = Validation (Left e1)
+  Validation (Right _) <.> Validation (Left e2) = Validation (Left e2)
+  Validation (Right f) <.> Validation (Right a) = Validation (Right (f a))
+  {-# INLINE (<.>) #-}
+
+instance (Semigroup err) => Applicative (Validation err) where
+  pure = Validation . Right
+  (<*>) = (Data.Functor.Apply.<.>)
+
+-- | For two errors, this instance reports only the last of them.
+instance Alt (Validation err) where
+  Validation (Left _) <!> x = x
+  Validation (Right a) <!> _ = Validation (Right a)
+  {-# INLINE (<!>) #-}
+
+instance Traversable (Validation err) where
+  traverse f (Validation e) = Validation <$> traverse f e
+
+instance Bitraversable Validation where
+  bitraverse f g (Validation e) = Validation <$> bitraverse f g e

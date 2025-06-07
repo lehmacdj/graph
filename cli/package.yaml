@@ -60,6 +60,7 @@ dependencies:
 - polysemy-zoo
 - random
 - random-shuffle
+- semigroupoids
 - SHA
 - temporary
 - text
