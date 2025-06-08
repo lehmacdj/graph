@@ -209,15 +209,9 @@
         menuX = ancestorRect.left - MENU_WIDTH - gap;
       }
 
-      // If still not enough space, place inside with overlap
+      // If still not enough space, place at viewport edge with minimum gap
       if (menuX < gap) {
-        menuX = Math.max(
-          ancestorRect.left + gap,
-          Math.min(
-            ancestorRect.right - MENU_WIDTH - gap,
-            viewportWidth - MENU_WIDTH - gap
-          )
-        );
+        menuX = gap;
       }
 
       // Adjust Y to keep within viewport
