@@ -44,6 +44,7 @@ dependencies:
 - hspec-expectations
 - inline-c
 - inline-c-objc
+- ixset-typed
 - html-conduit
 - http-conduit
 - http-types

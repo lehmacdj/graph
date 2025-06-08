@@ -34,7 +34,6 @@ library
       DAL.JSON
       DAL.RawGraph
       DAL.Serialization
-      Data.Set.Ordered.Orphans
       Effect.IOWrapper.DisplayImage
       Effect.IOWrapper.Echo
       Effect.IOWrapper.Editor
@@ -99,6 +98,7 @@ library
       MyPrelude.JSON
       MyPrelude.MaybeEither
       MyPrelude.MonadApplicative
+      MyPrelude.Orphans
       Polysemy.MTL
       Polysemy.Util
       Polysemy.UtilSpec
@@ -197,6 +197,7 @@ library
     , http-types
     , inline-c
     , inline-c-objc
+    , ixset-typed
     , lens
     , megaparsec
     , mono-traversable
@@ -325,6 +326,7 @@ executable dump-graph
     , http-types
     , inline-c
     , inline-c-objc
+    , ixset-typed
     , lens
     , megaparsec
     , mono-traversable
@@ -446,6 +448,7 @@ executable ge
     , http-types
     , inline-c
     , inline-c-objc
+    , ixset-typed
     , lens
     , megaparsec
     , mono-traversable
@@ -567,6 +570,7 @@ executable scratch
     , http-types
     , inline-c
     , inline-c-objc
+    , ixset-typed
     , lens
     , megaparsec
     , mono-traversable
@@ -689,6 +693,7 @@ test-suite graph-test
     , http-types
     , inline-c
     , inline-c-objc
+    , ixset-typed
     , lens
     , megaparsec
     , mono-traversable

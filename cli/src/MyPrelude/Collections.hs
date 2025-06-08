@@ -42,6 +42,7 @@ import Control.Lens as X
     isn't,
     iso,
     ix,
+    mapped,
     mapping,
     nearly,
     non,
@@ -71,12 +72,14 @@ import Control.Lens as X
 import Control.Lens.Extras as X (is)
 import Data.Generics.Labels as X
 import Data.Generics.Wrapped as X (_Unwrapped, _Wrapped)
+import Data.IxSet.Typed qualified as IxSet
 import Data.List as X (iterate, tails)
 import Data.List.NonEmpty as X (NonEmpty (..))
 import Data.Map.Strict qualified as Map
 import Data.Set qualified as Set
 import Data.Set.Lens as X (setmapped)
 import GHC.Stack (HasCallStack)
+import MyPrelude.Orphans ()
 
 -- | Copied from cabal codebase
 toSetOf :: Getting (Set a) s a -> s -> Set a
@@ -101,6 +104,9 @@ whenNonNull mono = for_ (fromNullable mono)
 
 singletonNNSet :: (IsSet s) => Element s -> NonNull s
 singletonNNSet = impureNonNull . singletonSet
+
+singletonNNIxSet :: (IxSet.Indexable ixs v) => v -> NonNull (IxSet.IxSet ixs v)
+singletonNNIxSet = impureNonNull . IxSet.fromList . singleton
 
 -- | generalized foldl1 monadically
 foldlM1 ::
@@ -169,3 +175,8 @@ assertMaxOne xs = error $ "assertMaxOne: not at most one: " <> show xs
 traverseSet ::
   (Applicative f, Ord b, Ord (f b)) => (a -> f b) -> Set a -> f (Set b)
 traverseSet f s = setFromList <$> sequenceA (toList (mapSet f s))
+
+ixsetmapped ::
+  (IxSet.All Ord jxs, IxSet.Indexable jxs j) =>
+  IndexPreservingSetter (IxSet.IxSet ixs i) (IxSet.IxSet jxs j) i j
+ixsetmapped = iso IxSet.toSet IxSet.fromSet . setmapped

@@ -42,7 +42,7 @@ nidDigits = 12
 -- converting them to this newtype however.
 newtype NID = UnsafeNID {representation :: Text}
   deriving (Eq, Ord, Generic)
-  deriving newtype (NFData)
+  deriving newtype (NFData, Hashable)
 
 instance Uniform NID where
   uniformM g =
@@ -113,5 +113,5 @@ instance FromJSONKey NID where
 -- collisions)
 unsafeNID :: (HasCallStack) => Text -> NID
 unsafeNID t =
-  fromMaybe (error $ show t <> " doesn't meet precondition")
-    $ readMay t
+  fromMaybe (error $ show t <> " doesn't meet precondition") $
+    readMay t

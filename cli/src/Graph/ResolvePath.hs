@@ -123,7 +123,7 @@ materializePathAsGraph ::
 materializePathAsGraph nid path = do
   case path of
     One -> pure $ singletonGraph (emptyNode nid & isTarget .~ True)
-    Zero -> pure emptyGraph
+    -- Zero -> pure emptyGraph
     Wild -> withEarlyReturn do
       n <- onNothingM (getNodeMetadata nid) $ returnEarly emptyGraph
       let n' = n & #augmentation .~ (mempty @(MaterializedPathInfo t) & #isThin .~ False)
@@ -178,15 +178,14 @@ materializePathAsGraph nid path = do
       -- it is not ok to generate the same node twice, because we need to avoid creating duplicated paths
       -- so we don't accidentally create too many nodes
       g2 <- materializePathAsGraph nid p2
-      let g1NonNewTargets = toSetOf (nodesMatching (\x -> not x.isNew && x.isTarget)) g1
-          g2NonNewTargets = toSetOf (nodesMatching (\x -> not x.isNew && x.isTarget)) g2
-          g1NewTargets = toSetOf (nodesMatching (\x -> x.isNew && x.isTarget)) g1
-          g2NewTargets = toSetOf (nodesMatching (\x -> x.isNew && x.isTarget)) g2
-      -- the resulting graph should have the targets:
-      -- - the non new nodes that were targets in both g1 and g2
-      let commonNonNewTargets = g1NonNewTargets `intersection` g2NonNewTargets
-          -- - g1NonNewTargets with each having each of g2NewTargets' new in-edges added to it (if there is at least one g2NewTargets node)
-          g1PlusNewTargets = g1NonNewTargets
-      -- - g2NonNewTargets with each having each of g1NewTargets' new in-edges added to it (if there is at least one g1NewTargets node)
-      -- - one extra new node with all of g1NewTargets' and g2NewTargets' in-edges added to it (if there is at least one of each)
-      pure $ au (mapping (_Unwrapped @(IntersectingTargets t))) foldMap [g1, g2]
+      let g1NonNewTargets = g1 ^.. nodesMatching (\x -> not x.isNew && x.isTarget)
+          g2NonNewTargets = g2 ^.. nodesMatching (\x -> not x.isNew && x.isTarget)
+      let g1NewTargets = g1 ^.. nodesMatching (\x -> x.isNew && x.isTarget)
+          g2NewTargets = g2 ^.. nodesMatching (\x -> x.isNew && x.isTarget)
+      let g1NewTargetEdges = asSet $ setFromList $ g1NewTargets >>= toList . (.incoming)
+          g2NewTargetEdges = asSet $ setFromList $ g2NewTargets >>= toList . (.incoming)
+      let commonNonNewTargetNids = undefined
+          g1NonNewTargetsWithNewTargetEdges = undefined
+          g2NonNewTargetsWithNewTargetEdges = undefined
+          mergedNewTargetNode = undefined
+      undefined

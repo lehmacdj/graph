@@ -90,7 +90,7 @@ spec_materializePathAsGraph = do
           p
           (testGraph `restrictToExpected` expectedTemplate)
   One `materializesTo` [(0, [Target, Thin])]
-  Zero `materializesTo` []
+  -- Zero `materializesTo` []
   Literal "zero-to-one" `materializesTo` [(0, []), (1, [Target, Thin])]
   (Literal "zero-to-one" :/ Literal "one-to-others")
     `materializesTo` [(0, [Target]), (1, []), (2, [Target, Thin])]

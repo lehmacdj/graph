@@ -47,7 +47,7 @@ resolvePathSuccesses ::
   Path t ->
   Sem effs (Set NID)
 resolvePathSuccesses nid = \case
-  Zero -> pure mempty
+  -- Zero -> pure mempty
   One -> pure $ singleton nid
   Wild -> do
     n <- getNodeSem nid
@@ -76,7 +76,7 @@ resolvePathSuccessesDetail' ::
   Sem effs (OSet (DPath t))
 resolvePathSuccessesDetail' nid = \case
   One -> pure $ OSet.singleton (DPath nid [] nid [])
-  Zero -> pure OSet.empty
+  -- Zero -> pure OSet.empty
   Absolute nid' ->
     getNode nid' <&> \case
       Nothing -> OSet.empty
@@ -243,7 +243,7 @@ listifyNewPath ::
   Path t ->
   Set (Maybe NID, [t])
 listifyNewPath = \case
-  Zero -> Set.empty
+  -- Zero -> Set.empty
   One -> Set.singleton (Nothing, [])
   Wild -> Set.empty -- we have to ignore paths that contain wild because we
   -- don't have the graph and can't add all possible
@@ -274,8 +274,8 @@ resolvePath' ::
   Graph t a ->
   OSet (DPath t)
 resolvePath' p n g =
-  nodeConsistentWithGraph g n
-    `seq` fromMaybe
+  nodeConsistentWithGraph g n `seq`
+    fromMaybe
       (error "node is from graph")
       (resolvePathInConcreteGraph (view #nid n) p g)
 

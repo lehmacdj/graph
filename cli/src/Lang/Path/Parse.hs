@@ -24,7 +24,7 @@ pathTerm pTransition =
     <|> try ((Absolute tagsNID :/) . Literal <$> (char '#' *> pTransition))
     <|> (symbol "@" $> One)
     <|> (symbol "*" $> Wild)
-    <|> (symbol "!" $> Zero)
+    -- <|> (symbol "!" $> Zero)
     <|> (Literal <$> pTransition)
     <|> parens (pPath pTransition)
 
@@ -51,16 +51,16 @@ test_pPath =
     [ "#foo" `parsesTo` (Absolute tagsNID :/ Literal "foo"),
       "@" `parsesTo` One,
       "*" `parsesTo` Wild,
-      "!" `parsesTo` Zero,
+      -- "!" `parsesTo` Zero,
       "foo" `parsesTo` Literal "foo",
       "foo/bar" `parsesTo` (Literal "foo" :/ Literal "bar"),
       "(foo/bar)/baz" `parsesTo` (Literal "foo" :/ Literal "bar" :/ Literal "baz"),
       "foo/(bar/baz)" `parsesTo` (Literal "foo" :/ (Literal "bar" :/ Literal "baz")),
       "foo / bar & baz" `parsesTo` (Literal "foo" :/ Literal "bar" :& Literal "baz"),
       "foo/bar&baz+qux" `parsesTo` (Literal "foo" :/ Literal "bar" :& Literal "baz" :+ Literal "qux"),
-      "foo/bar&baz+qux/!" `parsesTo` (Literal "foo" :/ Literal "bar" :& Literal "baz" :+ Literal "qux" :/ Zero),
+      -- "foo/bar&baz+qux/!" `parsesTo` (Literal "foo" :/ Literal "bar" :& Literal "baz" :+ Literal "qux" :/ Zero),
       "foo/bar&(baz+qux)" `parsesTo` (Literal "foo" :/ Literal "bar" :& (Literal "baz" :+ Literal "qux")),
-      "foo/(bar&baz+qux)/!" `parsesTo` (Literal "foo" :/ (Literal "bar" :& Literal "baz" :+ Literal "qux") :/ Zero),
+      -- "foo/(bar&baz+qux)/!" `parsesTo` (Literal "foo" :/ (Literal "bar" :& Literal "baz" :+ Literal "qux") :/ Zero),
       parseFails "foo/bar&",
       parseFails "foo/bar&+qux"
     ]

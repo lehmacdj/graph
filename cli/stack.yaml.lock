@@ -46,6 +46,13 @@ packages:
       size: 993
   original:
     hackage: constraints-0.14.2
+- completed:
+    hackage: ixset-typed-0.5.1.0@sha256:b3bf8ded64523a78a88acf0cbe4c715e9594033a0861fd454e08cb4ef3c9b59b,2738
+    pantry-tree:
+      sha256: be3c0191a91b6739987e570522e82f8df61ee8fdf49b7c286196c9e4d9d16df8
+      size: 475
+  original:
+    hackage: ixset-typed-0.5.1.0
 snapshots:
 - completed:
     sha256: abcc4a65c15c7c2313f1a87f01bfd4d910516e1930b99653eef1d2d006515916

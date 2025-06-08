@@ -8,8 +8,8 @@ import Models.NID
 import MyPrelude
 
 data Path t
-  = One
-  | Zero
+  = -- | Stay at a specific location / the current location
+    One
   | --  | Dual -- ^ a transition that dualizes the view of the graph
     -- The correct way to implement Dual is simply make backlinks part of the
     -- graph structure, as opposed to intrinsic. i.e. for each normal node have
@@ -19,7 +19,9 @@ data Path t
     --  | Negate (Path t) -- ^ negate a path, if included obsolesces other operators
     --  | Star (Path t) -- ^ kleene iteration: technically top in algebra is top^*
 
-    -- | a transition matched by anything (top in the algebra)
+    -- \| a transition matched by anything (top in the algebra)
+
+    -- | Zero
     Wild
   | Literal t
   | -- | this must not be before @:/@ in a @:+@. @:&@ acts as a scope that
@@ -58,7 +60,7 @@ isValidPath = \case
   Literal _ -> True
   One -> True
   Wild -> True
-  Zero -> True
+  -- Zero -> True
   p1 :& p2 -> isValidPath p1 && isValidPath p2
   p1 :+ p2 -> isValidPath p1 && isValidPath p2
   p1 :/ p2 -> isValidPath p1 && isValidChildPath p2
@@ -69,7 +71,7 @@ isValidChildPath = \case
   Literal _ -> True
   One -> True
   Wild -> True
-  Zero -> True
+  -- Zero -> True
   p1 :+ p2 -> isValidChildPath p1 && isValidChildPath p2
   p1 :/ p2 -> isValidChildPath p1 && isValidChildPath p2
   p1 :& p2 ->
@@ -85,7 +87,7 @@ isValidChildPath = \case
         Literal _ -> False
         One -> False
         Wild -> False
-        Zero -> False
+        -- Zero -> False
         _ :+ _ -> False
         _ :& _ -> False
         _ :/ _ -> False

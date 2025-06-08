@@ -4,19 +4,19 @@ module MyPrelude
     unconsumed,
     traceWith,
     traceShowWith,
+    nonNull,
 
     -- * Extra exports (see the import list below)
     module X,
   )
 where
 
-import ClassyPrelude hiding (fromException, throwString)
+import ClassyPrelude hiding (fromException, nonNull, throwString)
 import Control.Comonad as X
 import Control.DeepSeq as X
 import Data.Coerce as X (Coercible, coerce)
 import Data.Functor.Contravariant as X
 import Data.Kind as X (Type)
-import Data.Set.Ordered.Orphans as X ()
 import Data.Void as X
 import Debug.Trace
 import GHC.Generics as X (Generic, Rep)
@@ -29,6 +29,7 @@ import MyPrelude.IO as X
 import MyPrelude.JSON as X
 import MyPrelude.MaybeEither as X
 import MyPrelude.MonadApplicative as X
+import MyPrelude.Orphans as X ()
 
 unconsumed :: (Contravariant f) => f a -> f Void
 unconsumed = contramap absurd
@@ -40,3 +41,8 @@ traceWith f a = Debug.Trace.trace (unpack (f a)) a
 traceShowWith :: (Show b) => (a -> b) -> a -> a
 traceShowWith = traceWith . (tshow .)
 {-# WARNING traceShowWith "Don't leave traces in code" #-}
+
+nonNull ::
+  (MonoFoldable mono, MonoFoldable mono') =>
+  Iso (NonNull mono) (NonNull mono') mono mono'
+nonNull = iso toNullable impureNonNull
