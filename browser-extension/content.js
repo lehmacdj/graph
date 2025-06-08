@@ -52,28 +52,60 @@
     );
   }
 
+  function intersectRects(rect1, rect2) {
+    const left = Math.max(rect1.left, rect2.left);
+    const top = Math.max(rect1.top, rect2.top);
+    const right = Math.min(rect1.right, rect2.right);
+    const bottom = Math.min(rect1.bottom, rect2.bottom);
+    const width = Math.max(0, right - left);
+    const height = Math.max(0, bottom - top);
+
+    return {
+      left,
+      top,
+      right,
+      bottom,
+      width,
+      height,
+    };
+  }
+
+  // Find the outermost SVG ancestor of an element
+  // If it is possible for HTML to be nested inside SVG this might not be
+  // accurate
+  function outermostSVGAncestor(element) {
+    if (!element || !(element instanceof SVGElement)) {
+      return null;
+    }
+    let result = element;
+    let next = element.parentElement;
+    while (next && next instanceof SVGElement) {
+      result = next;
+      next = next.parentElement;
+    }
+    return result;
+  }
+
   function getBoundingRect(element) {
     let rect = element.getBoundingClientRect();
     if (element.tagName === "image") {
       // intersect the rect with the SVG element's bounding box
-      const svgParent = element.closest("svg");
+      const svgParent = outermostSVGAncestor(element);
       if (svgParent) {
         const svgRect = svgParent.getBoundingClientRect();
-        rect = {
-          left: Math.max(rect.left, svgRect.left),
-          top: Math.max(rect.top, svgRect.top),
-          right: Math.min(rect.right, svgRect.right),
-          bottom: Math.min(rect.bottom, svgRect.bottom),
-          width: Math.max(0, Math.min(rect.right, svgRect.right) - Math.max(rect.left, svgRect.left)),
-          height: Math.max(0, Math.min(rect.bottom, svgRect.bottom) - Math.max(rect.top, svgRect.top))
-        };
+        const clippedRect = intersectRects(rect, svgRect);
+        // Only return clipped rect if it has valid dimensions
+        if (clippedRect.width > 0 && clippedRect.height > 0) {
+          rect = clippedRect;
+        } else {
+          rect = svgRect; // Fallback to SVG bounding box if no intersection
+        }
       }
     }
     return rect;
   }
 
-  function findImagesInContainer(container, filterRect = null) {
-    console.log("Finding images in container:", container, filterRect);
+  function findImagesInContainer(container, point = null) {
     let images = Array.from(container.querySelectorAll("img, image")).map(
       (img) => ({
         element: img,
@@ -82,21 +114,18 @@
       })
     );
 
-    console.log("Initial images found:", images);
     images = images.filter((img) => img.url && isElementVisible(img.element));
-    console.log("Visible images after filtering:", images);
 
-    if (filterRect) {
+    if (point) {
       images = images.filter((img) => {
         return (
-          img.rect.left < filterRect.right &&
-          img.rect.right > filterRect.left &&
-          img.rect.top < filterRect.bottom &&
-          img.rect.bottom > filterRect.top
+          img.rect.left <= point.x &&
+          img.rect.right >= point.x &&
+          img.rect.top <= point.y &&
+          img.rect.bottom >= point.y
         );
-      }
+      });
     }
-    console.log("Images after applying filterRect:", images);
 
     return removeDuplicateUrls(images);
   }
@@ -121,7 +150,6 @@
 
   function findImagesAtPoint(x, y) {
     const result = findImagesInContainer(document, { x, y });
-    console.log(`Images found at (${x}, ${y}):`, result);
     return result;
   }
 
@@ -334,26 +362,9 @@
     return inBridge || inMenu || inAncestor;
   }
 
-  function isValidAncestor(ancestor, imagesAtPoint) {
-    // Validate that the ancestor isn't expanding too far (document.documentElement means something went wrong)
-    if (ancestor === document.documentElement || ancestor === document.body) {
-      return false;
-    }
-
-    // Ensure ancestor actually contains all the images we found
-    for (const imgData of imagesAtPoint) {
-      if (!ancestor.contains(imgData.element)) {
-        return false;
-      }
-    }
-
-    return true;
-  }
-
   function handleMouseMove(e) {
     const x = e.clientX;
     const y = e.clientY;
-    console.log(`Mouse moved to (${x}, ${y})`);
 
     // Don't dismiss menu if hovering over it or in transition zone
     if (
@@ -404,7 +415,8 @@
     removeMenu();
 
     currentImages = allImagesInAncestor;
-    currentHoverElement = imagesAtPoint[0].element;
+    currentHoverElement =
+      imagesAtPoint.length > 0 ? imagesAtPoint[0].element : null;
     currentAncestor = ancestor;
 
     // Use smart positioning
