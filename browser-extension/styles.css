@@ -1,9 +1,3 @@
-.image-url-outlined {
-  outline: 3px solid #4285f4 !important;
-  outline-offset: 2px !important;
-  transition: outline 0.2s ease !important;
-}
-
 .image-url-menu {
   background-color: white !important;
   border: 1px solid #dadce0 !important;

@@ -42,30 +42,141 @@
     return document.documentElement;
   }
 
-  function findImagesAtPoint(x, y) {
-    const elements = [];
-    const allImages = document.querySelectorAll("img, image");
+  function isElementVisible(element) {
+    const style = window.getComputedStyle(element);
+    return (
+      style.visibility !== "hidden" &&
+      style.display !== "none" &&
+      !isElementVisible(element.parentElement)
+    );
+  }
 
-    for (const img of allImages) {
-      const rect = img.getBoundingClientRect();
-      if (
-        x >= rect.left &&
-        x <= rect.right &&
-        y >= rect.top &&
-        y <= rect.bottom
-      ) {
-        const url = getImageURL(img);
-        if (url) {
-          elements.push({ element: img, url, rect });
-        }
+  function findImagesInContainer(container, filterRect = null) {
+    const images = Array.from(container.querySelectorAll("img, image"))
+      .map((img) => ({
+        element: img,
+        url: getImageURL(img),
+        rect: img.getBoundingClientRect(),
+      }))
+      .filter((img) => img.url && isElementVisible(img.element));
+
+    // If filterRect provided, only include images that intersect with it
+    if (filterRect) {
+      const filteredImages = images.filter(
+        (img) =>
+          filterRect.x >= img.rect.left &&
+          filterRect.x <= img.rect.right &&
+          filterRect.y >= img.rect.top &&
+          filterRect.y <= img.rect.bottom
+      );
+      return removeDuplicateUrls(filteredImages);
+    }
+
+    return removeDuplicateUrls(images);
+  }
+
+  function removeDuplicateUrls(images) {
+    const seenUrls = new Set();
+    const uniqueImages = [];
+
+    for (const img of images) {
+      if (!seenUrls.has(img.url)) {
+        seenUrls.add(img.url);
+        uniqueImages.push(img);
       }
     }
 
-    return elements.sort((a, b) => {
+    return uniqueImages.sort((a, b) => {
       const aZIndex = parseInt(window.getComputedStyle(a.element).zIndex) || 0;
       const bZIndex = parseInt(window.getComputedStyle(b.element).zIndex) || 0;
       return bZIndex - aZIndex;
     });
+  }
+
+  function findImagesAtPoint(x, y) {
+    const result = findImagesInContainer(document, { x, y });
+    console.log(`Images found at (${x}, ${y}):`, result);
+    return result;
+  }
+
+  function findAncestorAndImages(imagesAtPoint) {
+    const ancestor = findCommonAncestor(
+      imagesAtPoint.map((img) => img.element)
+    );
+    const allImagesInAncestor = findImagesInContainer(ancestor);
+    return { ancestor, images: allImagesInAncestor };
+  }
+
+  function calculateMenuPosition(ancestor, images) {
+    const MENU_WIDTH = 220;
+    const MENU_HEIGHT = images.length * 40 + 20; // Estimate based on button height
+    const ancestorRect = ancestor.getBoundingClientRect();
+    const viewportWidth = window.innerWidth;
+    const viewportHeight = window.innerHeight;
+
+    // Check if ancestor is large enough (3x menu size)
+    const isLargeAncestor =
+      ancestorRect.width > MENU_WIDTH * 3 &&
+      ancestorRect.height > MENU_HEIGHT * 3;
+
+    let menuX, menuY;
+
+    if (isLargeAncestor) {
+      // Place inside the ancestor at a corner
+      const padding = 10;
+
+      // Try top-right corner first
+      menuX = Math.min(
+        ancestorRect.right - MENU_WIDTH - padding,
+        viewportWidth - MENU_WIDTH - padding
+      );
+      menuY = Math.max(ancestorRect.top + padding, padding);
+
+      // If menu would be outside viewport, try other corners
+      if (menuX < padding) {
+        menuX = Math.max(ancestorRect.left + padding, padding);
+      }
+      if (menuY + MENU_HEIGHT > viewportHeight - padding) {
+        menuY = Math.min(
+          ancestorRect.bottom - MENU_HEIGHT - padding,
+          viewportHeight - MENU_HEIGHT - padding
+        );
+      }
+    } else {
+      // Place outside the ancestor
+      const gap = 10;
+
+      // Try to place to the right first
+      menuX = ancestorRect.right + gap;
+      menuY = ancestorRect.top;
+
+      // If not enough space on right, try left
+      if (menuX + MENU_WIDTH > viewportWidth - gap) {
+        menuX = ancestorRect.left - MENU_WIDTH - gap;
+      }
+
+      // If still not enough space, place inside with overlap
+      if (menuX < gap) {
+        menuX = Math.max(
+          ancestorRect.left + gap,
+          Math.min(
+            ancestorRect.right - MENU_WIDTH - gap,
+            viewportWidth - MENU_WIDTH - gap
+          )
+        );
+      }
+
+      // Adjust Y to keep within viewport
+      menuY = Math.max(
+        gap,
+        Math.min(menuY, viewportHeight - MENU_HEIGHT - gap)
+      );
+    }
+
+    return {
+      x: menuX + window.scrollX,
+      y: menuY + window.scrollY,
+    };
   }
 
   function createImageMenu(images, x, y) {
@@ -154,45 +265,90 @@
       currentMenu = null;
     }
 
-    currentImages.forEach((imgData) => {
-      imgData.element.classList.remove("image-url-outlined");
-    });
+    // Force reset all state
     currentImages = [];
     currentHoverElement = null;
     currentAncestor = null;
+  }
+
+  function isInMenuTransitionZone(x, y) {
+    if (!currentMenu || !currentAncestor) return false;
+
+    const menuRect = currentMenu.getBoundingClientRect();
+    const ancestorRect = currentAncestor.getBoundingClientRect();
+
+    // Calculate the bridge rectangle between ancestor and menu
+    const bridgeRect = {
+      left: Math.min(ancestorRect.left, menuRect.left),
+      right: Math.max(ancestorRect.right, menuRect.right),
+      top: Math.min(ancestorRect.top, menuRect.top),
+      bottom: Math.max(ancestorRect.bottom, menuRect.bottom),
+    };
+
+    // Check if cursor is in the bridge area
+    const inBridge =
+      x >= bridgeRect.left &&
+      x <= bridgeRect.right &&
+      y >= bridgeRect.top &&
+      y <= bridgeRect.bottom;
+
+    // Also check if directly in menu or ancestor
+    const inMenu =
+      x >= menuRect.left &&
+      x <= menuRect.right &&
+      y >= menuRect.top &&
+      y <= menuRect.bottom;
+
+    const inAncestor =
+      x >= ancestorRect.left &&
+      x <= ancestorRect.right &&
+      y >= ancestorRect.top &&
+      y <= ancestorRect.bottom;
+
+    return inBridge || inMenu || inAncestor;
+  }
+
+  function isValidAncestor(ancestor, imagesAtPoint) {
+    // Validate that the ancestor isn't expanding too far (document.documentElement means something went wrong)
+    if (ancestor === document.documentElement || ancestor === document.body) {
+      return false;
+    }
+
+    // Ensure ancestor actually contains all the images we found
+    for (const imgData of imagesAtPoint) {
+      if (!ancestor.contains(imgData.element)) {
+        return false;
+      }
+    }
+
+    return true;
   }
 
   function handleMouseMove(e) {
     const x = e.clientX;
     const y = e.clientY;
 
-    const imagesAtPoint = findImagesAtPoint(x, y);
-
-    if (imagesAtPoint.length === 0) {
-      removeMenu();
+    // Don't dismiss menu if hovering over it or in transition zone
+    if (
+      currentMenu &&
+      (currentMenu.contains(e.target) || isInMenuTransitionZone(x, y))
+    ) {
       return;
     }
 
-    // Find ancestor and get all images within it
-    const ancestor = findCommonAncestor(
-      imagesAtPoint.map((img) => img.element)
-    );
-    const allImagesInAncestor = Array.from(
-      ancestor.querySelectorAll("img, image")
-    )
-      .map((img) => ({
-        element: img,
-        url: getImageURL(img),
-        rect: img.getBoundingClientRect(),
-      }))
-      .filter((img) => img.url)
-      .sort((a, b) => {
-        const aZIndex =
-          parseInt(window.getComputedStyle(a.element).zIndex) || 0;
-        const bZIndex =
-          parseInt(window.getComputedStyle(b.element).zIndex) || 0;
-        return bZIndex - aZIndex;
-      });
+    const imagesAtPoint = findImagesAtPoint(x, y);
+
+    if (imagesAtPoint.length === 0) {
+      // Only remove menu if we're not in the transition zone
+      if (!isInMenuTransitionZone(x, y)) {
+        removeMenu();
+      }
+      return;
+    }
+
+    // Find ancestor and validate it
+    const { ancestor, images: allImagesInAncestor } =
+      findAncestorAndImages(imagesAtPoint);
 
     // Check if we're still within the same ancestor element with same images
     if (
@@ -202,6 +358,7 @@
         (img, i) => img.element === allImagesInAncestor[i].element
       )
     ) {
+      // Validate we're still in a reasonable area
       const ancestorRect = currentAncestor.getBoundingClientRect();
       if (
         x >= ancestorRect.left &&
@@ -213,31 +370,20 @@
       }
     }
 
+    updateMenuForImages(ancestor, allImagesInAncestor, imagesAtPoint);
+  }
+
+  function updateMenuForImages(ancestor, allImagesInAncestor, imagesAtPoint) {
     removeMenu();
 
     currentImages = allImagesInAncestor;
     currentHoverElement = imagesAtPoint[0].element;
     currentAncestor = ancestor;
 
-    allImagesInAncestor.forEach((imgData) => {
-      imgData.element.classList.add("image-url-outlined");
-    });
-
-    // Position menu within ancestor bounds
-    const ancestorRect = currentAncestor.getBoundingClientRect();
-    const menuX = Math.max(
-      ancestorRect.left + window.scrollX + 10,
-      Math.min(
-        ancestorRect.right + window.scrollX - 220,
-        window.innerWidth + window.scrollX - 220
-      )
-    );
-    const menuY = Math.max(
-      ancestorRect.top + window.scrollY + 10,
-      Math.min(
-        ancestorRect.bottom + window.scrollY - 50,
-        window.innerHeight + window.scrollY - 50
-      )
+    // Use smart positioning
+    const { x: menuX, y: menuY } = calculateMenuPosition(
+      ancestor,
+      allImagesInAncestor
     );
 
     currentMenu = createImageMenu(allImagesInAncestor, menuX, menuY);
@@ -283,47 +429,35 @@
     }
   });
 
-  document.addEventListener("scroll", function () {
-    if (currentMenu && currentAncestor) {
-      const ancestorRect = currentAncestor.getBoundingClientRect();
-      const menuX = Math.max(
-        ancestorRect.left + window.scrollX + 10,
-        Math.min(
-          ancestorRect.right + window.scrollX - 220,
-          window.innerWidth + window.scrollX - 220
-        )
-      );
-      const menuY = Math.max(
-        ancestorRect.top + window.scrollY + 10,
-        Math.min(
-          ancestorRect.bottom + window.scrollY - 50,
-          window.innerHeight + window.scrollY - 50
-        )
-      );
+  // Force cleanup on page visibility change
+  document.addEventListener("visibilitychange", function () {
+    if (document.hidden) {
+      removeMenu();
+    }
+  });
 
+  // Cleanup on navigation
+  window.addEventListener("beforeunload", function () {
+    removeMenu();
+  });
+
+  document.addEventListener("scroll", function () {
+    if (currentMenu && currentAncestor && currentImages.length > 0) {
+      const { x: menuX, y: menuY } = calculateMenuPosition(
+        currentAncestor,
+        currentImages
+      );
       currentMenu.style.left = menuX + "px";
       currentMenu.style.top = menuY + "px";
     }
   });
 
   window.addEventListener("resize", function () {
-    if (currentMenu && currentAncestor) {
-      const ancestorRect = currentAncestor.getBoundingClientRect();
-      const menuX = Math.max(
-        ancestorRect.left + window.scrollX + 10,
-        Math.min(
-          ancestorRect.right + window.scrollX - 220,
-          window.innerWidth + window.scrollX - 220
-        )
+    if (currentMenu && currentAncestor && currentImages.length > 0) {
+      const { x: menuX, y: menuY } = calculateMenuPosition(
+        currentAncestor,
+        currentImages
       );
-      const menuY = Math.max(
-        ancestorRect.top + window.scrollY + 10,
-        Math.min(
-          ancestorRect.bottom + window.scrollY - 50,
-          window.innerHeight + window.scrollY - 50
-        )
-      );
-
       currentMenu.style.left = menuX + "px";
       currentMenu.style.top = menuY + "px";
     }
