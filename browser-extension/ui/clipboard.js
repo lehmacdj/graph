@@ -6,7 +6,8 @@ window.ImageExtension.clipboard = {
    * @param {string} url - URL to copy
    * @param {Element} button - Button element for feedback
    */
-  copyImageURL: function(url, button) {
+  copyImageURL: function (originalURL, button) {
+    let url = this.getMaxResURL(originalURL);
     if (url) {
       navigator.clipboard
         .writeText(url)
@@ -19,12 +20,20 @@ window.ImageExtension.clipboard = {
     }
   },
 
+  getMaxResURL: function (url) {
+    let maxResUrl = url;
+    if (url.includes("sekai.best")) {
+      maxResUrl = url.replace("character/member_small", "character/member");
+    }
+    return maxResUrl;
+  },
+
   /**
    * Fallback clipboard copy using deprecated execCommand
    * @param {string} text - Text to copy
    * @param {Element} button - Button element for feedback
    */
-  fallbackCopyTextToClipboard: function(text, button) {
+  fallbackCopyTextToClipboard: function (text, button) {
     const textArea = document.createElement("textarea");
     textArea.value = text;
     textArea.style.position = "fixed";
@@ -48,7 +57,7 @@ window.ImageExtension.clipboard = {
    * Show visual feedback when copy operation succeeds
    * @param {Element} button - Button element to show feedback on
    */
-  showCopyFeedback: function(button) {
+  showCopyFeedback: function (button) {
     if (button) {
       const originalText = button.textContent;
       button.textContent = "Copied!";
@@ -61,5 +70,5 @@ window.ImageExtension.clipboard = {
         }
       }, 1000);
     }
-  }
+  },
 };

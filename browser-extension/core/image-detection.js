@@ -6,7 +6,7 @@ window.ImageExtension.imageDetection = {
    * @param {Element} element - Image element
    * @returns {string|null} Image URL or null
    */
-  getImageURL: function(element) {
+  getImageURL: function (element) {
     if (element.tagName === "IMG") {
       return element.src || element.currentSrc;
     } else if (element.tagName === "image") {
@@ -20,15 +20,19 @@ window.ImageExtension.imageDetection = {
    * @param {Element} element - Element to get bounds for
    * @returns {DOMRect} Bounding rectangle
    */
-  getBoundingRect: function(element) {
+  getBoundingRect: function (element) {
     let rect = element.getBoundingClientRect();
     if (element.tagName === "image") {
       // intersect the rect with the SVG element's bounding box
-      const svgParent = window.ImageExtension.domUtils.outermostSVGAncestor(element);
+      const svgParent =
+        window.ImageExtension.domUtils.outermostSVGAncestor(element);
       if (svgParent) {
         const svgRect = svgParent.getBoundingClientRect();
-        const clippedRect = window.ImageExtension.geometry.intersectRects(rect, svgRect);
-        
+        const clippedRect = window.ImageExtension.geometry.intersectRects(
+          rect,
+          svgRect
+        );
+
         // Only return clipped rect if it has valid dimensions
         if (clippedRect.width > 0 && clippedRect.height > 0) {
           rect = clippedRect;
@@ -46,7 +50,7 @@ window.ImageExtension.imageDetection = {
    * @param {Object|null} point - Point with x,y coordinates to filter by
    * @returns {Array} Array of image data objects
    */
-  findImagesInContainer: function(container, point = null) {
+  findImagesInContainer: function (container, point = null) {
     let images = Array.from(container.querySelectorAll("img, image")).map(
       (img) => ({
         element: img,
@@ -55,7 +59,10 @@ window.ImageExtension.imageDetection = {
       })
     );
 
-    images = images.filter((img) => img.url && window.ImageExtension.domUtils.isElementVisible(img.element));
+    images = images.filter(
+      (img) =>
+        img.url && window.ImageExtension.domUtils.isElementVisible(img.element)
+    );
 
     if (point) {
       images = images.filter((img) => {
@@ -76,7 +83,7 @@ window.ImageExtension.imageDetection = {
    * @param {Array} images - Array of image data objects
    * @returns {Array} Array with duplicates removed, sorted by z-index
    */
-  removeDuplicateUrls: function(images) {
+  removeDuplicateUrls: function (images) {
     const seenUrls = new Set();
     const uniqueImages = [];
 
@@ -100,7 +107,7 @@ window.ImageExtension.imageDetection = {
    * @param {number} y - Y coordinate
    * @returns {Array} Array of image data objects at the point
    */
-  findImagesAtPoint: function(x, y) {
+  findImagesAtPoint: function (x, y) {
     const result = this.findImagesInContainer(document, { x, y });
     return result;
   },
@@ -110,11 +117,11 @@ window.ImageExtension.imageDetection = {
    * @param {Array} imagesAtPoint - Array of image data objects
    * @returns {Object} Object with ancestor element and all images in ancestor
    */
-  findAncestorAndImages: function(imagesAtPoint) {
+  findAncestorAndImages: function (imagesAtPoint) {
     const ancestor = window.ImageExtension.domUtils.findCommonAncestor(
       imagesAtPoint.map((img) => img.element)
     );
     const allImagesInAncestor = this.findImagesInContainer(ancestor);
     return { ancestor, images: allImagesInAncestor };
-  }
+  },
 };
