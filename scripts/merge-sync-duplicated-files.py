@@ -26,35 +26,79 @@ def merge_json_files(directory):
     """Merges duplicate JSON files in a directory, keeping the union of keys."""
     pattern = re.compile(r"^(.*?)(\s+\d+)?\.json$")  # Match "filename.json" or "filename <number>.json"
 
+    # First pass: collect and group all files by NID
+    nid_groups = {}
+
     for filename in os.listdir(directory):
         match = pattern.match(filename)
         if not match:  # Skip non-matching files
             continue
 
-        original_name = match.group(1) + ".json"
-        original_path = os.path.join(directory, original_name)
+        nid = match.group(1)  # Extract the NID (base filename without extension)
+        file_path = os.path.join(directory, filename)
 
-        if filename != original_name:  # Skip the original file
-            duplicate_path = os.path.join(directory, filename)
+        if nid not in nid_groups:
+            nid_groups[nid] = []
+        nid_groups[nid].append((filename, file_path))
 
-            if os.path.exists(original_path):
-                # Read and merge JSON content
-                with open(original_path, 'r') as f1, open(duplicate_path, 'r') as f2:
-                    data1 = json.load(f1)
-                    data2 = json.load(f2)
-                    assert data1['id'] == data2['id']
-                    merged_data = {}
-                    merged_data["id"] = data1["id"]
-                    merged_data["incoming"] = dedup_dicts([v for v in data1["incoming"] + data2["incoming"]])
-                    merged_data["outgoing"] = dedup_dicts([v for v in data1["outgoing"] + data2["outgoing"]])
+    # Second pass: process each NID group
+    for nid, files in nid_groups.items():
+        if len(files) == 1:  # Handle single files - rename to remove suffix
+            filename, file_path = files[0]
+            if re.search(r'\s+\d+\.json$', filename):  # Has numeric suffix
+                base_filename = nid + ".json"
+                base_path = os.path.join(directory, base_filename)
+                os.rename(file_path, base_path)
+                print(f"Renamed '{filename}' to '{base_filename}'")
+            continue
+        elif len(files) < 1:  # Skip empty groups
+            print(f"No files found for NID '{nid}'")
+            continue
 
-                # Overwrite original file with merged data
-                with open(original_path, 'w') as f:
-                    json.dump(merged_data, f, separators=(',', ':'))
+        # Read all files in the group
+        all_data = []
+        for filename, file_path in files:
+            with open(file_path, 'r') as f:
+                data = json.load(f)
+                all_data.append((filename, file_path, data))
 
-                # Remove duplicate
-                os.remove(duplicate_path)
-                print(f"Merged '{filename}' into '{original_name}' and deleted '{filename}'")
+        # Verify all files have the same ID
+        first_id = all_data[0][2]['id']
+        for filename, _, data in all_data:
+            assert data['id'] == first_id, f"ID mismatch in {filename}"
+
+        # Merge all data
+        merged_incoming = []
+        merged_outgoing = []
+        for _, _, data in all_data:
+            merged_incoming.extend(data.get("incoming", []))
+            merged_outgoing.extend(data.get("outgoing", []))
+
+        merged_data = {
+            "id": first_id,
+            "incoming": dedup_dicts(merged_incoming),
+            "outgoing": dedup_dicts(merged_outgoing)
+        }
+
+        # Write merged data to the base filename (without number suffix)
+        base_filename = nid + ".json"
+        base_path = os.path.join(directory, base_filename)
+
+        with open(base_path, 'w') as f:
+            json.dump(merged_data, f, separators=(',', ':'))
+
+        # Remove all duplicate files (keep only the base file)
+        files_to_remove = []
+        for filename, file_path in files:
+            if filename != base_filename:
+                files_to_remove.append((filename, file_path))
+
+        for filename, file_path in files_to_remove:
+            os.remove(file_path)
+
+        if files_to_remove:
+            removed_names = [f[0] for f in files_to_remove]
+            print(f"Merged {len(files)} files with NID '{nid}' into '{base_filename}' and deleted {removed_names}")
 
 if __name__ == "__main__":
     if len(sys.argv) < 2:
