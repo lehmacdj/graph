@@ -62,13 +62,29 @@
 
     // If filterRect provided, only include images that intersect with it
     if (filterRect) {
-      const filteredImages = images.filter(
-        (img) =>
+      const filteredImages = images.filter((img) => {
+        const withinImageBounds =
           filterRect.x >= img.rect.left &&
           filterRect.x <= img.rect.right &&
           filterRect.y >= img.rect.top &&
-          filterRect.y <= img.rect.bottom
-      );
+          filterRect.y <= img.rect.bottom;
+
+        // For SVG image elements, also check if the enclosing SVG is within bounds
+        if (img.element.tagName === "image") {
+          const svgParent = img.element.closest("svg");
+          if (svgParent) {
+            const svgRect = svgParent.getBoundingClientRect();
+            const withinSvgBounds =
+              filterRect.x >= svgRect.left &&
+              filterRect.x <= svgRect.right &&
+              filterRect.y >= svgRect.top &&
+              filterRect.y <= svgRect.bottom;
+            return withinImageBounds && withinSvgBounds;
+          }
+        }
+
+        return withinImageBounds;
+      });
       return removeDuplicateUrls(filteredImages);
     }
 
