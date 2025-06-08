@@ -47,46 +47,56 @@
     return (
       style.visibility !== "hidden" &&
       style.display !== "none" &&
-      !isElementVisible(element.parentElement)
+      (element.parentElement === null ||
+        isElementVisible(element.parentElement))
     );
   }
 
+  function getBoundingRect(element) {
+    let rect = element.getBoundingClientRect();
+    if (element.tagName === "image") {
+      // intersect the rect with the SVG element's bounding box
+      const svgParent = element.closest("svg");
+      if (svgParent) {
+        const svgRect = svgParent.getBoundingClientRect();
+        rect = {
+          left: Math.max(rect.left, svgRect.left),
+          top: Math.max(rect.top, svgRect.top),
+          right: Math.min(rect.right, svgRect.right),
+          bottom: Math.min(rect.bottom, svgRect.bottom),
+          width: Math.max(0, Math.min(rect.right, svgRect.right) - Math.max(rect.left, svgRect.left)),
+          height: Math.max(0, Math.min(rect.bottom, svgRect.bottom) - Math.max(rect.top, svgRect.top))
+        };
+      }
+    }
+    return rect;
+  }
+
   function findImagesInContainer(container, filterRect = null) {
-    const images = Array.from(container.querySelectorAll("img, image"))
-      .map((img) => ({
+    console.log("Finding images in container:", container, filterRect);
+    let images = Array.from(container.querySelectorAll("img, image")).map(
+      (img) => ({
         element: img,
         url: getImageURL(img),
-        rect: img.getBoundingClientRect(),
-      }))
-      .filter((img) => img.url && isElementVisible(img.element));
+        rect: getBoundingRect(img),
+      })
+    );
 
-    // If filterRect provided, only include images that intersect with it
+    console.log("Initial images found:", images);
+    images = images.filter((img) => img.url && isElementVisible(img.element));
+    console.log("Visible images after filtering:", images);
+
     if (filterRect) {
-      const filteredImages = images.filter((img) => {
-        const withinImageBounds =
-          filterRect.x >= img.rect.left &&
-          filterRect.x <= img.rect.right &&
-          filterRect.y >= img.rect.top &&
-          filterRect.y <= img.rect.bottom;
-
-        // For SVG image elements, also check if the enclosing SVG is within bounds
-        if (img.element.tagName === "image") {
-          const svgParent = img.element.closest("svg");
-          if (svgParent) {
-            const svgRect = svgParent.getBoundingClientRect();
-            const withinSvgBounds =
-              filterRect.x >= svgRect.left &&
-              filterRect.x <= svgRect.right &&
-              filterRect.y >= svgRect.top &&
-              filterRect.y <= svgRect.bottom;
-            return withinImageBounds && withinSvgBounds;
-          }
-        }
-
-        return withinImageBounds;
-      });
-      return removeDuplicateUrls(filteredImages);
+      images = images.filter((img) => {
+        return (
+          img.rect.left < filterRect.right &&
+          img.rect.right > filterRect.left &&
+          img.rect.top < filterRect.bottom &&
+          img.rect.bottom > filterRect.top
+        );
+      }
     }
+    console.log("Images after applying filterRect:", images);
 
     return removeDuplicateUrls(images);
   }
@@ -343,6 +353,7 @@
   function handleMouseMove(e) {
     const x = e.clientX;
     const y = e.clientY;
+    console.log(`Mouse moved to (${x}, ${y})`);
 
     // Don't dismiss menu if hovering over it or in transition zone
     if (
