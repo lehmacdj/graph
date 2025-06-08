@@ -7,18 +7,20 @@
     currentMenu: null,
     currentImages: [],
     currentHoverElement: null,
-    currentAncestor: null
+    currentAncestor: null,
   };
 
   // Wait for all modules to be loaded
-  if (!window.ImageExtension || 
-      !window.ImageExtension.eventHandlers ||
-      !window.ImageExtension.imageDetection ||
-      !window.ImageExtension.menu ||
-      !window.ImageExtension.clipboard ||
-      !window.ImageExtension.domUtils ||
-      !window.ImageExtension.geometry) {
-    console.error('ImageExtension modules not fully loaded');
+  if (
+    !window.ImageExtension ||
+    !window.ImageExtension.eventHandlers ||
+    !window.ImageExtension.imageDetection ||
+    !window.ImageExtension.menu ||
+    !window.ImageExtension.clipboard ||
+    !window.ImageExtension.domUtils ||
+    !window.ImageExtension.geometry
+  ) {
+    console.error("ImageExtension modules not fully loaded");
     return;
   }
 
@@ -66,25 +68,5 @@
   document.addEventListener("scroll", handleScroll);
   window.addEventListener("resize", handleResize);
 
-  // Test hooks for automated testing
-  window.ImageExtension.testHooks = {
-    getState: function() {
-      return {
-        currentMenu: state.currentMenu,
-        currentImages: state.currentImages,
-        currentHoverElement: state.currentHoverElement,
-        currentAncestor: state.currentAncestor
-      };
-    },
-    
-    setState: function(newState) {
-      Object.assign(state, newState);
-    },
-    
-    clearState: function() {
-      window.ImageExtension.eventHandlers.removeMenu(state);
-    }
-  };
-
-  console.log('Image Extension initialized with modular structure');
+  console.log("Image Extension initialized with modular structure");
 })();
