@@ -102,13 +102,20 @@ whenNonNull ::
   f ()
 whenNonNull mono = for_ (fromNullable mono)
 
+singletonNN :: (IsSequence s) => Element s -> NonNull s
+singletonNN = impureNonNull . singleton
+
 singletonNNSet :: (IsSet s) => Element s -> NonNull s
 singletonNNSet = impureNonNull . singletonSet
+
+singletonNNMap :: (IsMap m) => ContainerKey m -> MapValue m -> NonNull m
+singletonNNMap k v = impureNonNull $ singletonMap k v
 
 singletonNNIxSet :: (IxSet.Indexable ixs v) => v -> NonNull (IxSet.IxSet ixs v)
 singletonNNIxSet = impureNonNull . IxSet.fromList . singleton
 
 -- | generalized foldl1 monadically
+-- i.e. @foldlM1 :: (a -> a -> Maybe a) -> NonNull [a] -> Maybe a@
 foldlM1 ::
   (IsSequence mono, Monad m) =>
   (Element mono -> Element mono -> m (Element mono)) ->

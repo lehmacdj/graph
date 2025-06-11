@@ -57,6 +57,18 @@ justIfTrue :: Bool -> a -> Maybe a
 justIfTrue True x = Just x
 justIfTrue False _ = Nothing
 
+attachError :: Maybe a -> e -> Either e a
+attachError (Just x) _ = Right x
+attachError Nothing e = Left e
+
+injectError :: Maybe a -> e -> Either (NonEmpty e) a
+injectError (Just x) _ = Right x
+injectError Nothing e = Left (singleton e)
+
+codiagonal :: Either a a -> a
+codiagonal (Left x) = x
+codiagonal (Right x) = x
+
 combineErrors ::
   Either (NonEmpty e) a ->
   Either (NonEmpty e) b ->

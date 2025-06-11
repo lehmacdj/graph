@@ -3,8 +3,6 @@
 module Models.NormalizedPath where
 
 import Data.IxSet.Typed (Indexable (indices), IxSet, ixFun, ixList)
-import Data.IxSet.Typed qualified as IxSet
-import Data.Map.Merge.Strict (dropMissing, merge)
 import Models.NID
 import Models.Path
 import MyPrelude
@@ -100,30 +98,55 @@ instance
           singleton $ DPITarget tdp.target
       mkRoot (RootedDeterministicPathBranch r _) = singleton $ DPIRoot r
 
+type family DPBranches r d x where
+  DPBranches Rooted d x = NonNull (Map d (Maybe (NonNull (Set x))))
+  DPBranches Unrooted d x = NonNull (Set x)
+
+type DeterministicPath r t d = DeterministicPath' r t d d
+
 -- | Path that has all `+` nodes/superposition factored out.
 -- @d@ should be either `MacroDeterministic` or `Deterministic` for specifying
 -- a truly deterministic path.
 --
 -- Mutually recursively defined as it is so that only valid combinations of
 -- intersection/sequence are possible.
-newtype DeterministicPath r t d = DeterministicPath
-  {intersection :: NonNull (IxSet (DPIndexes r d) (DPValue r t d))}
+data DeterministicPath' r transition determinacy target = DeterministicPath
+  { branches ::
+      DPBranches r determinacy (DeterministicPathBranch transition determinacy),
+    target :: target
+  }
   deriving (Generic)
 
-deriving newtype instance (Indexable (DPIndexes r d) (DPValue r t d)) => Eq (DeterministicPath r t d)
+deriving stock instance
+  ( Eq tr,
+    Eq d,
+    Eq ta,
+    Eq (DPBranches r d (DeterministicPathBranch tr d))
+  ) =>
+  Eq (DeterministicPath' r tr d ta)
 
-deriving newtype instance (Indexable (DPIndexes r d) (DPValue r t d), Show (DPValue r t d)) => Show (DeterministicPath r t d)
+deriving stock instance
+  ( Ord tr,
+    Ord d,
+    Ord ta,
+    Ord (DPBranches r d (DeterministicPathBranch tr d))
+  ) =>
+  Ord (DeterministicPath' r tr d ta)
 
-deriving newtype instance (Indexable (DPIndexes r d) (DPValue r t d)) => Ord (DeterministicPath r t d)
-
-deriving newtype instance (Indexable (DPIndexes r d) (DPValue r t d)) => Semigroup (DeterministicPath r t d)
+deriving stock instance
+  ( Show tr,
+    Show d,
+    Show ta,
+    Show (DPBranches r d (DeterministicPathBranch tr d))
+  ) =>
+  Show (DeterministicPath' r tr d ta)
 
 data DeterministicPathBranch t d
   = DPWild
   | DPLiteral t
   | DPSequence
       (NonNull [DeterministicPath Unrooted t d])
-      (DeterministicPath Unrooted t ())
+      (DeterministicPath' Unrooted t d ())
   deriving (Eq, Ord, Show, Generic)
 
 newtype NormalizedPath t d = NormalizedPath
@@ -134,10 +157,27 @@ deriving newtype instance (Semigroup (Set (DeterministicPath Rooted t d))) => (S
 
 deriving newtype instance (Monoid (Set (DeterministicPath Rooted t d))) => (Monoid (NormalizedPath t d))
 
-data NormalizationError t = E
+data NormalizationError t = NoPossibleJoinPointWhileSequencing
+  { prefix :: DeterministicPath Rooted t PreDeterministic,
+    suffix :: DeterministicPath Rooted t PreDeterministic
+  }
   deriving (Eq, Ord, Show, Generic)
 
 type NormalizationErrors t = NonEmpty (NormalizationError t)
+
+mergePreDeterminacy ::
+  PreDeterministic -> PreDeterministic -> Maybe PreDeterministic
+mergePreDeterminacy PDUnanchored PDUnanchored = Just PDUnanchored
+mergePreDeterminacy PDUnanchored PDJoinPoint = Just PDJoinPoint
+mergePreDeterminacy PDJoinPoint PDUnanchored = Just PDJoinPoint
+mergePreDeterminacy PDJoinPoint PDJoinPoint = Just PDJoinPoint
+mergePreDeterminacy PDUnanchored (PDSpecific nid) = Just (PDSpecific nid)
+mergePreDeterminacy (PDSpecific nid) PDUnanchored = Just (PDSpecific nid)
+mergePreDeterminacy PDJoinPoint (PDSpecific nid) = Just (PDSpecific nid)
+mergePreDeterminacy (PDSpecific nid) PDJoinPoint = Just (PDSpecific nid)
+mergePreDeterminacy (PDSpecific nid1) (PDSpecific nid2)
+  | nid1 == nid2 = Just (PDSpecific nid1)
+  | otherwise = Nothing
 
 -- fancier anchors:
 -- a/(@1/b & @) => a/@1/b & a/@
@@ -151,30 +191,75 @@ type NormalizationErrors t = NonEmpty (NormalizationError t)
 
 -- Key thing to figure out to make progress:
 -- (a & b/@)/(@1 & c) => ???
+-- a & b/@ => a/@ & b/@
+-- c/(@1 & b)
+
+intersectDeterministicPaths ::
+  (Ord t) =>
+  DeterministicPath Rooted t PreDeterministic ->
+  DeterministicPath Rooted t PreDeterministic ->
+  Maybe (DeterministicPath Rooted t PreDeterministic)
+intersectDeterministicPaths = undefined
+
+-- (a & b)/c => a/@/c & b/@/c
+-- a/(b & c) => a/@/b & a/@/c
+-- (a & b)/(c & d) => a/@/c & a/@/d & b/@/c & b/@/d
+-- (a & b/@)/(c & d) => (a & b)/@/(c & d)
 
 sequenceDeterministicPathBranches ::
   (Ord t) =>
-  RootedDeterministicPathBranch t PreDeterministic ->
-  RootedDeterministicPathBranch t PreDeterministic ->
-  Maybe (RootedDeterministicPathBranch t PreDeterministic)
-sequenceDeterministicPathBranches = undefined
+  DeterministicPathBranch t PreDeterministic ->
+  DeterministicPathBranch t PreDeterministic ->
+  DeterministicPathBranch t PreDeterministic
+sequenceDeterministicPathBranches p1 p2 =
+  DPSequence
+    (singletonNN (DeterministicPath (singletonNNSet p1) PDJoinPoint))
+    (DeterministicPath (singletonNNSet p2) ())
+
+-- (a & @)/b ???=> a/@/b & b or (a & @)/@/b
 
 sequenceDeterministicPaths ::
+  forall t.
   (Ord t) =>
   DeterministicPath Rooted t PreDeterministic ->
   DeterministicPath Rooted t PreDeterministic ->
   Either (NormalizationErrors t) (DeterministicPath Rooted t PreDeterministic)
-sequenceDeterministicPaths (DeterministicPath bs1) (DeterministicPath bs2) = do
-  let bs1ByTarget =
-        IxSet.groupBy @(DPITarget PreDeterministic) (toNullable bs1)
-      bs2ByRoot =
-        IxSet.groupBy @(DPIRoot PreDeterministic) (toNullable bs2)
-  let cp = cartesianProduct bs1ByTarget bs2ByRoot
+sequenceDeterministicPaths dp1@(DeterministicPath rb1 t1) dp2@(DeterministicPath rb2 t2) = do
+  anchor <-
+    foldlM1 mergePreDeterminacy (t1 `ncons` keys (toNullable rb2))
+      `injectError` NoPossibleJoinPointWhileSequencing dp1 dp2
+  -- need to also consider roots with no branch for rb1 when merging
+  -- pre-determinacy because these are effectively the target of the first path
+  case anchor of
+    PDUnanchored -> do
+      -- this won't actually merge any values because we know all the roots
+      -- were unanchored
+      let b2Set :: Set (Maybe (NonNull (Set (DeterministicPathBranch t PreDeterministic))))
+          b2Set = rb2 & toNullable & toList & setFromList & asSet
+      let b2HasNothing = Nothing `member` b2Set
+      let b2 :: [DeterministicPathBranch t PreDeterministic]
+          b2 = b2Set & toList & catMaybes & concatMap toList
+      let rb1' =
+            (rb1 & toNullable & mapToList)
+              & over (mapped . _2 . _Just) (toList . toNullable)
+      let distributeB2 :: ((x, Maybe [y]), z) -> [(x, Either z (y, z))]
+          distributeB2 ((x, Nothing), z) = [(x, Left z)]
+          distributeB2 ((x, Just ys), z) = ys <&> ((x,) . Right . (,z))
+      let nonB2NothingBranches :: [(PreDeterministic, DeterministicPathBranch t PreDeterministic)]
+          nonB2NothingBranches =
+            cartesianProduct rb1' b2
+              & concatMap distributeB2
+              & over (mapped . _2 . _Right) (uncurry sequenceDeterministicPathBranches)
+              & over (mapped . _2) codiagonal
+      let b2NothingBranches = rb1'
+      undefined
+  -- targets of 1st + roots of 2nd must match. otherwise error
+  --
+  -- either:
+  -- - if any is joinpoint/specific, just return a single DPSequence where the
+  --    midpoint is the joinpoint/specific node
+  -- - if all are unanchored, stitch together cartesian product of all branches
   undefined
-
--- let leadingMap
--- IxSet.groupBy @PreDeterministic . toNullable -> bs1
--- IxSet.groupBy @PreDeterministic . toNullable -> bs2    undefined
 
 prenormalizePath ::
   (Ord t) =>
@@ -182,26 +267,28 @@ prenormalizePath ::
   Either (NormalizationErrors t) (NormalizedPath t PreDeterministic)
 prenormalizePath = \case
   One ->
-    Right . NormalizedPath . singletonSet . DeterministicPath . singletonNNIxSet $
-      RootedDeterministicPathBranch PDJoinPoint Nothing
+    Right . NormalizedPath . singletonSet $
+      DeterministicPath (singletonNNMap PDJoinPoint Nothing) PDUnanchored
   Absolute nid ->
-    Right . NormalizedPath . singletonSet . DeterministicPath . singletonNNIxSet $
-      RootedDeterministicPathBranch (PDSpecific nid) Nothing
+    Right . NormalizedPath . singletonSet $
+      DeterministicPath (singletonNNMap (PDSpecific nid) Nothing) PDUnanchored
   Wild ->
-    Right . NormalizedPath . singletonSet . DeterministicPath . singletonNNIxSet $
-      RootedDeterministicPathBranch
+    Right . NormalizedPath . singletonSet $
+      DeterministicPath
+        (singletonNNMap PDUnanchored (Just (singletonNNSet DPWild)))
         PDUnanchored
-        (Just (TargetingDeterministicPathBranch DPWild PDUnanchored))
   Literal t ->
-    Right . NormalizedPath . singletonSet . DeterministicPath . singletonNNIxSet $
-      RootedDeterministicPathBranch
+    Right . NormalizedPath . singletonSet $
+      DeterministicPath
+        (singletonNNMap PDUnanchored (Just (singletonNNSet (DPLiteral t))))
         PDUnanchored
-        (Just (TargetingDeterministicPathBranch (DPLiteral t) PDUnanchored))
   p1 :+ p2 -> prenormalizePath p1 <!> prenormalizePath p2
   p1 :& p2 -> do
     (NormalizedPath u1, NormalizedPath u2) <-
       combineErrors (prenormalizePath p1) (prenormalizePath p2)
-    Right . NormalizedPath $ mapSet (uncurry (<>)) $ cartesianProductSet u1 u2
+    Right . NormalizedPath $
+      setFromList . mapMaybe (uncurry intersectDeterministicPaths) . toList $
+        cartesianProductSet u1 u2
   p1 :/ p2 -> do
     (NormalizedPath u1, NormalizedPath u2) <-
       combineErrors (prenormalizePath p1) (prenormalizePath p2)
@@ -242,6 +329,52 @@ deprenormalizeRootedDeterministicPathBranch
           deprenormalizeTargetingDeterministicPathBranch <$> branchTarget
       }
 
+deprenormalizeDeterministicPath ::
+  (Ord t) =>
+  DeterministicPath Rooted t PreDeterministic ->
+  DeterministicPath Rooted t MacroDeterministic
+deprenormalizeDeterministicPath
+  DeterministicPath {..} =
+    DeterministicPath
+      { branches =
+          branches
+            & toNullable
+            & mapToList
+            & over (traverse . _1) deprenormalize
+            & over
+              (traverse . _2 . _Just . nonNull . setmapped)
+              deprenormalizeDeterministicPathBranch
+            & mapFromList
+            & impureNonNull,
+        target = deprenormalize target
+      }
+
+deprenormalizeUnrootedDeterministicPath ::
+  (Ord t) =>
+  DeterministicPath Unrooted t PreDeterministic ->
+  DeterministicPath Unrooted t MacroDeterministic
+deprenormalizeUnrootedDeterministicPath
+  DeterministicPath {..} =
+    DeterministicPath
+      { branches =
+          branches
+            & over (nonNull . setmapped) deprenormalizeDeterministicPathBranch,
+        target = deprenormalize target
+      }
+
+deprenormalizeUnrootedDeterministicPath' ::
+  (Ord t) =>
+  DeterministicPath' Unrooted t PreDeterministic () ->
+  DeterministicPath' Unrooted t MacroDeterministic ()
+deprenormalizeUnrootedDeterministicPath'
+  DeterministicPath {..} =
+    DeterministicPath
+      { branches =
+          branches
+            & over (nonNull . setmapped) deprenormalizeDeterministicPathBranch,
+        target = ()
+      }
+
 deprenormalizeDeterministicPathBranch ::
   (Ord t) =>
   DeterministicPathBranch t PreDeterministic ->
@@ -252,20 +385,34 @@ deprenormalizeDeterministicPathBranch = \case
   DPSequence ps finalPath ->
     DPSequence
       ( over
-          (nonNull . traverse . _Unwrapped . nonNull . ixsetmapped)
-          deprenormalizeTargetingDeterministicPathBranch
+          (nonNull . traverse)
+          deprenormalizeUnrootedDeterministicPath
           ps
       )
-      finalPath
+      (deprenormalizeUnrootedDeterministicPath' finalPath)
+
+-- deprenormalizeDeterministicPathBranch ::
+--   (Ord t) =>
+--   DeterministicPathBranch t PreDeterministic ->
+--   DeterministicPathBranch t MacroDeterministic
+-- deprenormalizeDeterministicPathBranch = \case
+--   DPLiteral t -> DPLiteral t
+--   DPWild -> DPWild
+--   DPSequence ps finalPath ->
+--     DPSequence
+--       ( over
+--           (nonNull . traverse . _Unwrapped . nonNull . ixsetmapped)
+--           deprenormalizeTargetingDeterministicPathBranch
+--           ps
+--       )
+--       finalPath
 
 deprenormalizePath ::
   (Ord t) =>
   NormalizedPath t PreDeterministic ->
   NormalizedPath t MacroDeterministic
 deprenormalizePath =
-  over
-    (#union . setmapped . _Unwrapped . nonNull . ixsetmapped)
-    deprenormalizeRootedDeterministicPathBranch
+  over (#union . setmapped) deprenormalizeDeterministicPath
 
 normalizePath ::
   (Ord t) =>
