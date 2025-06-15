@@ -102,6 +102,10 @@ whenNonNull ::
   f ()
 whenNonNull mono = for_ (fromNullable mono)
 
+type NNMap k v = NonNull (Map k v)
+
+type NNSet a = NonNull (Set a)
+
 singletonNN :: (IsSequence s) => Element s -> NonNull s
 singletonNN = impureNonNull . singleton
 

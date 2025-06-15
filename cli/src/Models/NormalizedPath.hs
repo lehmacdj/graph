@@ -216,7 +216,11 @@ sequenceDeterministicPathBranches p1 p2 =
     (singletonNN (DeterministicPath (singletonNNSet p1) PDJoinPoint))
     (DeterministicPath (singletonNNSet p2) ())
 
--- (a & @)/b ???=> a/@/b & b or (a & @)/@/b
+-- (a & @)/b ???=> a/@/b & b
+-- a/(b & @) ???=> (a/@/b & a)/@ -- actually kind of confident about this one
+-- a/(b & @)/c ???=> (a/b & a)/c & a/(b & b/c) & a/c
+-- (a/(b & @))/c => (a/@/b & a/@)/c => a/@/b/c & a/@/c
+-- a/((b & @)/c)
 
 sequenceDeterministicPaths ::
   forall t.
