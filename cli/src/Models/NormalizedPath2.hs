@@ -1,4 +1,3 @@
-{-# LANGUAGE PatternGuards #-}
 {-# LANGUAGE UndecidableInstances #-}
 
 module NormalizedPath2 where
@@ -11,39 +10,26 @@ data Anchor = Unanchored | JoinPoint | Specific NID
   deriving stock (Eq, Ord, Show, Generic)
   deriving anyclass (NFData)
 
+data DeterministicPath t
+  = Rooted (RootedDeterministicPath t)
+  | Pointlike (PointlikeDeterministicPath t)
+  deriving stock (Eq, Ord, Show, Generic)
+  deriving anyclass (NFData)
+
 -- | Represents a path that targets a single node (i.e. is deterministic)
 --
 -- Invariants:
--- - if nonSelfLoopSources is empty, hasSelfLoop must be True
--- - if `hasSelfLoop`, the target can't be Unanchored
--- - the sets of branches in nonSelfLoopSources must be nonempty
--- - the keys of nonSelfLoopSources may not be the same Anchor.Specific as the
---   target
+-- - the sets of branches in rootBranches must be nonempty
+-- - the keys of rootBranches may not be the same Anchor as target.anchor
 data RootedDeterministicPath t = RootedDeterministicPath
-  { nonSelfLoopSources :: Map (PointlikeDeterministicPath t) (Set (DPBranch t)),
-    target :: PointlikeDeterministicPath t,
-    hasSelfLoop :: Bool
+  { rootBranches :: Map (PointlikeDeterministicPath t) (Set (DPBranch t)),
+    target :: PointlikeDeterministicPath t
   }
   deriving stock (Eq, Ord, Show, Generic)
   deriving anyclass (NFData)
 
--- | Try to coerce a 'RootedDeterministicPath' into a
--- 'PointlikeDeterministicPath'. This is only possible if the path is
--- "pointlike". A path is pointlike if it has a single source and the target is
--- the same as the source.
-asPointlike ::
-  (HasCallStack) =>
-  RootedDeterministicPath t ->
-  Maybe (PointlikeDeterministicPath t)
-asPointlike dp@RootedDeterministicPath {..}
-  | hasSelfLoop,
-    null nonSelfLoopSources,
-    target.anchor /= Unanchored || error "broken invariant" =
-      Just dp.target
-  | otherwise = Nothing
-
--- | A pointlike deterministic path. This is a path that has a single source
--- and the target is the same as the source.
+-- | A pointlike deterministic path. This is a path that has a single Root
+-- and the target is the same as the Root.
 data PointlikeDeterministicPath t
   = PointlikeDeterministicPath
   { -- | this anchor can't be Unanchored
@@ -78,51 +64,103 @@ data DPBranch t
   deriving stock (Eq, Ord, Show, Generic)
   deriving anyclass (NFData)
 
-newtype NormalizedPath t = NormalizedPath {union :: Set (RootedDeterministicPath t)}
+newtype NormalizedPath t = NormalizedPath {union :: Set (DeterministicPath t)}
+
+pointify ::
+  (Ord t) =>
+  RootedDeterministicPath t ->
+  Maybe (PointlikeDeterministicPath t)
+pointify RootedDeterministicPath {..} = do
+  protoPoint <- foldlM1 mergePointlike (target `ncons` keys rootBranches)
+  let extraLoops = mconcat $ toList rootBranches
+  Just protoPoint {loops = protoPoint.loops <> extraLoops}
 
 intersectDeterministicPaths ::
-  RootedDeterministicPath t ->
-  RootedDeterministicPath t ->
-  Maybe (RootedDeterministicPath t)
-intersectDeterministicPaths dp1 dp2 = undefined
+  (Ord t) =>
+  DeterministicPath t ->
+  DeterministicPath t ->
+  Maybe (DeterministicPath t)
+intersectDeterministicPaths (Rooted p1) (Rooted p2) = do
+  newTarget <- mergePointlike p1.target p2.target
+  let newSourceBranches = unionWith (<>) p1.rootBranches p2.rootBranches
+  Just . Rooted $ RootedDeterministicPath newSourceBranches newTarget
+intersectDeterministicPaths (Pointlike p1) (Pointlike p2) = do
+  Pointlike <$> mergePointlike p1 p2
+intersectDeterministicPaths (Rooted (pointify -> maybeP1)) (Pointlike p2) = do
+  p1 <- maybeP1
+  Pointlike <$> mergePointlike p1 p2
+intersectDeterministicPaths (Pointlike p1) (Rooted (pointify -> maybeP2)) = do
+  p2 <- maybeP2
+  Pointlike <$> mergePointlike p1 p2
+
+-- | Join on the semi-lattice of anchors. Every Specific NID is a top element
+mergeAnchor :: Anchor -> Anchor -> Maybe Anchor
+mergeAnchor Unanchored a = Just a
+mergeAnchor a Unanchored = Just a
+mergeAnchor JoinPoint (Specific nid) = Just (Specific nid)
+mergeAnchor (Specific nid) JoinPoint = Just (Specific nid)
+mergeAnchor JoinPoint JoinPoint = Just JoinPoint
+mergeAnchor (Specific nid1) (Specific nid2)
+  | nid1 == nid2 = Just (Specific nid1)
+  | otherwise = Nothing
+
+-- | Merge two PointlikeDeterministicPaths by combining their loops and
+-- merging their anchors.
+mergePointlike ::
+  (Ord t) =>
+  PointlikeDeterministicPath t ->
+  PointlikeDeterministicPath t ->
+  Maybe (PointlikeDeterministicPath t)
+mergePointlike p1 p2 = do
+  mergedAnchor <- mergeAnchor p1.anchor p2.anchor
+  Just $
+    PointlikeDeterministicPath
+      { anchor = mergedAnchor,
+        loops = p1.loops <> p2.loops
+      }
 
 sequenceDeterministicPaths ::
-  RootedDeterministicPath t ->
-  RootedDeterministicPath t ->
-  Maybe (RootedDeterministicPath t)
-sequenceDeterministicPaths dp1 dp2 = do
-  undefined
+  (Ord t) =>
+  DeterministicPath t ->
+  DeterministicPath t ->
+  Maybe (DeterministicPath t)
+sequenceDeterministicPaths (Pointlike p1) (Pointlike p2) =
+  Pointlike <$> mergePointlike p1 p2
+sequenceDeterministicPaths (Pointlike p1) (Rooted p2) = do
+  newRoot <- foldlM1 mergePointlike (p1 `ncons` keys p2.rootBranches)
+  let newBranches = mconcat $ toList p2.rootBranches
+  Just $ Rooted $ p2 {rootBranches = singletonMap newRoot newBranches}
+sequenceDeterministicPaths (Rooted p1) (Pointlike p2) = do
+  newTarget <- mergePointlike p1.target p2
+  Just $ Rooted $ p1 {target = newTarget}
+sequenceDeterministicPaths (Rooted p1) (Rooted p2) = do
+  midpoint <- foldlM1 mergePointlike (p1.target `ncons` keys p2.rootBranches)
+  let p2Branches = mconcat $ toList p2.rootBranches
+  let newRootBranches =
+        p1.rootBranches <&> \branches ->
+          singletonSet $ DPSequence branches midpoint p2Branches
+  Just . Rooted $ RootedDeterministicPath newRootBranches p2.target
 
 normalizePath :: (Ord t) => Path t -> Maybe (NormalizedPath t)
 normalizePath = \case
   One ->
-    Just . NormalizedPath . singletonSet $
-      RootedDeterministicPath
-        (singletonMap joinPoint mempty)
-        joinPoint
-        True
+    Just . NormalizedPath . singletonSet . Pointlike $ joinPoint
   Absolute nid ->
-    Just . NormalizedPath . singletonSet $
-      RootedDeterministicPath
-        (singletonMap (specific nid) mempty)
-        (specific nid)
-        True
+    Just . NormalizedPath . singletonSet . Pointlike $ specific nid
   Wild ->
-    Just . NormalizedPath . singletonSet $
+    Just . NormalizedPath . singletonSet . Rooted $
       RootedDeterministicPath
         (singletonMap unanchored (singletonSet DPWild))
         unanchored
-        False
   Literal t ->
-    Just . NormalizedPath . singletonSet $
+    Just . NormalizedPath . singletonSet . Rooted $
       RootedDeterministicPath
         (singletonMap unanchored (singletonSet (DPLiteral t)))
         unanchored
-        False
   p1 :+ p2 -> do
     np1 <- normalizePath p1
     np2 <- normalizePath p2
-    Just $ NormalizedPath $ np1.union <> np2.union
+    Just . NormalizedPath $ np1.union <> np2.union
   p1 :& p2 -> do
     np1 <- normalizePath p1
     np2 <- normalizePath p2
