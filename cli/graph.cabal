@@ -86,7 +86,7 @@ library
       Models.NID
       Models.NIDSpec
       Models.Node
-      Models.NormalizedPath2
+      Models.NormalizedPath
       Models.Path
       MyPrelude
       MyPrelude.Collections

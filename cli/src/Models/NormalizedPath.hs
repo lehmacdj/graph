@@ -1,6 +1,6 @@
 {-# LANGUAGE UndecidableInstances #-}
 
-module NormalizedPath2 where
+module NormalizedPath where
 
 import Models.NID
 import Models.Path
