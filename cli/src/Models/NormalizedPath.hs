@@ -1,6 +1,6 @@
 {-# LANGUAGE UndecidableInstances #-}
 
-module NormalizedPath where
+module Models.NormalizedPath where
 
 import Models.NID
 import Models.Path
@@ -65,6 +65,8 @@ data DPBranch t
   deriving anyclass (NFData)
 
 newtype NormalizedPath t = NormalizedPath {union :: Set (DeterministicPath t)}
+  deriving stock (Eq, Ord, Show, Generic)
+  deriving anyclass (NFData)
 
 pointify ::
   (Ord t) =>

@@ -68,6 +68,8 @@ library
       Graph.Utils
       Lang.Command
       Lang.Command.Parse
+      Lang.NormalizedPath.Parse
+      Lang.NormalizedPath.ParseSpec
       Lang.Parsing
       Lang.ParsingSpec
       Lang.Path
