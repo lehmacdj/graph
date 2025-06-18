@@ -61,6 +61,10 @@ attachError :: Maybe a -> e -> Either e a
 attachError (Just x) _ = Right x
 attachError Nothing e = Left e
 
+fromJustEx :: (HasCallStack) => Maybe a -> a
+fromJustEx (Just x) = x
+fromJustEx Nothing = error "fromJustEx: Nothing"
+
 injectError :: Maybe a -> e -> Either (NonEmpty e) a
 injectError (Just x) _ = Right x
 injectError Nothing e = Left (singleton e)

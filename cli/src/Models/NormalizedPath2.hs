@@ -73,7 +73,11 @@ pointify ::
 pointify RootedDeterministicPath {..} = do
   protoPoint <- foldlM1 mergePointlike (target `ncons` keys rootBranches)
   let extraLoops = mconcat $ toList rootBranches
-  Just protoPoint {loops = protoPoint.loops <> extraLoops}
+  Just
+    protoPoint
+      { loops = protoPoint.loops <> extraLoops,
+        anchor = fromJustEx $ mergeAnchor JoinPoint protoPoint.anchor
+      }
 
 intersectDeterministicPaths ::
   (Ord t) =>
