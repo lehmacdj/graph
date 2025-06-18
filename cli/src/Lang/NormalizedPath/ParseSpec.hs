@@ -1,7 +1,7 @@
 module Lang.NormalizedPath.ParseSpec where
 
 import Lang.NormalizedPath.Parse
-import Lang.Parsing (Parser)
+import Lang.Parsing (Parser, lexeme)
 import Lang.ParsingSpec
 import Models.NID
 import Models.NormalizedPath
@@ -26,8 +26,8 @@ test_pNormalizedPath =
       "(a & b)/@|c" `parsesTo` singletonBranch (DPSequence (setFromList [DPLiteral "a", DPLiteral "b"]) joinPoint (setFromList [DPLiteral "c"])),
       "a/@|(b & c)" `parsesTo` singletonBranch (DPSequence (setFromList [DPLiteral "a"]) joinPoint (setFromList [DPLiteral "b", DPLiteral "c"])),
       "a/|b" `parsesTo` singletonBranch (DPSequence (setFromList [DPLiteral "a"]) unanchored (setFromList [DPLiteral "b"])),
-      "a/|(b/|c)" `parsesTo` singletonBranch (DPSequence (setFromList [DPLiteral "a"]) unanchored (setFromList [DPLiteral "b", DPLiteral "c"])),
-      "(a/|b)/|c" `parsesTo` singletonBranch (DPSequence (setFromList [DPLiteral "a", DPLiteral "b"]) unanchored (setFromList [DPLiteral "c"])),
+      "a/|(b/|c)" `parsesTo` singletonBranch (DPSequence (setFromList [DPLiteral "a"]) unanchored (setFromList [DPSequence (setFromList [DPLiteral "b"]) unanchored (setFromList [DPLiteral "c"])])),
+      "(b/|c)/|a" `parsesTo` singletonBranch (DPSequence (setFromList [DPSequence (setFromList [DPLiteral "b"]) unanchored (setFromList [DPLiteral "c"])]) unanchored (setFromList [DPLiteral "a"])),
       "a/@1|b" `parsesTo` singletonBranch (DPSequence (setFromList [DPLiteral "a"]) (specific (smallNID 1)) (setFromList [DPLiteral "b"])),
       "a/@1[a]|b" `parsesTo` singletonBranch (DPSequence (setFromList [DPLiteral "a"]) (PointlikeDeterministicPath (Specific (smallNID 1)) (singletonSet (DPLiteral "a"))) (setFromList [DPLiteral "b"])),
       -- RootedDeterministicPath
@@ -86,4 +86,4 @@ singletonRooted :: RootedDeterministicPath Text -> NormalizedPath Text
 singletonRooted = NormalizedPath . singletonSet . Rooted
 
 transition :: Parser Text
-transition = pack <$> some letterChar
+transition = lexeme $ pack <$> some letterChar
