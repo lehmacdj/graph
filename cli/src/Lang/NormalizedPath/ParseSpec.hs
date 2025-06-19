@@ -1,7 +1,7 @@
 module Lang.NormalizedPath.ParseSpec where
 
 import Lang.NormalizedPath.Parse
-import Lang.Parsing (Parser, lexeme)
+import Lang.Parsing (Parser, transition)
 import Lang.ParsingSpec
 import Models.NID
 import Models.NormalizedPath
@@ -17,11 +17,14 @@ test_pNormalizedPath =
       "a" `parsesTo` singletonBranch (DPLiteral "a"),
       "*" `parsesTo` singletonBranch DPWild,
       -- PointlikeDeterministicPath
+      "@" `parsesTo` singletonPointlike (PointlikeDeterministicPath JoinPoint mempty),
+      "@1" `parsesTo` singletonPointlike (PointlikeDeterministicPath (Specific (smallNID 1)) mempty),
       "@[a]" `parsesTo` singletonPointlike (PointlikeDeterministicPath JoinPoint (singletonSet (DPLiteral "a"))),
       "@[a & *]" `parsesTo` singletonPointlike (PointlikeDeterministicPath JoinPoint (setFromList [DPLiteral "a", DPWild])),
       "@1[a]" `parsesTo` singletonPointlike (PointlikeDeterministicPath (Specific (smallNID 1)) (singletonSet (DPLiteral "a"))),
       "@42[a & b]" `parsesTo` singletonPointlike (PointlikeDeterministicPath (Specific (smallNID 42)) (setFromList [DPLiteral "a", DPLiteral "b"])),
       -- sequences
+      "[a/@|b]" `parsesTo` singletonBranch (DPSequence (setFromList [DPLiteral "a"]) joinPoint (setFromList [DPLiteral "b"])),
       "a/@|b" `parsesTo` singletonBranch (DPSequence (setFromList [DPLiteral "a"]) joinPoint (setFromList [DPLiteral "b"])),
       "(a & b)/@|c" `parsesTo` singletonBranch (DPSequence (setFromList [DPLiteral "a", DPLiteral "b"]) joinPoint (setFromList [DPLiteral "c"])),
       "a/@|(b & c)" `parsesTo` singletonBranch (DPSequence (setFromList [DPLiteral "a"]) joinPoint (setFromList [DPLiteral "b", DPLiteral "c"])),
@@ -66,13 +69,13 @@ test_pNormalizedPath =
       "[@<a]"
         `parsesTo` singletonRooted
           ( RootedDeterministicPath
-              (singletonMap unanchored (singletonSet (DPLiteral "a")))
+              (singletonMap joinPoint (singletonSet (DPLiteral "a")))
               unanchored
           ),
       "a + b" `parsesTo` branches [DPLiteral "a", DPLiteral "b"],
       "a + b + c" `parsesTo` branches [DPLiteral "a", DPLiteral "b", DPLiteral "c"],
       -- Complex combinations
-      "(@[a] + @1[b])"
+      "[a] + @1[b]"
         `parsesTo` NormalizedPath
           ( setFromList
               [ Rooted
@@ -85,42 +88,39 @@ test_pNormalizedPath =
           ),
       -- Parse failures
       parseFails "@[",
+      parseFails "@a",
       parseFails "@1[a",
-      parseFails "[@<a]",
       parseFails "a/|",
       parseFails "/|b",
       parseFails "[@<a>",
       parseFails "a + + b"
     ]
   where
-    parsesTo :: Text -> NormalizedPath Text -> TestTree
+    parsesTo :: String -> NormalizedPath String -> TestTree
     parsesTo input expected =
       testCase ("parse: " ++ show input) $
-        testParserParses (pNormalizedPath transition) (unpack input) expected
+        testParserParses (pNormalizedPath transition <* eof) (unpack input) expected
 
     parseFails input =
       testCase ("parse fails: " ++ show input) $
-        testParserFails (pNormalizedPath transition) input
+        testParserFails (pNormalizedPath transition <* eof) input
 
-singletonBranch :: DPBranch Text -> NormalizedPath Text
+singletonBranch :: DPBranch String -> NormalizedPath String
 singletonBranch branch =
   NormalizedPath . singletonSet . Rooted $
     RootedDeterministicPath
       (singletonMap unanchored (singletonSet branch))
       unanchored
 
-branches :: [DPBranch Text] -> NormalizedPath Text
+branches :: [DPBranch String] -> NormalizedPath String
 branches bs =
   NormalizedPath . setFromList $
     [ Rooted (RootedDeterministicPath (singletonMap unanchored (singletonSet b)) unanchored)
       | b <- bs
     ]
 
-singletonPointlike :: PointlikeDeterministicPath Text -> NormalizedPath Text
+singletonPointlike :: PointlikeDeterministicPath String -> NormalizedPath String
 singletonPointlike = NormalizedPath . singletonSet . Pointlike
 
-singletonRooted :: RootedDeterministicPath Text -> NormalizedPath Text
+singletonRooted :: RootedDeterministicPath String -> NormalizedPath String
 singletonRooted = NormalizedPath . singletonSet . Rooted
-
-transition :: Parser Text
-transition = lexeme $ pack <$> some letterChar

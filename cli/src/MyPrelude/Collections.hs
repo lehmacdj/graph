@@ -191,3 +191,6 @@ ixsetmapped ::
   (IxSet.All Ord jxs, IxSet.Indexable jxs j) =>
   IndexPreservingSetter (IxSet.IxSet ixs i) (IxSet.IxSet jxs j) i j
 ixsetmapped = iso IxSet.toSet IxSet.fromSet . setmapped
+
+nnmap :: (HasCallStack, MonoFoldable (f b), Functor f) => (a -> b) -> NonNull (f a) -> NonNull (f b)
+nnmap f = impureNonNull . fmap f . toNullable

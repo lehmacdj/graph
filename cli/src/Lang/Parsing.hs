@@ -95,3 +95,9 @@ commandFrom (x : xs) = try (command x) <|> commandFrom xs
 
 sepBy2 :: Parser a -> Parser sep -> Parser (TwoElemList a)
 sepBy2 p sep = twoElemList <$> p <*> (sep *> p) <*> many (sep *> p)
+
+via1 :: Parser a -> Parser sep -> Parser (a, NonNull [(sep, a)])
+via1 p sep = do
+  initial <- p
+  remainder <- some ((,) <$> sep <*> p)
+  pure (initial, impureNonNull remainder)

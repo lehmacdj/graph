@@ -1,17 +1,26 @@
-module Lang.ParsingSpec where
+module Lang.ParsingSpec (module Lang.ParsingSpec, eof) where
 
-import Data.Either (isLeft)
 import Lang.Parsing
 import TestPrelude
 import Text.Megaparsec
 
 testParserParses :: (Eq a, Show a) => Parser a -> String -> a -> Assertion
 testParserParses parser string expected =
-  Right expected @=? parse parser "<test>" string
+  case parse parser "<test>" string of
+    Right actual -> actual @=? expected
+    Left err -> assertFailure $ "expected: " ++ show expected ++ "\nbut parser failed with:\n" ++ errorBundlePretty err
 
 testParserFails :: (Eq a, Show a) => Parser a -> String -> Assertion
 testParserFails parser string =
-  isLeft (parse parser "<test>" string) @? "parser didn't fail"
+  case parse parser "<test>" string of
+    Right x -> assertFailure $ "expected parser to fail, but it succeeded producing: " ++ show x
+    Left _ -> pure ()
+
+debugParser :: (Eq a, Show a) => Parser a -> String -> IO ()
+debugParser parser string = do
+  case parse parser "<test>" string of
+    Right x -> say $ "Parser succeeded with: " ++ tshow x
+    Left err -> say $ "Parser failed with:\n" ++ pack (errorBundlePretty err)
 
 unit_command_emptyStillRequiresSpace :: Assertion
 unit_command_emptyStillRequiresSpace = testParserFails (command "") "1"
