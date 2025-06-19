@@ -1,144 +1,91 @@
-module Lang.NormalizedPath.Parse
-  ( pNormalizedPath,
-    normalizedPathTerm,
-  )
-where
+module Lang.NormalizedPath.Parse (pNormalizedPath) where
 
-import Control.Monad.Combinators.Expr
+import Control.Monad.Fail (MonadFail (fail))
 import Data.Functor
+import Data.Map qualified as Map (fromListWith)
 import Lang.Parsing
 import Models.NID
 import Models.NormalizedPath
 import MyPrelude hiding (try)
-import Text.Megaparsec (sepBy1, try, (<?>))
-import Text.Megaparsec.Char (char)
+import Text.Megaparsec (option, sepBy1, try)
+import Text.Megaparsec.Char (char, digitChar)
+
+-- | Parse a small integer and convert to NID
+pSmallNodeId :: Parser NID
+pSmallNodeId = lexeme $ do
+  digits <- some digitChar
+  case readMay digits of
+    Just n -> pure (smallNID n)
+    Nothing -> fail "Invalid integer for node ID"
 
 -- | Parse a normalized path term (atom)
-normalizedPathTerm :: (Ord t) => Parser t -> Parser (NormalizedPath t)
-normalizedPathTerm pTransition =
-  try (pPointlikePath pTransition)
-    <|> try (pRootedPath pTransition) 
-    <|> try (pSequencePath pTransition)
-    <|> try (pLiteral pTransition)
-    <|> try (pWild)
-    <|> parens (pNormalizedPath pTransition)
+pNormalizedPath :: (Ord t) => Parser t -> Parser (NormalizedPath t)
+pNormalizedPath pTransition =
+  NormalizedPath . setFromList <$> pDeterministicPath pTransition `sepBy1` symbol "+"
 
--- | Parse a literal as a rooted deterministic path: "a"
-pLiteral :: (Ord t) => Parser t -> Parser (NormalizedPath t)
-pLiteral pTransition = do
-  t <- pTransition
-  pure . NormalizedPath . singletonSet . Rooted $
-    RootedDeterministicPath
-      (singletonMap unanchored (singletonSet (DPLiteral t)))
-      unanchored
+pDeterministicPath :: (Ord t) => Parser t -> Parser (DeterministicPath t)
+pDeterministicPath pTransition =
+  try (Pointlike <$> pPointlike pTransition)
+    <|> (Rooted <$> pRootedPath pTransition)
 
--- | Parse a wild as a rooted deterministic path: "*"
-pWild :: (Ord t) => Parser (NormalizedPath t)
-pWild = do
-  symbol "*"
-  pure . NormalizedPath . singletonSet . Rooted $
-    RootedDeterministicPath
-      (singletonMap unanchored (singletonSet DPWild))
-      unanchored
+pBranch :: (Ord t) => Parser t -> Parser (DPBranch t)
+pBranch pTransition =
+  try (pSequence pTransition)
+    <|> (symbol "*" $> DPWild)
+    <|> (DPLiteral <$> pTransition)
 
 -- | Parse pointlike deterministic path: "@[loops]" or "@nid[loops]"
-pPointlikePath :: (Ord t) => Parser t -> Parser (NormalizedPath t)
-pPointlikePath pTransition = do
-  char '@'
-  anchor <- try (Specific <$> nodeId) <|> pure JoinPoint
-  char '['
-  loops <- pLoopSet pTransition
-  char ']'
-  pure . NormalizedPath . singletonSet . Pointlike $
-    PointlikeDeterministicPath anchor loops
+pPointlike :: (Ord t) => Parser t -> Parser (PointlikeDeterministicPath t)
+pPointlike pTransition = do
+  anchor <- pExplicitAnchor
+  loops <- brackets (pBranchSet pTransition)
+  pure $ PointlikeDeterministicPath anchor loops
 
--- | Parse rooted deterministic path: "[@<branches & @nid<branches]>target"
-pRootedPath :: (Ord t) => Parser t -> Parser (NormalizedPath t)
+-- | Parse rooted deterministic path: "[@<branches]", "[@<branches]>target", "[branches]"
+pRootedPath :: (Ord t) => Parser t -> Parser (RootedDeterministicPath t)
 pRootedPath pTransition = do
-  char '['
-  rootBranches <- pRootBranches pTransition
-  char ']'
-  char '>'
-  target <- pTarget pTransition
-  pure . NormalizedPath . singletonSet . Rooted $
-    RootedDeterministicPath (mapFromList rootBranches) target
+  _ <- char '['
+  rootBranches <- try (pRootBranches pTransition) <|> (singletonMap unanchored <$> pBranchSet pTransition)
+  _ <- char ']'
+  target <- try (char '>' *> pTarget pTransition) <|> pure unanchored
+  pure $ RootedDeterministicPath rootBranches target
 
--- | Parse sequence path using ternary /| operator: "a/@|b"
-pSequencePath :: (Ord t) => Parser t -> Parser (NormalizedPath t)
-pSequencePath pTransition = do
-  firstPart <- pSequencePart pTransition
-  symbol "/"
-  midpoint <- pMidpoint pTransition
-  symbol "|"
-  secondPart <- pSequencePart pTransition
-  pure . NormalizedPath . singletonSet . Rooted $
-    RootedDeterministicPath
-      (singletonMap unanchored (singletonSet $ DPSequence firstPart midpoint secondPart))
-      unanchored
+-- | Parse sequence branch using /| operator: "a/@|b", "a/|b", "(a & b)/@|c"
+pSequence :: (Ord t) => Parser t -> Parser (DPBranch t)
+pSequence pTransition = do
+  firstPart <- pBranchSet pTransition
+  _ <- symbol "/"
+  midpoint <- option unanchored $ try (pPointlike pTransition)
+  _ <- symbol "|"
+  secondPart <- pBranchSet pTransition
+  pure $ DPSequence firstPart midpoint secondPart
 
--- | Parse a part of a sequence (set of branches)
-pSequencePart :: (Ord t) => Parser t -> Parser (Set (DPBranch t))
-pSequencePart pTransition = setFromList <$> sepBy1 pSimpleBranch (symbol "&")
-  where
-    pSimpleBranch = 
-      try (symbol "*" $> DPWild)
-        <|> (DPLiteral <$> pTransition)
-
--- | Parse a midpoint in a sequence
-pMidpoint :: (Ord t) => Parser t -> Parser (PointlikeDeterministicPath t)
-pMidpoint pTransition =
-  try (do
-    char '@'
-    anchor <- try (Specific <$> nodeId) <|> pure JoinPoint
-    char '['
-    loops <- pLoopSet pTransition
-    char ']'
-    pure $ PointlikeDeterministicPath anchor loops)
-  <|> (do
-    char '@'
-    anchor <- try (Specific <$> nodeId) <|> pure JoinPoint
-    pure $ PointlikeDeterministicPath anchor mempty)
+-- | Parse explicit anchor: "@", "@nid"
+pExplicitAnchor :: Parser Anchor
+pExplicitAnchor = do
+  _ <- char '@'
+  optional pSmallNodeId >>= \case
+    Just nid -> pure (Specific nid)
+    Nothing -> pure JoinPoint
 
 -- | Parse root branches: "@<branches & @nid<branches & ..."
-pRootBranches :: (Ord t) => Parser t -> Parser [(PointlikeDeterministicPath t, Set (DPBranch t))]
-pRootBranches pTransition = sepBy1 pSingleRootBranch (symbol "&")
+pRootBranches :: (Ord t) => Parser t -> Parser (Map (PointlikeDeterministicPath t) (Set (DPBranch t)))
+pRootBranches pTransition = do
+  branches <- sepBy1 pRootBranch (symbol "&")
+  pure $ Map.fromListWith (<>) branches
   where
-    pSingleRootBranch = do
-      char '@'
-      anchor <- try (Specific <$> nodeId) <|> pure JoinPoint
-      char '<'
-      branches <- pLoopSet pTransition
-      pure (PointlikeDeterministicPath anchor mempty, branches)
+    pRootBranch = do
+      root <- option unanchored (pPointlike pTransition <* symbol "<")
+      branch <- pBranch pTransition
+      pure (root, singletonSet branch)
 
--- | Parse target: "@" or "@nid"
 pTarget :: (Ord t) => Parser t -> Parser (PointlikeDeterministicPath t)
-pTarget _pTransition = do
-  char '@'
-  anchor <- try (Specific <$> nodeId) <|> pure JoinPoint
-  pure $ PointlikeDeterministicPath anchor mempty
+pTarget pTransition = char '>' *> pPointlike pTransition
 
--- | Parse a set of loops/branches separated by &
-pLoopSet :: (Ord t) => Parser t -> Parser (Set (DPBranch t))
-pLoopSet pTransition = setFromList <$> sepBy1 pBranch (symbol "&")
+-- | Parse a set of branches separated by &
+pBranchSet :: (Ord t) => Parser t -> Parser (Set (DPBranch t))
+pBranchSet pTransition =
+  try (setFromList <$> pMultiple)
+    <|> try (singletonSet <$> pBranch pTransition)
   where
-    pBranch = 
-      try (symbol "*" $> DPWild)
-        <|> (DPLiteral <$> pTransition)
-
--- | Binary operators for normalized paths
-binary :: String -> (NormalizedPath t -> NormalizedPath t -> NormalizedPath t) -> Operator Parser (NormalizedPath t)
-binary name f = InfixL (f <$ symbol name)
-
--- | Union operation for normalized paths
-unionNormalizedPath :: (Ord t) => NormalizedPath t -> NormalizedPath t -> NormalizedPath t
-unionNormalizedPath (NormalizedPath s1) (NormalizedPath s2) = NormalizedPath (s1 <> s2)
-
--- | Operator precedence table
-table :: (Ord t) => [[Operator Parser (NormalizedPath t)]]
-table =
-  [ [binary "+" unionNormalizedPath]
-  ]
-
--- | Main parser for normalized paths
-pNormalizedPath :: (Ord t) => Parser t -> Parser (NormalizedPath t)
-pNormalizedPath pTransition = makeExprParser (normalizedPathTerm pTransition) table
+    pMultiple = parens (pBranch pTransition `sepBy1` symbol "&")

@@ -76,6 +76,9 @@ parens = between (symbol "(") (symbol ")")
 braces :: Parser a -> Parser a
 braces = between (symbol "{") (symbol "}")
 
+brackets :: Parser a -> Parser a
+brackets = between (symbol "[") (symbol "]")
+
 -- these all lookahead for space to ensure that arguments are space separated
 -- the intended paradigm for commands is that commands all require a following
 -- space or ; (when in a Seq) or } (when in braces), then perform their own
