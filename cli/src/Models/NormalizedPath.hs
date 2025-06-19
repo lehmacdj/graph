@@ -5,7 +5,6 @@ module Models.NormalizedPath where
 import Models.NID
 import Models.Path
 import MyPrelude
-import TestPrelude
 
 data Anchor = Unanchored | JoinPoint | Specific NID
   deriving stock (Eq, Ord, Show, Generic, Lift)
@@ -148,45 +147,43 @@ sequenceDeterministicPaths (Rooted p1) (Rooted p2) = do
           singletonSet $ DPSequence branches midpoint p2Branches
   Just . Rooted $ RootedDeterministicPath newRootBranches p2.target
 
-normalizePath :: (Ord t) => Path t -> Maybe (NormalizedPath t)
+normalizePath :: (Ord t) => Path t -> NormalizedPath t
 normalizePath = \case
   One ->
-    Just . NormalizedPath . singletonSet . Pointlike $ joinPoint
+    NormalizedPath . singletonSet . Pointlike $ joinPoint
   Absolute nid ->
-    Just . NormalizedPath . singletonSet . Pointlike $ specific nid
+    NormalizedPath . singletonSet . Pointlike $ specific nid
   Wild ->
-    Just . NormalizedPath . singletonSet . Rooted $
+    NormalizedPath . singletonSet . Rooted $
       RootedDeterministicPath
         (singletonMap unanchored (singletonSet DPWild))
         unanchored
   Literal t ->
-    Just . NormalizedPath . singletonSet . Rooted $
+    NormalizedPath . singletonSet . Rooted $
       RootedDeterministicPath
         (singletonMap unanchored (singletonSet (DPLiteral t)))
         unanchored
-  p1 :+ p2 -> do
-    np1 <- normalizePath p1
-    np2 <- normalizePath p2
-    Just . NormalizedPath $ np1.union <> np2.union
-  p1 :& p2 -> do
-    np1 <- normalizePath p1
-    np2 <- normalizePath p2
-    Just $
-      cartesianProductSet np1.union np2.union
-        & toList
-        -- maybe better to handle errors here than to just ignore them?
-        & mapMaybe (uncurry intersectDeterministicPaths)
-        & setFromList
-        & NormalizedPath
-  p1 :/ p2 -> do
-    np1 <- normalizePath p1
-    np2 <- normalizePath p2
-    Just $
-      cartesianProductSet np1.union np2.union
-        & toList
-        & mapMaybe (uncurry sequenceDeterministicPaths)
-        & setFromList
-        & NormalizedPath
+  p1 :+ p2 ->
+    let np1 = normalizePath p1
+        np2 = normalizePath p2
+     in NormalizedPath $ np1.union <> np2.union
+  p1 :& p2 ->
+    let np1 = normalizePath p1
+        np2 = normalizePath p2
+     in cartesianProductSet np1.union np2.union
+          & toList
+          -- maybe better to handle errors here than to just ignore them?
+          & mapMaybe (uncurry intersectDeterministicPaths)
+          & setFromList
+          & NormalizedPath
+  p1 :/ p2 ->
+    let np1 = normalizePath p1
+        np2 = normalizePath p2
+     in cartesianProductSet np1.union np2.union
+          & toList
+          & mapMaybe (uncurry sequenceDeterministicPaths)
+          & setFromList
+          & NormalizedPath
 
 -- | Expand all Unanchored anchors to produce the least constrained path
 -- possible. This may result in a very large number of paths
