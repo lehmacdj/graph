@@ -1,3 +1,5 @@
+{-# LANGUAGE DeriveLift #-}
+
 module Models.Path
   ( Path (..),
     isValidPath,
@@ -44,7 +46,7 @@ data Path t
     Path t :+ Path t
   | -- | intersection
     Path t :& Path t
-  deriving (Show, Eq, Ord)
+  deriving (Show, Eq, Ord, Lift)
 
 -- make the operator precedence match how they are parsed
 

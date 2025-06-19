@@ -69,11 +69,13 @@ library
       Lang.Command.Parse
       Lang.NormalizedPath.Parse
       Lang.NormalizedPath.ParseSpec
+      Lang.NormalizedPath.TH
       Lang.Parsing
       Lang.ParsingSpec
       Lang.Path
       Lang.Path.Parse
       Lang.Path.Partial
+      Lang.Path.TH
       Lang.PathSpec
       Models.Common
       Models.Connect

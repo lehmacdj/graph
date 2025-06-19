@@ -21,6 +21,7 @@ import Data.Void as X
 import Debug.Trace
 import GHC.Generics as X (Generic, Rep)
 import GHC.Stack as X (HasCallStack)
+import Language.Haskell.TH.Syntax as X (Lift)
 import MyPrelude.Collections as X
 import MyPrelude.EarlyReturn as X
 import MyPrelude.Effect as X

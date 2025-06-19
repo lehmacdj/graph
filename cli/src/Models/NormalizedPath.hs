@@ -1,3 +1,4 @@
+{-# LANGUAGE DeriveLift #-}
 {-# LANGUAGE UndecidableInstances #-}
 
 module Models.NormalizedPath where
@@ -5,15 +6,16 @@ module Models.NormalizedPath where
 import Models.NID
 import Models.Path
 import MyPrelude
+import TestPrelude
 
 data Anchor = Unanchored | JoinPoint | Specific NID
-  deriving stock (Eq, Ord, Show, Generic)
+  deriving stock (Eq, Ord, Show, Generic, Lift)
   deriving anyclass (NFData)
 
 data DeterministicPath t
   = Rooted (RootedDeterministicPath t)
   | Pointlike (PointlikeDeterministicPath t)
-  deriving stock (Eq, Ord, Show, Generic)
+  deriving stock (Eq, Ord, Show, Generic, Lift)
   deriving anyclass (NFData)
 
 -- | Represents a path that targets a single node (i.e. is deterministic)
@@ -25,7 +27,7 @@ data RootedDeterministicPath t = RootedDeterministicPath
   { rootBranches :: Map (PointlikeDeterministicPath t) (Set (DPBranch t)),
     target :: PointlikeDeterministicPath t
   }
-  deriving stock (Eq, Ord, Show, Generic)
+  deriving stock (Eq, Ord, Show, Generic, Lift)
   deriving anyclass (NFData)
 
 -- | A pointlike deterministic path. This is a path that has a single Root
@@ -36,7 +38,7 @@ data PointlikeDeterministicPath t
     anchor :: Anchor,
     loops :: Set (DPBranch t)
   }
-  deriving stock (Eq, Ord, Show, Generic)
+  deriving stock (Eq, Ord, Show, Generic, Lift)
   deriving anyclass (NFData)
 
 unanchored :: (Ord t) => PointlikeDeterministicPath t
@@ -61,11 +63,11 @@ data DPBranch t
     --   instead of
     --   @Sequence (Sequence (singleton a) m (singleton b)) n (singleton c)@)
     DPSequence (Set (DPBranch t)) (PointlikeDeterministicPath t) (Set (DPBranch t))
-  deriving stock (Eq, Ord, Show, Generic)
+  deriving stock (Eq, Ord, Show, Generic, Lift)
   deriving anyclass (NFData)
 
 newtype NormalizedPath t = NormalizedPath {union :: Set (DeterministicPath t)}
-  deriving stock (Eq, Ord, Show, Generic)
+  deriving stock (Eq, Ord, Show, Generic, Lift)
   deriving anyclass (NFData)
 
 pointify ::

@@ -1,4 +1,5 @@
 {-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE DeriveLift #-}
 
 module Models.NID
   ( NID,
@@ -41,7 +42,7 @@ nidDigits = 12
 -- them to a more compact format. We verify that they are valid before
 -- converting them to this newtype however.
 newtype NID = UnsafeNID {representation :: Text}
-  deriving (Eq, Ord, Generic)
+  deriving (Eq, Ord, Generic, Lift)
   deriving newtype (NFData, Hashable)
 
 instance Uniform NID where
