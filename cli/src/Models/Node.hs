@@ -91,16 +91,16 @@ instance
       reprParts = catMaybes [outgoingRepr, incomingRepr, augmentationRepr]
       incomingRepr :: Maybe Text
       incomingRepr =
-        justIfTrue showIncoming
-          $ "in=["
-          ++ intercalate ", " (nshowSettings (unconsumed settings) <$> toList incoming)
-          ++ "]"
+        justIfTrue showIncoming $
+          "in=["
+            ++ intercalate ", " (nshowSettings (unconsumed settings) <$> toList incoming)
+            ++ "]"
       outgoingRepr :: Maybe Text
       outgoingRepr =
-        Just
-          $ "out=["
-          ++ intercalate ", " (nshowSettings (unconsumed settings) <$> toList outgoing)
-          ++ "]"
+        Just $
+          "out=["
+            ++ intercalate ", " (nshowSettings (unconsumed settings) <$> toList outgoing)
+            ++ "]"
       augmentationRepr :: Maybe Text
       augmentationRepr =
         showAugmentation <&> \(name, showAug) ->
@@ -149,8 +149,8 @@ mergeNodes ::
   Node t a ->
   Maybe (Node t a)
 mergeNodes n1 n2 =
-  justIfTrue (n1.nid == n2.nid)
-    $ Node
+  justIfTrue (n1.nid == n2.nid) $
+    Node
       { nid = n1.nid,
         incoming = n1.incoming <> n2.incoming,
         outgoing = n1.outgoing <> n2.outgoing,

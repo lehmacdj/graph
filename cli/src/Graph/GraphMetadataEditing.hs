@@ -68,13 +68,12 @@ runInMemoryGraphMetadataEditing ::
 runInMemoryGraphMetadataEditing = interpret \case
   GetNodeMetadata nid -> gets @(Graph t ()) $ view (at nid)
   TouchNode nid ->
-    modify @(Graph t ())
-      $
+    modify @(Graph t ()) $
       -- it is important that we only write emptyNode if the node does not exist
       -- otherwise we will overwrite the node with an empty node
       at nid
-      . _Just
-      .~ emptyNode nid
+        . _Just
+        .~ emptyNode nid
   DeleteNode nid -> modify @(Graph t ()) $ at nid .~ Nothing
   InsertEdge edge -> modify $ Models.Graph.insertEdge edge
   DeleteEdge edge -> modify $ Models.Graph.deleteEdge edge
@@ -189,7 +188,7 @@ runGraphMetadataEditingTransactionally action = do
           let reconciledNode =
                 liftA2 mergeNodesEx underlyingNode changesNode
                   & _Just
-                  %~ withoutEdges deletedEdges
+                    %~ withoutEdges deletedEdges
           tag @Changes $ modify $ at nid .~ reconciledNode
           pure reconciledNode
         TouchNode nid -> tag @Cache $ touchNode nid
@@ -200,10 +199,10 @@ runGraphMetadataEditingTransactionally action = do
           -- deferring the read would just make our lives harder so we do it now
           maybeLoadedNode <- runUnitOfWork (getNodeMetadata nid)
           loadedNode <- unwrapReturningDefault () maybeLoadedNode
-          tag @DeletedEdges
-            $ modify
-            $ union (mapSet (nid `outgoingEdge`) loadedNode.outgoing)
-            . union (mapSet (`incomingEdge` nid) loadedNode.incoming)
+          tag @DeletedEdges $
+            modify $
+              union (mapSet (nid `outgoingEdge`) loadedNode.outgoing)
+                . union (mapSet (`incomingEdge` nid) loadedNode.incoming)
         InsertEdge edge -> do
           tag @Cache $ insertEdge edge
           tag @DeletedEdges $ modify $ deleteSet edge
@@ -231,16 +230,16 @@ runGraphMetadataEditingTransactionally action = do
     -- run the Cache GraphMetadataEditing effect
     & raiseUnder @(State (Graph Text ()))
     & tag @Changes
-    . runInMemoryGraphMetadataEditing
-    . untag @Cache
+      . runInMemoryGraphMetadataEditing
+      . untag @Cache
     & runState Models.Graph.emptyGraph
-    . untag @Changes
+      . untag @Changes
     & runState mempty
-    . untag @AsLoaded
+      . untag @AsLoaded
     & runState mempty
-    . untag @DeletedEdges
+      . untag @DeletedEdges
     & subsume
-    . untag @Underlying
+      . untag @Underlying
     & (>>= applyGraphDiff)
 
 -- | If I move to Effectful there is Effectful.Provider_ that does something

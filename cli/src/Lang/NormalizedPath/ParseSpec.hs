@@ -116,7 +116,7 @@ branches :: [DPBranch String] -> NormalizedPath String
 branches bs =
   NormalizedPath . setFromList $
     [ Rooted (RootedDeterministicPath (singletonMap unanchored (singletonSet b)) unanchored)
-      | b <- bs
+    | b <- bs
     ]
 
 singletonPointlike :: PointlikeDeterministicPath String -> NormalizedPath String

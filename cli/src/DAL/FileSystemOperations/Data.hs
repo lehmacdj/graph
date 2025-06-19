@@ -26,10 +26,10 @@ readNodeData_ ::
   Sem effs (Maybe ByteString)
 readNodeData_ nid fileExtension = do
   path <- getNodeDataFile nid fileExtension
-  result <- embed
-    $ coordinateReading path False defaultReadingOptions
-    $ \path' ->
-      try @IO @IOError $ readFile path'
+  result <- embed $
+    coordinateReading path False defaultReadingOptions $
+      \path' ->
+        try @IO @IOError $ readFile path'
   pure $ either (const Nothing) Just result
 
 writeNodeData_ ::
@@ -41,10 +41,10 @@ writeNodeData_ ::
   Sem effs ()
 writeNodeData_ nid extension rawData = do
   path <- getNodeDataFile nid extension
-  embedCatchingErrors
-    $ coordinateWriting path False defaultWritingOptions
-    $ \path' ->
-      writeFile path' rawData
+  embedCatchingErrors $
+    coordinateWriting path False defaultWritingOptions $
+      \path' ->
+        writeFile path' rawData
 
 deleteNodeData_ ::
   (Members [RawGraph, Embed IO, Error UserError] effs) =>
@@ -54,8 +54,8 @@ deleteNodeData_ ::
   Sem effs ()
 deleteNodeData_ nid extension = do
   path <- getNodeDataFile nid extension
-  embedCatchingErrors
-    $ coordinateWriting path False defaultWritingOptions removeFile
+  embedCatchingErrors $
+    coordinateWriting path False defaultWritingOptions removeFile
 
 runGraphDataFilesystemOperationsIO ::
   (Members [RawGraph, Embed IO, Error UserError] r) =>

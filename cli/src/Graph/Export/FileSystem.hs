@@ -118,4 +118,4 @@ exportToDirectory nid outputFp = do
       . toNonEmpty
       . (overallDescription `ncons`)
       $ failureToUserError
-      <$> DT.failures results
+        <$> DT.failures results

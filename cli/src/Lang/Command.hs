@@ -123,11 +123,11 @@ data Command
 
 singleErr :: Text -> Set NID -> UserError
 singleErr cmd xs =
-  OtherError
-    $ cmd
-    ++ " needs a path that resolves to a single node\n"
-    ++ "but it resolved to: "
-    ++ tshow (setToList xs)
+  OtherError $
+    cmd
+      ++ " needs a path that resolves to a single node\n"
+      ++ "but it resolved to: "
+      ++ tshow (setToList xs)
 
 printTransitions ::
   (Member Echo effs) =>
@@ -285,19 +285,19 @@ interpretCommand = \case
   Rename p q -> do
     nid <- currentLocation
     let err xs =
-          OtherError
-            $ "the first argument to rn require the path to only resolve to "
-            ++ "one node but they resolved to \n"
-            ++ (tshow . map endPoint . setToList $ xs)
+          OtherError $
+            "the first argument to rn require the path to only resolve to "
+              ++ "one node but they resolved to \n"
+              ++ (tshow . map endPoint . setToList $ xs)
     c <- the' err =<< subsumeUserError (resolvePathSuccessesDetail nid p)
     subsumeUserError (renameDPath c nid q)
   Alias p q -> do
     nid <- currentLocation
     let err xs =
-          OtherError
-            $ "the first argument to rn require the path to only resolve to "
-            ++ "one node but they resolved to \n"
-            ++ (tshow . map endPoint . setToList $ xs)
+          OtherError $
+            "the first argument to rn require the path to only resolve to "
+              ++ "one node but they resolved to \n"
+              ++ (tshow . map endPoint . setToList $ xs)
     c <- the' err =<< subsumeUserError (resolvePathSuccessesDetail nid p)
     subsumeUserError (aliasDPath c nid q)
   Edit -> do

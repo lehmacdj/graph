@@ -14,17 +14,17 @@ printNodeDebugRepresentation base nid = do
     Right n ->
       say $ nshowSettings defaultCompactNodeShowSettings {showIncoming = True} n
     Left e ->
-      say
-        $ "couldn't deserialize node "
-        <> tshow nid
-        <> "; failed with error "
-        <> pack e
+      say $
+        "couldn't deserialize node "
+          <> tshow nid
+          <> "; failed with error "
+          <> pack e
 
 main :: IO ()
 main = do
   args <- getArgs
-  when (length args /= 1)
-    $ error "must pass exactly one argument, a valid graphDir"
+  when (length args /= 1) $
+    error "must pass exactly one argument, a valid graphDir"
   let graphDir = unpack $ headEx args
   -- to guarantee that different ordering on different systems don't affect
   -- test results we sort the node ids so that we always dump the graph

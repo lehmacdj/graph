@@ -1,4 +1,3 @@
-
 -- | Functions for dealing with stuff that should be singletons
 module Utils.Singleton where
 

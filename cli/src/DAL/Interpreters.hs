@@ -27,8 +27,8 @@ withUnliftIORawGraphUserError ::
   Sem r a
 withUnliftIORawGraphUserError f = do
   graphPath <- getGraphFilePath
-  fromException @UserError
-    $ f
+  fromException @UserError $
+    f
       ( UnliftRawGraphUserErrorIO $ \action -> do
           result <- runRawGraphUserErrorIO graphPath action
           either E.throw pure result

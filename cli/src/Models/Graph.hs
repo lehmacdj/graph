@@ -271,12 +271,12 @@ containsEdge ::
   sink <- unwrapReturningDefault False $ maybeLookupNode g e.sink
   let outConnectExists = outConnect e `member` source.outgoing
   let inConnectExists = inConnect e `member` sink.incoming
-  when (outConnectExists /= inConnectExists)
-    $ error
-    $ "graph inconsistent, containsEdge"
-    ++ show e.source
-    ++ " "
-    ++ show e.sink
+  when (outConnectExists /= inConnectExists) $
+    error $
+      "graph inconsistent, containsEdge"
+        ++ show e.source
+        ++ " "
+        ++ show e.sink
   pure outConnectExists
 
 insertEdge ::
@@ -363,10 +363,11 @@ updateNode n g = withEarlyReturn_ do
       removedEdges =
         mapSet (outgoingEdge nid) outgoingRemoved
           ++ mapSet (`incomingEdge` nid) incomingRemoved
-  pure $ g
-    & insertEdges (toList addedEdges)
-    & deleteEdges (toList removedEdges)
-    & #nodeMap . ix n.nid . #augmentation %~ (<> n.augmentation)
+  pure $
+    g
+      & insertEdges (toList addedEdges)
+      & deleteEdges (toList removedEdges)
+      & #nodeMap . ix n.nid . #augmentation %~ (<> n.augmentation)
 
 -- | Somewhat bespoke operation that merges a node into the graph. This is
 -- used by the semigroup operation on Graphs. This is like @insertNode@ but
@@ -387,10 +388,10 @@ mergeNodeInto n g =
 -- nodes as well.
 delNode' :: (Ord t) => Node t a -> Graph t a -> Graph t a
 delNode' n g =
-  withNodeMap g
-    $ omap deleteIncoming
-    . omap deleteOutgoing
-    . deleteMap nid
+  withNodeMap g $
+    omap deleteIncoming
+      . omap deleteOutgoing
+      . deleteMap nid
   where
     nid = n ^. #nid
     del = filterSet ((/= nid) . view #node)

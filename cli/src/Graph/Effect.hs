@@ -114,8 +114,7 @@ runReadGraphIODualizeable ::
 runReadGraphIODualizeable dir = reinterpret $ \case
   GetNode nid -> do
     maybeN <-
-      errorToNothing
-        $
+      errorToNothing $
         -- writing type level lists in your code is not fun :(
         -- kids: be careful when you choose haskell
         S2.deserializeNodeF @t @(Error UserError : Input IsDual : effs) dir nid
@@ -135,8 +134,7 @@ runReadGraphDatalessIODualizeable ::
 runReadGraphDatalessIODualizeable dir = reinterpret $ \case
   GetNodeDataless nid -> do
     maybeN <-
-      errorToNothing
-        $
+      errorToNothing $
         -- writing type level lists in your code is not fun :(
         -- kids: be careful when you choose haskell
         S2.deserializeNodeWithoutDataF @t @(Error UserError : Input IsDual : effs) dir nid
@@ -264,9 +262,9 @@ runWriteGraphIODualizeable ::
   Sem (WriteGraph t : effs) ~> Sem (Input IsDual : effs)
 runWriteGraphIODualizeable dir = reinterpret $ \case
   TouchNode nid ->
-    whenM (not <$> S2.doesNodeExist dir nid)
-      $ embedCatchingErrors
-      $ S2.serializeNodeEx (emptyNode' nid :: Node t (Maybe ByteString)) dir
+    whenM (not <$> S2.doesNodeExist dir nid) $
+      embedCatchingErrors $
+        S2.serializeNodeEx (emptyNode' nid :: Node t (Maybe ByteString)) dir
   DeleteNode nid -> do
     n <- S2.deserializeNodeF @t dir nid
     let del = Set.filter ((/= nid) . view #node) :: Set (Connect t) -> Set (Connect t)

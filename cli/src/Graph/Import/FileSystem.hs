@@ -1,4 +1,3 @@
-
 -- |
 --   Import directories from filesystems as nodes.
 --   Data is automatically deduplicated.
@@ -34,9 +33,9 @@ importDirectory ::
 importDirectory base nid = do
   fileTree <- readDirectory base
   when (anyFailed fileTree) do
-    echo
-      $ "error: search failed at least partially, "
-      ++ "missed directories will be ignored"
+    echo $
+      "error: search failed at least partially, "
+        ++ "missed directories will be ignored"
     echo "the failed files are:"
     echo . show $ failures fileTree
   addDirectories fileTree nid

@@ -1,4 +1,3 @@
-
 module Executable.GraphEditor.GoldenSpec where
 
 import Data.Attoparsec.ByteString

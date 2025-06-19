@@ -118,8 +118,8 @@ deserializeNode base nid = do
 
 doesNodeExist :: (MonadIO m) => FilePath -> NID -> m Bool
 doesNodeExist base nid = liftIO $ do
-  whenM (not <$> doesDirectoryExist base)
-    $ error "doesNodeExist: graph directory doesn't exist"
+  whenM (not <$> doesDirectoryExist base) $
+    error "doesNodeExist: graph directory doesn't exist"
   doesFileExist (metadataFile base nid)
 
 -- | initializes graph with a single node with id 0 with no edges, if the

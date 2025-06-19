@@ -69,8 +69,8 @@ instance ShowableAugmentation () where
 instance (ShowableAugmentation a) => ShowableAugmentation (Maybe a) where
   augmentationLabel = augmentationLabel @a
   defaultShowAugmentation maybeX =
-    pack
-      $ liftShowsPrec
+    pack $
+      liftShowsPrec
         (\_ x -> (unpack (defaultShowAugmentation x :: Text) ++))
         (error "shouldn't need showList")
         0
@@ -118,7 +118,7 @@ nshowDefault ::
   n ->
   Text
 nshowDefault =
-  nshowWith
-    $ justIfTrue
+  nshowWith $
+    justIfTrue
       (shouldShowStandaloneAugmentation @a)
       (augmentationLabel @a, defaultShowAugmentation @a)
