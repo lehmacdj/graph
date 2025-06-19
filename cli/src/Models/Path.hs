@@ -1,5 +1,3 @@
-{-# LANGUAGE DeriveLift #-}
-
 module Models.Path
   ( Path (..),
     isValidPath,

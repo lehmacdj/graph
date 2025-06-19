@@ -1,3 +1,6 @@
+-- too big signatures/inference in this module
+{-# LANGUAGE NoImpredicativeTypes #-}
+
 -- | Interpreters for running various large stacks of effects that it might
 -- make sense to use while using this library.
 module Graph.AppInterpreters where

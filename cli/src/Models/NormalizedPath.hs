@@ -1,4 +1,3 @@
-{-# LANGUAGE DeriveLift #-}
 {-# LANGUAGE UndecidableInstances #-}
 
 module Models.NormalizedPath where

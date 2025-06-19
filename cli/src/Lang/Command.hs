@@ -1,6 +1,3 @@
-{-# LANGUAGE DeriveGeneric #-}
-{-# LANGUAGE LambdaCase #-}
-
 -- | This module implements commands.
 --
 -- Style guide for commands for the future:

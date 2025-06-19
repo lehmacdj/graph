@@ -32,7 +32,7 @@ applyMaybeInput f =
     . raiseUnder @(Error None)
     . applyInput
     $ raise @(Input i)
-    . f
+      . f
 
 applyMaybeInput2 ::
   forall i r a b.
@@ -47,7 +47,7 @@ applyMaybeInput2 f b =
     . raiseUnder @(Error None)
     . applyInput
     $ raise @(Input i)
-    . flip f b
+      . flip f b
 
 applyInputOf ::
   forall i env r a.
@@ -79,7 +79,7 @@ applyMaybeInputOf l f =
     . raiseUnder @(Error None)
     . applyInputOf l
     $ raise @(Input env)
-    . f
+      . f
 
 applyMaybeInput2Of ::
   forall i env r a b.
@@ -95,7 +95,7 @@ applyMaybeInput2Of l f b =
     . raiseUnder @(Error None)
     . applyInputOf l
     $ raise @(Input env)
-    . flip f b
+      . flip f b
 
 -- | Utility function to interpret a reader effect as a State effect, via a
 -- the inclusion Reader < State.
@@ -116,8 +116,8 @@ inputFromJust ::
   (Member (Error None) effs) =>
   Sem (Input r : effs) a ->
   Sem (Input (Maybe r) : effs) a
-inputFromJust = reinterpret
-  $ \Input -> do
+inputFromJust = reinterpret $
+  \Input -> do
     r <- input @(Maybe r)
     case r of
       Nothing -> throw None

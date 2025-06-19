@@ -1,4 +1,3 @@
-{-# LANGUAGE FlexibleContexts #-}
 
 -- |
 --   Import directories from filesystems as nodes.

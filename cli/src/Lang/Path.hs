@@ -1,5 +1,3 @@
-{-# LANGUAGE StrictData #-}
-{-# LANGUAGE ViewPatterns #-}
 {-# OPTIONS_GHC -Wno-name-shadowing #-}
 
 -- |

@@ -1,5 +1,4 @@
 {-# LANGUAGE CPP #-}
-{-# LANGUAGE ImpredicativeTypes #-}
 
 -- | This module provides a high-level interface to the NSFileCoordinator API.
 -- Though it is only available on macOS, this module provides a cross-platform

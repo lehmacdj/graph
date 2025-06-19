@@ -1,5 +1,4 @@
 {-# LANGUAGE AllowAmbiguousTypes #-}
-{-# LANGUAGE LambdaCase #-}
 
 module Graph.Utils where
 

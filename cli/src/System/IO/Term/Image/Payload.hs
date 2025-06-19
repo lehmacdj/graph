@@ -1,5 +1,3 @@
-{-# LANGUAGE OverloadedStrings #-}
-
 -- | Data structure representing the information needed for the serialization
 --    of images for the iTerm2 terminal emulator.
 --    https://iterm2.com/documentation-images.html

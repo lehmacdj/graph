@@ -1,5 +1,3 @@
-{-# LANGUAGE ScopedTypeVariables #-}
-
 -- |
 --   This module introduces a serialization format for graphs that uses a
 --   directory to store all of the data associated with the graph.

@@ -1,7 +1,5 @@
 {-# LANGUAGE AllowAmbiguousTypes #-}
-{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE TemplateHaskell #-}
-{-# LANGUAGE ViewPatterns #-}
 
 module Graph.Check where
 
