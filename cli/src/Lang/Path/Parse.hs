@@ -44,10 +44,7 @@ table =
   ]
 
 pPath' :: Parser NID -> Parser t -> Parser (Path t)
-pPath' pNID pTransition = do
-  path <- makeExprParser (pathTerm' pNID pTransition) table
-  guard (isValidPath path) <?> "valid path"
-  pure path
+pPath' pNID pTransition = makeExprParser (pathTerm' pNID pTransition) table
 
 pPath :: Parser t -> Parser (Path t)
 pPath = pPath' pFullNID
@@ -61,6 +58,8 @@ test_pPath =
       "*" `parsesTo` Wild,
       "!" `parsesTo` Zero,
       "foo" `parsesTo` Literal "foo",
+      "@000000000002" `parsesTo` Absolute (smallNID 2),
+      "foo/@000000000002" `parsesTo` (Literal "foo" :/ Absolute (smallNID 2)),
       "foo/bar" `parsesTo` (Literal "foo" :/ Literal "bar"),
       "(foo/bar)/baz" `parsesTo` (Literal "foo" :/ Literal "bar" :/ Literal "baz"),
       "foo/(bar/baz)" `parsesTo` (Literal "foo" :/ (Literal "bar" :/ Literal "baz")),

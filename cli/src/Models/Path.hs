@@ -1,6 +1,5 @@
 module Models.Path
   ( Path (..),
-    isValidPath,
   )
 where
 
@@ -54,41 +53,3 @@ infixl 7 :/
 infixl 5 :+
 
 infixl 6 :&
-
-isValidPath :: Path t -> Bool
-isValidPath = \case
-  Absolute _ -> True
-  Literal _ -> True
-  One -> True
-  Wild -> True
-  Zero -> True
-  p1 :& p2 -> isValidPath p1 && isValidPath p2
-  p1 :+ p2 -> isValidPath p1 && isValidPath p2
-  p1 :/ p2 -> isValidPath p1 && isValidChildPath p2
-
-isValidChildPath :: Path t -> Bool
-isValidChildPath = \case
-  Absolute _ -> False
-  Literal _ -> True
-  One -> True
-  Wild -> True
-  Zero -> True
-  p1 :+ p2 -> isValidChildPath p1 && isValidChildPath p2
-  p1 :/ p2 -> isValidChildPath p1 && isValidChildPath p2
-  p1 :& p2 ->
-    not (all isAbsolute (andSiblings p1 ++ andSiblings p2))
-      && isValidPath p1
-      && isValidPath p2
-    where
-      andSiblings = \case
-        p1' :& p2' -> andSiblings p1' ++ andSiblings p2'
-        x -> [x]
-      isAbsolute = \case
-        Absolute _ -> True
-        Literal _ -> False
-        One -> False
-        Wild -> False
-        Zero -> False
-        _ :+ _ -> False
-        _ :& _ -> False
-        _ :/ _ -> False
