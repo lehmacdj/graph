@@ -164,6 +164,8 @@ sequenceDeterministicPaths (Rooted p1) (Rooted p2) = do
 
 normalizePath :: (Ord t) => Path t -> NormalizedPath t
 normalizePath = \case
+  Zero ->
+    NormalizedPath mempty
   One ->
     NormalizedPath . singletonSet . Pointlike $ joinPoint
   Absolute nid ->

@@ -21,8 +21,9 @@ data Path t
 
     -- \| a transition matched by anything (top in the algebra)
 
-    -- | Zero
-    Wild
+    -- | Zero path (bottom element in path algebra)
+    Zero
+  | Wild
   | Literal t
   | -- | this must not be before @:/@ in a @:+@. @:&@ acts as a scope that
     -- allows another absolute node as long as at least one sibling is not
@@ -60,7 +61,7 @@ isValidPath = \case
   Literal _ -> True
   One -> True
   Wild -> True
-  -- Zero -> True
+  Zero -> True
   p1 :& p2 -> isValidPath p1 && isValidPath p2
   p1 :+ p2 -> isValidPath p1 && isValidPath p2
   p1 :/ p2 -> isValidPath p1 && isValidChildPath p2
@@ -71,7 +72,7 @@ isValidChildPath = \case
   Literal _ -> True
   One -> True
   Wild -> True
-  -- Zero -> True
+  Zero -> True
   p1 :+ p2 -> isValidChildPath p1 && isValidChildPath p2
   p1 :/ p2 -> isValidChildPath p1 && isValidChildPath p2
   p1 :& p2 ->
@@ -87,7 +88,7 @@ isValidChildPath = \case
         Literal _ -> False
         One -> False
         Wild -> False
-        -- Zero -> False
+        Zero -> False
         _ :+ _ -> False
         _ :& _ -> False
         _ :/ _ -> False

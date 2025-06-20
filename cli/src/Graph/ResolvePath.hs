@@ -123,7 +123,7 @@ materializePathAsGraph ::
 materializePathAsGraph nid path = do
   case path of
     One -> pure $ singletonGraph (emptyNode nid & isTarget .~ True)
-    -- Zero -> pure emptyGraph
+    Zero -> pure emptyGraph
     Wild -> withEarlyReturn do
       n <- onNothingM (getNodeMetadata nid) $ returnEarly emptyGraph
       let n' = n & #augmentation .~ (mempty @(MaterializedPathInfo t) & #isThin .~ False)
