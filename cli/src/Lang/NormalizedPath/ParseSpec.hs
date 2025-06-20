@@ -1,13 +1,12 @@
 module Lang.NormalizedPath.ParseSpec where
 
 import Lang.NormalizedPath.Parse
-import Lang.Parsing (Parser, transition)
+import Lang.Parsing (transition)
 import Lang.ParsingSpec
 import Models.NID
 import Models.NormalizedPath
 import MyPrelude hiding (union)
 import TestPrelude hiding (union)
-import Text.Megaparsec.Char (letterChar)
 
 test_pNormalizedPath :: TestTree
 test_pNormalizedPath =
@@ -74,6 +73,17 @@ test_pNormalizedPath =
           ),
       "a + b" `parsesTo` branches [DPLiteral "a", DPLiteral "b"],
       "a + b + c" `parsesTo` branches [DPLiteral "a", DPLiteral "b", DPLiteral "c"],
+      "@ + a"
+        `parsesTo` NormalizedPath
+          ( setFromList
+              [ Rooted
+                  ( RootedDeterministicPath
+                      (singletonMap unanchored (singletonSet (DPLiteral "a")))
+                      unanchored
+                  ),
+                Pointlike joinPoint
+              ]
+          ),
       -- Complex combinations
       "[a] + @1[b]"
         `parsesTo` NormalizedPath
@@ -116,7 +126,7 @@ branches :: [DPBranch String] -> NormalizedPath String
 branches bs =
   NormalizedPath . setFromList $
     [ Rooted (RootedDeterministicPath (singletonMap unanchored (singletonSet b)) unanchored)
-    | b <- bs
+      | b <- bs
     ]
 
 singletonPointlike :: PointlikeDeterministicPath String -> NormalizedPath String

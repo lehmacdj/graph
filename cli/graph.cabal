@@ -90,6 +90,7 @@ library
       Models.NIDSpec
       Models.Node
       Models.NormalizedPath
+      Models.NormalizedPathSpec
       Models.Path
       MyPrelude
       MyPrelude.Collections

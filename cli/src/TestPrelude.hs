@@ -12,11 +12,13 @@ module TestPrelude
     node,
     disconnectedGraph,
     stronglyConnectedGraph,
+    parseForTest,
   )
 where
 
 import DAL.Serialization (initializeGraph)
 import Data.Aeson
+import Data.Void
 import Models.Connect
 import Models.Edge
 import Models.Graph (Graph, emptyGraph, insertEdges, insertNodes)
@@ -32,6 +34,7 @@ import Test.Tasty as X
 import Test.Tasty.HUnit as X
 import Test.Tasty.Hspec (testSpec)
 import Test.Tasty.QuickCheck as X
+import Text.Megaparsec
 
 -- | initializes a graph that is either empty, or based on a template graph
 -- at the specified location
@@ -93,3 +96,11 @@ disconnectedGraph nids = insertNodes (node <$> nids) emptyGraph
 stronglyConnectedGraph :: [Int] -> Graph () ()
 stronglyConnectedGraph nids =
   disconnectedGraph nids & insertEdges (uncurry edge <$> allAnyOrderPairs nids)
+
+parseForTest :: String -> Parsec Void String a -> String -> IO a
+parseForTest whatToParse parser input =
+  case runParser (parser <* eof) ("<" <> whatToParse <> ">") input of
+    Left err -> do
+      expectationFailure $ "Failed to parse: " <> errorBundlePretty err
+      error "unreachable"
+    Right result -> pure result

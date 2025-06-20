@@ -45,7 +45,7 @@ pPointlike pTransition = do
 
 pRootedPath :: (Ord t) => Parser t -> Parser (RootedDeterministicPath t)
 pRootedPath pTransition =
-  pMultiRootedPath pTransition
+  try (pMultiRootedPath pTransition)
     <|> pSingleRootedPath pTransition
 
 pSingleRootedPath :: (Ord t) => Parser t -> Parser (RootedDeterministicPath t)
@@ -88,7 +88,7 @@ pExplicitAnchor = do
   _ <- char '@'
   optional pSmallNodeId >>= \case
     Just nid -> pure (Specific nid)
-    Nothing -> pure JoinPoint
+    Nothing -> s $> JoinPoint
 
 -- | Parse root branches: "@<branches & @nid<branches & ..."
 pRootBranches :: (Ord t) => Parser t -> Parser (Map (PointlikeDeterministicPath t) (Set (DPBranch t)))
