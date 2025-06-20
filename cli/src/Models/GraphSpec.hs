@@ -19,7 +19,7 @@ instance DefaultAugmentation TestTextAugmentation where
 instance MonoidAugmentation TestTextAugmentation
 
 instance ShowableAugmentation TestTextAugmentation where
-  augmentationLabel = "testText"
+  augmentationLabel = Just "testText"
   defaultShowAugmentation = coerce
   shouldShowStandaloneAugmentation = True
 

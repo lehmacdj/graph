@@ -25,7 +25,7 @@ data CompactNodeShowSettings a = CompactNodeShowSettings
     showIncoming :: Bool,
     -- | Whether to show the augmentation; if so provide a name and way to show
     -- it
-    showAugmentation :: Maybe (Text, a -> Text)
+    showAugmentation :: Maybe (Maybe Text, a -> Text)
   }
 
 instance Contravariant CompactNodeShowSettings where
@@ -52,17 +52,17 @@ class CompactNodeShow n where
   nshowSettings :: CompactNodeShowSettings (Augmentation n) -> n -> Text
 
 class ShowableAugmentation a where
-  augmentationLabel :: Text
+  augmentationLabel :: Maybe Text
   defaultShowAugmentation :: a -> Text
   shouldShowStandaloneAugmentation :: Bool
 
 instance ShowableAugmentation Void where
-  augmentationLabel = "void"
+  augmentationLabel = Just "void"
   defaultShowAugmentation = const "!"
   shouldShowStandaloneAugmentation = False
 
 instance ShowableAugmentation () where
-  augmentationLabel = "unit"
+  augmentationLabel = Just "unit"
   defaultShowAugmentation = const "()"
   shouldShowStandaloneAugmentation = False
 
@@ -81,7 +81,7 @@ instance (ShowableAugmentation a) => ShowableAugmentation (Maybe a) where
 newtype UnshownAugmentation a = UnshownAugmentation a
 
 instance ShowableAugmentation (UnshownAugmentation a) where
-  augmentationLabel = "unshown"
+  augmentationLabel = Just "unshown"
   defaultShowAugmentation = const ""
   shouldShowStandaloneAugmentation = False
 
@@ -94,7 +94,7 @@ withoutShowingAugmentations x = x \\ e
         (Dict :: Dict (ShowableAugmentation (UnshownAugmentation a)))
 
 nshowWith ::
-  (CompactNodeShow n) => Maybe (Text, Augmentation n -> Text) -> n -> Text
+  (CompactNodeShow n) => Maybe (Maybe Text, Augmentation n -> Text) -> n -> Text
 nshowWith showAugmentation n =
   let minNidLength = minimumNidLength defaultCompactNodeShowSettings n
       settings =

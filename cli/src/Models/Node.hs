@@ -103,8 +103,9 @@ instance
             ++ "]"
       augmentationRepr :: Maybe Text
       augmentationRepr =
-        showAugmentation <&> \(name, showAug) ->
-          name ++ "=" ++ showAug augmentation
+        showAugmentation <&> \(mLabel, showAug) -> case mLabel of
+          Nothing -> showAug augmentation
+          Just label -> label ++ "=" ++ showAug augmentation
 
 instance
   {-# OVERLAPPABLE #-}

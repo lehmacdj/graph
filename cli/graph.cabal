@@ -59,8 +59,8 @@ library
       Graph.GraphMetadataEditing
       Graph.Import.ByteString
       Graph.Import.FileSystem
+      Graph.MaterializePath
       Graph.NodeLocated
-      Graph.ResolvePath
       Graph.SystemNodes
       Graph.SystemNodes.Init
       Graph.Time

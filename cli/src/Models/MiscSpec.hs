@@ -12,7 +12,7 @@ data Showable = Showable
   deriving (Eq)
 
 instance ShowableAugmentation Showable where
-  augmentationLabel = "showable"
+  augmentationLabel = Just "showable"
   defaultShowAugmentation = const "shown"
   shouldShowStandaloneAugmentation = True
 
