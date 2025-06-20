@@ -83,11 +83,7 @@ pBranchSet pNID pTransition =
 
 -- | Parse explicit anchor: "@", "@nid"
 pExplicitAnchor :: Parser NID -> Parser Anchor
-pExplicitAnchor pNID = do
-  _ <- char '@'
-  optional pNID >>= \case
-    Just nid -> pure (Specific nid)
-    Nothing -> s $> JoinPoint
+pExplicitAnchor pNID = try (Specific <$> pNID) <|> (symbol "@" $> JoinPoint)
 
 -- | Parse root branches: "@<branches & @nid<branches & ..."
 pRootBranches ::

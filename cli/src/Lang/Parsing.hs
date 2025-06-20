@@ -4,7 +4,6 @@ import Control.Monad.Fail
 import Data.Char
 import Data.Void
 import Models.NID
-import Models.NID qualified as BigNID
 import MyPrelude hiding (many, some, try)
 import Text.Megaparsec
 import Text.Megaparsec.Char
@@ -46,7 +45,7 @@ transition = ident <|> stringLiteral
 base62Chars :: String
 base62Chars = ['a' .. 'z'] ++ ['A' .. 'Z'] ++ ['0' .. '9']
 
-pFullNID :: Parser BigNID.NID
+pFullNID :: Parser NID
 pFullNID = L.lexeme s (char '@' *> p)
   where
     p = do
@@ -58,7 +57,7 @@ pFullNID = L.lexeme s (char '@' *> p)
 
 -- | Parse a small integer and convert to NID
 pSmallNID :: Parser NID
-pSmallNID = lexeme $ smallNID <$> positiveNumber
+pSmallNID = lexeme $ smallNID <$> (char '@' *> positiveNumber)
 
 positiveNumber :: Parser Int
 positiveNumber = L.lexeme s L.decimal

@@ -1,10 +1,7 @@
-{-# LANGUAGE TemplateHaskell #-}
-
 module Lang.Path.TH where
 
 import Control.Monad.Fail (MonadFail (fail))
-import Lang.Parsing
-import Lang.Path
+import Lang.Parsing (transition)
 import Lang.Path.Parse
 import Language.Haskell.TH
 import Language.Haskell.TH.Quote
@@ -21,6 +18,6 @@ path =
     }
 
 pathExp :: String -> Q Exp
-pathExp s = case parse (pPath stringLiteral <* eof) "" s of
+pathExp s = case parse (pPath transition <* eof) "" s of
   Left err -> fail $ "Parse error in path quasi-quoter: " ++ show err
   Right result -> [|result|]

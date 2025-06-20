@@ -1,13 +1,10 @@
-{-# LANGUAGE TemplateHaskell #-}
-
 module Lang.NormalizedPath.TH where
 
 import Control.Monad.Fail (MonadFail (fail))
 import Lang.NormalizedPath.Parse
-import Lang.Parsing
+import Lang.Parsing (transition)
 import Language.Haskell.TH
 import Language.Haskell.TH.Quote
-import Models.NormalizedPath
 import MyPrelude
 import Text.Megaparsec (eof, parse)
 
@@ -21,6 +18,6 @@ npath =
     }
 
 npathExp :: String -> Q Exp
-npathExp s = case parse (pNormalizedPath stringLiteral <* eof) "" s of
+npathExp s = case parse (pNormalizedPath transition <* eof) "" s of
   Left err -> fail $ "Parse error in npath quasi-quoter: " ++ show err
   Right result -> [|result|]

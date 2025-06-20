@@ -8,10 +8,11 @@ import TestPrelude
 
 spec_normalizePath :: Spec
 spec_normalizePath = describe "normalizePath" do
-  let normalizesTo pathStr expectedStr = it (show pathStr <> " normalizes to " <> show expectedStr) do
-        path <- parseForTest "path" (pPath transition) pathStr
-        expected <- parseForTest "normalized path" (pNormalizedPath transition) expectedStr
-        normalizePath path `shouldBe` expected
+  let normalizesTo pathStr expectedStr =
+        it (show pathStr <> " normalizes to " <> show expectedStr) do
+          path <- parseForTest "path" (pPath' pSmallNID transition) pathStr
+          expected <- parseForTest "normalized path" (pNormalizedPath transition) expectedStr
+          normalizePath path `shouldBe` expected
 
   -- Basic path normalization tests
   "@" `normalizesTo` "@"
