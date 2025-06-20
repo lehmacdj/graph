@@ -46,8 +46,8 @@ transition = ident <|> stringLiteral
 base62Chars :: String
 base62Chars = ['a' .. 'z'] ++ ['A' .. 'Z'] ++ ['0' .. '9']
 
-nodeId :: Parser BigNID.NID
-nodeId = L.lexeme s p
+pNID :: Parser BigNID.NID
+pNID = L.lexeme s (char '@' *> p)
   where
     p = do
       chars <- replicateM nidDigits $ oneOf base62Chars :: Parser String

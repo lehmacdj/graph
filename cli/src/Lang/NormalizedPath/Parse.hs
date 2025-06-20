@@ -11,8 +11,8 @@ import Text.Megaparsec (option, sepBy1, try)
 import Text.Megaparsec.Char (char, digitChar)
 
 -- | Parse a small integer and convert to NID
-pSmallNodeId :: Parser NID
-pSmallNodeId = lexeme $ do
+pSmallNID :: Parser NID
+pSmallNID = lexeme $ do
   digits <- some digitChar
   case readMay digits of
     Just n -> pure (smallNID n)
@@ -86,7 +86,7 @@ pBranchSet pTransition =
 pExplicitAnchor :: Parser Anchor
 pExplicitAnchor = do
   _ <- char '@'
-  optional pSmallNodeId >>= \case
+  optional pSmallNID >>= \case
     Just nid -> pure (Specific nid)
     Nothing -> s $> JoinPoint
 

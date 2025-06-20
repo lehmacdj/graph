@@ -20,7 +20,7 @@ import Text.Megaparsec.Char (char)
 
 pathTerm :: Parser t -> Parser (Path t)
 pathTerm pTransition =
-  try (Absolute <$> (char '@' *> nodeId))
+  try (Absolute <$> pNID)
     <|> try ((Absolute tagsNID :/) . Literal <$> (char '#' *> pTransition))
     <|> (symbol "@" $> One)
     <|> (symbol "*" $> Wild)
