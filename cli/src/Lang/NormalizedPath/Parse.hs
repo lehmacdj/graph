@@ -16,7 +16,9 @@ import Text.Megaparsec.Char (char)
 -- | Parse a normalized path term (atom) - generalized version
 pNormalizedPath' :: (Ord t) => Parser NID -> Parser t -> Parser (NormalizedPath t)
 pNormalizedPath' pNID pTransition =
-  NormalizedPath . setFromList <$> pDeterministicPath pNID pTransition `sepBy1` symbol "+"
+  fmap (NormalizedPath . setFromList) $
+    (pDeterministicPath pNID pTransition `sepBy1` symbol "+")
+      <|> (symbol "!" $> [])
 
 -- | Parse a normalized path term (atom)
 pNormalizedPath :: (Ord t) => Parser t -> Parser (NormalizedPath t)

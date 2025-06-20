@@ -125,6 +125,20 @@ mergePointlike p1 p2 = do
         loops = p1.loops <> p2.loops
       }
 
+smartBuildSequence ::
+  (HasCallStack, Ord t) =>
+  Set (DPBranch t) ->
+  PointlikeDeterministicPath t ->
+  Set (DPBranch t) ->
+  DPBranch t
+smartBuildSequence bs1 midpoint bs2
+  | null (bs1 <> bs2) = error "smartBuildSequence: both branch sets must be nonempty"
+  | otherwise = case toList bs1 of
+      [DPSequence leftBs leftMid leftRightBs] ->
+        DPSequence leftBs leftMid . singletonSet $
+          smartBuildSequence leftRightBs midpoint bs2
+      _ -> DPSequence bs1 midpoint bs2
+
 sequenceDeterministicPaths ::
   (Ord t) =>
   DeterministicPath t ->
@@ -144,7 +158,8 @@ sequenceDeterministicPaths (Rooted p1) (Rooted p2) = do
   let p2Branches = mconcat $ toList p2.rootBranches
   let newRootBranches =
         p1.rootBranches <&> \branches ->
-          singletonSet $ DPSequence branches midpoint p2Branches
+          singletonSet $
+            smartBuildSequence branches midpoint p2Branches
   Just . Rooted $ RootedDeterministicPath newRootBranches p2.target
 
 normalizePath :: (Ord t) => Path t -> NormalizedPath t

@@ -39,7 +39,9 @@ spec_normalizePath = describe "normalizePath" do
   "foo/(bar + baz)" `normalizesTo` "foo /| bar + foo /| baz"
   "(foo & bar)/baz" `normalizesTo` "(foo & bar) /| baz"
   "foo/(bar & baz)" `normalizesTo` "foo /| (bar & baz)"
-  "foo/bar/baz" `normalizesTo` "foo /| bar /| baz"
+  "foo/bar/baz" `normalizesTo` "foo /| (bar /| baz)"
+  "(foo/bar)/baz" `normalizesTo` "foo /| (bar /| baz)"
+  "foo/(bar/baz)" `normalizesTo` "foo /| bar /| baz"
 
   -- Mixed operations
   "foo/bar + baz" `normalizesTo` "foo /| bar + baz"
@@ -53,4 +55,4 @@ spec_normalizePath = describe "normalizePath" do
   "@/foo & @1/bar" `normalizesTo` "[@<foo & @1<bar]"
   "baz/(@/foo & @1/bar)" `normalizesTo` "baz/@1|(foo & bar)"
   "foo/@/(@/bar & @2/baz)" `normalizesTo` "foo/@2|(bar & baz)"
-  "@1 & @2" `normalizesTo` "[]"
+  "@1 & @2" `normalizesTo` "!"

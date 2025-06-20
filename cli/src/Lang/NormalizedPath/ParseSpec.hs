@@ -73,6 +73,7 @@ test_pNormalizedPath =
           ),
       "a + b" `parsesTo` branches [DPLiteral "a", DPLiteral "b"],
       "a + b + c" `parsesTo` branches [DPLiteral "a", DPLiteral "b", DPLiteral "c"],
+      "!" `parsesTo` NormalizedPath mempty,
       "@ + a"
         `parsesTo` NormalizedPath
           ( setFromList
@@ -126,7 +127,7 @@ branches :: [DPBranch String] -> NormalizedPath String
 branches bs =
   NormalizedPath . setFromList $
     [ Rooted (RootedDeterministicPath (singletonMap unanchored (singletonSet b)) unanchored)
-      | b <- bs
+    | b <- bs
     ]
 
 singletonPointlike :: PointlikeDeterministicPath String -> NormalizedPath String
