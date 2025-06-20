@@ -26,6 +26,7 @@ spec_normalizePath = describe "normalizePath" do
   -- Intersection tests
   "foo & bar" `normalizesTo` "[foo & bar]"
   "@ & foo" `normalizesTo` "@[foo]"
+  "@ & foo & @/bar" `normalizesTo` "@[foo & bar]"
 
   -- Sequence tests
   "foo/bar" `normalizesTo` "foo /| bar"
@@ -53,6 +54,9 @@ spec_normalizePath = describe "normalizePath" do
   "foo/@ & bar" `normalizesTo` "[foo & bar]>@"
   "@/foo & bar" `normalizesTo` "[@<foo & bar]"
   "@/foo & @1/bar" `normalizesTo` "[@<foo & @1<bar]"
+  "@/foo & @1/bar/@2" `normalizesTo` "[@<foo & @1<bar]>@2"
+  "@/foo & @/bar/@2" `normalizesTo` "[@<foo & @<bar]>@2"
+  "@1/foo & @1/bar/@2" `normalizesTo` "[@1<foo & @1<bar]>@2"
   "baz/(@/foo & @1/bar)" `normalizesTo` "baz/@1|(foo & bar)"
   "foo/@/(@/bar & @2/baz)" `normalizesTo` "foo/@2|(bar & baz)"
   "@1 & @2" `normalizesTo` "!"
