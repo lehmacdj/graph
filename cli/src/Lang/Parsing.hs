@@ -46,8 +46,8 @@ transition = ident <|> stringLiteral
 base62Chars :: String
 base62Chars = ['a' .. 'z'] ++ ['A' .. 'Z'] ++ ['0' .. '9']
 
-pNID :: Parser BigNID.NID
-pNID = L.lexeme s (char '@' *> p)
+pFullNID :: Parser BigNID.NID
+pFullNID = L.lexeme s (char '@' *> p)
   where
     p = do
       chars <- replicateM nidDigits $ oneOf base62Chars :: Parser String
@@ -55,6 +55,10 @@ pNID = L.lexeme s (char '@' *> p)
         Just nid -> pure nid
         Nothing ->
           fail "couldn't parse NID"
+
+-- | Parse a small integer and convert to NID
+pSmallNID :: Parser NID
+pSmallNID = lexeme $ smallNID <$> positiveNumber
 
 positiveNumber :: Parser Int
 positiveNumber = L.lexeme s L.decimal
