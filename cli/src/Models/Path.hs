@@ -7,7 +7,10 @@ import Models.NID
 import MyPrelude
 
 data Path t
-  = -- | Stay at a specific location / the current location
+  = -- | Stay at a specific location / the current location.
+    -- Acts as a join point forcing intersections of a path that end in it to
+    -- match at the same node (e.g. `(a/@ & b)/c` is equivalent to `(a & b)
+    -- /@/c`)
     One
   | --  | Dual -- ^ a transition that dualizes the view of the graph
     -- The correct way to implement Dual is simply make backlinks part of the
@@ -24,19 +27,9 @@ data Path t
     Zero
   | Wild
   | Literal t
-  | -- | this must not be before @:/@ in a @:+@. @:&@ acts as a scope that
-    -- allows another absolute node as long as at least one sibling is not
-    -- absolute. e.g.:
-    -- * @#10 + a/b@ is fine
-    -- * as is @a/(b & #10)@
-    -- * but @a/#10@ is not ok
-    --
-    -- 'isValidPath' checks this condition
-    --
-    -- This is in order to ensure that there aren't any jumps in the
-    -- deterministic paths that are created when resolving a path. We could
-    -- probably loosen this condition, but better to start stricter and then
-    -- loosen up later
+  | -- | marks a specific NID. Acts like an anchor if after a :/, and as a root
+    -- if at the start of a path. Creates Pointlike paths when :&-ed with
+    -- other paths
     Absolute NID
   | -- | sequence
     Path t :/ Path t

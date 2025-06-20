@@ -10,6 +10,14 @@ data Anchor = Unanchored | JoinPoint | Specific NID
   deriving stock (Eq, Ord, Show, Generic, Lift)
   deriving anyclass (NFData)
 
+data FullyAnchored = FJoinPoint | FSpecific NID
+  deriving stock (Eq, Ord, Show, Generic, Lift)
+  deriving anyclass (NFData)
+
+data ConcreteAnchor = CSpecific NID | NotInGraph
+  deriving stock (Eq, Ord, Show, Generic, Lift)
+  deriving anyclass (NFData)
+
 data DeterministicPath t
   = Rooted (RootedDeterministicPath t)
   | Pointlike (PointlikeDeterministicPath t)
