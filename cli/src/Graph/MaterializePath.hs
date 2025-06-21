@@ -20,7 +20,7 @@ instance ShowableAugmentation IsThin where
   shouldShowStandaloneAugmentation = True
 
 data MaterializedPathResult t = MatrializedPathResult
-  { path :: NormalizedPath t,
+  { path :: NormalizedPath ConcreteAnchor t,
     graph :: Graph t IsThin,
     nonexistentNodes :: [NID]
   }

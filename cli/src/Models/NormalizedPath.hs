@@ -18,9 +18,9 @@ data ConcreteAnchor = CSpecific NID | NotInGraph
   deriving stock (Eq, Ord, Show, Generic, Lift)
   deriving anyclass (NFData)
 
-data DeterministicPath t
-  = Rooted (RootedDeterministicPath t)
-  | Pointlike (PointlikeDeterministicPath t)
+data DeterministicPath a t
+  = Rooted (RootedDeterministicPath a t)
+  | Pointlike (PointlikeDeterministicPath a t)
   deriving stock (Eq, Ord, Show, Generic, Lift)
   deriving anyclass (NFData)
 
@@ -29,35 +29,35 @@ data DeterministicPath t
 -- Invariants:
 -- - the sets of branches in rootBranches must be nonempty
 -- - the keys of rootBranches may not be the same Anchor as target.anchor
-data RootedDeterministicPath t = RootedDeterministicPath
-  { rootBranches :: Map (PointlikeDeterministicPath t) (Set (DPBranch t)),
-    target :: PointlikeDeterministicPath t
+data RootedDeterministicPath a t = RootedDeterministicPath
+  { rootBranches :: Map (PointlikeDeterministicPath a t) (Set (DPBranch a t)),
+    target :: PointlikeDeterministicPath a t
   }
   deriving stock (Eq, Ord, Show, Generic, Lift)
   deriving anyclass (NFData)
 
 -- | A pointlike deterministic path. This is a path that has a single Root
 -- and the target is the same as the Root.
-data PointlikeDeterministicPath t
+data PointlikeDeterministicPath a t
   = PointlikeDeterministicPath
   { -- | this anchor can't be Unanchored
-    anchor :: Anchor,
-    loops :: Set (DPBranch t)
+    anchor :: a,
+    loops :: Set (DPBranch a t)
   }
   deriving stock (Eq, Ord, Show, Generic, Lift)
   deriving anyclass (NFData)
 
-unanchored :: (Ord t) => PointlikeDeterministicPath t
+unanchored :: (Ord t) => PointlikeDeterministicPath Anchor t
 unanchored = PointlikeDeterministicPath Unanchored mempty
 
-joinPoint :: (Ord t) => PointlikeDeterministicPath t
+joinPoint :: (Ord t) => PointlikeDeterministicPath Anchor t
 joinPoint = PointlikeDeterministicPath JoinPoint mempty
 
-specific :: (Ord t) => NID -> PointlikeDeterministicPath t
+specific :: (Ord t) => NID -> PointlikeDeterministicPath Anchor t
 specific nid = PointlikeDeterministicPath (Specific nid) mempty
 
 -- | A branch in the path.
-data DPBranch t
+data DPBranch a t
   = DPLiteral t
   | DPWild
   | -- | A concatenation of two intersections of branches.
@@ -68,18 +68,18 @@ data DPBranch t
     --   @Sequence (singleton a) m (Sequence (singleton b) n (singleton c))@
     --   instead of
     --   @Sequence (Sequence (singleton a) m (singleton b)) n (singleton c)@)
-    DPSequence (Set (DPBranch t)) (PointlikeDeterministicPath t) (Set (DPBranch t))
+    DPSequence (Set (DPBranch a t)) (PointlikeDeterministicPath a t) (Set (DPBranch a t))
   deriving stock (Eq, Ord, Show, Generic, Lift)
   deriving anyclass (NFData)
 
-newtype NormalizedPath t = NormalizedPath {union :: Set (DeterministicPath t)}
+newtype NormalizedPath a t = NormalizedPath {union :: Set (DeterministicPath a t)}
   deriving stock (Eq, Ord, Show, Generic, Lift)
   deriving anyclass (NFData)
 
 pointify ::
   (Ord t) =>
-  RootedDeterministicPath t ->
-  Maybe (PointlikeDeterministicPath t)
+  RootedDeterministicPath Anchor t ->
+  Maybe (PointlikeDeterministicPath Anchor t)
 pointify RootedDeterministicPath {..} = do
   protoPoint <- foldlM1 mergePointlike (target `ncons` keys rootBranches)
   let extraLoops = mconcat $ toList rootBranches
@@ -91,9 +91,9 @@ pointify RootedDeterministicPath {..} = do
 
 intersectDeterministicPaths ::
   (Ord t) =>
-  DeterministicPath t ->
-  DeterministicPath t ->
-  Maybe (DeterministicPath t)
+  DeterministicPath Anchor t ->
+  DeterministicPath Anchor t ->
+  Maybe (DeterministicPath Anchor t)
 intersectDeterministicPaths (Rooted p1) (Rooted p2) = do
   newTarget <- mergePointlike p1.target p2.target
   let newSourceBranches = unionWith (<>) p1.rootBranches p2.rootBranches
@@ -122,9 +122,9 @@ mergeAnchor (Specific nid1) (Specific nid2)
 -- merging their anchors.
 mergePointlike ::
   (Ord t) =>
-  PointlikeDeterministicPath t ->
-  PointlikeDeterministicPath t ->
-  Maybe (PointlikeDeterministicPath t)
+  PointlikeDeterministicPath Anchor t ->
+  PointlikeDeterministicPath Anchor t ->
+  Maybe (PointlikeDeterministicPath Anchor t)
 mergePointlike p1 p2 = do
   mergedAnchor <- mergeAnchor p1.anchor p2.anchor
   Just $
@@ -135,10 +135,10 @@ mergePointlike p1 p2 = do
 
 smartBuildSequence ::
   (HasCallStack, Ord t) =>
-  Set (DPBranch t) ->
-  PointlikeDeterministicPath t ->
-  Set (DPBranch t) ->
-  DPBranch t
+  Set (DPBranch Anchor t) ->
+  PointlikeDeterministicPath Anchor t ->
+  Set (DPBranch Anchor t) ->
+  DPBranch Anchor t
 smartBuildSequence bs1 midpoint bs2
   | null (bs1 <> bs2) = error "smartBuildSequence: both branch sets must be nonempty"
   | otherwise = case toList bs1 of
@@ -149,9 +149,9 @@ smartBuildSequence bs1 midpoint bs2
 
 sequenceDeterministicPaths ::
   (Ord t) =>
-  DeterministicPath t ->
-  DeterministicPath t ->
-  Maybe (DeterministicPath t)
+  DeterministicPath Anchor t ->
+  DeterministicPath Anchor t ->
+  Maybe (DeterministicPath Anchor t)
 sequenceDeterministicPaths (Pointlike p1) (Pointlike p2) =
   Pointlike <$> mergePointlike p1 p2
 sequenceDeterministicPaths (Pointlike p1) (Rooted p2) = do
@@ -170,7 +170,7 @@ sequenceDeterministicPaths (Rooted p1) (Rooted p2) = do
             smartBuildSequence branches midpoint p2Branches
   Just . Rooted $ RootedDeterministicPath newRootBranches p2.target
 
-normalizePath :: (Ord t) => Path t -> NormalizedPath t
+normalizePath :: (Ord t) => Path t -> NormalizedPath Anchor t
 normalizePath = \case
   Zero ->
     NormalizedPath mempty
@@ -213,9 +213,9 @@ normalizePath = \case
 -- | Expand all Unanchored anchors to produce the least constrained path
 -- possible. This may result in a very large number of paths
 -- (e.g. @(a & b)/(c & d) => (a/c & a/d & b/c & b/d)@).
-leastConstrainedNormalizedPath :: NormalizedPath t -> NormalizedPath t
+leastConstrainedNormalizedPath :: NormalizedPath Anchor t -> NormalizedPath FullyAnchored t
 leastConstrainedNormalizedPath = undefined
 
 -- | Assign one JoinPoint to each Unanchored anchor
-leastNodesNormalizedPath :: NormalizedPath t -> NormalizedPath t
+leastNodesNormalizedPath :: NormalizedPath Anchor t -> NormalizedPath FullyAnchored t
 leastNodesNormalizedPath = undefined

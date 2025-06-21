@@ -107,7 +107,7 @@ test_pNormalizedPath =
       parseFails "a + + b"
     ]
   where
-    parsesTo :: String -> NormalizedPath String -> TestTree
+    parsesTo :: String -> NormalizedPath Anchor String -> TestTree
     parsesTo input expected =
       testCase ("parse: " ++ show input) $
         testParserParses (pNormalizedPath transition <* eof) (unpack input) expected
@@ -116,22 +116,22 @@ test_pNormalizedPath =
       testCase ("parse fails: " ++ show input) $
         testParserFails (pNormalizedPath transition <* eof) input
 
-singletonBranch :: DPBranch String -> NormalizedPath String
+singletonBranch :: DPBranch Anchor String -> NormalizedPath Anchor String
 singletonBranch branch =
   NormalizedPath . singletonSet . Rooted $
     RootedDeterministicPath
       (singletonMap unanchored (singletonSet branch))
       unanchored
 
-branches :: [DPBranch String] -> NormalizedPath String
+branches :: [DPBranch Anchor String] -> NormalizedPath Anchor String
 branches bs =
   NormalizedPath . setFromList $
     [ Rooted (RootedDeterministicPath (singletonMap unanchored (singletonSet b)) unanchored)
     | b <- bs
     ]
 
-singletonPointlike :: PointlikeDeterministicPath String -> NormalizedPath String
+singletonPointlike :: PointlikeDeterministicPath Anchor String -> NormalizedPath Anchor String
 singletonPointlike = NormalizedPath . singletonSet . Pointlike
 
-singletonRooted :: RootedDeterministicPath String -> NormalizedPath String
+singletonRooted :: RootedDeterministicPath Anchor String -> NormalizedPath Anchor String
 singletonRooted = NormalizedPath . singletonSet . Rooted
