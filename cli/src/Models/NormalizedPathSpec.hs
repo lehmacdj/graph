@@ -4,7 +4,6 @@ import Lang.NormalizedPath.Parse
 import Lang.Parsing
 import Lang.Path.Parse
 import Models.NormalizedPath
-import Models.Path
 import TestPrelude
 
 spec_normalizePath :: Spec
@@ -70,7 +69,11 @@ spec_leastConstrainedNormalizedPath = describe "leastConstrainedNormalizedPath" 
         it (show p <> " when least constrained is equivalent to " <> show expected) do
           p' <- parseForTest "normalized path" (pNormalizedPath transition) p
           expected' <- parseForTest "normalized path" (pNormalizedPath transition) expected
-          leastConstrainedNormalizedPath p' `shouldBe` leastConstrainedNormalizedPath expected'
+          leastConstrainedNormalizedPath p' `shouldBe` leastNodesNormalizedPath expected'
   "(a & b)/|(c & d)"
     `whenLeastConstrainedIsEquivalentTo` "[@<a/@|c & @<a/@|d & @<b/@|c & @<b/@|d]>@"
+  "(a & b)/|(c & d)/|(e & f)"
+    `whenLeastConstrainedIsEquivalentTo` "[@<a/@|c/@|e & @<a/@|d/@|e & @<b/@|c/@|e & @<b/@|d/@|e & @<a/@|c/@|f & @<a/@|d/@|f & @<b/@|c/@|f & @<b/@|d/@|f]>@"
+  "z/@|(a & b)/|(c & d)"
+    `whenLeastConstrainedIsEquivalentTo` "[@<z/@|(a/@|c & a/@|d & b/@|c & b/@|d)]>@"
   "(a & b)/@|(c & d)" `whenLeastConstrainedIsEquivalentTo` "[@<(a & b)/@|(c & d)]>@"

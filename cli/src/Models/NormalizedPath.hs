@@ -40,7 +40,7 @@ data RootedDeterministicPath a t = RootedDeterministicPath
 -- and the target is the same as the Root.
 data PointlikeDeterministicPath a t
   = PointlikeDeterministicPath
-  { -- | this anchor can't be Unanchored
+  { -- | this anchor can only be unanchored if the loops set is empty
     anchor :: a,
     loops :: Set (DPBranch a t)
   }
@@ -213,9 +213,106 @@ normalizePath = \case
 -- | Expand all Unanchored anchors to produce the least constrained path
 -- possible. This may result in a very large number of paths
 -- (e.g. @(a & b)/(c & d) => (a/c & a/d & b/c & b/d)@).
-leastConstrainedNormalizedPath :: NormalizedPath Anchor t -> NormalizedPath FullyAnchored t
-leastConstrainedNormalizedPath = undefined
+leastConstrainedNormalizedPath ::
+  forall t.
+  (Ord t) =>
+  NormalizedPath Anchor t ->
+  NormalizedPath FullyAnchored t
+leastConstrainedNormalizedPath =
+  over (_Unwrapped . setmapped) convertDeterministicPath
+  where
+    convertDeterministicPath = \case
+      Rooted p -> Rooted $ convertRooted p
+      Pointlike p -> Pointlike $ convertPointlike p
+
+    convertRooted ::
+      (HasCallStack) =>
+      RootedDeterministicPath Anchor t ->
+      RootedDeterministicPath FullyAnchored t
+    convertRooted (RootedDeterministicPath rootBranches target) =
+      RootedDeterministicPath
+        ( mapKeysWith union convertPointlike $
+            map (unions . mapSet convertBranch) rootBranches
+        )
+        (convertPointlike target)
+
+    convertAnchor = \case
+      Unanchored -> FJoinPoint
+      JoinPoint -> FJoinPoint
+      Specific nid -> FSpecific nid
+
+    convertPointlike (PointlikeDeterministicPath Unanchored (toList -> (_ : _))) =
+      error "convertPointlike: Unanchored path with loops"
+    convertPointlike (PointlikeDeterministicPath anchor loops) =
+      PointlikeDeterministicPath
+        (convertAnchor anchor)
+        (unions (mapSet convertBranch loops))
+
+    convertBranch ::
+      (HasCallStack) =>
+      DPBranch Anchor t ->
+      Set (DPBranch FullyAnchored t)
+    convertBranch = \case
+      DPLiteral t -> singletonSet $ DPLiteral t
+      DPWild -> singletonSet DPWild
+      DPSequence bs1 midpoint bs2 -> do
+        let bs1' = unions (mapSet convertBranch bs1)
+        let bs2' = unions (mapSet convertBranch bs2)
+        case midpoint.anchor of
+          Unanchored
+            | null midpoint.loops ->
+                mapSet
+                  ( \(x, y) ->
+                      DPSequence
+                        (singletonSet x)
+                        (convertPointlike joinPoint)
+                        (singletonSet y)
+                  )
+                  (bs1' `cartesianProductSet` bs2')
+          _ -> singletonSet $ DPSequence bs1' (convertPointlike midpoint) bs2'
 
 -- | Assign one JoinPoint to each Unanchored anchor
-leastNodesNormalizedPath :: NormalizedPath Anchor t -> NormalizedPath FullyAnchored t
-leastNodesNormalizedPath = undefined
+leastNodesNormalizedPath ::
+  forall t.
+  (Ord t) =>
+  NormalizedPath Anchor t ->
+  NormalizedPath FullyAnchored t
+leastNodesNormalizedPath =
+  over (_Unwrapped . setmapped) convertDeterministicPath
+  where
+    convertDeterministicPath = \case
+      Rooted p -> Rooted $ convertRooted p
+      Pointlike p -> Pointlike $ convertPointlike p
+
+    convertRooted ::
+      (HasCallStack) =>
+      RootedDeterministicPath Anchor t ->
+      RootedDeterministicPath FullyAnchored t
+    convertRooted (RootedDeterministicPath rootBranches target) =
+      RootedDeterministicPath
+        ( mapKeysWith union convertPointlike $
+            map (mapSet convertBranch) rootBranches
+        )
+        (convertPointlike target)
+
+    convertPointlike (PointlikeDeterministicPath Unanchored (toList -> (_ : _))) =
+      error "convertPointlike: Unanchored path with loops"
+    convertPointlike (PointlikeDeterministicPath anchor loops) =
+      PointlikeDeterministicPath
+        (convertAnchor anchor)
+        (mapSet convertBranch loops)
+
+    convertAnchor = \case
+      Unanchored -> FJoinPoint
+      JoinPoint -> FJoinPoint
+      Specific nid -> FSpecific nid
+
+    convertBranch :: (HasCallStack) => DPBranch Anchor t -> DPBranch FullyAnchored t
+    convertBranch = \case
+      DPLiteral t -> DPLiteral t
+      DPWild -> DPWild
+      DPSequence bs1 midpoint bs2 ->
+        DPSequence
+          (mapSet convertBranch bs1)
+          (convertPointlike midpoint)
+          (mapSet convertBranch bs2)
