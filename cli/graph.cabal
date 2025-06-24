@@ -673,7 +673,7 @@ test-suite graph-test
       TypeOperators
       TypeSynonymInstances
       ViewPatterns
-  ghc-options: -Wall -fplugin=Polysemy.Plugin -flate-specialise -fspecialise-aggressively -threaded -rtsopts -with-rtsopts=-N -Wall
+  ghc-options: -Wall -fplugin=Polysemy.Plugin -flate-specialise -fspecialise-aggressively -threaded -rtsopts -with-rtsopts=-N -Wall -O0
   cpp-options: -DDEBUG
   build-depends:
       Glob

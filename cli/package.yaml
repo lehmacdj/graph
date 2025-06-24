@@ -198,5 +198,6 @@ tests:
     - -rtsopts
     - -with-rtsopts=-N
     - -Wall
+    - -O0 # compile faster, equivalent to --fast
     dependencies:
     - graph
