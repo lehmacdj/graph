@@ -22,7 +22,7 @@ instance ShowableAugmentation IsThin where
 data MaterializedPathResult t = MatrializedPathResult
   { path :: NormalizedPath ConcreteAnchor t,
     graph :: Graph t IsThin,
-    nonexistentNodes :: [NID]
+    nonexistentNodes :: Set NID
   }
   deriving (Eq, Show, Generic)
 
