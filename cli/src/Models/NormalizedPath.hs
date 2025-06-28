@@ -30,7 +30,7 @@ data DeterministicPath a t
 -- - the sets of branches in rootBranches must be nonempty
 -- - the keys of rootBranches may not be the same Anchor as target.anchor
 data RootedDeterministicPath a t = RootedDeterministicPath
-  { rootBranches :: Map (PointlikeDeterministicPath a t) (Set (DPBranch a t)),
+  { rootBranches :: OMap (PointlikeDeterministicPath a t) (OSet (DPBranch a t)),
     target :: PointlikeDeterministicPath a t
   }
   deriving stock (Eq, Ord, Show, Generic, Lift)
@@ -42,7 +42,7 @@ data PointlikeDeterministicPath a t
   = PointlikeDeterministicPath
   { -- | this anchor can only be unanchored if the loops set is empty
     anchor :: a,
-    loops :: Set (DPBranch a t)
+    loops :: OSet (DPBranch a t)
   }
   deriving stock (Eq, Ord, Show, Generic, Lift)
   deriving anyclass (NFData)
@@ -68,7 +68,10 @@ data DPBranch a t
     --   @Sequence (singleton a) m (Sequence (singleton b) n (singleton c))@
     --   instead of
     --   @Sequence (Sequence (singleton a) m (singleton b)) n (singleton c)@)
-    DPSequence (Set (DPBranch a t)) (PointlikeDeterministicPath a t) (Set (DPBranch a t))
+    DPSequence
+      (OSet (DPBranch a t))
+      (PointlikeDeterministicPath a t)
+      (OSet (DPBranch a t))
   deriving stock (Eq, Ord, Show, Generic, Lift)
   deriving anyclass (NFData)
 
@@ -134,11 +137,11 @@ mergePointlike p1 p2 = do
       }
 
 smartBuildSequence ::
-  (HasCallStack, Ord t) =>
-  Set (DPBranch Anchor t) ->
-  PointlikeDeterministicPath Anchor t ->
-  Set (DPBranch Anchor t) ->
-  DPBranch Anchor t
+  (HasCallStack, Ord a, Ord t) =>
+  OSet (DPBranch a t) ->
+  PointlikeDeterministicPath a t ->
+  OSet (DPBranch a t) ->
+  DPBranch a t
 smartBuildSequence bs1 midpoint bs2
   | null (bs1 <> bs2) = error "smartBuildSequence: both branch sets must be nonempty"
   | otherwise = case toList bs1 of
@@ -196,6 +199,7 @@ normalizePath = \case
     let np1 = normalizePath p1
         np2 = normalizePath p2
      in cartesianProductSet np1.union np2.union
+          & asSet
           & toList
           -- maybe better to handle errors here than to just ignore them?
           & mapMaybe (uncurry intersectDeterministicPaths)
@@ -205,6 +209,7 @@ normalizePath = \case
     let np1 = normalizePath p1
         np2 = normalizePath p2
      in cartesianProductSet np1.union np2.union
+          & asSet
           & toList
           & mapMaybe (uncurry sequenceDeterministicPaths)
           & setFromList
@@ -232,7 +237,7 @@ leastConstrainedNormalizedPath =
     convertRooted (RootedDeterministicPath rootBranches target) =
       RootedDeterministicPath
         ( mapKeysWith union convertPointlike $
-            map (unions . mapSet convertBranch) rootBranches
+            map (unions . mapOSet convertBranch) rootBranches
         )
         (convertPointlike target)
 
@@ -246,24 +251,24 @@ leastConstrainedNormalizedPath =
     convertPointlike (PointlikeDeterministicPath anchor loops) =
       PointlikeDeterministicPath
         (convertAnchor anchor)
-        (unions (mapSet convertBranch loops))
+        (unions (mapOSet convertBranch loops))
 
     convertBranch ::
       (HasCallStack) =>
       DPBranch Anchor t ->
-      Set (DPBranch FullyAnchored t)
+      OSet (DPBranch FullyAnchored t)
     convertBranch = \case
       DPLiteral t -> singletonSet $ DPLiteral t
       DPWild -> singletonSet DPWild
       DPSequence bs1 midpoint bs2 -> do
-        let bs1' = unions (mapSet convertBranch bs1)
-        let bs2' = unions (mapSet convertBranch bs2)
+        let bs1' = unions (mapOSet convertBranch bs1)
+        let bs2' = unions (mapOSet convertBranch bs2)
         case midpoint.anchor of
           Unanchored
             | null midpoint.loops ->
-                mapSet
+                mapOSet
                   ( \(x, y) ->
-                      DPSequence
+                      smartBuildSequence
                         (singletonSet x)
                         (convertPointlike joinPoint)
                         (singletonSet y)
@@ -291,7 +296,7 @@ leastNodesNormalizedPath =
     convertRooted (RootedDeterministicPath rootBranches target) =
       RootedDeterministicPath
         ( mapKeysWith union convertPointlike $
-            map (mapSet convertBranch) rootBranches
+            map (mapOSet convertBranch) rootBranches
         )
         (convertPointlike target)
 
@@ -300,7 +305,7 @@ leastNodesNormalizedPath =
     convertPointlike (PointlikeDeterministicPath anchor loops) =
       PointlikeDeterministicPath
         (convertAnchor anchor)
-        (mapSet convertBranch loops)
+        (mapOSet convertBranch loops)
 
     convertAnchor = \case
       Unanchored -> FJoinPoint
@@ -312,7 +317,7 @@ leastNodesNormalizedPath =
       DPLiteral t -> DPLiteral t
       DPWild -> DPWild
       DPSequence bs1 midpoint bs2 ->
-        DPSequence
-          (mapSet convertBranch bs1)
+        smartBuildSequence
+          (mapOSet convertBranch bs1)
           (convertPointlike midpoint)
-          (mapSet convertBranch bs2)
+          (mapOSet convertBranch bs2)

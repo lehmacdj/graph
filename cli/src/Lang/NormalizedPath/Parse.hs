@@ -5,7 +5,6 @@ module Lang.NormalizedPath.Parse
 where
 
 import Data.Functor
-import Data.Map qualified as Map (fromListWith)
 import Lang.Parsing
 import Models.NID
 import Models.NormalizedPath
@@ -69,14 +68,14 @@ pSequence pNID pTransition = do
   pure . uncurry ($) $
     foldl'
       (\(acc, x) (n, y) -> (acc . singletonSet . DPSequence x n, y))
-      (DPSequence initial m :: Set (DPBranch Anchor t) -> DPBranch Anchor t, b :: Set (DPBranch Anchor t))
+      (DPSequence initial m :: OSet (DPBranch Anchor t) -> DPBranch Anchor t, b :: OSet (DPBranch Anchor t))
       rest
   where
     pMidpoint =
       symbol "/" *> option unanchored (pPointlike pNID pTransition) <* symbol "|"
 
 -- | Parse a set of branches separated by &
-pBranchSet :: (Ord t) => Parser NID -> Parser t -> Parser (Set (DPBranch Anchor t))
+pBranchSet :: (Ord t) => Parser NID -> Parser t -> Parser (OSet (DPBranch Anchor t))
 pBranchSet pNID pTransition =
   (setFromList <$> pMultiple)
     <|> (singletonSet <$> pSingleBranch pTransition)
@@ -92,16 +91,16 @@ pRootBranches ::
   (Ord t) =>
   Parser NID ->
   Parser t ->
-  Parser (Map (PointlikeDeterministicPath Anchor t) (Set (DPBranch Anchor t)))
+  Parser (OMap (PointlikeDeterministicPath Anchor t) (OSet (DPBranch Anchor t)))
 pRootBranches pNID pTransition = do
   branches <- sepBy1 (pRootBranch pNID pTransition) (symbol "&")
-  pure $ Map.fromListWith (<>) branches
+  pure $ unionsWith (<>) $ uncurry singletonMap <$> branches
 
 pRootBranch ::
   (Ord t) =>
   Parser NID ->
   Parser t ->
-  Parser (PointlikeDeterministicPath Anchor t, Set (DPBranch Anchor t))
+  Parser (PointlikeDeterministicPath Anchor t, OSet (DPBranch Anchor t))
 pRootBranch pNID pTransition = do
   root <- option unanchored (pPointlike pNID pTransition <* symbol "<")
   branch <- pBranch pNID pTransition

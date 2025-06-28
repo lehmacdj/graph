@@ -72,8 +72,11 @@ spec_leastConstrainedNormalizedPath = describe "leastConstrainedNormalizedPath" 
           leastConstrainedNormalizedPath p' `shouldBe` leastNodesNormalizedPath expected'
   "(a & b)/|(c & d)"
     `whenLeastConstrainedIsEquivalentTo` "[@<a/@|c & @<a/@|d & @<b/@|c & @<b/@|d]>@"
-  "(a & b)/|(c & d)/|(e & f)"
-    `whenLeastConstrainedIsEquivalentTo` "[@<a/@|c/@|e & @<a/@|d/@|e & @<b/@|c/@|e & @<b/@|d/@|e & @<a/@|c/@|f & @<a/@|d/@|f & @<b/@|c/@|f & @<b/@|d/@|f]>@"
+  "(a & b)/|((c & d)/|(e & f))"
+    `whenLeastConstrainedIsEquivalentTo` "[@<a/@|c/@|e & @<a/@|c/@|f & @<a/@|d/@|e & @<a/@|d/@|f & @<b/@|c/@|e & @<b/@|c/@|f & @<b/@|d/@|e & @<b/@|d/@|f]>@"
+  -- reassociating shouldn't affect the final ordering
+  "((a & b)/|(c & d))/|(e & f)"
+    `whenLeastConstrainedIsEquivalentTo` "[@<a/@|c/@|e & @<a/@|c/@|f & @<a/@|d/@|e & @<a/@|d/@|f & @<b/@|c/@|e & @<b/@|c/@|f & @<b/@|d/@|e & @<b/@|d/@|f]>@"
   "z/@|(a & b)/|(c & d)"
     `whenLeastConstrainedIsEquivalentTo` "[@<z/@|(a/@|c & a/@|d & b/@|c & b/@|d)]>@"
   "(a & b)/@|(c & d)" `whenLeastConstrainedIsEquivalentTo` "[@<(a & b)/@|(c & d)]>@"

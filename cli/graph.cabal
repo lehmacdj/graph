@@ -94,6 +94,7 @@ library
       Models.Path
       MyPrelude
       MyPrelude.Collections
+      MyPrelude.Collections.Ordered
       MyPrelude.CollectionsSpec
       MyPrelude.EarlyReturn
       MyPrelude.Effect

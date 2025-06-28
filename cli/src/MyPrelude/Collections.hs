@@ -79,6 +79,7 @@ import Data.Map.Strict qualified as Map
 import Data.Set qualified as Set
 import Data.Set.Lens as X (setmapped)
 import GHC.Stack (HasCallStack)
+import MyPrelude.Collections.Ordered as X
 import MyPrelude.Orphans ()
 
 -- | Copied from cabal codebase
@@ -87,6 +88,9 @@ toSetOf l s = getConst (l (Const . singleton) s)
 
 mapSet :: (Ord b) => (a -> b) -> Set a -> Set b
 mapSet = Set.map
+
+mapOSet :: (Ord b) => (a -> b) -> OSet a -> OSet b
+mapOSet f = setFromList . map f . toList
 
 mapFromSet :: (Ord k) => Set k -> Map k ()
 mapFromSet = Map.fromSet (const ())
@@ -170,7 +174,14 @@ allAnyOrderPairs xs = allPairs xs ++ map swap (allPairs xs)
 cartesianProduct :: [a] -> [b] -> [(a, b)]
 cartesianProduct xs ys = [(x, y) | x <- xs, y <- ys]
 
-cartesianProductSet :: (Ord a, Ord b) => Set a -> Set b -> Set (a, b)
+cartesianProductSet ::
+  ( (Ord a, IsSet set1, ContainerKey set1 ~ a),
+    (Ord b, IsSet set2, ContainerKey set2 ~ b),
+    (IsSet set12, ContainerKey set12 ~ (a, b))
+  ) =>
+  set1 ->
+  set2 ->
+  set12
 cartesianProductSet xs ys =
   setFromList $ cartesianProduct (toList xs) (toList ys)
 
