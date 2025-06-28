@@ -8,6 +8,7 @@ import Models.Node
 import Models.NormalizedPath
 import Models.Path
 import MyPrelude hiding ((\\))
+import Polysemy.State
 
 data IsThin = Thin | Fetched
   deriving (Eq, Show, Ord, Generic)
@@ -19,7 +20,7 @@ instance ShowableAugmentation IsThin where
     Fetched -> "fetched"
   shouldShowStandaloneAugmentation = True
 
-data MaterializedPathResult t = MatrializedPathResult
+data MaterializedPath t = MaterializedPath
   { path :: NormalizedPath ConcreteAnchor t,
     graph :: Graph t IsThin,
     nonexistentNodes :: Set NID
@@ -35,5 +36,48 @@ materializePath ::
   -- | The node to start from
   NID ->
   Path t ->
-  Sem r (MaterializedPathResult t)
-materializePath nid path = undefined
+  Sem r (MaterializedPath t)
+materializePath firstNid op = do
+  let normalizedPath = leastConstrainedNormalizedPath $ normalizePath op
+  traverse (traverseDeterministicPath firstNid) (toList normalizedPath.union)
+    & fmap (NormalizedPath . setFromList . concat)
+    & runState emptyGraph
+    & runState mempty
+    & fmap \(nonexistentNodes, (graph, path)) -> MaterializedPath {..}
+  where
+    traverseDeterministicPath ::
+      NID ->
+      DeterministicPath FullyAnchored t ->
+      Sem
+        (State (Graph t IsThin) : State (Set NID) : r)
+        [DeterministicPath ConcreteAnchor t]
+    traverseDeterministicPath nid = \case
+      Pointlike p -> fmap Pointlike <$> traversePointlike nid p
+      Rooted r -> fmap Rooted <$> traverseRooted nid r
+
+    traversePointlike ::
+      NID ->
+      PointlikeDeterministicPath FullyAnchored t ->
+      Sem
+        (State (Graph t IsThin) : State (Set NID) : r)
+        [PointlikeDeterministicPath ConcreteAnchor t]
+    traversePointlike nid PointlikeDeterministicPath {..} = undefined
+
+    traverseRooted ::
+      NID ->
+      RootedDeterministicPath FullyAnchored t ->
+      Sem
+        (State (Graph t IsThin) : State (Set NID) : r)
+        [RootedDeterministicPath ConcreteAnchor t]
+    traverseRooted nid RootedDeterministicPath {..} = undefined
+
+    traverseBranch ::
+      NID ->
+      DPBranch FullyAnchored t ->
+      Sem
+        (State (Graph t IsThin) : State (Set NID) : r)
+        [(DPBranch ConcreteAnchor t, NID)]
+    traverseBranch nid = \case
+      DPLiteral l -> undefined
+      DPWild -> undefined
+      DPSequence {} -> undefined
