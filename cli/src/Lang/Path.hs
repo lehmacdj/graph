@@ -15,7 +15,6 @@ where
 import Control.Lens hiding (pre, unsnoc)
 import Data.List (intersectBy)
 import Data.Set qualified as Set
-import Data.Set.Ordered (OSet)
 import Data.Set.Ordered qualified as OSet
 import Error.Missing
 import Graph.Effect

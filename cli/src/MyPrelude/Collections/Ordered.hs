@@ -119,3 +119,7 @@ instance (Ord k) => IsMap (OMap k v) where
   singletonMap = curry OMap.singleton
   mapFromList = OMap.fromList
   mapToList = OMap.assocs
+
+instance (Ord k) => HasKeysSet (OMap k v) where
+  type KeySet (OMap k v) = OSet k
+  keysSet = setFromList . map fst . OMap.assocs

@@ -1,8 +1,8 @@
 module Graph.MaterializePath where
 
 import Graph.GraphMetadataEditing
-import Models.Connect (Connect (..), matchConnect)
-import Models.Graph (Graph, emptyGraph, insertNode, nodesMatchedBy, nodesMatching, singletonGraph)
+import Models.Connect (matchConnect)
+import Models.Graph (Graph, emptyGraph)
 import Models.NID
 import Models.Node
 import Models.NormalizedPath

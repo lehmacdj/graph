@@ -17,7 +17,7 @@ import Lang.Path
 import Models.NID
 import MyPrelude hiding (try)
 import TestPrelude hiding (try)
-import Text.Megaparsec (try, (<?>))
+import Text.Megaparsec (try)
 import Text.Megaparsec.Char (char)
 
 pathTerm' :: Parser NID -> Parser t -> Parser (Path t)
