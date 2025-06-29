@@ -2,12 +2,13 @@
 
 module Graph.GraphMetadataEditing where
 
+import Control.Lens (prism')
 import DAL.FileSystemOperations.Metadata
 import DAL.FileSystemOperations.MetadataWriteDiff
 import Error.UserError
 import Error.Warn
 import Models.Edge
-import Models.Graph (Graph)
+import Models.Graph (Graph, emptyGraph)
 import Models.Graph qualified
 import Models.NID
 import Models.Node
@@ -15,6 +16,24 @@ import MyPrelude
 import Polysemy.Scoped
 import Polysemy.State
 import Polysemy.Tagged
+
+data IsThin = Thin | Fetched
+  deriving (Eq, Show, Ord, Generic)
+
+instance ShowableAugmentation IsThin where
+  augmentationLabel = Nothing
+  defaultShowAugmentation = \case
+    Thin -> "thin"
+    Fetched -> "fetched"
+  shouldShowStandaloneAugmentation = True
+
+instance DefaultAugmentation IsThin where
+  defaultAugmentation = Thin
+
+onlyFetched :: Prism' (Node t IsThin) (Node t ())
+onlyFetched = prism' (fmap (const Fetched)) \case
+  n | n.augmentation == Fetched -> Just $ void n
+  _ -> Nothing
 
 -- | Marker indicating that something promises to only read the graph metadata.
 -- I gave up on trying to enforce this at the type level because it ended up
@@ -43,22 +62,43 @@ makeSem ''GraphMetadataEditing
 -- action by caching fetched nodes in memory
 cachingReadingInMemory ::
   forall t a r.
-  (Member (GraphMetadataReading t) r, HasCallStack) =>
+  ( Member (GraphMetadataReading t) r,
+    ValidTransition t,
+    HasCallStack
+  ) =>
   Sem (GraphMetadataReading t : r) a ->
   Sem r a
-cachingReadingInMemory = do
-  let interpreter = interpret \case
-        GetNodeMetadata nid -> withEarlyReturn do
-          cached <- gets @(Map NID (Maybe (Node t ()))) $ view $ at nid
-          withJust cached returnEarly
-          n <- getNodeMetadata nid
-          modify @(Map NID (Maybe (Node t ()))) $ at nid ?~ n
-          pure n
-        TouchNode _ -> error "TouchNode is unsafe while caching reading"
-        DeleteNode _ -> error "DeleteNode is unsafe while caching reading"
-        InsertEdge _ -> error "InsertEdge is unsafe while caching reading"
-        DeleteEdge _ -> error "DeleteEdge is unsafe while caching reading"
-  evalState mempty . interpreter . raiseUnder @(State (Map NID (Maybe (Node t ()))))
+cachingReadingInMemory =
+  evalState @(Set NID) mempty
+    . evalState @(Graph t IsThin) emptyGraph
+    . cachingReadingInState
+    . raiseUnder @(State (Graph t IsThin))
+    . raiseUnder @(State (Set NID))
+
+cachingReadingInState ::
+  forall t a r.
+  ( Member (GraphMetadataReading t) r,
+    Members [State (Graph t IsThin), State (Set NID)] r,
+    ValidTransition t,
+    HasCallStack
+  ) =>
+  Sem (GraphMetadataReading t : r) a ->
+  Sem r a
+cachingReadingInState = interpret \case
+  GetNodeMetadata nid -> withEarlyReturn do
+    whenM (gets @(Set NID) (member nid)) (returnEarly Nothing)
+    cached <- gets @(Graph t IsThin) $ preview (ix nid . onlyFetched)
+    withJust cached (returnEarly . Just)
+    n <-
+      getNodeMetadata nid `onNothingM` do
+        modify @(Set NID) $ insertSet nid
+        returnEarly Nothing
+    modify @(Graph t IsThin) $ at nid ?~ (Fetched <$ n)
+    pure $ Just n
+  TouchNode _ -> error "TouchNode is unsafe while caching reading"
+  DeleteNode _ -> error "DeleteNode is unsafe while caching reading"
+  InsertEdge _ -> error "InsertEdge is unsafe while caching reading"
+  DeleteEdge _ -> error "DeleteEdge is unsafe while caching reading"
 
 runInMemoryGraphMetadataEditing ::
   forall t r a.
