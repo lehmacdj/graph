@@ -1,7 +1,7 @@
 module Graph.MaterializePath where
 
 import Graph.GraphMetadataEditing
-import Models.Connect (Connect (..))
+import Models.Connect (Connect (..), matchConnect)
 import Models.Graph (Graph, emptyGraph, insertNode, nodesMatchedBy, nodesMatching, singletonGraph)
 import Models.NID
 import Models.Node
@@ -9,16 +9,6 @@ import Models.NormalizedPath
 import Models.Path
 import MyPrelude hiding ((\\))
 import Polysemy.State
-
-data IsThin = Thin | Fetched
-  deriving (Eq, Show, Ord, Generic)
-
-instance ShowableAugmentation IsThin where
-  augmentationLabel = Nothing
-  defaultShowAugmentation = \case
-    Thin -> "thin"
-    Fetched -> "fetched"
-  shouldShowStandaloneAugmentation = True
 
 data MaterializedPath t = MaterializedPath
   { path :: NormalizedPath ConcreteAnchor t,
@@ -40,7 +30,8 @@ materializePath ::
 materializePath firstNid op = do
   let normalizedPath = leastConstrainedNormalizedPath $ normalizePath op
   traverse (traverseDeterministicPath firstNid) (toList normalizedPath.union)
-    & fmap (NormalizedPath . setFromList . concat)
+    & fmap (NormalizedPath . setFromList . concatMap toNullable)
+    & cachingReadingInState
     & runState emptyGraph
     & runState mempty
     & fmap \(nonexistentNodes, (graph, path)) -> MaterializedPath {..}
@@ -49,35 +40,48 @@ materializePath firstNid op = do
       NID ->
       DeterministicPath FullyAnchored t ->
       Sem
-        (State (Graph t IsThin) : State (Set NID) : r)
-        [DeterministicPath ConcreteAnchor t]
+        (GraphMetadataReading t : State (Graph t IsThin) : State (Set NID) : r)
+        (NonNull [DeterministicPath ConcreteAnchor t])
     traverseDeterministicPath nid = \case
-      Pointlike p -> fmap Pointlike <$> traversePointlike nid p
-      Rooted r -> fmap Rooted <$> traverseRooted nid r
+      Pointlike p -> mapNonNull Pointlike <$> traversePointlike nid p
+      Rooted r -> mapNonNull Rooted <$> traverseRooted nid r
 
     traversePointlike ::
       NID ->
       PointlikeDeterministicPath FullyAnchored t ->
       Sem
-        (State (Graph t IsThin) : State (Set NID) : r)
-        [PointlikeDeterministicPath ConcreteAnchor t]
+        (GraphMetadataReading t : State (Graph t IsThin) : State (Set NID) : r)
+        (NonNull [PointlikeDeterministicPath ConcreteAnchor t])
     traversePointlike nid PointlikeDeterministicPath {..} = undefined
 
     traverseRooted ::
       NID ->
       RootedDeterministicPath FullyAnchored t ->
       Sem
-        (State (Graph t IsThin) : State (Set NID) : r)
-        [RootedDeterministicPath ConcreteAnchor t]
+        (GraphMetadataReading t : State (Graph t IsThin) : State (Set NID) : r)
+        (NonNull [RootedDeterministicPath ConcreteAnchor t])
     traverseRooted nid RootedDeterministicPath {..} = undefined
 
     traverseBranch ::
+      ( Members [GraphMetadataReading t, State (Graph t IsThin), State (Set NID)] q,
+        HasCallStack
+      ) =>
       NID ->
       DPBranch FullyAnchored t ->
-      Sem
-        (State (Graph t IsThin) : State (Set NID) : r)
-        [(DPBranch ConcreteAnchor t, NID)]
+      Sem q (NonNull [(DPBranch ConcreteAnchor t, ConcreteAnchor)])
     traverseBranch nid = \case
-      DPLiteral l -> undefined
-      DPWild -> undefined
-      DPSequence {} -> undefined
+      DPLiteral l -> do
+        let def = singletonNN (DPLiteral l, NotInGraph)
+        getNodeMetadata nid <&> \case
+          Nothing -> def
+          Just n ->
+            fromMaybe def . fromNullable $
+              [(DPLiteral l, CSpecific nid') | nid' <- matchConnect l n.outgoing]
+      DPWild -> do
+        let def = singletonNN (DPWild, NotInGraph)
+        getNodeMetadata nid <&> \case
+          Nothing -> def
+          Just n ->
+            fromMaybe def . fromNullable $
+              [(DPWild, CSpecific nid') | nid' <- n ^.. #outgoing . folded . #node]
+      DPSequence bs1 midpoint bs2 -> undefined
