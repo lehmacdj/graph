@@ -16,6 +16,7 @@ import Executable.GraphEditor.Options
 import Graph.AppInterpreters
 import Graph.Effect
 import Graph.FreshNID
+import Graph.GraphMetadataEditing (GraphMetadataEditing)
 import Graph.NodeLocated
 import Graph.SystemNodes.Init (createSystemNodes)
 import Lang.Command hiding (printTransitions)
@@ -23,6 +24,7 @@ import Lang.Command.Parse
 import Models.History
 import Models.NID
 import MyPrelude
+import Polysemy.Internal.Scoped (Scoped)
 import Polysemy.Readline
 import Polysemy.State
 import System.Console.Haskeline qualified as H
@@ -59,7 +61,7 @@ withDefaultQuitParser p s
 repl ::
   ( Members [Echo, DisplayImage, SetLocation, GetLocation, Dualizeable, Readline, Embed IO] effs,
     Members [FileSystem, Web, FreshNID, GetTime, Editor, State History] effs,
-    Members '[FileTypeOracle] effs,
+    Members '[FileTypeOracle, Scoped () (GraphMetadataEditing Text)] effs,
     HasGraph String effs,
     -- TODO: these effects are bad and shouldn't be exposed; need to rewrite
     -- commands using them as plugins once plugins are available. See also

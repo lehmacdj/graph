@@ -19,6 +19,9 @@ import Text.Megaparsec
 path :: Parser (Path String)
 path = pPath transition
 
+tpath :: Parser (Path Text)
+tpath = pPath ttransition
+
 pChangeNode :: Parser Command
 pChangeNode = (command "cd" $> ChangeNode) <*> path
 
@@ -109,9 +112,13 @@ pCollect = (command "collect" $> Collect) <*> transition
 pAddText :: Parser Command
 pAddText = (commandFrom ["add-text", "al"] $> AddText) <*> anyText
 
+pV2Path :: Parser Command
+pV2Path = (commandFrom ["debug-v2-path", "v2"] $> V2Path) <*> tpath
+
 pCommandTerm :: Parser Command
 pCommandTerm =
   try pChangeNode
+    <|> try pV2Path
     <|> try pDualize
     <|> try pMake
     <|> try pMerge

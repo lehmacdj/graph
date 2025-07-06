@@ -29,8 +29,10 @@ import Graph.Check
 import Graph.Effect
 import Graph.Export.FileSystem (exportToDirectory)
 import Graph.FreshNID
+import Graph.GraphMetadataEditing (GraphMetadataEditing)
 import Graph.Import.ByteString
 import Graph.Import.FileSystem
+import Graph.MaterializePath (materializePath)
 import Graph.NodeLocated
 import Graph.Time (taggingFreshNodesWithTime)
 import Graph.Utils
@@ -40,7 +42,9 @@ import Models.Edge
 import Models.History
 import Models.NID
 import Models.Node
+import Models.NormalizedPath (normalizePath)
 import MyPrelude
+import Polysemy.Internal.Scoped (Scoped, scoped_)
 import Polysemy.Readline
 import Polysemy.State
 import Utils.Singleton
@@ -119,6 +123,8 @@ data Command
     Collect String
   | -- | Execute a list of commands sequentially
     Seq (TwoElemList Command)
+  | -- | debug-v2-path, v2
+    V2Path (Path Text)
   deriving (Eq, Show, Ord, Generic)
 
 singleErr :: Text -> Set NID -> UserError
@@ -162,7 +168,7 @@ guardDangerousDualizedOperation = do
 interpretCommand ::
   ( Members [DisplayImage, Echo, Error UserError, SetLocation, GetLocation, Dualizeable] effs,
     Members [FileSystem, Web, FreshNID, GetTime, Editor, State History] effs,
-    Members [FileTypeOracle, Readline, Warn UserError] effs,
+    Members [FileTypeOracle, Readline, Warn UserError, Scoped () (GraphMetadataEditing Text)] effs,
     -- TODO: remove this inclusion of RawGraph + Embed IO here; probably the
     -- best way to do this is to allow commands to be defined as @stack@
     -- scripts, and then rewrite materialize and any other commands that
@@ -329,3 +335,10 @@ interpretCommand = \case
       insertEdge (Edge newNid "" nid)
   Seq ps -> do
     toList ps & traverse_ interpretCommand
+  V2Path p -> do
+    nid <- currentLocation
+    say $ "current location: " ++ tshow nid
+    say $ "parsed path: " ++ tshow p
+    say $ "normalized path: " ++ tshow (normalizePath p)
+    mp <- scoped_ $ materializePath nid p
+    say $ "resolved path: " ++ tshow mp

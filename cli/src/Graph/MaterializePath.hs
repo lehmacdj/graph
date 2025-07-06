@@ -83,12 +83,13 @@ materializePath firstNid op = do
           & fromMaybe (mapNonNull (PointlikeDeterministicPath unsatisfiedAnchor . fst) loops')
 
     ensureSameAnchors ::
-      (HasCallStack) => [(a, ConcreteAnchor)] -> ([a], ConcreteAnchor)
-    ensureSameAnchors [] = error "broken invariant: empty list"
-    ensureSameAnchors xs@((_, a1) : _)
-      | all (\(_, a) -> a == a1) xs =
-          (map fst xs, a1)
-      | otherwise = (map fst xs, NotInGraph)
+      (HasCallStack) => NonNull [(a, ConcreteAnchor)] -> (NonNull [a], ConcreteAnchor)
+    ensureSameAnchors xs =
+      let example = snd (head xs)
+          as = mapNonNull fst xs
+       in if all ((== example) . snd) $ toNullable xs
+            then (as, example)
+            else (as, NotInGraph)
 
     traverseRooted ::
       ( Members [GraphMetadataReading t, State (Graph t IsThin), State (Set NID)] q,
@@ -123,9 +124,9 @@ materializePath firstNid op = do
             )
           <&> map (map \(r, bas) -> (\(b, a) -> ((r, b), a)) <$> toNullable bas)
           <&> concatMap choices
-          <&> map ensureSameAnchors
+          <&> map (ensureSameAnchors . impureNonNull)
           <&> ordNub
-          <&> over (mapped . _1) mapFromList
+          <&> over (mapped . _1) (mapFromList . toNullable)
       rootBranches''
         & (traverse . _2) (`traversePointlike` target)
         <&> concatMap (\(rbs, ts) -> (rbs,) <$> toNullable ts)
@@ -143,8 +144,8 @@ materializePath firstNid op = do
       fmap
         ( impureNonNull
             . ordNub
-            . over (mapped . _1) setFromList
-            . map ensureSameAnchors
+            . over (mapped . _1) (setFromList . toNullable)
+            . map (ensureSameAnchors . impureNonNull)
             . choices
             . map toNullable
         )

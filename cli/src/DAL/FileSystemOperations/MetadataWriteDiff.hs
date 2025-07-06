@@ -122,3 +122,13 @@ runGraphMetadataFilesystemOperationsWriteDiffIO ::
 runGraphMetadataFilesystemOperationsWriteDiffIO = interpret \case
   WriteGraphDiff loaded changes deletedEdges ->
     writeGraphDiff_ loaded changes deletedEdges
+
+runGraphMetadataFilesystemOperationsWriteDiffDryRun ::
+  (Members [RawGraph, Embed IO, Error UserError] effs) =>
+  Sem (GraphMetadataFilesystemOperationsWriteDiff ': effs) a ->
+  Sem effs a
+runGraphMetadataFilesystemOperationsWriteDiffDryRun = interpret \case
+  WriteGraphDiff loaded changes deletedEdges -> do
+    say $ "loaded: " <> tshow loaded
+    say $ "changes: " <> tshow changes
+    say $ "deletedEdges: " <> tshow deletedEdges

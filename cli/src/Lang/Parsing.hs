@@ -41,6 +41,9 @@ stringLiteral = L.lexeme s $ char '"' >> manyTill L.charLiteral (char '"')
 transition :: Parser String
 transition = ident <|> stringLiteral
 
+ttransition :: Parser Text
+ttransition = pack <$> (ident <|> stringLiteral)
+
 -- | chars allowed in base 62 nids
 base62Chars :: String
 base62Chars = ['a' .. 'z'] ++ ['A' .. 'Z'] ++ ['0' .. '9']
