@@ -1,7 +1,9 @@
+{-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
+
 module Graph.MaterializePath where
 
 import Graph.GraphMetadataEditing
-import Models.Connect (matchConnect)
+import Models.Connect (Connect (..), matchConnect)
 import Models.Graph (Graph, emptyGraph)
 import Models.NID
 import Models.Node
@@ -17,11 +19,14 @@ data MaterializedPath t = MaterializedPath
   }
   deriving (Eq, Show, Generic)
 
+{-# HLINT ignore materializePath "Functor law" #-}
+
 -- | Traverse a path, fetching node metadata and noting which nodes are missing.
 materializePath ::
   forall t r.
   ( Members '[GraphMetadataReading t] r,
-    ValidTransition t
+    ValidTransition t,
+    HasCallStack
   ) =>
   -- | The node to start from
   NID ->
@@ -29,7 +34,7 @@ materializePath ::
   Sem r (MaterializedPath t)
 materializePath firstNid op = do
   let normalizedPath = leastConstrainedNormalizedPath $ normalizePath op
-  traverse (traverseDeterministicPath firstNid) (toList normalizedPath.union)
+  traverse (traverseDeterministicPath (CSpecific firstNid)) (toList normalizedPath.union)
     & fmap (NormalizedPath . setFromList . concatMap toNullable)
     & cachingReadingInState
     & runState emptyGraph
@@ -37,51 +42,154 @@ materializePath firstNid op = do
     & fmap \(nonexistentNodes, (graph, path)) -> MaterializedPath {..}
   where
     traverseDeterministicPath ::
-      NID ->
+      ( Members [GraphMetadataReading t, State (Graph t IsThin), State (Set NID)] q,
+        HasCallStack
+      ) =>
+      ConcreteAnchor ->
       DeterministicPath FullyAnchored t ->
-      Sem
-        (GraphMetadataReading t : State (Graph t IsThin) : State (Set NID) : r)
-        (NonNull [DeterministicPath ConcreteAnchor t])
+      Sem q (NonNull [DeterministicPath ConcreteAnchor t])
     traverseDeterministicPath nid = \case
       Pointlike p -> mapNonNull Pointlike <$> traversePointlike nid p
       Rooted r -> mapNonNull Rooted <$> traverseRooted nid r
 
     traversePointlike ::
-      NID ->
+      ( Members [GraphMetadataReading t, State (Graph t IsThin), State (Set NID)] q,
+        HasCallStack
+      ) =>
+      ConcreteAnchor ->
       PointlikeDeterministicPath FullyAnchored t ->
-      Sem
-        (GraphMetadataReading t : State (Graph t IsThin) : State (Set NID) : r)
-        (NonNull [PointlikeDeterministicPath ConcreteAnchor t])
-    traversePointlike nid PointlikeDeterministicPath {..} = undefined
+      Sem q (NonNull [PointlikeDeterministicPath ConcreteAnchor t])
+    traversePointlike canchor PointlikeDeterministicPath {..} = do
+      let canchor' = case (canchor, anchor) of
+            (UnsatisfiedLoops _, _) ->
+              error "can't have UnsatisfiedLoops when traversing PointlikeDeterministicPath"
+            (CSpecific nid1, FSpecific nid2)
+              | nid1 == nid2 -> CSpecific nid1
+              | otherwise -> NotInGraph
+            (CSpecific nid1, FJoinPoint) -> CSpecific nid1
+            (NotInGraph, FJoinPoint) -> NotInGraph
+            (NotInGraph, FSpecific _) -> NotInGraph
+      loops' <- traverseBranches canchor' loops
+      let unsatisfiedAnchor = case canchor' of
+            UnsatisfiedLoops _ ->
+              error "can't have UnsatisfiedLoops when traversing PointlikeDeterministicPath"
+            CSpecific nid -> UnsatisfiedLoops nid
+            NotInGraph -> NotInGraph
+      pure $
+        loops'
+          & nfilter ((== canchor') . snd)
+          & map (PointlikeDeterministicPath canchor' . fst)
+          & fromNullable
+          & fromMaybe (mapNonNull (PointlikeDeterministicPath unsatisfiedAnchor . fst) loops')
+
+    ensureSameAnchors ::
+      (HasCallStack) => [(a, ConcreteAnchor)] -> ([a], ConcreteAnchor)
+    ensureSameAnchors [] = error "broken invariant: empty list"
+    ensureSameAnchors xs@((_, a1) : _)
+      | all (\(_, a) -> a == a1) xs =
+          (map fst xs, a1)
+      | otherwise = (map fst xs, NotInGraph)
 
     traverseRooted ::
-      NID ->
+      ( Members [GraphMetadataReading t, State (Graph t IsThin), State (Set NID)] q,
+        HasCallStack
+      ) =>
+      ConcreteAnchor ->
       RootedDeterministicPath FullyAnchored t ->
-      Sem
-        (GraphMetadataReading t : State (Graph t IsThin) : State (Set NID) : r)
-        (NonNull [RootedDeterministicPath ConcreteAnchor t])
-    traverseRooted nid RootedDeterministicPath {..} = undefined
+      Sem q (NonNull [RootedDeterministicPath ConcreteAnchor t])
+    traverseRooted nid RootedDeterministicPath {..} = do
+      rootBranches' ::
+        [ [ ( DeterministicPath ConcreteAnchor t,
+              OSet (DPBranch FullyAnchored t)
+            )
+          ]
+        ] <-
+        rootBranches
+          & mapToList
+          & (traverse . _1) (traverseDeterministicPath nid)
+          <&> map (\(rs, bs) -> (,bs) <$> toNullable rs)
+          <&> choices
+      rootBranches'' ::
+        [ ( OMap
+              (DeterministicPath ConcreteAnchor t)
+              (OSet (DPBranch ConcreteAnchor t)),
+            ConcreteAnchor
+          )
+        ] <-
+        rootBranches'
+          & (traverse . traverse)
+            ( \(dp, bs) ->
+                (dp,) <$> traverseBranches dp.target.anchor bs
+            )
+          <&> map (map \(r, bas) -> (\(b, a) -> ((r, b), a)) <$> toNullable bas)
+          <&> concatMap choices
+          <&> map ensureSameAnchors
+          <&> ordNub
+          <&> over (mapped . _1) mapFromList
+      rootBranches''
+        & (traverse . _2) (`traversePointlike` target)
+        <&> concatMap (\(rbs, ts) -> (rbs,) <$> toNullable ts)
+        <&> map (uncurry smartBuildRootedDeterministicPath)
+        <&> impureNonNull
+
+    traverseBranches ::
+      ( Members [GraphMetadataReading t, State (Graph t IsThin), State (Set NID)] q,
+        HasCallStack
+      ) =>
+      ConcreteAnchor ->
+      OSet (DPBranch FullyAnchored t) ->
+      Sem q (NonNull [(OSet (DPBranch ConcreteAnchor t), ConcreteAnchor)])
+    traverseBranches nid =
+      fmap
+        ( impureNonNull
+            . ordNub
+            . over (mapped . _1) setFromList
+            . map ensureSameAnchors
+            . choices
+            . map toNullable
+        )
+        . traverse (traverseBranch nid)
+        . toList
 
     traverseBranch ::
       ( Members [GraphMetadataReading t, State (Graph t IsThin), State (Set NID)] q,
         HasCallStack
       ) =>
-      NID ->
+      ConcreteAnchor ->
       DPBranch FullyAnchored t ->
       Sem q (NonNull [(DPBranch ConcreteAnchor t, ConcreteAnchor)])
-    traverseBranch nid = \case
-      DPLiteral l -> do
-        let def = singletonNN (DPLiteral l, NotInGraph)
-        getNodeMetadata nid <&> \case
-          Nothing -> def
-          Just n ->
-            fromMaybe def . fromNullable $
-              [(DPLiteral l, CSpecific nid') | nid' <- matchConnect l n.outgoing]
-      DPWild -> do
-        let def = singletonNN (DPWild, NotInGraph)
-        getNodeMetadata nid <&> \case
-          Nothing -> def
-          Just n ->
-            fromMaybe def . fromNullable $
-              [(DPWild, CSpecific nid') | nid' <- n ^.. #outgoing . folded . #node]
-      DPSequence bs1 midpoint bs2 -> undefined
+    traverseBranch anchor = \case
+      DPLiteral t -> withEarlyReturn do
+        nid <- case anchor of
+          CSpecific n -> pure n
+          UnsatisfiedLoops n -> pure n
+          NotInGraph -> returnEarly (singletonNN (DPLiteral t, NotInGraph))
+        n <- getNodeMetadata nid `onNothingM` returnEarly (singletonNN (DPLiteral t, NotInGraph))
+        pure $
+          n.outgoing
+            & matchConnect t
+            & map (\nid' -> (DPLiteral t, CSpecific nid'))
+            & fromNullable
+            & fromMaybe (singletonNN (DPLiteral t, NotInGraph))
+      DPWild -> withEarlyReturn do
+        nid <- case anchor of
+          CSpecific n -> pure n
+          UnsatisfiedLoops n -> pure n
+          NotInGraph -> returnEarly (singletonNN (DPWild, NotInGraph))
+        n <- getNodeMetadata nid `onNothingM` returnEarly (singletonNN (DPWild, NotInGraph))
+        pure $
+          n.outgoing
+            & toList
+            & map (\Connect {..} -> (DPLiteral transition, CSpecific node))
+            & fromNullable
+            & fromMaybe (singletonNN (DPWild, NotInGraph))
+      DPSequence bs1 midpoint bs2 -> do
+        bs1's <- traverseBranches anchor bs1 <&> toNullable
+        uptoMidpoints :: [(OSet (DPBranch ConcreteAnchor t), PointlikeDeterministicPath ConcreteAnchor t)] <-
+          bs1's
+            & (traverse . _2) (`traversePointlike` midpoint)
+            <&> concatMap (\(bs1', ms) -> (bs1',) <$> toNullable ms)
+        uptoMidpoints
+          & (traverse . _2) (\p -> (p,) <$> traverseBranches p.anchor bs2)
+          <&> concatMap (\(bs1', (p, bs2'ts)) -> first (DPSequence bs1' p) <$> toNullable bs2'ts)
+          <&> impureNonNull

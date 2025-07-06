@@ -2,6 +2,7 @@
 
 module Models.NormalizedPath where
 
+import GHC.Records
 import Models.NID
 import Models.Path
 import MyPrelude
@@ -14,7 +15,7 @@ data FullyAnchored = FJoinPoint | FSpecific NID
   deriving stock (Eq, Ord, Show, Generic, Lift)
   deriving anyclass (NFData)
 
-data ConcreteAnchor = CSpecific NID | NotInGraph
+data ConcreteAnchor = CSpecific NID | NotInGraph | UnsatisfiedLoops NID
   deriving stock (Eq, Ord, Show, Generic, Lift)
   deriving anyclass (NFData)
 
@@ -23,6 +24,10 @@ data DeterministicPath a t
   | Pointlike (PointlikeDeterministicPath a t)
   deriving stock (Eq, Ord, Show, Generic, Lift)
   deriving anyclass (NFData)
+
+instance HasField "target" (DeterministicPath a t) (PointlikeDeterministicPath a t) where
+  getField (Rooted p) = p.target
+  getField (Pointlike p) = p
 
 -- | Represents a path that targets a single node (i.e. is deterministic)
 --
@@ -402,7 +407,7 @@ leastConstrainedNormalizedPath =
                         (singletonSet y)
                   )
                   (bs1' `cartesianProductSet` bs2')
-            | otherwise -> error "impossible: Unanchored path with loops"
+            | otherwise -> error "broken invariant: Unanchored path with loops"
           _ -> singletonSet $ DPSequence bs1' (convertPointlike midpoint) bs2'
 
 -- | Assign one JoinPoint to each Unanchored anchor
@@ -430,7 +435,7 @@ leastNodesNormalizedPath =
         (convertPointlike target)
 
     convertPointlike (PointlikeDeterministicPath Unanchored (toList -> (_ : _))) =
-      error "convertPointlike: Unanchored path with loops"
+      error "broken invariant: Unanchored path with loops"
     convertPointlike (PointlikeDeterministicPath anchor loops) =
       PointlikeDeterministicPath
         (convertAnchor anchor)

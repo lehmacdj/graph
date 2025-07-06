@@ -73,7 +73,7 @@ import Control.Lens.Extras as X (is)
 import Data.Generics.Labels as X
 import Data.Generics.Wrapped as X (_Unwrapped, _Wrapped)
 import Data.IxSet.Typed qualified as IxSet
-import Data.List as X (iterate, tails)
+import Data.List as X (iterate, tails, transpose)
 import Data.List.NonEmpty as X (NonEmpty (..))
 import Data.Map.Strict qualified as Map
 import Data.Set qualified as Set
@@ -171,8 +171,50 @@ allPairs xs = [(x, y) | (x : ys) <- tails xs, y <- ys]
 allAnyOrderPairs :: [a] -> [(a, a)]
 allAnyOrderPairs xs = allPairs xs ++ map swap (allPairs xs)
 
+-- | Unfair n-way interleaving: given a possibly infinite number of (possibly
+-- infinite) lists, produce a single list such that whenever @v@ has finite
+-- index in an input list at finite index, @v@ also has finite index in the
+-- output list. Elements from lists at lower index occur more frequently, but
+-- not exponentially so.
+diagonal :: (HasCallStack) => [[a]] -> [a]
+diagonal = concat . diagonals
+
+-- | Like 'diagonal', but expose a tiny bit more (non-semantic) information:
+-- if you lay out the input list in two dimensions, each list in the result
+-- will be one of the diagonals of the input. In particular, each element of
+-- the output will be a list whose elements are each from a distinct input
+-- list.
+diagonals :: (HasCallStack) => [[a]] -> [[a]]
+diagonals = tailEx . go []
+  where
+    -- it is critical for some applications that we start producing answers
+    -- before inspecting es_
+    go b es_ =
+      [h | h : _ <- b] : case es_ of
+        [] -> transpose ts
+        e : es -> go (e : ts) es
+      where
+        ts = [t | _ : t <- b]
+
+-- | Slightly unfair 2-way Cartesian product: given two (possibly infinite)
+-- lists, produce a single list such that whenever @v@ and @w@ have finite
+-- indices in the input lists, @(v,w)@ has finite index in the output list.
+-- Lower indices occur as the @fst@ part of the tuple more frequently, but not
+-- exponentially so.
+genericCartesianProduct :: (a -> b -> c) -> [a] -> [b] -> [c]
+-- special case: don't want to construct an infinite list of empty lists to pass to diagonal
+genericCartesianProduct _ [] _ = []
+genericCartesianProduct f xs ys = diagonal [[f x y | x <- xs] | y <- ys]
+
 cartesianProduct :: [a] -> [b] -> [(a, b)]
 cartesianProduct xs ys = [(x, y) | x <- xs, y <- ys]
+
+-- | Slightly unfair n-way Cartesian product: given a finite number of
+-- (possibly infinite) lists, produce a single list such that whenever @vi@ has
+-- finite index in list i for each i, @[v1, ..., vn]@ has finite index in the
+-- output list.
+choices :: [[a]] -> [[a]]
+choices = foldr (genericCartesianProduct (:)) [[]]
 
 cartesianProductSet ::
   ( (Ord a, IsSet set1, ContainerKey set1 ~ a),
