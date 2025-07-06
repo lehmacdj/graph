@@ -121,14 +121,15 @@ filePathFromNSURL url = do
   path <- p_NSURL_path url
   unpack <$> packNSString path
 
-peekNSError :: Ptr NSError -> IO NSErrorException
-peekNSError nsError = do
-  domain <- p_NSError_domain nsError >>= packNSString
-  code <- p_NSError_code nsError
-  pure $ NSErrorException domain (fromIntegral code)
+peekNSError :: Ptr NSError -> IO (Maybe NSErrorException)
+peekNSError nsError = withEarlyReturnIO do
+  when (nsError == nullPtr) $ returnEarly Nothing
+  domain <- liftIO $ p_NSError_domain nsError >>= packNSString
+  code <- liftIO $ p_NSError_code nsError
+  pure . Just $ NSErrorException domain (fromIntegral code)
 
-throwNSError :: Ptr NSError -> IO a
-throwNSError nsError = peekNSError nsError >>= throwIO
+throwNonNullNSError :: Ptr NSError -> IO ()
+throwNonNullNSError nsError = peekNSError nsError >>= maybe (pure ()) throwIO
 
 withNSArray :: Objc a => [Ptr a] -> (Ptr NSArray -> IO b) -> IO b
 withNSArray objects action = withArrayLen objects $ \len objectsPtr ->
@@ -136,6 +137,9 @@ withNSArray objects action = withArrayLen objects $ \len objectsPtr ->
     (nsArray_initWithObjects (castPtr objectsPtr) (fromIntegral len))
     m_release
     action
+
+calloca :: Storable a => (Ptr a -> IO b) -> IO b
+calloca = bracket calloc free
 
 -- * Relatively raw darwin wrappers
 
@@ -157,7 +161,7 @@ coordinateReading' fileCoordinator errPtr url options action = do
       path <- filePathFromNSURL newUrl
       result <- action path
       writeIORef resultRef (Just result)
-  when (errPtr /= nullPtr) $ peek errPtr >>= throwNSError
+  when (errPtr /= nullPtr) $ peek errPtr >>= throwNonNullNSError
   readIORef resultRef >>= maybe (throwIO NullResultException) pure
 
 coordinateWriting' ::
@@ -178,7 +182,7 @@ coordinateWriting' fileCoordinator errPtr url options action = do
       path <- filePathFromNSURL newUrl
       result <- action path
       writeIORef resultRef (Just result)
-  when (errPtr /= nullPtr) $ peek errPtr >>= throwNSError
+  when (errPtr /= nullPtr) $ peek errPtr >>= throwNonNullNSError
   readIORef resultRef >>= maybe (throwIO NullResultException) pure
 
 coordinateReadingThenWriting' ::
@@ -204,7 +208,7 @@ coordinateReadingThenWriting' fileCoordinator errPtr readingUrl readingOptions w
       writingPath <- filePathFromNSURL newWritingUrl
       result <- action readingPath writingPath
       writeIORef resultRef (Just result)
-  when (errPtr /= nullPtr) $ peek errPtr >>= throwNSError
+  when (errPtr /= nullPtr) $ peek errPtr >>= throwNonNullNSError
   readIORef resultRef >>= maybe (throwIO NullResultException) pure
 
 coordinateWritingAndWriting' ::
@@ -234,7 +238,7 @@ coordinateWritingAndWriting' fileCoordinator errPtr writingUrl1 writingOptions1 
           writingPath2 <- filePathFromNSURL newWritingUrl2
           result <- action writingPath1 writingPath2
           writeIORef resultRef (Just result)
-  when (errPtr /= nullPtr) $ peek errPtr >>= throwNSError
+  when (errPtr /= nullPtr) $ peek errPtr >>= throwNonNullNSError
   readIORef resultRef >>= maybe (throwIO NullResultException) pure
 
 #endif
@@ -245,7 +249,7 @@ coordinateReading :: FilePath -> Bool -> ReadingOptions -> (FilePath -> IO a) ->
 #ifdef darwin_HOST_OS
 coordinateReading path isDirectory options action = evalContT do
   fileCoordinator <- ContT $ bracket nsFileCoordinator_init m_release
-  errPtr <- ContT alloca
+  errPtr <- ContT calloca
   url <- ContT $ withNSURL path isDirectory
   lift $ coordinateReading' fileCoordinator errPtr url options action
 #else
@@ -256,7 +260,7 @@ coordinateWriting :: FilePath -> Bool -> WritingOptions -> (FilePath -> IO a) ->
 #ifdef darwin_HOST_OS
 coordinateWriting path isDirectory options action = evalContT do
   fileCoordinator <- ContT $ bracket nsFileCoordinator_init m_release
-  errPtr <- ContT alloca
+  errPtr <- ContT calloca
   url <- ContT $ withNSURL path isDirectory
   lift $ coordinateWriting' fileCoordinator errPtr url options action
 #else
@@ -267,7 +271,7 @@ coordinateReadingThenWriting :: FilePath -> Bool -> ReadingOptions -> FilePath -
 #ifdef darwin_HOST_OS
 coordinateReadingThenWriting readingPath readingIsDirectory readingOptions writingPath writingIsDirectory writingOptions action = evalContT do
   fileCoordinator <- ContT $ bracket nsFileCoordinator_init m_release
-  errPtr <- ContT alloca
+  errPtr <- ContT calloca
   readingUrl <- ContT $ withNSURL readingPath readingIsDirectory
   writingUrl <- ContT $ withNSURL writingPath writingIsDirectory
   lift $ coordinateReadingThenWriting' fileCoordinator errPtr readingUrl readingOptions writingUrl writingOptions action
@@ -279,7 +283,7 @@ coordinateWritingAndWriting :: FilePath -> Bool -> WritingOptions -> FilePath ->
 #ifdef darwin_HOST_OS
 coordinateWritingAndWriting writingPath1 writingIsDirectory1 writingOptions1 writingPath2 writingIsDirectory2 writingOptions2 action = evalContT do
   fileCoordinator <- ContT $ bracket nsFileCoordinator_init m_release
-  errPtr <- ContT alloca
+  errPtr <- ContT calloca
   writingUrl1 <- ContT $ withNSURL writingPath1 writingIsDirectory1
   writingUrl2 <- ContT $ withNSURL writingPath2 writingIsDirectory2
   lift $ coordinateWritingAndWriting' fileCoordinator errPtr writingUrl1 writingOptions1 writingUrl2 writingOptions2 action
@@ -324,7 +328,7 @@ coordinateAccessing FilesToCoordinate{..} action =
     readingUrlsArray <- ContT $ withNSArray (ordNub $ readingUrls ^.. folded)
     writingUrlsArray <- ContT $ withNSArray (ordNub $ writingUrls ^.. folded)
     fileCoordinator <- ContT $ bracket nsFileCoordinator_init m_release
-    errPtr <- ContT alloca
+    errPtr <- ContT calloca
     let readingAccessors =
           readingUrls <&> \url -> WrappedReader \readingOptions readingAction ->
             coordinateReading' fileCoordinator errPtr url readingOptions readingAction

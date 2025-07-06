@@ -9,6 +9,7 @@ module MyPrelude.EarlyReturn
     unwrapM,
     withEarlyReturn,
     withEarlyReturn_,
+    withEarlyReturnIO,
   )
 where
 
@@ -54,6 +55,11 @@ newtype EarlyReturnResult result = EarlyReturnResult {result :: result}
 
 withEarlyReturn_ :: Sem '[EarlyReturn result] result -> result
 withEarlyReturn_ = run . withEarlyReturn
+
+withEarlyReturnIO ::
+  Sem '[EarlyReturn result, Embed IO, Final IO] result ->
+  IO result
+withEarlyReturnIO = runFinal . embedToFinal . withEarlyReturn
 
 withEarlyReturn ::
   Sem (EarlyReturn result : r) result ->

@@ -227,7 +227,7 @@ maybeLookupNode = flip maybeNodeLookup
 
 -- | Utility function for converting lookups into actual node values with error
 -- reporting.
-assertNodeInGraph :: NID -> Maybe a -> a
+assertNodeInGraph :: (HasCallStack) => NID -> Maybe a -> a
 assertNodeInGraph _ (Just n) = n
 assertNodeInGraph i Nothing =
   error $ "expected " ++ show i ++ " to be in the graph"
@@ -249,6 +249,7 @@ unprimed ::
 unprimed f i ig = f (lookupNodeEx ig i) ig
 
 listify ::
+  (HasCallStack) =>
   (x -> Graph t a -> Graph t a) ->
   ([x] -> Graph t a -> Graph t a)
 listify f nodes ig = foldl' (flip f) ig nodes
@@ -386,7 +387,7 @@ mergeNodeInto n g =
 
 -- | Remove a node from the graph; updating the cached data in the neighbors
 -- nodes as well.
-delNode' :: (Ord t) => Node t a -> Graph t a -> Graph t a
+delNode' :: (ValidNode t a) => Node t a -> Graph t a -> Graph t a
 delNode' n g =
   withNodeMap g $
     omap deleteIncoming
@@ -403,10 +404,14 @@ delNode ::
   NID ->
   Graph t a ->
   Graph t a
-delNode = unprimed delNode'
+-- this needs special treatment because unprimeds requires the node to be in the
+-- graph
+delNode nid g = case g ^. #nodeMap . at nid of
+  Just n -> delNode' n g
+  Nothing -> g
 
 delNodes' ::
-  (Ord t) => [Node t a] -> Graph t a -> Graph t a
+  (ValidNode t a) => [Node t a] -> Graph t a -> Graph t a
 delNodes' = listify delNode'
 
 delNodes ::
@@ -414,7 +419,7 @@ delNodes ::
   [NID] ->
   Graph t a ->
   Graph t a
-delNodes = unprimeds delNodes'
+delNodes = listify delNode
 
 -- * Operations on augmentations (formerly referred to as data)
 
