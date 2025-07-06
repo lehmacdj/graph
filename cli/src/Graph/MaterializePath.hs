@@ -144,8 +144,10 @@ materializePath firstNid op = do
       fmap
         ( impureNonNull
             . ordNub
-            . over (mapped . _1) (setFromList . toNullable)
-            . map (ensureSameAnchors . impureNonNull)
+            . over (mapped . _1) setFromList
+            -- in the case where the OSet is empty (only when loops),
+            -- we return the same anchor as the input
+            . map (fromMaybe ([], nid) . map (first toNullable . ensureSameAnchors) . fromNullable)
             . choices
             . map toNullable
         )
