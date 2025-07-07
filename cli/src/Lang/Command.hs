@@ -32,7 +32,7 @@ import Graph.FreshNID
 import Graph.GraphMetadataEditing (GraphMetadataEditing)
 import Graph.Import.ByteString
 import Graph.Import.FileSystem
-import Graph.MaterializePath (materializePath)
+import Graph.MaterializePath (graph, materializePath, nonexistentNodes, path)
 import Graph.NodeLocated
 import Graph.Time (taggingFreshNodesWithTime)
 import Graph.Utils
@@ -341,4 +341,10 @@ interpretCommand = \case
     say $ "parsed path: " ++ tshow p
     say $ "normalized path: " ++ tshow (normalizePath p)
     mp <- scoped_ $ materializePath nid p
-    say $ "resolved path: " ++ tshow mp
+    say $ "materialized path: " <> tshow mp.path
+    if null mp.graph
+      then say "no nodes materialized"
+      else do
+        say "graph:"
+        say $ tshow mp.graph
+    say $ "nonexistent nodes: " ++ tshow mp.nonexistentNodes

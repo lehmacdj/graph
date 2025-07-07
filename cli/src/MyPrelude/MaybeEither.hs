@@ -69,6 +69,11 @@ injectError :: Maybe a -> e -> Either (NonEmpty e) a
 injectError (Just x) _ = Right x
 injectError Nothing e = Left (singleton e)
 
+mergeMaybes :: (a -> a -> a) -> Maybe a -> Maybe a -> Maybe a
+mergeMaybes _ Nothing x = x
+mergeMaybes _ x Nothing = x
+mergeMaybes f (Just x) (Just y) = Just (f x y)
+
 codiagonal :: Either a a -> a
 codiagonal (Left x) = x
 codiagonal (Right x) = x

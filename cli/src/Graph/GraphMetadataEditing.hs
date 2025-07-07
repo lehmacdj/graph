@@ -226,7 +226,7 @@ runGraphMetadataEditingTransactionally action = do
           -- we might already have a node in the cache even if we did not load
           -- because we create nodes for any changes we make
           let reconciledNode =
-                liftA2 mergeNodesEx underlyingNode changesNode
+                mergeMaybes mergeNodesEx underlyingNode changesNode
                   & _Just
                     %~ withoutEdges deletedEdges
           tag @Changes $ modify $ at nid .~ reconciledNode
