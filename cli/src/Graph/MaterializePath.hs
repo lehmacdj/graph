@@ -49,23 +49,28 @@ materializePath firstNid op = do
       DeterministicPath FullyAnchored t ->
       Sem q [DeterministicPath NID t]
     traverseDeterministicPath nid = \case
-      Pointlike p -> map Pointlike <$> traversePointlike nid p
+      Pointlike p -> map Pointlike <$> traversePointlike True nid p
       Rooted r -> map Rooted <$> traverseRooted nid r
 
     traversePointlike ::
       ( Members [GraphMetadataReading t, State (Graph t IsThin), State (Set NID)] q,
         HasCallStack
       ) =>
+      Bool ->
       NID ->
       PointlikeDeterministicPath FullyAnchored t ->
       Sem q [PointlikeDeterministicPath NID t]
-    traversePointlike nid PointlikeDeterministicPath {..} = withEarlyReturn do
-      when (has (#_FSpecific . only nid) anchor) $ returnEarly []
-      loops' <- traverseBranches nid loops
+    traversePointlike isRoot nid PointlikeDeterministicPath {..} = withEarlyReturn do
+      nid' <- case anchor of
+        FSpecific fnid
+          | not isRoot && nid /= fnid -> returnEarly []
+          | otherwise -> pure fnid
+        FJoinPoint -> pure nid
+      loops' <- traverseBranches nid' loops
       pure $
         loops'
-          & filter ((== nid) . snd)
-          & map (PointlikeDeterministicPath nid . fst)
+          & filter ((== nid') . snd)
+          & map (PointlikeDeterministicPath nid' . fst)
 
     ensureSameAnchors ::
       (HasCallStack) => NonNull [(a, NID)] -> Maybe (NonNull [a], NID)
@@ -106,7 +111,7 @@ materializePath firstNid op = do
           <&> ordNub
           <&> over (mapped . _1) (mapFromList . toNullable)
       rootBranches''
-        & (traverse . _2) (`traversePointlike` target)
+        & (traverse . _2) (\x -> traversePointlike False x target)
         <&> concatMap (\(rbs, ts) -> (rbs,) <$> ts)
         <&> map (uncurry smartBuildRootedDeterministicPath)
 
@@ -152,7 +157,7 @@ materializePath firstNid op = do
         bs1's <- traverseBranches nid bs1
         uptoMidpoints :: [(OSet (DPBranch NID t), PointlikeDeterministicPath NID t)] <-
           bs1's
-            & (traverse . _2) (`traversePointlike` midpoint)
+            & (traverse . _2) (\x -> traversePointlike False x midpoint)
             <&> concatMap (\(bs1', ms) -> (bs1',) <$> ms)
         uptoMidpoints
           & (traverse . _2) (\p -> (p,) <$> traverseBranches p.anchor bs2)
