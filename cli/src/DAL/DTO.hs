@@ -34,7 +34,7 @@ nodeFromDTO NodeDTO {id = nid, ..} =
     { augmentation = (),
       incoming = mapSet connectFromDTO incoming,
       outgoing = mapSet connectFromDTO outgoing,
-      ..
+      nid
     }
 
 data ConnectDTO t = ConnectDTO

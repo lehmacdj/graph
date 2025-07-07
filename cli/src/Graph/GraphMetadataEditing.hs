@@ -111,9 +111,7 @@ runInMemoryGraphMetadataEditing = interpret \case
     modify @(Graph t ()) $
       -- it is important that we only write emptyNode if the node does not exist
       -- otherwise we will overwrite the node with an empty node
-      at nid
-        . _Just
-        .~ emptyNode nid
+      at nid . _Just .~ emptyNode nid
   DeleteNode nid -> modify @(Graph t ()) $ at nid .~ Nothing
   InsertEdge edge -> modify $ Models.Graph.insertEdge edge
   DeleteEdge edge -> modify $ Models.Graph.deleteEdge edge
@@ -227,22 +225,23 @@ runGraphMetadataEditingTransactionally action = do
           -- because we create nodes for any changes we make
           let reconciledNode =
                 mergeMaybes mergeNodesEx underlyingNode changesNode
-                  & _Just
-                    %~ withoutEdges deletedEdges
+                  <&> withoutEdges deletedEdges
           tag @Changes $ modify $ at nid .~ reconciledNode
           pure reconciledNode
         TouchNode nid -> tag @Cache $ touchNode nid
         DeleteNode nid -> withEarlyReturn do
-          -- TODO: this is sus and needs to be more carefully considered
-          tag @Cache $ deleteNode nid
           -- we need to load the node to know what edges to delete
           -- deferring the read would just make our lives harder so we do it now
           maybeLoadedNode <- runUnitOfWork (getNodeMetadata nid)
           loadedNode <- unwrapReturningDefault () maybeLoadedNode
-          tag @DeletedEdges $
-            modify $
-              union (mapSet (nid `outgoingEdge`) loadedNode.outgoing)
-                . union (mapSet (`incomingEdge` nid) loadedNode.incoming)
+          let edges =
+                mempty
+                  & union (mapSet (nid `outgoingEdge`) loadedNode.outgoing)
+                  & union (mapSet (`incomingEdge` nid) loadedNode.incoming)
+          -- delete edges first to account for DeletedEdges properly
+          -- (i.e. only add to it to the set if not deleted from Cache)
+          for_ edges $ runUnitOfWork . deleteEdge
+          tag @Cache $ deleteNode nid
         InsertEdge edge -> do
           tag @Cache $ insertEdge edge
           tag @DeletedEdges $ modify $ deleteSet edge

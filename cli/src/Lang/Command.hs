@@ -276,7 +276,9 @@ interpretCommand = \case
     changeLocation nid
   Debug -> do
     echo "current node:"
-    currentLocation >>= subsumeUserError . getNodeSem >>= echo . unpack . nshow
+    currentLocation
+      >>= subsumeUserError . getNodeSem
+      >>= echo . unpack . nshowWith (\x -> x {showAugmentation = Nothing})
     echo "history:"
     get @History >>= echo . show
   -- echo "node-ids in the graph:"

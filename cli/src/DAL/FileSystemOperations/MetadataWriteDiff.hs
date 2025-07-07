@@ -98,9 +98,10 @@ writeGraphDiff_
         ifor_ writingPaths \nid _ -> do
           let upToDateNode =
                 unwrapEx "upToDateNode exists for nodes we are writing" $
-                  upToDateNodes
-                    ^. at nid
-          let changedNode = changes ^. at nid
+                  upToDateNodes ^. at nid
+          let changedNode =
+                (changes ^. at nid)
+                  <&> withoutEdges deletedEdges . maybe id mergeNodesEx upToDateNode
           -- only hold the write lock while we are actually writing
           evalContT . lift $ case (upToDateNode, changedNode) of
             (Just _, Nothing) -> do
@@ -112,11 +113,7 @@ writeGraphDiff_
             (Just upToDateNode', Just changedNode')
               | upToDateNode' /= changedNode' -> do
                   path <- beginWriting nid defaultWritingOptions
-                  lift
-                    . unliftIO
-                    $ writeNodeMetadata' path
-                    $ mergeNodesEx upToDateNode' changedNode'
-                      & withoutEdges deletedEdges
+                  lift . unliftIO $ writeNodeMetadata' path changedNode'
               | otherwise ->
                   -- node didn't change
                   pure ()
@@ -138,11 +135,11 @@ runGraphMetadataFilesystemOperationsWriteDiffIO = interpret \case
       changes
       deletedEdges
 
-runGraphMetadataFilesystemOperationsWriteDiffDryRun ::
+runGraphMetadataFilesystemOperationsWriteDiffOperationsDryRun ::
   (Members [RawGraph, Embed IO, Error UserError] effs) =>
   Sem (GraphMetadataFilesystemOperationsWriteDiff ': effs) a ->
   Sem effs a
-runGraphMetadataFilesystemOperationsWriteDiffDryRun = interpret \case
+runGraphMetadataFilesystemOperationsWriteDiffOperationsDryRun = interpret \case
   WriteGraphDiff loaded changes deletedEdges -> do
     say "loaded:"
     ifor_ loaded \nid node ->
@@ -153,13 +150,6 @@ runGraphMetadataFilesystemOperationsWriteDiffDryRun = interpret \case
         say "changes:"
         say $ tshow changes
     say $ "deletedEdges: " <> tshow (toList deletedEdges)
-
-runGraphMetadataFilesystemOperationsWriteDiffOperationsDryRun ::
-  (Members [RawGraph, Embed IO, Error UserError] effs) =>
-  Sem (GraphMetadataFilesystemOperationsWriteDiff ': effs) a ->
-  Sem effs a
-runGraphMetadataFilesystemOperationsWriteDiffOperationsDryRun = interpret \case
-  WriteGraphDiff loaded changes deletedEdges -> do
     writeGraphDiff_
       readNodeMetadata_
       (\path node -> say $ "write: " <> tshow node <> " -> " <> tshow path)

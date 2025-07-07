@@ -42,7 +42,7 @@ defaultCompactNodeShowSettings =
   CompactNodeShowSettings
     { nidLength = maxBound,
       showNidAtSign = True,
-      showIncoming = False,
+      showIncoming = True,
       showAugmentation = Nothing
     }
 
@@ -94,19 +94,21 @@ withoutShowingAugmentations x = x \\ e
         (Dict :: Dict (ShowableAugmentation (UnshownAugmentation a)))
 
 nshowWith ::
-  (CompactNodeShow n) => Maybe (Maybe Text, Augmentation n -> Text) -> n -> Text
-nshowWith showAugmentation n =
+  (CompactNodeShow n) =>
+  (CompactNodeShowSettings (Augmentation n) -> CompactNodeShowSettings (Augmentation n)) ->
+  n ->
+  Text
+nshowWith fsettings n =
   let minNidLength = minimumNidLength defaultCompactNodeShowSettings n
       settings =
         defaultCompactNodeShowSettings
-          { nidLength = minNidLength,
-            showAugmentation
+          { nidLength = minNidLength
           }
-   in nshowSettings settings n
+   in nshowSettings (fsettings settings) n
 
 nshow ::
   (CompactNodeShow n) => n -> Text
-nshow = nshowWith Nothing
+nshow = nshowWith (\x -> x {showAugmentation = Nothing})
 
 snshow :: (CompactNodeShow n) => n -> String
 snshow = unpack . nshow
@@ -118,7 +120,10 @@ nshowDefault ::
   n ->
   Text
 nshowDefault =
-  nshowWith $
-    justIfTrue
-      (shouldShowStandaloneAugmentation @a)
-      (augmentationLabel @a, defaultShowAugmentation @a)
+  nshowWith \x ->
+    x
+      { showAugmentation =
+          justIfTrue
+            (shouldShowStandaloneAugmentation @a)
+            (augmentationLabel @a, defaultShowAugmentation @a)
+      }
