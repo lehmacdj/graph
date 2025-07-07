@@ -141,15 +141,15 @@ runGraphMetadataFilesystemOperationsWriteDiffOperationsDryRun ::
   Sem effs a
 runGraphMetadataFilesystemOperationsWriteDiffOperationsDryRun = interpret \case
   WriteGraphDiff loaded changes deletedEdges -> do
-    say "loaded:"
-    ifor_ loaded \nid node ->
-      say $ "  " <> tshow nid <> " -> " <> tshow node
-    if null (tshow changes)
-      then say "changes: none"
-      else do
-        say "changes:"
-        say $ tshow changes
-    say $ "deletedEdges: " <> tshow (toList deletedEdges)
+    -- say "loaded:"
+    -- ifor_ loaded \nid node ->
+    --   say $ "  " <> tshow nid <> " -> " <> tshow node
+    -- if null (tshow changes)
+    --   then say "changes: none"
+    --   else do
+    --     say "changes:"
+    --     say $ tshow changes
+    -- say $ "deletedEdges: " <> tshow (toList deletedEdges)
     writeGraphDiff_
       readNodeMetadata_
       (\path node -> say $ "write: " <> tshow node <> " -> " <> tshow path)
