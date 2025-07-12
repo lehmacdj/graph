@@ -61,6 +61,7 @@ dependencies:
 - polysemy-zoo
 - random
 - random-shuffle
+- resourcet
 - semigroupoids
 - SHA
 - temporary

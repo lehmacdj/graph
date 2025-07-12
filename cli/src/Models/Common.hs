@@ -42,7 +42,7 @@ defaultCompactNodeShowSettings =
   CompactNodeShowSettings
     { nidLength = maxBound,
       showNidAtSign = True,
-      showIncoming = True,
+      showIncoming = False,
       showAugmentation = Nothing
     }
 

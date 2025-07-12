@@ -27,7 +27,7 @@ import MyPrelude
 
 #ifdef darwin_HOST_OS
 
-import Control.Monad.Trans.Cont
+import Control.Monad.Trans.Resource
 import Foreign
 import Foreign.C.String
 import System.MacOS.NSFileCoordinator.RawBindings
@@ -92,10 +92,6 @@ data NSErrorException = NSErrorException
 
 -- * Utilities for Darwin
 
-withNSURL :: FilePath -> Bool -> (Ptr NSURL -> IO a) -> IO a
-withNSURL path isDirectory action = withCString path $ \pathPtr ->
-  bracket (nsURL_initFileURL pathPtr (fromBool isDirectory)) m_release action
-
 fromWritingOptions :: WritingOptions -> NSFileCoordinatorWritingOptions
 fromWritingOptions WritingOptions {..} =
   [ justIfTrue forDeleting k_NSFileCoordinatorWritingForDeleting,
@@ -131,15 +127,23 @@ peekNSError nsError = withEarlyReturnIO do
 throwNonNullNSError :: Ptr NSError -> IO ()
 throwNonNullNSError nsError = peekNSError nsError >>= maybe (pure ()) throwIO
 
-withNSArray :: Objc a => [Ptr a] -> (Ptr NSArray -> IO b) -> IO b
-withNSArray objects action = withArrayLen objects $ \len objectsPtr ->
-  bracket
-    (nsArray_initWithObjects (castPtr objectsPtr) (fromIntegral len))
-    m_release
-    action
+allocateNSURL :: FilePath -> Bool -> ResourceT IO (ReleaseKey, Ptr NSURL)
+allocateNSURL path isDirectory = allocate
+  -- I'm pretty sure nsURL_initFileURL copies the array so we don't need to
+  -- worry about the array being deallocated before the NSURL is used
+  (withCString path $ \pathPtr ->
+    nsURL_initFileURL pathPtr (fromBool isDirectory))
+  m_release
 
-calloca :: Storable a => (Ptr a -> IO b) -> IO b
-calloca = bracket calloc free
+allocateNSArray :: Objc a => [Ptr a] -> ResourceT IO (ReleaseKey, Ptr NSArray)
+allocateNSArray objects =
+  allocate
+    -- I'm pretty sure nsArray_arrayWithObjects copies the array so we don't
+    -- need to worry about the array being deallocated before the NSArray is
+    -- used
+    (withArrayLen objects $ \len objectsPtr ->
+      nsArray_arrayWithObjects (castPtr objectsPtr) (fromIntegral len))
+    m_release
 
 -- * Relatively raw darwin wrappers
 
@@ -247,46 +251,46 @@ coordinateWritingAndWriting' fileCoordinator errPtr writingUrl1 writingOptions1 
 
 coordinateReading :: FilePath -> Bool -> ReadingOptions -> (FilePath -> IO a) -> IO a
 #ifdef darwin_HOST_OS
-coordinateReading path isDirectory options action = evalContT do
-  fileCoordinator <- ContT $ bracket nsFileCoordinator_init m_release
-  errPtr <- ContT calloca
-  url <- ContT $ withNSURL path isDirectory
-  lift $ coordinateReading' fileCoordinator errPtr url options action
+coordinateReading path isDirectory options action = runResourceT do
+  (_, fileCoordinator) <- allocate nsFileCoordinator_init m_release
+  (_, errPtr) <- allocate calloc free
+  (_, url) <- allocateNSURL path isDirectory
+  liftIO $ coordinateReading' fileCoordinator errPtr url options action
 #else
 coordinateReading path _ _ action = action path
 #endif
 
 coordinateWriting :: FilePath -> Bool -> WritingOptions -> (FilePath -> IO a) -> IO a
 #ifdef darwin_HOST_OS
-coordinateWriting path isDirectory options action = evalContT do
-  fileCoordinator <- ContT $ bracket nsFileCoordinator_init m_release
-  errPtr <- ContT calloca
-  url <- ContT $ withNSURL path isDirectory
-  lift $ coordinateWriting' fileCoordinator errPtr url options action
+coordinateWriting path isDirectory options action = runResourceT do
+  (_, fileCoordinator) <- allocate nsFileCoordinator_init m_release
+  (_, errPtr) <- allocate calloc free
+  (_, url) <- allocateNSURL path isDirectory
+  liftIO $ coordinateWriting' fileCoordinator errPtr url options action
 #else
 coordinateWriting path _ _ action = action path
 #endif
 
 coordinateReadingThenWriting :: FilePath -> Bool -> ReadingOptions -> FilePath -> Bool -> WritingOptions -> (FilePath -> FilePath -> IO a) -> IO a
 #ifdef darwin_HOST_OS
-coordinateReadingThenWriting readingPath readingIsDirectory readingOptions writingPath writingIsDirectory writingOptions action = evalContT do
-  fileCoordinator <- ContT $ bracket nsFileCoordinator_init m_release
-  errPtr <- ContT calloca
-  readingUrl <- ContT $ withNSURL readingPath readingIsDirectory
-  writingUrl <- ContT $ withNSURL writingPath writingIsDirectory
-  lift $ coordinateReadingThenWriting' fileCoordinator errPtr readingUrl readingOptions writingUrl writingOptions action
+coordinateReadingThenWriting readingPath readingIsDirectory readingOptions writingPath writingIsDirectory writingOptions action = runResourceT do
+  (_, fileCoordinator) <- allocate nsFileCoordinator_init m_release
+  (_, errPtr) <- allocate calloc free
+  (_, readingUrl) <- allocateNSURL readingPath readingIsDirectory
+  (_, writingUrl) <- allocateNSURL writingPath writingIsDirectory
+  liftIO $ coordinateReadingThenWriting' fileCoordinator errPtr readingUrl readingOptions writingUrl writingOptions action
 #else
 coordinateReadingThenWriting readingPath _ _ writingPath _ _ action = action readingPath writingPath
 #endif
 
 coordinateWritingAndWriting :: FilePath -> Bool -> WritingOptions -> FilePath -> Bool -> WritingOptions -> (FilePath -> FilePath -> IO a) -> IO a
 #ifdef darwin_HOST_OS
-coordinateWritingAndWriting writingPath1 writingIsDirectory1 writingOptions1 writingPath2 writingIsDirectory2 writingOptions2 action = evalContT do
-  fileCoordinator <- ContT $ bracket nsFileCoordinator_init m_release
-  errPtr <- ContT calloca
-  writingUrl1 <- ContT $ withNSURL writingPath1 writingIsDirectory1
-  writingUrl2 <- ContT $ withNSURL writingPath2 writingIsDirectory2
-  lift $ coordinateWritingAndWriting' fileCoordinator errPtr writingUrl1 writingOptions1 writingUrl2 writingOptions2 action
+coordinateWritingAndWriting writingPath1 writingIsDirectory1 writingOptions1 writingPath2 writingIsDirectory2 writingOptions2 action = runResourceT do
+  (_, fileCoordinator) <- allocate nsFileCoordinator_init m_release
+  (_, errPtr) <- allocate calloc free
+  (_, writingUrl1) <- allocateNSURL writingPath1 writingIsDirectory1
+  (_, writingUrl2) <- allocateNSURL writingPath2 writingIsDirectory2
+  liftIO $ coordinateWritingAndWriting' fileCoordinator errPtr writingUrl1 writingOptions1 writingUrl2 writingOptions2 action
 #else
 coordinateWritingAndWriting writingPath1 _ _ writingPath2 _ _ action = action writingPath1 writingPath2
 #endif
@@ -310,6 +314,9 @@ unwrappingWriter (WrappedWriter unwrapped) = unwrapped
 
 -- | This only works up to ~448 files. When accessing more files, either for
 -- reading or writing, the file coordinator has a tendency to segfault.
+--
+-- Just don't nest the wrappedreader/writer functions too deeply/call them too
+-- concurrently and you should be fine.
 coordinateAccessing ::
   (Traversable t) =>
   FilesToCoordinate t ->
@@ -319,18 +326,19 @@ coordinateAccessing ::
   ) ->
   IO a
 #ifdef darwin_HOST_OS
-coordinateAccessing FilesToCoordinate{..} action =
-  evalContT do
-    readingUrls <- for readingPaths $ \(path, isDirectory) ->
-      ContT $ withNSURL path isDirectory
-    writingUrls <- for writingPaths $ \(path, isDirectory) ->
-      ContT $ withNSURL path isDirectory
+coordinateAccessing FilesToCoordinate{..} action = runResourceT do
+    readingUrls <- for readingPaths $ \(path, isDirectory) -> do
+      (_, url) <- allocateNSURL path isDirectory
+      pure url
+    writingUrls <- for writingPaths $ \(path, isDirectory) -> do
+      (_, url) <- allocateNSURL path isDirectory
+      pure url
     -- using ordNub allows Haskell caller's to not need to worry about
     -- specifying the same file multiple times
-    readingUrlsArray <- ContT $ withNSArray (ordNub $ readingUrls ^.. folded)
-    writingUrlsArray <- ContT $ withNSArray (ordNub $ writingUrls ^.. folded)
-    fileCoordinator <- ContT $ bracket nsFileCoordinator_init m_release
-    errPtr <- ContT calloca
+    (_, readingUrlsArray) <- allocateNSArray (ordNub $ readingUrls ^.. folded)
+    (_, writingUrlsArray) <- allocateNSArray (ordNub $ writingUrls ^.. folded)
+    (_, fileCoordinator) <- allocate nsFileCoordinator_init m_release
+    (_, errPtr) <- allocate calloc free
     let readingAccessors =
           readingUrls <&> \url -> WrappedReader \readingOptions readingAction ->
             coordinateReading' fileCoordinator errPtr url readingOptions readingAction
@@ -338,7 +346,7 @@ coordinateAccessing FilesToCoordinate{..} action =
           writingUrls <&> \url -> WrappedWriter \writingOptions writingAction ->
             coordinateWriting' fileCoordinator errPtr url writingOptions writingAction
     resultRef <- newIORef Nothing
-    lift $
+    liftIO $
       m_NSFileCoordinator_prepareForReadingAndWritingItems
         fileCoordinator
         readingUrlsArray

@@ -218,6 +218,7 @@ library
     , polysemy-zoo
     , random
     , random-shuffle
+    , resourcet
     , semigroupoids
     , tasty
     , tasty-discover
@@ -349,6 +350,7 @@ executable dump-graph
     , polysemy-zoo
     , random
     , random-shuffle
+    , resourcet
     , semigroupoids
     , tasty
     , tasty-discover
@@ -473,6 +475,7 @@ executable ge
     , polysemy-zoo
     , random
     , random-shuffle
+    , resourcet
     , semigroupoids
     , tasty
     , tasty-discover
@@ -597,6 +600,7 @@ executable scratch
     , polysemy-zoo
     , random
     , random-shuffle
+    , resourcet
     , semigroupoids
     , tasty
     , tasty-discover
@@ -722,6 +726,7 @@ test-suite graph-test
     , polysemy-zoo
     , random
     , random-shuffle
+    , resourcet
     , semigroupoids
     , tasty
     , tasty-discover
