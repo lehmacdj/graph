@@ -308,6 +308,8 @@ newtype WrappedWriter m = WrappedWriter {unwrapped :: forall a. WritingOptions -
 unwrappingWriter :: WrappedWriter m -> WritingOptions -> (FilePath -> m a) -> m a
 unwrappingWriter (WrappedWriter unwrapped) = unwrapped
 
+-- | This only works up to ~448 files. When accessing more files, either for
+-- reading or writing, the file coordinator has a tendency to segfault.
 coordinateAccessing ::
   (Traversable t) =>
   FilesToCoordinate t ->
