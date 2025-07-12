@@ -128,9 +128,9 @@ runGraphMetadataFilesystemOperationsWriteDiffIO ::
 runGraphMetadataFilesystemOperationsWriteDiffIO = interpret \case
   WriteGraphDiff loaded changes deletedEdges ->
     writeGraphDiff_
-      readNodeMetadata_
-      writeNodeMetadata_
-      deleteNodeMetadata_
+      (readNodeMetadata_ False)
+      (writeNodeMetadata_ False)
+      (deleteNodeMetadata_ False)
       loaded
       changes
       deletedEdges
@@ -151,7 +151,7 @@ runGraphMetadataFilesystemOperationsWriteDiffOperationsDryRun = interpret \case
         say $ tshow changes
     say $ "deletedEdges: " <> tshow (toList deletedEdges)
     writeGraphDiff_
-      readNodeMetadata_
+      (readNodeMetadata_ False)
       (\path node -> say $ "write: " <> tshow node <> " -> " <> tshow path)
       (\path -> say $ "delete at path: " <> tshow path)
       loaded

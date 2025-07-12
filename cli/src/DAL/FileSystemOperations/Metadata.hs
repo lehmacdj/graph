@@ -23,11 +23,12 @@ makeSem ''GraphMetadataFilesystemOperations
 
 readNodeMetadata_ ::
   (Members [Embed IO, Error UserError] effs) =>
+  Bool ->
   FilePath ->
   Sem effs (Maybe (Node Text ()))
-readNodeMetadata_ path = withEarlyReturn do
+readNodeMetadata_ shouldCoordinate path = withEarlyReturn do
   result <- embedCatchingErrors $
-    coordinateReading path False defaultReadingOptions $
+    (if shouldCoordinate then coordinateReading path False defaultReadingOptions else ($ path)) $
       \path' ->
         try @IO @IOError $ readFile path'
   serialized <- either (const $ returnEarly Nothing) pure result
@@ -36,24 +37,26 @@ readNodeMetadata_ path = withEarlyReturn do
 
 writeNodeMetadata_ ::
   (Members [Embed IO, Error UserError] effs) =>
+  Bool ->
   FilePath ->
   Node Text () ->
   Sem effs ()
-writeNodeMetadata_ path node = do
+writeNodeMetadata_ shouldCoordinate path node = do
   let dto = nodeToDTO node
   let serialized = toStrict $ encodeJSON dto
   embedCatchingErrors $
-    coordinateWriting path False defaultWritingOptions $
+    (if shouldCoordinate then coordinateWriting path False defaultWritingOptions else ($ path)) $
       \path' ->
         writeFile path' serialized
 
 deleteNodeMetadata_ ::
   (Members [RawGraph, Embed IO, Error UserError] effs) =>
+  Bool ->
   FilePath ->
   Sem effs ()
-deleteNodeMetadata_ path = do
+deleteNodeMetadata_ shouldCoordinate path = do
   embedCatchingErrors $
-    coordinateWriting path False defaultWritingOptions $
+    (if shouldCoordinate then coordinateWriting path False defaultWritingOptions else ($ path)) $
       \path' ->
         removeFile path'
 
@@ -62,15 +65,15 @@ runGraphMetadataFilesystemOperationsIO ::
   Sem (GraphMetadataFilesystemOperations : r) a ->
   Sem r a
 runGraphMetadataFilesystemOperationsIO = interpret \case
-  ReadNodeMetadata nid -> readNodeMetadata_ =<< getMetadataFile nid
-  WriteNodeMetadata node -> (`writeNodeMetadata_` node) =<< getMetadataFile node.nid
-  DeleteNodeMetadata nid -> deleteNodeMetadata_ =<< getMetadataFile nid
+  ReadNodeMetadata nid -> readNodeMetadata_ True =<< getMetadataFile nid
+  WriteNodeMetadata node -> (\x -> writeNodeMetadata_ True x node) =<< getMetadataFile node.nid
+  DeleteNodeMetadata nid -> deleteNodeMetadata_ True =<< getMetadataFile nid
 
 runGraphMetadataFilesystemOperationsWriteDryRun ::
   (Members [RawGraph, Embed IO, Error UserError] r) =>
   Sem (GraphMetadataFilesystemOperations : r) a ->
   Sem r a
 runGraphMetadataFilesystemOperationsWriteDryRun = interpret \case
-  ReadNodeMetadata nid -> readNodeMetadata_ =<< getMetadataFile nid
+  ReadNodeMetadata nid -> readNodeMetadata_ True =<< getMetadataFile nid
   WriteNodeMetadata node -> say $ "Would write node: " <> tshow node
   DeleteNodeMetadata nid -> say $ "Would delete node with NID: " <> tshow nid
