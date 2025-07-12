@@ -29,7 +29,7 @@ import Graph.Check
 import Graph.Effect
 import Graph.Export.FileSystem (exportToDirectory)
 import Graph.FreshNID
-import Graph.GraphMetadataEditing (GraphMetadataEditing)
+import Graph.GraphMetadataEditing (GraphMetadataEditing, IsThin (Fetched))
 import Graph.Import.ByteString
 import Graph.Import.FileSystem
 import Graph.MaterializePath (graph, materializePath, nonexistentNodes, path)
@@ -39,6 +39,7 @@ import Graph.Utils
 import Lang.Path
 import Models.Connect
 import Models.Edge
+import Models.Graph (subtractiveFilterGraph)
 import Models.History
 import Models.NID
 import Models.Node
@@ -347,6 +348,6 @@ interpretCommand = \case
     if null mp.graph
       then say "no nodes materialized"
       else do
-        say "graph:"
-        say $ tshow mp.graph
+        say "fetched graph:"
+        sayShow $ subtractiveFilterGraph (\n -> n.augmentation == Fetched) mp.graph
     say $ "nonexistent nodes: " ++ tshow mp.nonexistentNodes

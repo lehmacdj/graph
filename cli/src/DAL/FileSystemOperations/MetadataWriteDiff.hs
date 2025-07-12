@@ -61,12 +61,12 @@ writeGraphDiff_
         -- we need to read every node we write to, plus any node that was loaded
         -- to check that nothing changed since we started the transaction
         readingNids = writingNids <> (loaded $> ())
-    readingPaths <- ifor readingNids \nid _ -> getMetadataFile nid <&> (,False)
-    writingPaths <- ifor writingNids \nid _ -> getMetadataFile nid <&> (,False)
+    readingPaths <- ifor readingNids \nid () -> getMetadataFile nid <&> (,False)
+    writingPaths <- ifor writingNids \nid () -> getMetadataFile nid <&> (,False)
     let blanketReadingOptions = defaultReadingOptions
         blanketWritingOptions = defaultWritingOptions
     withUnliftIORawGraphUserError \(UnliftRawGraphUserErrorIO unliftIO) ->
-      coordinateAccessing FilesToCoordinate {..} \wrappedReaders wrappedWriters -> evalContT do
+      coordinateAccessing FilesToCoordinate {..} \wrappedReaders wrappedWriters -> do
         let beginReading ::
               forall a. (HasCallStack) => NID -> ReadingOptions -> ContT a IO FilePath
             beginReading nid options =
@@ -77,7 +77,7 @@ writeGraphDiff_
             beginWriting nid options =
               ContT $
                 unwrappingWriter (wrappedWriters ^. at nid . to (unwrapEx "missing writer")) options
-        upToDateNodes' <- ifor readingPaths \nid _ -> do
+        upToDateNodes' <- ifor readingPaths \nid _ -> evalContT do
           path <- beginReading nid defaultReadingOptions
           upToDateNode <- lift . unliftIO $ readNodeMetadata' path
           -- if the node was loaded, we require that it is the same now as it was
@@ -88,8 +88,7 @@ writeGraphDiff_
               else Nothing
         let notUpToDateNids = keysSet $ filterMap (== Nothing) upToDateNodes'
         unless (null notUpToDateNids)
-          $ lift
-            . unliftIO
+          $ unliftIO
             . throwText
           $ "The following nodes were changed before trying to write the diff: "
             ++ tshow notUpToDateNids
@@ -102,8 +101,7 @@ writeGraphDiff_
           let changedNode =
                 (changes ^. at nid)
                   <&> withoutEdges deletedEdges . maybe id mergeNodesEx upToDateNode
-          -- only hold the write lock while we are actually writing
-          evalContT . lift $ case (upToDateNode, changedNode) of
+          evalContT $ case (upToDateNode, changedNode) of
             (Just _, Nothing) -> do
               path <- beginWriting nid defaultWritingOptions {forDeleting = True}
               lift . unliftIO $ deleteNodeMetadata' path
@@ -141,15 +139,15 @@ runGraphMetadataFilesystemOperationsWriteDiffOperationsDryRun ::
   Sem effs a
 runGraphMetadataFilesystemOperationsWriteDiffOperationsDryRun = interpret \case
   WriteGraphDiff loaded changes deletedEdges -> do
-    say "loaded:"
-    ifor_ loaded \nid node ->
-      say $ "  " <> tshow nid <> " -> " <> tshow node
-    if null (tshow changes)
-      then say "changes: none"
-      else do
-        say "changes:"
-        say $ tshow changes
-    say $ "deletedEdges: " <> tshow (toList deletedEdges)
+    -- say "loaded:"
+    -- ifor_ loaded \nid node ->
+    --   say $ "  " <> tshow nid <> " -> " <> tshow node
+    -- if null (tshow changes)
+    --   then say "changes: none"
+    --   else do
+    --     say "changes:"
+    --     say $ tshow changes
+    -- say $ "deletedEdges: " <> tshow (toList deletedEdges)
     writeGraphDiff_
       (readNodeMetadata_ False)
       (\path node -> say $ "write: " <> tshow node <> " -> " <> tshow path)
