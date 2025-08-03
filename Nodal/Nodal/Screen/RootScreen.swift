@@ -33,7 +33,7 @@ struct RootScreen: View {
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
                     Button(action: doSelectFile) {
-                        Text("Select graph")
+                        Image(systemName: "folder")
                     }
                 }
             }

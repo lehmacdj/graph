@@ -22,7 +22,9 @@ struct NodeScreen: View {
     @ViewBuilder
     func links(_ state: NodeState) -> some View {
         List {
-            if let favorites = state.favoriteLinks {
+            if let favorites = state.favoriteLinks,
+               favorites.count > 0
+            {
                 Section("Favorites") {
                     ForEach(favorites) { favorite in
                         TransitionCell(favorite)
@@ -42,7 +44,9 @@ struct NodeScreen: View {
                 }
             }
 
-            if let worses = state.worseLinks {
+            if let worses = state.worseLinks,
+               worses.count > 0
+            {
                 Section("Worse") {
                     ForEach(worses) { worse in
                         TransitionCell(worse)
@@ -79,10 +83,16 @@ struct NodeScreen: View {
     @ToolbarContentBuilder
     func toolbarContent(for state: NodeState) -> some ToolbarContent {
         ToolbarItem(placement: .navigationBarTrailing) {
-            Button {
-                UIPasteboard.general.string = String(describing: vm.nid)
+            Menu {
+                Button {
+                    UIPasteboard.general.string = String(describing: vm.nid)
+                } label: {
+                    Label("@\(vm.nid)", systemImage: "link")
+                }
             } label: {
                 Image(systemName: "link")
+            } primaryAction: {
+                UIPasteboard.general.string = String(describing: vm.nid)
             }
         }
         ToolbarItem(placement: .navigationBarTrailing) {
@@ -156,7 +166,6 @@ struct NodeScreen: View {
         Suspense(vm.state) { state in
             content(for: state)
         }
-        .navigationTitle(Text("\(vm.nid)"))
         .task { await vm.subscribe() }
     }
 }
