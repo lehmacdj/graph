@@ -83,6 +83,10 @@ actor FilesystemGraphRepository: GraphRepository {
         return nid
     }
 
+    nonisolated func getHypotheticalDataPath(for nid: NID) -> URL {
+        basePath.appending(dataPathFor: nid)
+    }
+
     func updates<T: Sendable>(computeValue: @escaping ComputeValueClosure<T>) -> sending any AsyncSequence<T, Error> {
         UpdatesSequence<T>(graphRepository: self, computeValue: computeValue)
     }

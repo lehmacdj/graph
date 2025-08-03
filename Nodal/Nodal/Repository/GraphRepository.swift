@@ -34,6 +34,9 @@ protocol GraphRepository: Actor {
     /// Create a new node with a random NID returning the newly generated NID.
     func createNewNode() async throws -> NID
 
+    nonisolated func getHypotheticalDataPath(for nid: NID) -> URL
+
+
     /// Acquire a stream of updates for a value computed by computeValue.
     ///
     /// `computeValue` is repeatedly called to discover dependencies.

@@ -31,7 +31,7 @@ struct ErrorIndicator: View {
                 presentingAlert = false
             }
         } message: {
-            Text("\(error)")
+            Text(String(describing: error))
         }
     }
 }

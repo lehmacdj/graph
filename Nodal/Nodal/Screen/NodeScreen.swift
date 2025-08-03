@@ -87,7 +87,15 @@ struct NodeScreen: View {
                 Button {
                     UIPasteboard.general.string = String(describing: vm.nid)
                 } label: {
-                    Label("@\(vm.nid)", systemImage: "link")
+                    Label(String(describing: vm.nid), systemImage: "link")
+                }
+                Button {
+                    if let dataURL = state.dataURL {
+                        UIPasteboard.general.url = dataURL
+                        UIPasteboard.general.string = dataURL.absoluteString
+                    }
+                } label: {
+                    Label("Copy data file path", systemImage: "file")
                 }
             } label: {
                 Image(systemName: "link")

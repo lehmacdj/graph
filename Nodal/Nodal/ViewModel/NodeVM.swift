@@ -10,6 +10,7 @@ import Observation
 
 struct NodeState {
     let data: Data?
+    let dataURL: URL?
     let favoriteLinks: [AnyTransitionVM]?
     let links: [AnyTransitionVM]
     let worseLinks: [AnyTransitionVM]?

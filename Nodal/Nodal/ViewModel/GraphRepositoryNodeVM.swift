@@ -54,6 +54,7 @@ final class GraphRepositoryNodeVM: NodeVM {
             for try await value in updatesSequence {
                 state = .loaded(NodeState(
                     data: value.data,
+                    dataURL: value.data.map { _ in graphRepository.getHypotheticalDataPath(for: nid) },
                     favoriteLinks: value.favoriteLinks
                         .sorted(by: sortOrder.weirdDataComparisonFunction)
                         .map { getTransitionVM(transition: $0.0, timestamp: $0.1, configuredForSection: .favorites) },
@@ -83,23 +84,19 @@ final class GraphRepositoryNodeVM: NodeVM {
     var sortOrder: NodeSortOrder = .transitionThenTimestamp(timestampOrder: .newerFirst) {
         didSet {
             guard let currentState = state.loaded else { return }
-            do {
-                state = try .loaded(NodeState(
-                    data: currentState.data,
-                    favoriteLinks: currentState.favoriteLinks?
-                        .sorted(by: sortOrder.transitionVMComparisonFunction),
-                    links: currentState.links
-                        .sorted(by: sortOrder.transitionVMComparisonFunction),
-                    worseLinks: currentState.worseLinks?
-                        .sorted(by: sortOrder.transitionVMComparisonFunction),
-                    backlinks: currentState.backlinks
-                        .sorted(by: sortOrder.transitionVMComparisonFunction),
-                    tags: currentState.tags
-                ))
-            } catch {
-                logError(error)
-                state = .failed(error)
-            }
+            state = .loaded(NodeState(
+                data: currentState.data,
+                dataURL: currentState.data.map { _ in graphRepository.getHypotheticalDataPath(for: nid) },
+                favoriteLinks: currentState.favoriteLinks?
+                    .sorted(by: sortOrder.transitionVMComparisonFunction),
+                links: currentState.links
+                    .sorted(by: sortOrder.transitionVMComparisonFunction),
+                worseLinks: currentState.worseLinks?
+                    .sorted(by: sortOrder.transitionVMComparisonFunction),
+                backlinks: currentState.backlinks
+                    .sorted(by: sortOrder.transitionVMComparisonFunction),
+                tags: currentState.tags
+            ))
         }
     }
 

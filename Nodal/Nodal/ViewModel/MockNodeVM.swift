@@ -30,6 +30,7 @@ class MockNodeVM: NodeVM {
             state: .loaded(
                 NodeState(
                     data: data,
+                    dataURL: URL(string: nid.dataPath),
                     favoriteLinks: favoriteLinks.map { $0.map(\.asFavorites) },
                     links: links.map(\.asOther),
                     worseLinks: worseLinks.map { $0.map(\.asWorse) },
