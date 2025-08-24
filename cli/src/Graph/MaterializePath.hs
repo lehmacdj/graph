@@ -147,12 +147,24 @@ materializePath firstNid op = do
           n.outgoing
             & matchConnect t
             & map (DPLiteral t,)
+      DPBackLiteral t -> withEarlyReturn do
+        n <- getNodeMetadata nid `onNothingM` returnEarly []
+        pure $
+          n.incoming
+            & matchConnect t
+            & map (DPBackLiteral t,)
       DPWild -> withEarlyReturn do
         n <- getNodeMetadata nid `onNothingM` returnEarly []
         pure $
           n.outgoing
             & toList
             & map (\Connect {..} -> (DPLiteral transition, node))
+      DPBackWild -> withEarlyReturn do
+        n <- getNodeMetadata nid `onNothingM` returnEarly []
+        pure $
+          n.incoming
+            & toList
+            & map (\Connect {..} -> (DPBackLiteral transition, node))
       DPSequence bs1 midpoint bs2 -> do
         bs1's <- traverseBranches nid bs1
         uptoMidpoints :: [(OSet (DPBranch NID t), PointlikeDeterministicPath NID t)] <-

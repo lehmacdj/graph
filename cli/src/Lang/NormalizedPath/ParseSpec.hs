@@ -15,16 +15,22 @@ test_pNormalizedPath =
     [ -- Literal characters and wildcards
       "[a]" `parsesTo` singletonBranch (DPLiteral "a"),
       "[*]" `parsesTo` singletonBranch DPWild,
+      "[~a]" `parsesTo` singletonBranch (DPBackLiteral "a"),
+      "[~*]" `parsesTo` singletonBranch DPBackWild,
       -- PointlikeDeterministicPath
       "@" `parsesTo` singletonPointlike (PointlikeDeterministicPath JoinPoint mempty),
       "@1" `parsesTo` singletonPointlike (PointlikeDeterministicPath (Specific (smallNID 1)) mempty),
       "@[a]" `parsesTo` singletonPointlike (PointlikeDeterministicPath JoinPoint (singletonSet (DPLiteral "a"))),
+      "@[~a]" `parsesTo` singletonPointlike (PointlikeDeterministicPath JoinPoint (singletonSet (DPBackLiteral "a"))),
       "@[a & *]" `parsesTo` singletonPointlike (PointlikeDeterministicPath JoinPoint (setFromList [DPLiteral "a", DPWild])),
+      "@[a & ~*]" `parsesTo` singletonPointlike (PointlikeDeterministicPath JoinPoint (setFromList [DPLiteral "a", DPBackWild])),
       "@1[a]" `parsesTo` singletonPointlike (PointlikeDeterministicPath (Specific (smallNID 1)) (singletonSet (DPLiteral "a"))),
       "@42[a & b]" `parsesTo` singletonPointlike (PointlikeDeterministicPath (Specific (smallNID 42)) (setFromList [DPLiteral "a", DPLiteral "b"])),
       -- sequences
+      "[a/|b]" `parsesTo` singletonBranch (DPSequence (setFromList [DPLiteral "a"]) unanchored (setFromList [DPLiteral "b"])),
+      "[a/|~b]" `parsesTo` singletonBranch (DPSequence (setFromList [DPLiteral "a"]) unanchored (setFromList [DPBackLiteral "b"])),
       "[a/@|b]" `parsesTo` singletonBranch (DPSequence (setFromList [DPLiteral "a"]) joinPoint (setFromList [DPLiteral "b"])),
-      "[a/@|b]" `parsesTo` singletonBranch (DPSequence (setFromList [DPLiteral "a"]) joinPoint (setFromList [DPLiteral "b"])),
+      "[~a/@|b]" `parsesTo` singletonBranch (DPSequence (setFromList [DPBackLiteral "a"]) joinPoint (setFromList [DPLiteral "b"])),
       "[(a & b)/@|c]" `parsesTo` singletonBranch (DPSequence (setFromList [DPLiteral "a", DPLiteral "b"]) joinPoint (setFromList [DPLiteral "c"])),
       "[a/@|(b & c)]" `parsesTo` singletonBranch (DPSequence (setFromList [DPLiteral "a"]) joinPoint (setFromList [DPLiteral "b", DPLiteral "c"])),
       "[a/|b]" `parsesTo` singletonBranch (DPSequence (setFromList [DPLiteral "a"]) unanchored (setFromList [DPLiteral "b"])),
@@ -32,6 +38,7 @@ test_pNormalizedPath =
       "[(b/|c)/|a]" `parsesTo` singletonBranch (DPSequence (setFromList [DPSequence (setFromList [DPLiteral "b"]) unanchored (setFromList [DPLiteral "c"])]) unanchored (setFromList [DPLiteral "a"])),
       "[a/@1|b]" `parsesTo` singletonBranch (DPSequence (setFromList [DPLiteral "a"]) (specific (smallNID 1)) (setFromList [DPLiteral "b"])),
       "[a/@1[a]|b]" `parsesTo` singletonBranch (DPSequence (setFromList [DPLiteral "a"]) (PointlikeDeterministicPath (Specific (smallNID 1)) (singletonSet (DPLiteral "a"))) (setFromList [DPLiteral "b"])),
+      "[a/@1[~a]|b]" `parsesTo` singletonBranch (DPSequence (setFromList [DPLiteral "a"]) (PointlikeDeterministicPath (Specific (smallNID 1)) (singletonSet (DPBackLiteral "a"))) (setFromList [DPLiteral "b"])),
       -- RootedDeterministicPath
       "[@<a & @1<b & c]>@"
         `parsesTo` singletonRooted
@@ -105,6 +112,8 @@ test_pNormalizedPath =
       parseFails "/|b",
       parseFails "[@<a>",
       parseFails "a + + b",
+      parseFails "~",
+      parseFails "~@",
       -- we require [] around all RootedDeterministicPaths
       parseFails "a + b",
       parseFails "a"
@@ -130,7 +139,7 @@ branches :: [DPBranch Anchor String] -> NormalizedPath Anchor String
 branches bs =
   NormalizedPath . setFromList $
     [ Rooted (RootedDeterministicPath (singletonMap (Pointlike unanchored) (singletonSet b)) unanchored)
-    | b <- bs
+      | b <- bs
     ]
 
 singletonPointlike :: PointlikeDeterministicPath Anchor String -> NormalizedPath Anchor String

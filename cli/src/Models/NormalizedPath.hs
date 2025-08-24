@@ -2,6 +2,7 @@
 
 module Models.NormalizedPath where
 
+import Data.Monoid (Sum (..))
 import GHC.Records
 import Models.NID
 import Models.Path
@@ -62,7 +63,11 @@ specific nid = PointlikeDeterministicPath (Specific nid) mempty
 -- | A branch in the path.
 data DPBranch a t
   = DPLiteral t
+  | -- | like literal but traverses backlinks
+    DPBackLiteral t
   | DPWild
+  | -- | like wild but traverses backlinks
+    DPBackWild
   | -- | A concatenation of two intersections of branches.
     --
     -- Invariants:
@@ -189,7 +194,7 @@ mergePointlike p1 p2 = do
   Just $
     PointlikeDeterministicPath
       { anchor = mergedAnchor,
-        loops = p1.loops <> p2.loops
+        loops = mapOSet isoLoop (p1.loops <> p2.loops)
       }
 
 smartBuildSequence ::
@@ -263,6 +268,77 @@ sequenceDeterministicPaths
         (singletonMap (Rooted p1 {target = midpoint}) p2Branches)
         p2Target
 
+invertBranch :: (Ord a, Ord t) => DPBranch a t -> DPBranch a t
+invertBranch = \case
+  DPLiteral t -> DPBackLiteral t
+  DPBackLiteral t -> DPLiteral t
+  DPWild -> DPBackWild
+  DPBackWild -> DPWild
+  DPSequence bs1 midpoint bs2 ->
+    DPSequence
+      (mapOSet invertBranch bs1)
+      (invertPointlike midpoint)
+      (mapOSet invertBranch bs2)
+
+flipBranch :: (Ord a, Ord t) => DPBranch a t -> DPBranch a t
+flipBranch = \case
+  DPLiteral t -> DPLiteral t
+  DPBackLiteral t -> DPBackLiteral t
+  DPWild -> DPWild
+  DPBackWild -> DPBackWild
+  DPSequence bs1 m12 bs23 ->
+    case flipBranch <$> toList bs23 of
+      [] -> error "invariant broken: both branch sets must be nonempty"
+      [DPSequence bs2 m23 bs3] ->
+        smartBuildSequence bs3 (invertPointlike m23) $
+          singletonSet (smartBuildSequence bs2 (invertPointlike m12) bs1)
+      xs -> smartBuildSequence (setFromList xs) (invertPointlike m12) bs1
+
+backwardsCount :: DPBranch a t -> Int
+backwardsCount = \case
+  DPLiteral _ -> 0
+  DPBackLiteral _ -> 1
+  DPWild -> 0
+  DPBackWild -> 1
+  DPSequence bs1 _ bs2 ->
+    alaf Sum foldMap backwardsCount bs1
+      + alaf Sum foldMap backwardsCount bs2
+
+-- | There's two valid ways to flip a branch if it's the loop of a pointlike
+-- path: invert (like we do for Rooted paths) or flip the sequence so the last
+-- transition becomes the first. We need both, so that we can compare &
+-- determine one (relatively arbitrary) cannonical form
+invertLoop :: (Ord a, Ord t) => DPBranch a t -> DPBranch a t
+invertLoop =
+  minOn (\x -> (backwardsCount x, x))
+    <$> invertBranch
+    <*> flipBranch
+
+isoLoop :: (Ord a, Ord t) => DPBranch a t -> DPBranch a t
+isoLoop =
+  minOn (\x -> (backwardsCount x, x))
+    <$> id
+    <*> invertBranch . flipBranch
+
+invertPointlike ::
+  (Ord a, Ord t) =>
+  PointlikeDeterministicPath a t ->
+  PointlikeDeterministicPath a t
+invertPointlike (PointlikeDeterministicPath anchor loops) =
+  PointlikeDeterministicPath anchor (mapOSet invertLoop loops)
+
+invertDeterministicPath ::
+  (Ord t) => DeterministicPath Anchor t -> Maybe (DeterministicPath Anchor t)
+invertDeterministicPath (Pointlike p) = Just . Pointlike $ invertPointlike p
+invertDeterministicPath
+  (Rooted (branchify -> (roots, branches, target))) = do
+    newTarget <- foldlM1 mergePointlike =<< fromNullable (toList roots)
+    let newBranches = mapOSet invertBranch branches
+    Just . Rooted $
+      smartBuildRootedDeterministicPath
+        (singletonMap (Pointlike target) newBranches)
+        newTarget
+
 normalizePath :: (Ord t) => Path t -> NormalizedPath Anchor t
 normalizePath = \case
   Zero ->
@@ -281,6 +357,13 @@ normalizePath = \case
       smartBuildRootedDeterministicPath
         (singletonMap (Pointlike unanchored) (singletonSet (DPLiteral t)))
         unanchored
+  Backwards p ->
+    let np = normalizePath p
+     in NormalizedPath $
+          np.union
+            & toList
+            & mapMaybe invertDeterministicPath
+            & setFromList
   p1 :+ p2 ->
     let np1 = normalizePath p1
         np2 = normalizePath p2
@@ -388,7 +471,9 @@ leastConstrainedNormalizedPath =
       OSet (DPBranch FullyAnchored t)
     convertBranch = \case
       DPLiteral t -> singletonSet $ DPLiteral t
+      DPBackLiteral t -> singletonSet $ DPBackLiteral t
       DPWild -> singletonSet DPWild
+      DPBackWild -> singletonSet DPBackWild
       DPSequence bs1 midpoint bs2 -> do
         let bs1' = unions (mapOSet convertBranch bs1)
         let bs2' = unions (mapOSet convertBranch bs2)
@@ -445,7 +530,9 @@ leastNodesNormalizedPath =
     convertBranch :: (HasCallStack) => DPBranch Anchor t -> DPBranch FullyAnchored t
     convertBranch = \case
       DPLiteral t -> DPLiteral t
+      DPBackLiteral t -> DPBackLiteral t
       DPWild -> DPWild
+      DPBackWild -> DPBackWild
       DPSequence bs1 midpoint bs2 ->
         smartBuildSequence
           (mapOSet convertBranch bs1)

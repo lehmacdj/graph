@@ -38,7 +38,8 @@ binary name f = InfixL (f <$ symbol name)
 
 table :: [[Operator Parser (Path t)]]
 table =
-  [ [binary "/" (:/)],
+  [ [Prefix (Backwards <$ symbol "~")],
+    [binary "/" (:/)],
     [binary "&" (:&)],
     [binary "+" (:+)]
   ]
@@ -61,6 +62,12 @@ test_pPath =
       "@000000000002" `parsesTo` Absolute (smallNID 2),
       "foo/@000000000002" `parsesTo` (Literal "foo" :/ Absolute (smallNID 2)),
       "foo/bar" `parsesTo` (Literal "foo" :/ Literal "bar"),
+      "~foo/bar" `parsesTo` (Backwards (Literal "foo") :/ Literal "bar"),
+      "~foo/~bar" `parsesTo` (Backwards (Literal "foo") :/ Backwards (Literal "bar")),
+      "~(foo/~bar)" `parsesTo` Backwards (Literal "foo" :/ Backwards (Literal "bar")),
+      "~@" `parsesTo` Backwards One,
+      "foo + ~@" `parsesTo` (Literal "foo" :+ Backwards One),
+      "~@ & ~@000000000001" `parsesTo` (Backwards One :& Backwards (Absolute (smallNID 1))),
       "(foo/bar)/baz" `parsesTo` (Literal "foo" :/ Literal "bar" :/ Literal "baz"),
       "foo/(bar/baz)" `parsesTo` (Literal "foo" :/ (Literal "bar" :/ Literal "baz")),
       "foo / bar & baz" `parsesTo` (Literal "foo" :/ Literal "bar" :& Literal "baz"),
@@ -71,10 +78,14 @@ test_pPath =
         `parsesTo` (Literal "foo" :/ Literal "bar" :& (Literal "baz" :+ Literal "qux")),
       "foo/(bar&baz+qux)/!" `parsesTo` (Literal "foo" :/ (Literal "bar" :& Literal "baz" :+ Literal "qux") :/ Zero),
       parseFails "foo/bar&",
-      parseFails "foo/bar&+qux"
+      parseFails "foo/bar&+qux",
+      parseFails "foo+",
+      parseFails "+foo",
+      parseFails "~",
+      parseFails "foo~bar"
     ]
   where
     parsesTo :: String -> Path String -> TestTree
     parsesTo input = testCase ("parse: " ++ show input) . testParserParses (pPath transition) input
     parseFails input =
-      testCase ("parse fails: " ++ show input) $ testParserFails (pPath transition) input
+      testCase ("parse fails: " ++ show input) $ testParserFails (pPath transition <* eof) input

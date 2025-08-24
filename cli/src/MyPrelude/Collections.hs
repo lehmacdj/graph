@@ -29,6 +29,7 @@ import Control.Lens as X
     Traversal,
     Traversal',
     ala,
+    alaf,
     at,
     au,
     filtered,

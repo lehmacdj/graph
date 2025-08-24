@@ -31,6 +31,11 @@ data Path t
     -- if at the start of a path. Creates Pointlike paths when :&-ed with
     -- other paths
     Absolute NID
+  | -- | backlink-ify. traversing Backwards (Literal t) traverses the backlink
+    -- (Literal t) instead, likewise for Wild. It inverts the order of paths and
+    -- has no effect on node-location specifying path components or
+    -- intersection/union operators
+    Backwards (Path t)
   | -- | sequence
     Path t :/ Path t
   | -- | union

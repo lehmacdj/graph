@@ -53,6 +53,7 @@ resolvePathSuccesses nid = \case
     n <- getNodeSem nid
     pure . setFromList $ matchConnect x n.outgoing
   Absolute nid -> pure $ singleton nid
+  Backwards _ -> error "can't use backwards with old paths"
   p :/ q -> do
     pResolved <- toList <$> resolvePathSuccesses nid p
     mconcat <$> traverse (`resolvePathSuccesses` q) pResolved
@@ -87,6 +88,7 @@ resolvePathSuccessesDetail' nid = \case
       case matchConnect t n.outgoing of
         [] -> OSet.singleton (DPath nid [] nid [t])
         ms -> OSet.fromList (DPath nid [view #nid n `FromVia` t] <$> ms <*> pure [])
+  Backwards _ -> error "can't use backwards with old paths"
   p1 :/ p2 -> do
     r1 <- toList <$> resolvePathSuccessesDetail' nid p1
     fmap OSet.fromList . (`concatMapM` r1) $ \case
@@ -246,6 +248,7 @@ listifyNewPath = \case
   -- don't have the graph and can't add all possible
   -- transitions
   Literal t -> Set.singleton (Nothing, [t])
+  Backwards _ -> error "can't use backwards with old paths"
   Absolute nid -> Set.singleton (Just nid, [])
   p1 :/ p2 -> Set.fromList $ do
     (nid, p1') <- toList $ listifyNewPath p1

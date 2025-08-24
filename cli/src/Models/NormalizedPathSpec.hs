@@ -67,6 +67,31 @@ spec_normalizePath = describe "normalizePath" do
   "(@1/a & @2/b)/@/(c & d)" `normalizesTo` "[[@1<a & @2<b]>@<(c & d)]"
   "(@1/a & @2/b)/@/c & @3/d" `normalizesTo` "[[@1<a & @2<b]>@<c & @3<d]"
 
+  -- inverse / backlinks
+  "~foo" `normalizesTo` "[~foo]"
+  "~(foo + bar)" `normalizesTo` "[~foo] + [~bar]"
+  "~(foo & bar)" `normalizesTo` "[~foo & ~bar]"
+  "~foo & bar/baz" `normalizesTo` "[~foo & bar /| baz]"
+  "~(foo/bar)" `normalizesTo` "[~foo /| ~bar]"
+  -- this is surprisingly similar to @[x /@| y] but the target is different
+  "@/x/@ & @/~y/@" `normalizesTo` "[@<x & @<~y]>@"
+
+  -- inverse/backlinks with loops
+  -- these are complicated because there are potentially several ways of
+  -- expressing the same thing; trying to decide on a cannoical form
+  "~@" `normalizesTo` "@"
+  "~(@ & foo)" `normalizesTo` "@[foo]"
+  "@ & ~foo" `normalizesTo` "@[foo]"
+  "~(@ & foo/bar)" `normalizesTo` "@[bar /| foo]" -- also @[bar /| foo]
+  -- there's no super principled way to distinguish between cases like the
+  -- below; the normalization algorithm makes a deterministic but arbitrary
+  -- choice based the Ord instance of the involved things
+  "@ & ~foo/bar" `normalizesTo` "@[~bar /| foo]"
+  "@ & foo/~bar" `normalizesTo` "@[bar /| ~foo]"
+  "~(@ & ~foo/bar)" `normalizesTo` "@[bar /| ~foo]"
+  "(@ & w/~x & y/~z)" `normalizesTo` "@[w /| ~x & y /| ~z]"
+  "(@ & ~w/~x & y/~z)" `normalizesTo` "@[x /| w & y /| ~z]"
+
 spec_leastConstrainedNormalizedPath :: Spec
 spec_leastConstrainedNormalizedPath = describe "leastConstrainedNormalizedPath" do
   let whenLeastConstrainedIsEquivalentTo p expected =

@@ -5,6 +5,8 @@ module MyPrelude
     traceWith,
     traceShowWith,
     nonNull,
+    minOn,
+    maxOn,
 
     -- * Extra exports (see the import list below)
     module X,
@@ -47,3 +49,9 @@ nonNull ::
   (MonoFoldable mono, MonoFoldable mono') =>
   Iso (NonNull mono) (NonNull mono') mono mono'
 nonNull = iso toNullable impureNonNull
+
+minOn :: (Ord b) => (a -> b) -> a -> a -> a
+minOn f x y = if f x <= f y then x else y
+
+maxOn :: (Ord b) => (a -> b) -> a -> a -> a
+maxOn f x y = if f x >= f y then x else y
