@@ -133,6 +133,29 @@ materializePath firstNid op = do
           & mapMaybe (ensureSameAnchors . impureNonNull)
           & over (mapped . _1) (setFromList . toNullable)
 
+    traverseTransition ::
+      ( Members [GraphMetadataReading t, State (Graph t IsThin), State (Set NID)] q,
+        HasCallStack
+      ) =>
+      NID ->
+      (Node t () -> Set (Connect t)) ->
+      (DPTransition t -> DPBranch NID t) ->
+      DPTransition t ->
+      Sem q [(DPBranch NID t, NID)]
+    traverseTransition nid getConnections mkBranch = \case
+      DPLiteral t -> withEarlyReturn do
+        n <- getNodeMetadata nid `onNothingM` returnEarly []
+        pure $
+          getConnections n
+            & matchConnect t
+            & map (mkBranch (DPLiteral t),)
+      DPWild -> withEarlyReturn do
+        n <- getNodeMetadata nid `onNothingM` returnEarly []
+        pure $
+          getConnections n
+            & toList
+            & map (\Connect {..} -> (mkBranch (DPLiteral transition), node))
+
     traverseBranch ::
       ( Members [GraphMetadataReading t, State (Graph t IsThin), State (Set NID)] q,
         HasCallStack
@@ -141,30 +164,8 @@ materializePath firstNid op = do
       DPBranch FullyAnchored t ->
       Sem q [(DPBranch NID t, NID)]
     traverseBranch nid = \case
-      DPLiteral t -> withEarlyReturn do
-        n <- getNodeMetadata nid `onNothingM` returnEarly []
-        pure $
-          n.outgoing
-            & matchConnect t
-            & map (DPLiteral t,)
-      DPBackLiteral t -> withEarlyReturn do
-        n <- getNodeMetadata nid `onNothingM` returnEarly []
-        pure $
-          n.incoming
-            & matchConnect t
-            & map (DPBackLiteral t,)
-      DPWild -> withEarlyReturn do
-        n <- getNodeMetadata nid `onNothingM` returnEarly []
-        pure $
-          n.outgoing
-            & toList
-            & map (\Connect {..} -> (DPLiteral transition, node))
-      DPBackWild -> withEarlyReturn do
-        n <- getNodeMetadata nid `onNothingM` returnEarly []
-        pure $
-          n.incoming
-            & toList
-            & map (\Connect {..} -> (DPBackLiteral transition, node))
+      DPOutgoing transition -> traverseTransition nid (.outgoing) DPOutgoing transition
+      DPIncoming transition -> traverseTransition nid (.incoming) DPIncoming transition
       DPSequence bs1 midpoint bs2 -> do
         bs1's <- traverseBranches nid bs1
         uptoMidpoints :: [(OSet (DPBranch NID t), PointlikeDeterministicPath NID t)] <-

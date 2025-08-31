@@ -32,10 +32,10 @@ pDeterministicPath pNID pTransition =
 pSingleBranch :: (Ord t) => Parser t -> Parser (DPBranch Anchor t)
 pSingleBranch pTransition =
   label "single branch" $
-    try (symbol "~*" $> DPBackWild)
-      <|> (symbol "*" $> DPWild)
-      <|> try (DPBackLiteral <$> (char '~' *> pTransition))
-      <|> (DPLiteral <$> pTransition)
+    try (symbol "~*" $> DPIncoming DPWild)
+      <|> (symbol "*" $> DPOutgoing DPWild)
+      <|> try (DPIncoming . DPLiteral <$> (char '~' *> pTransition))
+      <|> (DPOutgoing . DPLiteral <$> pTransition)
 
 pBranch :: (Ord t) => Parser NID -> Parser t -> Parser (DPBranch Anchor t)
 pBranch pNID pTransition =
