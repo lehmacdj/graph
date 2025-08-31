@@ -164,7 +164,10 @@ mergeNodesEx ::
   Node t a ->
   Node t a
 mergeNodesEx n1 n2 =
-  fromMaybe (error "mergeNodesEx: nodes don't match") $ mergeNodes n1 n2
+  fromMaybe (error msg) $ mergeNodes n1 n2
+  where
+    msg =
+      "mergeNodesEx: nodes don't match " ++ show n1.nid ++ " != " ++ show n2.nid
 
 withoutEdges :: (ValidTransition t) => Set (Edge t) -> Node t a -> Node t a
 withoutEdges deletedEdges n =

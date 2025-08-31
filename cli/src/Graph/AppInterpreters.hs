@@ -130,9 +130,9 @@ runIOWrapperEffects timeBehavior =
     >>> runFileSystemIO
     >>> runFileTypeOracle
     >>> timeBehavior
-    >>> runGraphMetadataFilesystemOperationsWriteDryRun
-    >>> runGraphMetadataFilesystemOperationsWriteDiffOperationsDryRun
-    >>> runGraphDataFilesystemOperationsIO
+    >>> runGraphMetadataFilesystemOperationsDryRun
+    >>> runGraphMetadataFilesystemOperationsWriteDiffDryRun
+    >>> runGraphDataFilesystemOperationsDryRun
     >>> subsume
     >>> interpretEditorAsIOVim
     >>> interpretDisplayImageIO

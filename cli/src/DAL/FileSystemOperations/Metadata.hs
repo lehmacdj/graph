@@ -69,11 +69,11 @@ runGraphMetadataFilesystemOperationsIO = interpret \case
   WriteNodeMetadata node -> (\x -> writeNodeMetadata_ True x node) =<< getMetadataFile node.nid
   DeleteNodeMetadata nid -> deleteNodeMetadata_ True =<< getMetadataFile nid
 
-runGraphMetadataFilesystemOperationsWriteDryRun ::
+runGraphMetadataFilesystemOperationsDryRun ::
   (Members [RawGraph, Embed IO, Error UserError] r) =>
   Sem (GraphMetadataFilesystemOperations : r) a ->
   Sem r a
-runGraphMetadataFilesystemOperationsWriteDryRun = interpret \case
+runGraphMetadataFilesystemOperationsDryRun = interpret \case
   ReadNodeMetadata nid -> readNodeMetadata_ True =<< getMetadataFile nid
   WriteNodeMetadata node -> say $ "Would write node: " <> tshow node
   DeleteNodeMetadata nid -> say $ "Would delete node with NID: " <> tshow nid

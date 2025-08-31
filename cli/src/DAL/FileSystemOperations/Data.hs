@@ -65,3 +65,16 @@ runGraphDataFilesystemOperationsIO = interpret \case
   ReadNodeData nid extension -> readNodeData_ nid extension
   WriteNodeData nid extension rawData -> writeNodeData_ nid extension rawData
   DeleteNodeData nid extension -> deleteNodeData_ nid extension
+
+runGraphDataFilesystemOperationsDryRun ::
+  (Members [RawGraph, Embed IO, Error UserError] r) =>
+  Sem (GraphDataFilesystemOperations : r) a ->
+  Sem r a
+runGraphDataFilesystemOperationsDryRun = interpret \case
+  ReadNodeData nid extension -> readNodeData_ nid extension
+  WriteNodeData nid extension rawData ->
+    say $
+      ("overwrite " <> tshow (length rawData) <> " bytes of data for ")
+        <> (tshow nid <> "." <> tshow extension)
+  DeleteNodeData nid extension ->
+    say $ "delete data for " <> tshow nid <> "." <> tshow extension
