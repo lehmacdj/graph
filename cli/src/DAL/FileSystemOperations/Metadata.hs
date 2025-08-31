@@ -65,7 +65,17 @@ runGraphMetadataFilesystemOperationsIO ::
   Sem (GraphMetadataFilesystemOperations : r) a ->
   Sem r a
 runGraphMetadataFilesystemOperationsIO = interpret \case
-  ReadNodeMetadata nid -> readNodeMetadata_ True =<< getMetadataFile nid
+  ReadNodeMetadata nid -> do
+    path <- getMetadataFile nid
+    node <- readNodeMetadata_ True path
+    withJust node $ \n ->
+      unless (n.nid == nid) $
+        sayErr $
+          "Warning: NID mismatch when reading metadata file for NID "
+            <> tshow nid
+            <> ". File contains NID "
+            <> tshow n.nid
+    pure node
   WriteNodeMetadata node -> (\x -> writeNodeMetadata_ True x node) =<< getMetadataFile node.nid
   DeleteNodeMetadata nid -> deleteNodeMetadata_ True =<< getMetadataFile nid
 
