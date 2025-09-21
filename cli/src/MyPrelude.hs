@@ -33,6 +33,8 @@ import MyPrelude.JSON as X
 import MyPrelude.MaybeEither as X
 import MyPrelude.MonadApplicative as X
 import MyPrelude.Orphans as X ()
+import MyPrelude.RawStrings as X
+import Prelude as X (Show (showsPrec), ShowS, showParen, showString, shows)
 
 unconsumed :: (Contravariant f) => f a -> f Void
 unconsumed = contramap absurd
