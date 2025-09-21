@@ -180,6 +180,7 @@ library
     , aeson
     , attoparsec
     , base >=4.7 && <5
+    , base-orphans
     , base64
     , base64-bytestring
     , bytestring
@@ -196,6 +197,7 @@ library
     , filepath
     , foreign-store
     , free
+    , generic-data
     , generic-lens
     , haskeline
     , hspec
@@ -311,6 +313,7 @@ executable dump-graph
     , aeson
     , attoparsec
     , base >=4.7 && <5
+    , base-orphans
     , base64
     , base64-bytestring
     , bytestring
@@ -327,6 +330,7 @@ executable dump-graph
     , filepath
     , foreign-store
     , free
+    , generic-data
     , generic-lens
     , graph
     , haskeline
@@ -436,6 +440,7 @@ executable ge
     , aeson
     , attoparsec
     , base >=4.7 && <5
+    , base-orphans
     , base64
     , base64-bytestring
     , bytestring
@@ -452,6 +457,7 @@ executable ge
     , filepath
     , foreign-store
     , free
+    , generic-data
     , generic-lens
     , graph
     , haskeline
@@ -561,6 +567,7 @@ executable scratch
     , aeson
     , attoparsec
     , base >=4.7 && <5
+    , base-orphans
     , base64
     , base64-bytestring
     , bytestring
@@ -577,6 +584,7 @@ executable scratch
     , filepath
     , foreign-store
     , free
+    , generic-data
     , generic-lens
     , graph
     , haskeline
@@ -687,6 +695,7 @@ test-suite graph-test
     , aeson
     , attoparsec
     , base >=4.7 && <5
+    , base-orphans
     , base64
     , base64-bytestring
     , bytestring
@@ -703,6 +712,7 @@ test-suite graph-test
     , filepath
     , foreign-store
     , free
+    , generic-data
     , generic-lens
     , graph
     , haskeline

@@ -21,6 +21,7 @@ description:         Please see the README on GitHub at <https://github.com/lehm
 
 dependencies:
 - base >= 4.7 && < 5
+- base-orphans
 - aeson
 - attoparsec
 - base64
@@ -32,6 +33,7 @@ dependencies:
 - conduit-extra
 - constraints
 - containers
+- generic-data
 - deepseq
 - directory
 - directory-tree

@@ -19,10 +19,12 @@ import Control.DeepSeq as X
 import Data.Coerce as X (Coercible, coerce)
 import Data.Functor.Contravariant as X
 import Data.Kind as X (Type)
+import Data.Orphans ()
 import Data.Void as X
 import Debug.Trace
 import GHC.Generics as X (Generic, Rep)
 import GHC.Stack as X (HasCallStack)
+import Generic.Data as X (Generically (..), Generically1 (..))
 import Language.Haskell.TH.Syntax as X (Lift)
 import MyPrelude.Collections as X
 import MyPrelude.EarlyReturn as X
