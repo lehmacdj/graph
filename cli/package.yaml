@@ -21,9 +21,9 @@ description:         Please see the README on GitHub at <https://github.com/lehm
 
 dependencies:
 - base >= 4.7 && < 5
-- base-orphans
 - aeson
 - attoparsec
+- base-orphans
 - base64
 - base64-bytestring
 - bytestring
@@ -33,7 +33,6 @@ dependencies:
 - conduit-extra
 - constraints
 - containers
-- generic-data
 - deepseq
 - directory
 - directory-tree
@@ -41,22 +40,27 @@ dependencies:
 - filepath
 - foreign-store
 - free
+- generic-data
 - generic-lens
+- Glob
 - haskeline
+- hspec
 - hspec-expectations
-- inline-c
-- inline-c-objc
-- ixset-typed
 - html-conduit
 - http-conduit
 - http-types
+- inline-c
+- inline-c-objc
+- ixset-typed
 - lens
+- lens-regex-pcre
 - megaparsec
 - mono-traversable
 - mtl
 - optparse-applicative
 - ordered-containers
 - parser-combinators
+- pcre-light
 - polysemy
 - polysemy-plugin
 - polysemy-readline
@@ -66,10 +70,16 @@ dependencies:
 - resourcet
 - semigroupoids
 - SHA
+- tasty
+- tasty-discover
+- tasty-golden
+- tasty-hspec
+- tasty-hunit
+- tasty-quickcheck
+- template-haskell
 - temporary
 - text
 - time
-- template-haskell
 - transformers
 - typed-process
 - unix
@@ -78,16 +88,6 @@ dependencies:
 - wreq
 - xdg-basedir
 - xml-conduit
-- Glob
-# below are test dependencies which are collapsed into main dependencies due to
-# God module structure
-- hspec
-- tasty
-- tasty-hunit
-- tasty-hspec
-- tasty-discover
-- tasty-golden
-- tasty-quickcheck
 
 default-extensions:
 - BangPatterns

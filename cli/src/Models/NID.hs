@@ -8,7 +8,6 @@ module Models.NID
 where
 
 import Control.DeepSeq
-import Control.Monad.Fail (fail)
 import Data.Aeson
 import Data.Aeson.Types (toJSONKeyText)
 import GHC.Generics

@@ -105,6 +105,7 @@ library
       MyPrelude.MonadApplicative
       MyPrelude.Orphans
       MyPrelude.RawStrings
+      MyPrelude.Regex
       Polysemy.MTL
       Polysemy.Util
       Polysemy.UtilSpec
@@ -209,12 +210,14 @@ library
     , inline-c-objc
     , ixset-typed
     , lens
+    , lens-regex-pcre
     , megaparsec
     , mono-traversable
     , mtl
     , optparse-applicative
     , ordered-containers
     , parser-combinators
+    , pcre-light
     , polysemy
     , polysemy-plugin
     , polysemy-readline
@@ -343,12 +346,14 @@ executable dump-graph
     , inline-c-objc
     , ixset-typed
     , lens
+    , lens-regex-pcre
     , megaparsec
     , mono-traversable
     , mtl
     , optparse-applicative
     , ordered-containers
     , parser-combinators
+    , pcre-light
     , polysemy
     , polysemy-plugin
     , polysemy-readline
@@ -470,12 +475,14 @@ executable ge
     , inline-c-objc
     , ixset-typed
     , lens
+    , lens-regex-pcre
     , megaparsec
     , mono-traversable
     , mtl
     , optparse-applicative
     , ordered-containers
     , parser-combinators
+    , pcre-light
     , polysemy
     , polysemy-plugin
     , polysemy-readline
@@ -597,12 +604,14 @@ executable scratch
     , inline-c-objc
     , ixset-typed
     , lens
+    , lens-regex-pcre
     , megaparsec
     , mono-traversable
     , mtl
     , optparse-applicative
     , ordered-containers
     , parser-combinators
+    , pcre-light
     , polysemy
     , polysemy-plugin
     , polysemy-readline
@@ -725,12 +734,14 @@ test-suite graph-test
     , inline-c-objc
     , ixset-typed
     , lens
+    , lens-regex-pcre
     , megaparsec
     , mono-traversable
     , mtl
     , optparse-applicative
     , ordered-containers
     , parser-combinators
+    , pcre-light
     , polysemy
     , polysemy-plugin
     , polysemy-readline

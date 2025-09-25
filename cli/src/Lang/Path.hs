@@ -52,6 +52,7 @@ resolvePathSuccesses nid = \case
   Literal x -> do
     n <- getNodeSem nid
     pure . setFromList $ matchConnect x n.outgoing
+  RegexMatch _ -> error "regex not supported in old paths"
   Absolute nid -> pure $ singleton nid
   Backwards _ -> error "can't use backwards with old paths"
   p :/ q -> do
@@ -88,6 +89,7 @@ resolvePathSuccessesDetail' nid = \case
       case matchConnect t n.outgoing of
         [] -> OSet.singleton (DPath nid [] nid [t])
         ms -> OSet.fromList (DPath nid [view #nid n `FromVia` t] <$> ms <*> pure [])
+  RegexMatch _ -> error "regex not supported in old paths"
   Backwards _ -> error "can't use backwards with old paths"
   p1 :/ p2 -> do
     r1 <- toList <$> resolvePathSuccessesDetail' nid p1
@@ -248,6 +250,7 @@ listifyNewPath = \case
   -- don't have the graph and can't add all possible
   -- transitions
   Literal t -> Set.singleton (Nothing, [t])
+  RegexMatch _ -> error "regex not supported in old paths"
   Backwards _ -> error "can't use backwards with old paths"
   Absolute nid -> Set.singleton (Just nid, [])
   p1 :/ p2 -> Set.fromList $ do

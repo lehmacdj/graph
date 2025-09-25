@@ -1,6 +1,5 @@
 module Lang.Path.TH where
 
-import Control.Monad.Fail (MonadFail (fail))
 import Lang.Parsing (transition)
 import Lang.Path.Parse
 import Language.Haskell.TH

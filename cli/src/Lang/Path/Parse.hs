@@ -27,8 +27,16 @@ pathTerm' pNID pTransition =
     <|> (symbol "@" $> One)
     <|> (symbol "*" $> Wild)
     <|> (symbol "!" $> Zero)
+    <|> (RegexMatch <$> try pRegex)
     <|> (Literal <$> pTransition)
     <|> parens (pPath' pNID pTransition)
+
+pRegex :: Parser CheckedRegex
+pRegex = do
+  str <- symbol "re" *> stringLiteral
+  str
+    & compileRegex . encodeUtf8 . pack
+    & codiagonal . bimap fail pure
 
 pathTerm :: Parser t -> Parser (Path t)
 pathTerm = pathTerm' pFullNID
@@ -62,6 +70,7 @@ test_pPath =
       "@000000000002" `parsesTo` Absolute (smallNID 2),
       "foo/@000000000002" `parsesTo` (Literal "foo" :/ Absolute (smallNID 2)),
       "foo/bar" `parsesTo` (Literal "foo" :/ Literal "bar"),
+      "re\"^foo.*bar$\"" `parsesTo` RegexMatch [re|^foo.*bar$|],
       "~foo/bar" `parsesTo` (Backwards (Literal "foo") :/ Literal "bar"),
       "~foo/~bar" `parsesTo` (Backwards (Literal "foo") :/ Backwards (Literal "bar")),
       "~(foo/~bar)" `parsesTo` Backwards (Literal "foo" :/ Backwards (Literal "bar")),
@@ -82,7 +91,8 @@ test_pPath =
       parseFails "foo+",
       parseFails "+foo",
       parseFails "~",
-      parseFails "foo~bar"
+      parseFails "foo~bar",
+      parseFails "re\""
     ]
   where
     parsesTo :: String -> Path String -> TestTree

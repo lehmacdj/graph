@@ -36,6 +36,8 @@ data Path' f t
     -- | Zero path (bottom element in path algebra)
     Zero
   | Wild
+  | -- | match a regex
+    RegexMatch CheckedRegex
   | Literal t
   | -- | marks a specific NID. Acts like an anchor if after a :/, and as a root
     -- if at the start of a path. Creates Pointlike paths when :&-ed with
@@ -66,6 +68,7 @@ showsPath _ _ One = showString "@"
 showsPath _ _ Zero = showString "!"
 showsPath _ _ Wild = showString "*"
 showsPath _ _ (Literal x) = shows x
+showsPath _ _ (RegexMatch r) = shows r
 showsPath _ _ (Absolute nid) = showString "@" . shows nid
 showsPath showF d (Backwards' p) =
   showParen (d > 8) $ showString "~" . showF 8 p
@@ -106,7 +109,7 @@ pattern l :+ r = Identity l ::+ Identity r
 pattern (:&) :: Path t -> Path t -> Path t
 pattern l :& r = Identity l ::& Identity r
 
-{-# COMPLETE One, Zero, Wild, Literal, Absolute, Backwards, (:/), (:+), (:&) #-}
+{-# COMPLETE One, Zero, Wild, Literal, RegexMatch, Absolute, Backwards, (:/), (:+), (:&) #-}
 
 -- make the operator precedence match how they are parsed
 
@@ -133,6 +136,8 @@ spec_showPath = describe "Show Path" $ do
     show (Wild :: Path String) `shouldBe` [rq|*|]
   it "Literal" $
     show (Literal "foo" :: Path String) `shouldBe` [rq|"foo"|]
+  it "RegexMatch" $
+    show (RegexMatch [re|^foo.*bar$|] :: Path String) `shouldBe` [rq|re"^foo.*bar$"|]
   it "Absolute" $
     show (Absolute (smallNID 2) :: Path String) `shouldBe` [rq|@000000000002|]
   it "Backwards One" $

@@ -64,6 +64,7 @@ specific nid = PointlikeDeterministicPath (Specific nid) mempty
 data DPTransition t
   = DPLiteral t
   | DPWild
+  | DPRegex CheckedRegex
   deriving stock (Eq, Ord, Show, Generic, Lift)
   deriving anyclass (NFData)
 
@@ -353,6 +354,11 @@ normalizePath = \case
     NormalizedPath . singletonSet . Rooted $
       smartBuildRootedDeterministicPath
         (singletonMap (Pointlike unanchored) (singletonSet (DPOutgoing (DPLiteral t))))
+        unanchored
+  RegexMatch r ->
+    NormalizedPath . singletonSet . Rooted $
+      smartBuildRootedDeterministicPath
+        (singletonMap (Pointlike unanchored) (singletonSet (DPOutgoing (DPRegex r))))
         unanchored
   Backwards p ->
     let np = normalizePath p

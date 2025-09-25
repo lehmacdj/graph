@@ -154,6 +154,12 @@ materializePath firstNid op = do
           getConnections n
             & toList
             & map (\Connect {..} -> (mkBranch (DPLiteral transition), node))
+      DPRegex r -> withEarlyReturn do
+        n <- getNodeMetadata nid `onNothingM` returnEarly []
+        pure $
+          getConnections n
+            & toListOf (folded . filteredBy (#transition . regexing' r))
+            & map (\Connect {..} -> (mkBranch (DPLiteral transition), node))
 
     traverseBranch ::
       ( Members [GraphMetadataReading, State (Graph Text IsThin), State (Set NID)] q,
