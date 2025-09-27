@@ -19,9 +19,12 @@ import Text.Read
 import Utils.Base62 (base62Chars, isBase62Char)
 
 -- | The number of letter digits in a NID
--- * My notes use 10 which is probably as long as there are <1 million nodes generated
--- * YouTube uses 12 which is probably enough if I use a DB that can detect collisions and fail non-silently
--- * 32 is enough for all intents and purposes including distributed universal paperclip building AI
+-- * My notes use 10 which is probably as long as there are <1 million nodes
+--   generated
+-- * YouTube uses 12 which is probably enough if I use a DB that can detect
+--   collisions and fail non-silently
+-- * 32 is enough for all intents and purposes including distributed universal
+--   paperclip producing AI nanofactories
 nidDigits :: Int
 nidDigits = 12
 
