@@ -61,7 +61,7 @@ withDefaultQuitParser p s
 repl ::
   ( Members [Echo, DisplayImage, SetLocation, GetLocation, Dualizeable, Readline, Embed IO] effs,
     Members [FileSystem, Web, FreshNID, GetTime, Editor, State History] effs,
-    Members '[FileTypeOracle, Scoped () (GraphMetadataEditing Text)] effs,
+    Members '[FileTypeOracle, Scoped () GraphMetadataEditing] effs,
     HasGraph String effs,
     -- TODO: these effects are bad and shouldn't be exposed; need to rewrite
     -- commands using them as plugins once plugins are available. See also

@@ -72,7 +72,7 @@ type GraphEditorEffects =
     ReadGraph String (Maybe ByteString),
     ReadGraphDataless String,
     WriteGraph String,
-    Scoped_ (GraphMetadataEditing Text),
+    Scoped_ GraphMetadataEditing,
     -- GraphDataEditing,
     Dualizeable,
     GetLocation,

@@ -39,10 +39,12 @@ onlyFetched = prism' (fmap (const Fetched)) \case
 -- I gave up on trying to enforce this at the type level because it ended up
 -- being really hard to get type inference to infer all the things I wanted it
 -- to.
-type GraphMetadataReading t = GraphMetadataEditing t
+type GraphMetadataReading' t = GraphMetadataEditing' t
 
-data GraphMetadataEditing t m a where
-  GetNodeMetadata :: NID -> GraphMetadataEditing t m (Maybe (Node t ()))
+type GraphMetadataReading = GraphMetadataReading' Text
+
+data GraphMetadataEditing' t m a where
+  GetNodeMetadata :: NID -> GraphMetadataEditing' t m (Maybe (Node t ()))
   -- This barely needs to exist because InsertEdge can also be used to create
   -- a node if it doesn't exist. The only reason you would want to use this
   -- is if you need to create a disconnected node for some reason, or if we
@@ -51,22 +53,24 @@ data GraphMetadataEditing t m a where
   -- node, but you'd probably want to build that by intercepting
   -- GraphMetadataFilesystemOperations to only update when the FS is actually
   -- updated)
-  TouchNode :: NID -> GraphMetadataEditing t m ()
-  DeleteNode :: NID -> GraphMetadataEditing t m ()
-  InsertEdge :: Edge t -> GraphMetadataEditing t m ()
-  DeleteEdge :: Edge t -> GraphMetadataEditing t m ()
+  TouchNode :: NID -> GraphMetadataEditing' t m ()
+  DeleteNode :: NID -> GraphMetadataEditing' t m ()
+  InsertEdge :: Edge t -> GraphMetadataEditing' t m ()
+  DeleteEdge :: Edge t -> GraphMetadataEditing' t m ()
 
-makeSem ''GraphMetadataEditing
+makeSem ''GraphMetadataEditing'
+
+type GraphMetadataEditing = GraphMetadataEditing' Text
 
 -- | Makes it so all reads to a node will return the same result within the
 -- action by caching fetched nodes in memory
 cachingReadingInMemory ::
   forall t a r.
-  ( Member (GraphMetadataReading t) r,
+  ( Member (GraphMetadataReading' t) r,
     ValidTransition t,
     HasCallStack
   ) =>
-  Sem (GraphMetadataReading t : r) a ->
+  Sem (GraphMetadataReading' t : r) a ->
   Sem r a
 cachingReadingInMemory =
   evalState @(Set NID) mempty
@@ -77,12 +81,12 @@ cachingReadingInMemory =
 
 cachingReadingInState ::
   forall t a r.
-  ( Member (GraphMetadataReading t) r,
+  ( Member (GraphMetadataReading' t) r,
     Members [State (Graph t IsThin), State (Set NID)] r,
     ValidTransition t,
     HasCallStack
   ) =>
-  Sem (GraphMetadataReading t : r) a ->
+  Sem (GraphMetadataReading' t : r) a ->
   Sem r a
 cachingReadingInState = interpret \case
   GetNodeMetadata nid -> withEarlyReturn do
@@ -103,7 +107,7 @@ cachingReadingInState = interpret \case
 runInMemoryGraphMetadataEditing ::
   forall t r a.
   (Member (State (Graph t ())) r, ValidTransition t) =>
-  Sem (GraphMetadataEditing t : r) a ->
+  Sem (GraphMetadataEditing' t : r) a ->
   Sem r a
 runInMemoryGraphMetadataEditing = interpret \case
   GetNodeMetadata nid -> gets @(Graph t ()) $ view (at nid)
@@ -122,7 +126,7 @@ runInMemoryGraphMetadataEditing = interpret \case
 runGraphMetadataEditing ::
   forall r a.
   (Members [GraphMetadataFilesystemOperations, Warn UserError] r) =>
-  Sem (GraphMetadataEditing Text : r) a ->
+  Sem (GraphMetadataEditing : r) a ->
   Sem r a
 runGraphMetadataEditing = interpret \case
   GetNodeMetadata nid -> readNodeMetadata nid
@@ -189,7 +193,7 @@ runGraphMetadataEditingTransactionally ::
       ]
       r
   ) =>
-  Sem (GraphMetadataEditing Text : r) a ->
+  Sem (GraphMetadataEditing : r) a ->
   Sem r a
 runGraphMetadataEditingTransactionally action = do
   -- the way I'm implementing transactional behavior is based on my
@@ -199,7 +203,7 @@ runGraphMetadataEditingTransactionally action = do
   let runUnitOfWork ::
         forall q b.
         ( Members
-            [ Tagged Cache (GraphMetadataEditing Text),
+            [ Tagged Cache GraphMetadataEditing,
               Tagged Underlying GraphMetadataFilesystemOperations,
               Tagged AsLoaded (State (Map NID (Maybe (Node Text ())))),
               Tagged Changes (State (Graph Text ())),
@@ -207,9 +211,9 @@ runGraphMetadataEditingTransactionally action = do
             ]
             q
         ) =>
-        Sem (GraphMetadataEditing Text : q) b ->
+        Sem (GraphMetadataEditing : q) b ->
         Sem q b
-      runUnitOfWork = interpret @(GraphMetadataEditing Text) \case
+      runUnitOfWork = interpret @GraphMetadataEditing \case
         GetNodeMetadata nid -> withEarlyReturn do
           changesNode <- tag @Cache $ getNodeMetadata nid
           loadedNode <- tag @AsLoaded $ gets $ view (at nid)
@@ -263,7 +267,7 @@ runGraphMetadataEditingTransactionally action = do
       @(Tagged DeletedEdges (State (Set (Edge Text))))
     -- this just exists so that we can avoid duplicating the implementation of
     -- runInMemoryGraphMetadataEditing
-    & raiseUnder @(Tagged Cache (GraphMetadataEditing Text))
+    & raiseUnder @(Tagged Cache GraphMetadataEditing)
     -- build up the unit of work in the effects above
     & runUnitOfWork
     -- run the Cache GraphMetadataEditing effect
@@ -291,7 +295,7 @@ runScopedGraphMetadataEditingTransactionally ::
       ]
       r
   ) =>
-  Sem (Scoped_ (GraphMetadataEditing Text) : r) a ->
+  Sem (Scoped_ GraphMetadataEditing : r) a ->
   Sem r a
 runScopedGraphMetadataEditingTransactionally =
   runScopedNew \() -> runGraphMetadataEditingTransactionally

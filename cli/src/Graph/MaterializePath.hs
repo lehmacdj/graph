@@ -23,15 +23,14 @@ data MaterializedPath t = MaterializedPath
 
 -- | Traverse a path, fetching node metadata and noting which nodes are missing.
 materializePath ::
-  forall t r.
-  ( Members '[GraphMetadataReading t] r,
-    ValidTransition t,
+  forall r.
+  ( Members '[GraphMetadataReading] r,
     HasCallStack
   ) =>
   -- | The node to start from
   NID ->
-  Path t ->
-  Sem r (MaterializedPath t)
+  Path Text ->
+  Sem r (MaterializedPath Text)
 materializePath firstNid op = do
   let normalizedPath = leastConstrainedNormalizedPath $ normalizePath op
   traverse (traverseDeterministicPath firstNid) (toList normalizedPath.union)
@@ -42,24 +41,24 @@ materializePath firstNid op = do
     & fmap \(nonexistentNodes, (graph, path)) -> MaterializedPath {..}
   where
     traverseDeterministicPath ::
-      ( Members [GraphMetadataReading t, State (Graph t IsThin), State (Set NID)] q,
+      ( Members [GraphMetadataReading, State (Graph Text IsThin), State (Set NID)] q,
         HasCallStack
       ) =>
       NID ->
-      DeterministicPath FullyAnchored t ->
-      Sem q [DeterministicPath NID t]
+      DeterministicPath FullyAnchored Text ->
+      Sem q [DeterministicPath NID Text]
     traverseDeterministicPath nid = \case
       Pointlike p -> map Pointlike <$> traversePointlike True nid p
       Rooted r -> map Rooted <$> traverseRooted nid r
 
     traversePointlike ::
-      ( Members [GraphMetadataReading t, State (Graph t IsThin), State (Set NID)] q,
+      ( Members [GraphMetadataReading, State (Graph Text IsThin), State (Set NID)] q,
         HasCallStack
       ) =>
       Bool ->
       NID ->
-      PointlikeDeterministicPath FullyAnchored t ->
-      Sem q [PointlikeDeterministicPath NID t]
+      PointlikeDeterministicPath FullyAnchored Text ->
+      Sem q [PointlikeDeterministicPath NID Text]
     traversePointlike isRoot nid PointlikeDeterministicPath {..} = withEarlyReturn do
       nid' <- case anchor of
         FSpecific fnid
@@ -82,16 +81,16 @@ materializePath firstNid op = do
             (as, example)
 
     traverseRooted ::
-      ( Members [GraphMetadataReading t, State (Graph t IsThin), State (Set NID)] q,
+      ( Members [GraphMetadataReading, State (Graph Text IsThin), State (Set NID)] q,
         HasCallStack
       ) =>
       NID ->
-      RootedDeterministicPath FullyAnchored t ->
-      Sem q [RootedDeterministicPath NID t]
+      RootedDeterministicPath FullyAnchored Text ->
+      Sem q [RootedDeterministicPath NID Text]
     traverseRooted nid RootedDeterministicPath {..} = do
       rootBranches' ::
         [ [ ( DeterministicPath NID t,
-              OSet (DPBranch FullyAnchored t)
+              OSet (DPBranch FullyAnchored Text)
             )
           ]
         ] <-
@@ -101,7 +100,7 @@ materializePath firstNid op = do
           <&> map (\(rs, bs) -> (,bs) <$> rs)
           <&> choices
       rootBranches'' ::
-        [(OMap (DeterministicPath NID t) (OSet (DPBranch NID t)), NID)] <-
+        [(OMap (DeterministicPath NID t) (OSet (DPBranch NID Text)), NID)] <-
         rootBranches'
           & (traverse . traverse)
             (\(dp, bs) -> (dp,) <$> traverseBranches dp.target.anchor bs)
@@ -116,12 +115,12 @@ materializePath firstNid op = do
         <&> map (uncurry smartBuildRootedDeterministicPath)
 
     traverseBranches ::
-      ( Members [GraphMetadataReading t, State (Graph t IsThin), State (Set NID)] q,
+      ( Members [GraphMetadataReading, State (Graph Text IsThin), State (Set NID)] q,
         HasCallStack
       ) =>
       NID ->
-      OSet (DPBranch FullyAnchored t) ->
-      Sem q [(OSet (DPBranch NID t), NID)]
+      OSet (DPBranch FullyAnchored Text) ->
+      Sem q [(OSet (DPBranch NID Text), NID)]
     traverseBranches nid branches = withEarlyReturn do
       -- in the case where the OSet is empty (only when loops),
       -- we return the same anchor as the input
@@ -134,14 +133,14 @@ materializePath firstNid op = do
           & over (mapped . _1) (setFromList . toNullable)
 
     traverseTransition ::
-      ( Members [GraphMetadataReading t, State (Graph t IsThin), State (Set NID)] q,
+      ( Members [GraphMetadataReading, State (Graph Text IsThin), State (Set NID)] q,
         HasCallStack
       ) =>
       NID ->
-      (Node t () -> Set (Connect t)) ->
-      (DPTransition t -> DPBranch NID t) ->
-      DPTransition t ->
-      Sem q [(DPBranch NID t, NID)]
+      (Node Text () -> Set (Connect Text)) ->
+      (DPTransition Text -> DPBranch NID Text) ->
+      DPTransition Text ->
+      Sem q [(DPBranch NID Text, NID)]
     traverseTransition nid getConnections mkBranch = \case
       DPLiteral t -> withEarlyReturn do
         n <- getNodeMetadata nid `onNothingM` returnEarly []
@@ -157,18 +156,18 @@ materializePath firstNid op = do
             & map (\Connect {..} -> (mkBranch (DPLiteral transition), node))
 
     traverseBranch ::
-      ( Members [GraphMetadataReading t, State (Graph t IsThin), State (Set NID)] q,
+      ( Members [GraphMetadataReading, State (Graph Text IsThin), State (Set NID)] q,
         HasCallStack
       ) =>
       NID ->
-      DPBranch FullyAnchored t ->
-      Sem q [(DPBranch NID t, NID)]
+      DPBranch FullyAnchored Text ->
+      Sem q [(DPBranch NID Text, NID)]
     traverseBranch nid = \case
       DPOutgoing transition -> traverseTransition nid (.outgoing) DPOutgoing transition
       DPIncoming transition -> traverseTransition nid (.incoming) DPIncoming transition
       DPSequence bs1 midpoint bs2 -> do
         bs1's <- traverseBranches nid bs1
-        uptoMidpoints :: [(OSet (DPBranch NID t), PointlikeDeterministicPath NID t)] <-
+        uptoMidpoints :: [(OSet (DPBranch NID Text), PointlikeDeterministicPath NID Text)] <-
           bs1's
             & (traverse . _2) (\x -> traversePointlike False x midpoint)
             <&> concatMap (\(bs1', ms) -> (bs1',) <$> ms)

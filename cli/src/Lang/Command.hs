@@ -169,7 +169,7 @@ guardDangerousDualizedOperation = do
 interpretCommand ::
   ( Members [DisplayImage, Echo, Error UserError, SetLocation, GetLocation, Dualizeable] effs,
     Members [FileSystem, Web, FreshNID, GetTime, Editor, State History] effs,
-    Members [FileTypeOracle, Readline, Warn UserError, Scoped () (GraphMetadataEditing Text)] effs,
+    Members [FileTypeOracle, Readline, Warn UserError, Scoped () GraphMetadataEditing] effs,
     -- TODO: remove this inclusion of RawGraph + Embed IO here; probably the
     -- best way to do this is to allow commands to be defined as @stack@
     -- scripts, and then rewrite materialize and any other commands that
