@@ -5,7 +5,7 @@ module Models.NormalizedPath where
 import Data.Monoid (Sum (..))
 import GHC.Records
 import Models.NID
-import Models.Path
+import Models.Path.Simple
 import MyPrelude
 
 data Anchor = Unanchored | JoinPoint | Specific NID

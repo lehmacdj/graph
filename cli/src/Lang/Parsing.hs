@@ -11,6 +11,8 @@ import Text.Megaparsec.Char.Lexer qualified as L
 
 type Parser = Parsec Void String
 
+type ParseError' = ParseError Void String
+
 s :: Parser ()
 s = L.space space1 empty empty
 

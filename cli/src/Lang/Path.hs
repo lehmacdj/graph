@@ -25,7 +25,7 @@ import Models.DPath as X
 import Models.Edge
 import Models.Graph hiding (insertEdge)
 import Models.Node
-import Models.Path as X
+import Models.Path.Simple as X
 import MyPrelude
 import Polysemy.State (evalState)
 

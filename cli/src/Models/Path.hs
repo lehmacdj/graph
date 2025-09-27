@@ -2,50 +2,39 @@
 
 module Models.Path
   ( Path' (..),
-    Path,
     PathPhase (..),
-    pattern Backwards,
-    pattern (:/),
-    pattern (:+),
-    pattern (:&),
-    spec_showPath,
   )
 where
 
-import Data.Functor.Classes (Show1 (..))
 import Models.NID
 import MyPrelude
-import TestPrelude
 
--- | Compilation phase of a path
--- Used for "Trees That Grow" style extensions
-data PathPhase
-  = -- | Unelaborated paths may contain directives that need to be resolved
-    -- before the path can be normalized
-    Unelaborated
-  | -- | Elaborated paths are fully resolved and ready for normalization
-    Elaborated
-
+-- | The most general path type. Parametrized with a phase, a functor that
+-- allows wrapping nested paths, and the raw type of literals/transitions.
+--
+-- There are also submodules that expose simpler path types with common
+-- parameters, e.g. @Models.Path.SimpleElaborated@ exposes the simple Path type
+--
+-- There's some constructors that I'd like to add, but haven't either because I
+-- haven't needed them and/or because they would complicate the implementation
+-- more than is worthwhile:
+-- Path t :\ Path t -- ^ set minus (useful with wild to restrict)
+-- Negate (Path t) -- ^ negate a path, if included obsolesces other operators
+-- KleeneStar (Path t) -- ^ necessary for expressing arbitrary graph traversals as paths
+--
+-- WARNING: when updating this type, update the {-# COMPLETE #-} pragmas
+-- in @Models.Path.*@ submodules too so that completeness checking works as
+-- expected
 data Path' (p :: PathPhase) f t
   = -- | Stay at a specific location / the current location.
     -- Acts as a join point forcing intersections of a path that end in it to
     -- match at the same node (e.g. `(a/@ & b)/c` is equivalent to `(a & b)
     -- /@/c`)
     One
-  | --  | Dual -- ^ a transition that dualizes the view of the graph
-    -- The correct way to implement Dual is simply make backlinks part of the
-    -- graph structure, as opposed to intrinsic. i.e. for each normal node have
-    -- a slightly special node that stores backlinks for that node.
-
-    --  | Path t :\ Path t -- ^ set minus (useful with wild to restrict)
-    --  | Negate (Path t) -- ^ negate a path, if included obsolesces other operators
-    --  | Star (Path t) -- ^ kleene iteration: technically top in algebra is top^*
-
-    -- \| a transition matched by anything (top in the algebra)
-
-    -- | Zero path (bottom element in path algebra)
+  | -- | Zero path (bottom element in path algebra)
     Zero
-  | Wild
+  | -- | Matches any single transition
+    Wild
   | -- | match a regex
     RegexMatch CheckedRegex
   | Literal t
@@ -64,23 +53,43 @@ data Path' (p :: PathPhase) f t
     f (Path' p f t) ::+ f (Path' p f t)
   | -- | intersection
     f (Path' p f t) ::& f (Path' p f t)
-  | Location (LocationVal p)
+  | -- | A location in the history
+    LocationFromHistory (LocationFromHistoryVal p)
   deriving (Generic)
 
-type family LocationVal (p :: PathPhase) where
-  LocationVal 'Unelaborated = Int
-  LocationVal 'Elaborated = Void
+infixl 7 ::/
+
+infixl 5 ::+
+
+infixl 6 ::&
+
+-- * Trees that grow machinery
+
+-- | Compilation phase of a path
+-- Used for "Trees That Grow" style extensions
+data PathPhase
+  = -- | Unelaborated paths may contain directives that need to be resolved
+    -- before the path can be normalized
+    Unelaborated
+  | -- | Elaborated paths are fully resolved and ready for normalization
+    Elaborated
+
+type family LocationFromHistoryVal (p :: PathPhase) where
+  LocationFromHistoryVal 'Unelaborated = Int
+  LocationFromHistoryVal 'Elaborated = Void
 
 -- | helper for producing the necessary constraints for a Path'
 type Path'Constraints ::
   (Type -> Constraint) -> PathPhase -> (Type -> Type) -> Type -> Constraint
-type Path'Constraints c p f t = (c t, c (LocationVal p), c (f (Path' p f t)))
+type Path'Constraints c p f t = (c t, c (LocationFromHistoryVal p), c (f (Path' p f t)))
 
 -- | helper for producing the necessary constraints for a Path' excluding the
 -- functorial type parameter
 type PathConstraints ::
   (Type -> Constraint) -> PathPhase -> Type -> Constraint
-type PathConstraints c p t = (c t, c (LocationVal p))
+type PathConstraints c p t = (c t, c (LocationFromHistoryVal p))
+
+-- * Instances
 
 deriving instance (Path'Constraints Lift p f t) => Lift (Path' p f t)
 
@@ -104,7 +113,7 @@ showsPath showF d (l ::& r) =
   showParen (d > 6) $ showF 7 l . showString " & " . showF 7 r
 showsPath showF d (l ::+ r) =
   showParen (d > 5) $ showF 6 l . showString " + " . showF 6 r
-showsPath _ _ (Location n) = showString "%location(" . shows n . showString ")"
+showsPath _ _ (LocationFromHistory n) = showString "%location(" . shows n . showString ")"
 
 instance (Show1 f, Path'Constraints Show p f t) => Show (Path' p f t) where
   showsPrec = showsPath showsPath1
@@ -118,78 +127,6 @@ instance {-# OVERLAPPING #-} (PathConstraints Show p t) => Show (Path' p Identit
       skipIdentity :: (Show t) => Int -> Identity (Path' p Identity t) -> ShowS
       skipIdentity prec (Identity p) = showsPath skipIdentity prec p
 
-deriving instance (Eq t) => Eq (Path t)
+deriving instance (Eq1 f, Path'Constraints Eq p f t) => Eq (Path' p f t)
 
-deriving instance (Ord t) => Ord (Path t)
-
-type Path = Path' Elaborated Identity
-
-pattern Backwards :: Path t -> Path t
-pattern Backwards p = Backwards' (Identity p)
-
-pattern (:/) :: Path t -> Path t -> Path t
-pattern l :/ r = Identity l ::/ Identity r
-
-pattern (:+) :: Path t -> Path t -> Path t
-pattern l :+ r = Identity l ::+ Identity r
-
-pattern (:&) :: Path t -> Path t -> Path t
-pattern l :& r = Identity l ::& Identity r
-
-{-# COMPLETE One, Zero, Wild, Literal, RegexMatch, Absolute, Backwards, (:/), (:+), (:&) #-}
-
--- make the operator precedence match how they are parsed
-
-infixl 7 :/
-
-infixl 7 ::/
-
-infixl 5 :+
-
-infixl 5 ::+
-
-infixl 6 :&
-
-infixl 6 ::&
-
--- Tests for Show instance
-spec_showPath :: Spec
-spec_showPath = describe "Show Path" $ do
-  it "One" $
-    show (One :: Path String) `shouldBe` [rq|@|]
-  it "Zero" $
-    show (Zero :: Path String) `shouldBe` [rq|!|]
-  it "Wild" $
-    show (Wild :: Path String) `shouldBe` [rq|*|]
-  it "Literal" $
-    show (Literal "foo" :: Path String) `shouldBe` [rq|"foo"|]
-  it "RegexMatch" $
-    show (RegexMatch [re|^foo.*bar$|] :: Path String) `shouldBe` [rq|re"^foo.*bar$"|]
-  it "Absolute" $
-    show (Absolute (smallNID 2) :: Path String) `shouldBe` [rq|@000000000002|]
-  it "Backwards One" $
-    show (Backwards One :: Path String) `shouldBe` [rq|~@|]
-  it "Backwards Literal" $
-    show (Backwards (Literal "foo") :: Path String) `shouldBe` [rq|~"foo"|]
-  it "Simple sequence" $
-    show (Literal "foo" :/ Literal "bar" :: Path String) `shouldBe` [rq|"foo" / "bar"|]
-  it "Simple union" $
-    show (Literal "foo" :+ Literal "bar" :: Path String) `shouldBe` [rq|"foo" + "bar"|]
-  it "Simple intersection" $
-    show (Literal "foo" :& Literal "bar" :: Path String) `shouldBe` [rq|"foo" & "bar"|]
-  it "Precedence: / binds tighter than &" $
-    show (Literal "a" :/ Literal "b" :& Literal "c" :: Path String) `shouldBe` [rq|"a" / "b" & "c"|]
-  it "Precedence: & binds tighter than +" $
-    show (Literal "a" :& Literal "b" :+ Literal "c" :: Path String) `shouldBe` [rq|"a" & "b" + "c"|]
-  it "Precedence: complex expression" $
-    show (Literal "a" :/ Literal "b" :& Literal "c" :+ Literal "d" :: Path String) `shouldBe` [rq|"a" / "b" & "c" + "d"|]
-  it "Backwards with higher precedence" $
-    show (Backwards (Literal "foo") :/ Literal "bar" :: Path String) `shouldBe` [rq|~"foo" / "bar"|]
-  it "Parentheses needed for lower precedence in Backwards" $
-    show (Backwards (Literal "foo" :+ Literal "bar") :: Path String) `shouldBe` [rq|~("foo" + "bar")|]
-  it "Parentheses needed for + in &" $
-    show (Literal "a" :& (Literal "b" :+ Literal "c") :: Path String) `shouldBe` [rq|"a" & ("b" + "c")|]
-  it "No parentheses needed for higher precedence" $
-    show (Literal "a" :+ Literal "b" :/ Literal "c" :: Path String) `shouldBe` [rq|"a" + "b" / "c"|]
-  it "Complex with Backwards and Absolute" $
-    show (Backwards (Absolute (smallNID 1)) :& Literal "test" :: Path String) `shouldBe` [rq|~@000000000001 & "test"|]
+deriving instance (Ord1 f, Path'Constraints Ord p f t) => Ord (Path' p f t)

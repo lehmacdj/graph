@@ -31,6 +31,7 @@ import MyPrelude.Collections as X
 import MyPrelude.EarlyReturn as X
 import MyPrelude.Effect as X
 import MyPrelude.Function as X
+import MyPrelude.FunctorClasses as X
 import MyPrelude.IO as X
 import MyPrelude.JSON as X
 import MyPrelude.MaybeEither as X

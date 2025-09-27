@@ -8,7 +8,7 @@ import Models.Graph (Graph, emptyGraph)
 import Models.NID
 import Models.Node
 import Models.NormalizedPath
-import Models.Path
+import Models.Path.Simple
 import MyPrelude hiding ((\\))
 import Polysemy.State
 

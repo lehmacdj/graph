@@ -92,6 +92,9 @@ library
       Models.NormalizedPath
       Models.NormalizedPathSpec
       Models.Path
+      Models.Path.ParsedPath
+      Models.Path.PartialPath
+      Models.Path.Simple
       MyPrelude
       MyPrelude.Collections
       MyPrelude.Collections.Ordered
@@ -99,6 +102,7 @@ library
       MyPrelude.EarlyReturn
       MyPrelude.Effect
       MyPrelude.Function
+      MyPrelude.FunctorClasses
       MyPrelude.IO
       MyPrelude.JSON
       MyPrelude.MaybeEither
