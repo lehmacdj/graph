@@ -11,6 +11,7 @@ import Control.DeepSeq
 import Control.Lens
 import Data.Semigroup qualified as Semigroup (Last (Last))
 import Data.Set qualified as Set
+import Debug.Trace qualified
 import GHC.Records
 import Models.Common
 import Models.Connect
@@ -180,3 +181,23 @@ withEdge e n =
   n
     & #incoming %~ maybe id insertSet (justIfTrue (e.sink == n.nid) (inConnect e))
     & #outgoing %~ maybe id insertSet (justIfTrue (e.source == n.nid) (outConnect e))
+
+traceNode :: (CompactNodeShow n) => n -> n
+traceNode a =
+  Debug.Trace.trace (unpack (nshowWith (\x -> x {showIncoming = True}) a)) a
+{-# WARNING traceNode "Leaving traces in code" #-}
+
+traceMaybeNode :: (CompactNodeShow n) => NID -> Maybe n -> Maybe n
+traceMaybeNode nid =
+  maybe
+    (Debug.Trace.trace (show nid <> " does not exist") Nothing)
+    (Just . traceNode)
+{-# WARNING traceMaybeNode "Leaving traces in code" #-}
+
+traceGetNodeMetadata ::
+  (CompactNodeShow n) =>
+  (NID -> Sem r (Maybe n)) ->
+  (NID -> Sem r (Maybe n))
+traceGetNodeMetadata getNodeMetadata nid =
+  traceMaybeNode nid <$> getNodeMetadata nid
+{-# WARNING traceGetNodeMetadata "Leaving traces in code" #-}
