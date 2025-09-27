@@ -17,6 +17,7 @@ import ClassyPrelude hiding (fromException, nonNull, throwString)
 import Control.Comonad as X
 import Control.DeepSeq as X
 import Data.Coerce as X (Coercible, coerce)
+import Data.Constraint as X (Constraint)
 import Data.Functor.Contravariant as X
 import Data.Kind as X (Type)
 import Data.Orphans ()

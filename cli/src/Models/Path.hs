@@ -3,6 +3,7 @@
 module Models.Path
   ( Path' (..),
     Path,
+    PathPhase (..),
     pattern Backwards,
     pattern (:/),
     pattern (:+),
@@ -16,7 +17,16 @@ import Models.NID
 import MyPrelude
 import TestPrelude
 
-data Path' f t
+-- | Compilation phase of a path
+-- Used for "Trees That Grow" style extensions
+data PathPhase
+  = -- | Unelaborated paths may contain directives that need to be resolved
+    -- before the path can be normalized
+    Unelaborated
+  | -- | Elaborated paths are fully resolved and ready for normalization
+    Elaborated
+
+data Path' (p :: PathPhase) f t
   = -- | Stay at a specific location / the current location.
     -- Acts as a join point forcing intersections of a path that end in it to
     -- match at the same node (e.g. `(a/@ & b)/c` is equivalent to `(a & b)
@@ -47,22 +57,38 @@ data Path' f t
     -- (Literal t) instead, likewise for Wild. It inverts the order of paths and
     -- has no effect on node-location specifying path components or
     -- intersection/union operators
-    Backwards' (f (Path' f t))
+    Backwards' (f (Path' p f t))
   | -- | sequence
-    f (Path' f t) ::/ f (Path' f t)
+    f (Path' p f t) ::/ f (Path' p f t)
   | -- | union
-    f (Path' f t) ::+ f (Path' f t)
+    f (Path' p f t) ::+ f (Path' p f t)
   | -- | intersection
-    f (Path' f t) ::& f (Path' f t)
+    f (Path' p f t) ::& f (Path' p f t)
+  | Location (LocationVal p)
   deriving (Generic)
 
-deriving instance (Lift t, Lift (f (Path' f t))) => Lift (Path' f t)
+type family LocationVal (p :: PathPhase) where
+  LocationVal 'Unelaborated = Int
+  LocationVal 'Elaborated = Void
+
+-- | helper for producing the necessary constraints for a Path'
+type Path'Constraints ::
+  (Type -> Constraint) -> PathPhase -> (Type -> Type) -> Type -> Constraint
+type Path'Constraints c p f t = (c t, c (LocationVal p), c (f (Path' p f t)))
+
+-- | helper for producing the necessary constraints for a Path' excluding the
+-- functorial type parameter
+type PathConstraints ::
+  (Type -> Constraint) -> PathPhase -> Type -> Constraint
+type PathConstraints c p t = (c t, c (LocationVal p))
+
+deriving instance (Path'Constraints Lift p f t) => Lift (Path' p f t)
 
 showsPath ::
-  (Show t) =>
-  (Int -> f (Path' f t) -> ShowS) ->
+  (PathConstraints Show p t) =>
+  (Int -> f (Path' p f t) -> ShowS) ->
   Int ->
-  Path' f t ->
+  Path' p f t ->
   ShowS
 showsPath _ _ One = showString "@"
 showsPath _ _ Zero = showString "!"
@@ -78,24 +104,25 @@ showsPath showF d (l ::& r) =
   showParen (d > 6) $ showF 7 l . showString " & " . showF 7 r
 showsPath showF d (l ::+ r) =
   showParen (d > 5) $ showF 6 l . showString " + " . showF 6 r
+showsPath _ _ (Location n) = showString "%location(" . shows n . showString ")"
 
-instance (Show1 f, Show t) => Show (Path' f t) where
+instance (Show1 f, Path'Constraints Show p f t) => Show (Path' p f t) where
   showsPrec = showsPath showsPath1
     where
-      showsPath1 :: (Show1 f, Show t) => Int -> f (Path' f t) -> ShowS
+      showsPath1 :: (Show1 f, Show t) => Int -> f (Path' p f t) -> ShowS
       showsPath1 = liftShowsPrec (showsPath showsPath1) showList
 
-instance {-# OVERLAPPING #-} (Show t) => Show (Path' Identity t) where
+instance {-# OVERLAPPING #-} (PathConstraints Show p t) => Show (Path' p Identity t) where
   showsPrec = showsPath skipIdentity
     where
-      skipIdentity :: (Show t) => Int -> Identity (Path' Identity t) -> ShowS
+      skipIdentity :: (Show t) => Int -> Identity (Path' p Identity t) -> ShowS
       skipIdentity prec (Identity p) = showsPath skipIdentity prec p
 
 deriving instance (Eq t) => Eq (Path t)
 
 deriving instance (Ord t) => Ord (Path t)
 
-type Path = Path' Identity
+type Path = Path' Elaborated Identity
 
 pattern Backwards :: Path t -> Path t
 pattern Backwards p = Backwards' (Identity p)
