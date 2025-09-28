@@ -10,7 +10,7 @@ spec_normalizePath :: Spec
 spec_normalizePath = describe "normalizePath" do
   let normalizesTo pathStr expectedStr =
         it (show pathStr <> " normalizes to " <> show expectedStr) do
-          path <- parseForTest "path" (pPath' pSmallNID transition) pathStr
+          path <- parseForTest "path" (convertDirectivesToErrors (pPath' pSmallNID transition)) pathStr
           expected <- parseForTest "normalized path" (pNormalizedPath transition) expectedStr
           normalizePath path `shouldBe` expected
 

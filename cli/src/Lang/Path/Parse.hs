@@ -13,14 +13,14 @@ import Data.Functor
 import Graph.SystemNodes (tagsNID)
 import Lang.Parsing
 import Lang.ParsingSpec
-import Lang.Path
 import Models.NID
+import Models.Path.ParsedPath
 import MyPrelude hiding (try)
 import TestPrelude hiding (try)
 import Text.Megaparsec (try)
 import Text.Megaparsec.Char (char)
 
-pathTerm' :: Parser NID -> Parser t -> Parser (Path t)
+pathTerm' :: Parser NID -> Parser t -> Parser (ParsedPath t)
 pathTerm' pNID pTransition =
   try (Absolute <$> pNID)
     <|> try ((Absolute tagsNID :/) . Literal <$> (char '#' *> pTransition))
@@ -38,13 +38,13 @@ pRegex = do
     & compileRegex . encodeUtf8 . pack
     & codiagonal . bimap fail pure
 
-pathTerm :: Parser t -> Parser (Path t)
+pathTerm :: Parser t -> Parser (ParsedPath t)
 pathTerm = pathTerm' pFullNID
 
-binary :: String -> (Path t -> Path t -> Path t) -> Operator Parser (Path t)
+binary :: String -> (ParsedPath t -> ParsedPath t -> ParsedPath t) -> Operator Parser (ParsedPath t)
 binary name f = InfixL (f <$ symbol name)
 
-table :: [[Operator Parser (Path t)]]
+table :: [[Operator Parser (ParsedPath t)]]
 table =
   [ [Prefix (Backwards <$ symbol "~")],
     [binary "/" (:/)],
@@ -52,10 +52,10 @@ table =
     [binary "+" (:+)]
   ]
 
-pPath' :: Parser NID -> Parser t -> Parser (Path t)
+pPath' :: Parser NID -> Parser t -> Parser (ParsedPath t)
 pPath' pNID pTransition = makeExprParser (pathTerm' pNID pTransition) table
 
-pPath :: Parser t -> Parser (Path t)
+pPath :: Parser t -> Parser (ParsedPath t)
 pPath = pPath' pFullNID
 
 test_pPath :: TestTree
@@ -95,7 +95,7 @@ test_pPath =
       parseFails "re\""
     ]
   where
-    parsesTo :: String -> Path String -> TestTree
+    parsesTo :: String -> ParsedPath String -> TestTree
     parsesTo input = testCase ("parse: " ++ show input) . testParserParses (pPath transition) input
     parseFails input =
       testCase ("parse fails: " ++ show input) $ testParserFails (pPath transition <* eof) input

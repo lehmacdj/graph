@@ -13,7 +13,7 @@ import Models.Path as X
 import MyPrelude
 
 -- | PartialPath type (representing paths that may contain parse errors)
-type PartialPath = Path' Unelaborated (Either ParseError')
+type PartialPath = Path' WithDirectives (Either ParseError')
 
 pattern Backwards :: Either ParseError' (PartialPath t) -> PartialPath t
 pattern Backwards p = Backwards' p

@@ -5,6 +5,7 @@ import Lang.Path
 import Models.Graph
 import Models.NID
 import Models.Node
+import Models.Path.Simple
 import TestPrelude
 
 testGraph :: Graph String ()

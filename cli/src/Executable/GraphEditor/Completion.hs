@@ -14,6 +14,7 @@ import Lang.Parsing
 import Lang.Path
 import Lang.Path.Partial
 import Models.NID (nidDigits)
+import Models.Path.Simple qualified as Simple
 import MyPrelude
 import System.Console.Haskeline
 import Utils.Base62 (isBase62Char)
@@ -88,7 +89,7 @@ completePath env (i, _) = case getPartialPath (takeRelevantFromEnd i) of
       interpretTimeAsIO
       env
       $ do
-        let p = foldr (:/) One pp
+        let p = foldr (Simple.:/) Simple.One pp
         nid <- currentLocation
         ntids <- toList <$> subsumeUserError (resolvePathSuccesses nid p)
         nts <- getNodes @String ntids

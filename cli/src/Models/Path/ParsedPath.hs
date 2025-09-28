@@ -13,7 +13,7 @@ import MyPrelude
 
 -- | Represents a path that has been successfully parsed, but has had no
 -- further processing applied
-type ParsedPath = Path' Unelaborated Identity
+type ParsedPath = Path' WithDirectives Identity
 
 pattern Backwards :: ParsedPath t -> ParsedPath t
 pattern Backwards p = Backwards' (Identity p)
@@ -44,5 +44,5 @@ infixl 6 :&
   (:/),
   (:+),
   (:&),
-  LocationFromHistory
+  Directive
   #-}

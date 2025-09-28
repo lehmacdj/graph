@@ -10,8 +10,8 @@ where
 import Graph.SystemNodes (tagsNID)
 import Lang.Parsing
 import Lang.ParsingSpec
-import Lang.Path
 import Lang.Path.Parse
+import Models.Path.Simple
 import MyPrelude hiding (many, try)
 import TestPrelude hiding (many, try)
 import Text.Megaparsec
@@ -25,7 +25,7 @@ getPartialPath i = case parse pLastPartialPath "<completion>" i of
   Right r -> Just r
 
 pPathSegment :: Parser (Path String)
-pPathSegment = pathTerm transition
+pPathSegment = convertDirectivesToErrors (pathTerm transition)
 
 -- | a list of path segments that are interpreted as being separated by
 -- concatenation, followed by a string that represents a partial transition or something else

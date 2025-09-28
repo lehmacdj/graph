@@ -10,16 +10,21 @@ import Data.Functor
 import Graph.SystemNodes (tagsNID)
 import Lang.Command
 import Lang.Parsing
-import Lang.Path
 import Lang.Path.Parse
+import Models.Path.ParsedPath
+import Models.Path.Simple (Path)
+import Models.Path.Simple qualified as Simple
 import MyPrelude hiding (some, try)
 import TestPrelude hiding (some, try)
 import Text.Megaparsec
 
-path :: Parser (Path String)
-path = pPath transition
+path' :: Parser (ParsedPath String)
+path' = pPath transition
 
-tpath :: Parser (Path Text)
+path :: Parser (Path String)
+path = convertDirectivesToErrors path'
+
+tpath :: Parser (ParsedPath Text)
 tpath = pPath ttransition
 
 pChangeNode :: Parser Command
@@ -163,7 +168,7 @@ test_parseCommand =
   testGroup
     "parseCommand"
     [ "t hello/world @"
-        `parsesTo` Tag (Literal "hello" :/ Literal "world") One,
+        `parsesTo` Tag (Literal "hello" Simple.:/ Literal "world") One,
       "tag \"hello/world\" @"
         `parsesTo` Tag (Literal "hello/world") One,
       "tag hello-world @; tag foo-bar @"
@@ -179,7 +184,7 @@ test_parseCommand =
         `parsesTo` Seq (twoElemList (At Wild NodeId) ShowImage []),
       "{nid}" `parsesTo` NodeId,
       "{nid; si}" `parsesTo` Seq (twoElemList NodeId ShowImage []),
-      "at #foo nid" `parsesTo` At (Absolute tagsNID :/ Literal "foo") NodeId,
+      "at #foo nid" `parsesTo` At (Absolute tagsNID Simple.:/ Literal "foo") NodeId,
       -- regression test: this used to parse to t ouch hello-world; incorrectly
       -- not requiring a space between t and ouch
       parseFails "touch hello-world",

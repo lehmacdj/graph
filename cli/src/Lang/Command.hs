@@ -44,6 +44,9 @@ import Models.History
 import Models.NID
 import Models.Node
 import Models.NormalizedPath (normalizePath)
+import Models.Path.ParsedPath
+import Models.Path.Simple (Path)
+import Models.Path.Simple qualified as Simple
 import MyPrelude
 import Polysemy.Internal.Scoped (Scoped, scoped_)
 import Polysemy.Readline
@@ -125,7 +128,7 @@ data Command
   | -- | Execute a list of commands sequentially
     Seq (TwoElemList Command)
   | -- | debug-v2-path, v2
-    V2Path (Path Text)
+    V2Path (ParsedPath Text)
   deriving (Eq, Show, Ord, Generic)
 
 singleErr :: Text -> Set NID -> UserError
@@ -220,7 +223,7 @@ interpretCommand = \case
     nid <- currentLocation
     let err = singleErr "the last argument of tag"
     target <- the' err =<< subsumeUserError (resolvePathSuccesses nid q)
-    nnids <- (subsumeUserError . taggingFreshNodesWithTime) (mkPath nid (p :/ Literal ""))
+    nnids <- (subsumeUserError . taggingFreshNodesWithTime) (mkPath nid (p Simple.:/ Literal ""))
     _ <- subsumeUserError (Graph.Utils.mergeNodes @String (target `ncons` toList nnids))
     pure ()
   Text t s -> do
@@ -342,8 +345,10 @@ interpretCommand = \case
     nid <- currentLocation
     say $ "current location: " ++ tshow nid
     say $ "parsed path: " ++ tshow p
-    say $ "normalized path: " ++ tshow (normalizePath p)
-    mp <- scoped_ $ materializePath nid p
+    p' <- handleDirectivesWith (error "unimplemented") p
+    say $ "prenormal path: " ++ tshow p'
+    say $ "normalized path: " ++ tshow (normalizePath p')
+    mp <- scoped_ $ materializePath nid p'
     say $ "materialized path: " <> tshow mp.path
     if null mp.graph
       then say "no nodes materialized"

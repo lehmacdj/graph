@@ -3,17 +3,21 @@
 module Models.Path
   ( Path' (..),
     PathPhase (..),
+    PathAnnotation (..),
+    Directive (..),
+    handleDirectivesWith,
   )
 where
 
 import Models.NID
 import MyPrelude
+import Text.Megaparsec.Pos (SourcePos)
 
 -- | The most general path type. Parametrized with a phase, a functor that
 -- allows wrapping nested paths, and the raw type of literals/transitions.
 --
 -- There are also submodules that expose simpler path types with common
--- parameters, e.g. @Models.Path.SimpleElaborated@ exposes the simple Path type
+-- parameters, e.g. @Models.Path.Simple@ exposes the simple Path type
 --
 -- There's some constructors that I'd like to add, but haven't either because I
 -- haven't needed them and/or because they would complicate the implementation
@@ -54,7 +58,7 @@ data Path' (p :: PathPhase) f t
   | -- | intersection
     f (Path' p f t) ::& f (Path' p f t)
   | -- | A location in the history
-    LocationFromHistory (LocationFromHistoryVal p)
+    Directive PathAnnotation (DirectiveVal p)
   deriving (Generic)
 
 infixl 7 ::/
@@ -68,26 +72,73 @@ infixl 6 ::&
 -- | Compilation phase of a path
 -- Used for "Trees That Grow" style extensions
 data PathPhase
-  = -- | Unelaborated paths may contain directives that need to be resolved
-    -- before the path can be normalized
-    Unelaborated
-  | -- | Elaborated paths are fully resolved and ready for normalization
-    Elaborated
+  = -- | paths may contain directives that need to be resolved before the path
+    -- can be normalized
+    WithDirectives
+  | -- | Plain paths that are ready for normalization. These paths have no
+    -- dependencies necessary for normalization
+    Prenormal
 
-type family LocationFromHistoryVal (p :: PathPhase) where
-  LocationFromHistoryVal 'Unelaborated = Int
-  LocationFromHistoryVal 'Elaborated = Void
+-- | Annotation for components of a path, indicating the start/end source
+-- location.
+--
+-- Currently I'm only including this for directives, but I'd like to add it
+-- to all path components eventually
+data PathAnnotation = PathAnnotation
+  { startPos :: SourcePos,
+    endPos :: SourcePos
+  }
+  deriving (Eq, Ord, Show, Generic, Lift)
+
+newtype Directive = LocationFromHistory Int
+  deriving (Eq, Ord, Generic, Lift)
+
+instance Show Directive where
+  showsPrec _ (LocationFromHistory i) =
+    showString "%history(" . shows i . showString ")"
+
+type family DirectiveVal (p :: PathPhase) where
+  DirectiveVal 'WithDirectives = Directive
+  DirectiveVal 'Prenormal = Void
+
+handleDirectivesWith ::
+  (Traversable f, Applicative g) =>
+  (forall a. PathAnnotation -> Directive -> g a) ->
+  Path' 'WithDirectives f t ->
+  g (Path' 'Prenormal f t)
+handleDirectivesWith interpretDirective = \case
+  One -> pure One
+  Zero -> pure Zero
+  Wild -> pure Wild
+  RegexMatch r -> pure (RegexMatch r)
+  Literal x -> pure (Literal x)
+  Absolute nid -> pure (Absolute nid)
+  Backwards' p ->
+    Backwards' <$> traverse (handleDirectivesWith interpretDirective) p
+  l ::/ r ->
+    (::/)
+      <$> traverse (handleDirectivesWith interpretDirective) l
+      <*> traverse (handleDirectivesWith interpretDirective) r
+  l ::+ r ->
+    (::+)
+      <$> traverse (handleDirectivesWith interpretDirective) l
+      <*> traverse (handleDirectivesWith interpretDirective) r
+  l ::& r ->
+    (::&)
+      <$> traverse (handleDirectivesWith interpretDirective) l
+      <*> traverse (handleDirectivesWith interpretDirective) r
+  Directive ann directive -> interpretDirective ann directive
 
 -- | helper for producing the necessary constraints for a Path'
 type Path'Constraints ::
   (Type -> Constraint) -> PathPhase -> (Type -> Type) -> Type -> Constraint
-type Path'Constraints c p f t = (c t, c (LocationFromHistoryVal p), c (f (Path' p f t)))
+type Path'Constraints c p f t = (c t, c (DirectiveVal p), c (f (Path' p f t)))
 
 -- | helper for producing the necessary constraints for a Path' excluding the
 -- functorial type parameter
 type PathConstraints ::
   (Type -> Constraint) -> PathPhase -> Type -> Constraint
-type PathConstraints c p t = (c t, c (LocationFromHistoryVal p))
+type PathConstraints c p t = (c t, c (DirectiveVal p))
 
 -- * Instances
 
@@ -113,7 +164,7 @@ showsPath showF d (l ::& r) =
   showParen (d > 6) $ showF 7 l . showString " & " . showF 7 r
 showsPath showF d (l ::+ r) =
   showParen (d > 5) $ showF 6 l . showString " + " . showF 6 r
-showsPath _ _ (LocationFromHistory n) = showString "%location(" . shows n . showString ")"
+showsPath _ _ (Directive _ d) = shows d
 
 instance (Show1 f, Path'Constraints Show p f t) => Show (Path' p f t) where
   showsPrec = showsPath showsPath1

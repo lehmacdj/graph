@@ -1,17 +1,18 @@
-module Lang.Parsing where
+module Lang.Parsing
+  ( module X,
+    module Lang.Parsing,
+  )
+where
 
 import Control.Monad.Fail
 import Data.Char
-import Data.Void
+import Lang.Parsing.Common as X
 import Models.NID
+import Models.Path
 import MyPrelude hiding (many, some, try)
 import Text.Megaparsec
 import Text.Megaparsec.Char
 import Text.Megaparsec.Char.Lexer qualified as L
-
-type Parser = Parsec Void String
-
-type ParseError' = ParseError Void String
 
 s :: Parser ()
 s = L.space space1 empty empty
@@ -109,3 +110,12 @@ via1 p sep = do
   initial <- p
   remainder <- some ((,) <$> sep <*> p)
   pure (initial, impureNonNull remainder)
+
+convertDirectivesToErrors ::
+  (Traversable f) =>
+  Parser (Path' 'WithDirectives f t) ->
+  Parser (Path' 'Prenormal f t)
+convertDirectivesToErrors p = handleDirectivesWith interpretDirective =<< p
+  where
+    interpretDirective PathAnnotation {..} directive = do
+      customFailure (IllegalDirective directive startPos endPos)

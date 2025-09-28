@@ -19,10 +19,12 @@ where
 import DAL.Serialization (initializeGraph)
 import Data.Aeson
 import Data.Void
+import Lang.Parsing.Common
 import Models.Connect
 import Models.Edge
 import Models.Graph (Graph, emptyGraph, insertEdges, insertNodes)
 import Models.NID
+import Models.NID as X (smallNID)
 import Models.Node (Node, emptyNode)
 import MyPrelude hiding (assert)
 import System.Directory (copyFile)
@@ -35,7 +37,6 @@ import Test.Tasty.HUnit as X
 import Test.Tasty.Hspec (testSpec)
 import Test.Tasty.QuickCheck as X
 import Text.Megaparsec
-import Models.NID as X (smallNID) 
 
 -- | initializes a graph that is either empty, or based on a template graph
 -- at the specified location
@@ -98,7 +99,7 @@ stronglyConnectedGraph :: [Int] -> Graph () ()
 stronglyConnectedGraph nids =
   disconnectedGraph nids & insertEdges (uncurry edge <$> allAnyOrderPairs nids)
 
-parseForTest :: String -> Parsec Void String a -> String -> IO a
+parseForTest :: String -> Parser a -> String -> IO a
 parseForTest whatToParse parser input =
   case runParser (parser <* eof) ("<" <> whatToParse <> ">") input of
     Left err -> do
