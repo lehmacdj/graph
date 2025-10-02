@@ -71,6 +71,7 @@ library
       Lang.NormalizedPath.ParseSpec
       Lang.NormalizedPath.TH
       Lang.Parsing
+      Lang.Parsing.Common
       Lang.ParsingSpec
       Lang.Path
       Lang.Path.Parse
