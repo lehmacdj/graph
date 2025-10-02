@@ -111,3 +111,6 @@ spec_showPath = describe "Show Path" $ do
   it "Complex with Backwards and Absolute" $
     show (Backwards (Absolute (smallNID 1)) :& Literal "test" :: TPath)
       `shouldBe` [rq|~@000000000001 & "test"|]
+  it "LocationFromHistory" $
+    show (Directive testAnn (LocationFromHistory -23) :: TPath)
+      `shouldBe` [rq|%history(-23)|]

@@ -154,6 +154,7 @@ library
       ImportQualifiedPost
       ImpredicativeTypes
       LambdaCase
+      LexicalNegation
       MultiParamTypeClasses
       NamedFieldPuns
       NoFieldSelectors
@@ -289,6 +290,7 @@ executable dump-graph
       ImportQualifiedPost
       ImpredicativeTypes
       LambdaCase
+      LexicalNegation
       MultiParamTypeClasses
       NamedFieldPuns
       NoFieldSelectors
@@ -418,6 +420,7 @@ executable ge
       ImportQualifiedPost
       ImpredicativeTypes
       LambdaCase
+      LexicalNegation
       MultiParamTypeClasses
       NamedFieldPuns
       NoFieldSelectors
@@ -547,6 +550,7 @@ executable scratch
       ImportQualifiedPost
       ImpredicativeTypes
       LambdaCase
+      LexicalNegation
       MultiParamTypeClasses
       NamedFieldPuns
       NoFieldSelectors
@@ -677,6 +681,7 @@ test-suite graph-test
       ImportQualifiedPost
       ImpredicativeTypes
       LambdaCase
+      LexicalNegation
       MultiParamTypeClasses
       NamedFieldPuns
       NoFieldSelectors

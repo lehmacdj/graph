@@ -114,6 +114,7 @@ default-extensions:
 - ImportQualifiedPost
 - ImpredicativeTypes
 - LambdaCase
+- LexicalNegation
 - MultiParamTypeClasses
 - NamedFieldPuns
 - NoFieldSelectors

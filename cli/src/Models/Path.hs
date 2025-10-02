@@ -4,6 +4,7 @@ module Models.Path
   ( Path' (..),
     PathPhase (..),
     PathAnnotation (..),
+    testAnn,
     Directive (..),
     handleDirectivesWith,
   )
@@ -11,7 +12,7 @@ where
 
 import Models.NID
 import MyPrelude
-import Text.Megaparsec.Pos (SourcePos)
+import Text.Megaparsec.Pos (SourcePos, initialPos)
 
 -- | The most general path type. Parametrized with a phase, a functor that
 -- allows wrapping nested paths, and the raw type of literals/transitions.
@@ -89,6 +90,9 @@ data PathAnnotation = PathAnnotation
     endPos :: SourcePos
   }
   deriving (Eq, Ord, Show, Generic, Lift)
+
+testAnn :: PathAnnotation
+testAnn = PathAnnotation (initialPos "<test>") (initialPos "<test>")
 
 newtype Directive = LocationFromHistory Int
   deriving (Eq, Ord, Generic, Lift)
