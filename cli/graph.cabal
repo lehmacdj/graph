@@ -178,7 +178,7 @@ library
       TypeOperators
       TypeSynonymInstances
       ViewPatterns
-  ghc-options: -Wall -fplugin=Polysemy.Plugin -flate-specialise -fspecialise-aggressively
+  ghc-options: -Wall -fplugin=Polysemy.Plugin -flate-specialise -fspecialise-aggressively -fprefer-byte-code -fbyte-code-and-object-code
   cpp-options: -DDEBUG
   build-depends:
       Glob
@@ -313,7 +313,7 @@ executable dump-graph
       TypeOperators
       TypeSynonymInstances
       ViewPatterns
-  ghc-options: -Wall -fplugin=Polysemy.Plugin -flate-specialise -fspecialise-aggressively -threaded -rtsopts -with-rtsopts=-N
+  ghc-options: -Wall -fplugin=Polysemy.Plugin -flate-specialise -fspecialise-aggressively -fprefer-byte-code -fbyte-code-and-object-code -threaded -rtsopts -with-rtsopts=-N
   cpp-options: -DDEBUG
   build-depends:
       Glob
@@ -442,7 +442,7 @@ executable ge
       TypeOperators
       TypeSynonymInstances
       ViewPatterns
-  ghc-options: -Wall -fplugin=Polysemy.Plugin -flate-specialise -fspecialise-aggressively -threaded -rtsopts -with-rtsopts=-N
+  ghc-options: -Wall -fplugin=Polysemy.Plugin -flate-specialise -fspecialise-aggressively -fprefer-byte-code -fbyte-code-and-object-code -threaded -rtsopts -with-rtsopts=-N
   cpp-options: -DDEBUG
   build-depends:
       Glob
@@ -571,7 +571,7 @@ executable scratch
       TypeOperators
       TypeSynonymInstances
       ViewPatterns
-  ghc-options: -Wall -fplugin=Polysemy.Plugin -flate-specialise -fspecialise-aggressively -threaded -rtsopts -with-rtsopts=-N
+  ghc-options: -Wall -fplugin=Polysemy.Plugin -flate-specialise -fspecialise-aggressively -fprefer-byte-code -fbyte-code-and-object-code -threaded -rtsopts -with-rtsopts=-N
   cpp-options: -DDEBUG
   build-depends:
       Glob
@@ -701,7 +701,7 @@ test-suite graph-test
       TypeOperators
       TypeSynonymInstances
       ViewPatterns
-  ghc-options: -Wall -fplugin=Polysemy.Plugin -flate-specialise -fspecialise-aggressively -threaded -rtsopts -with-rtsopts=-N -Wall -O0
+  ghc-options: -Wall -fplugin=Polysemy.Plugin -flate-specialise -fspecialise-aggressively -fprefer-byte-code -fbyte-code-and-object-code -threaded -rtsopts -with-rtsopts=-N -Wall -O0
   cpp-options: -DDEBUG
   build-depends:
       Glob

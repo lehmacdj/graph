@@ -77,7 +77,7 @@ import Control.Lens.Extras as X (is)
 import Data.Generics.Labels as X
 import Data.Generics.Wrapped as X (_Unwrapped, _Wrapped)
 import Data.IxSet.Typed qualified as IxSet
-import Data.List as X (iterate, tails, transpose)
+import Data.List as X (iterate, transpose)
 import Data.List.NonEmpty as X (NonEmpty (..))
 import Data.Map.Strict qualified as Map
 import Data.Set qualified as Set

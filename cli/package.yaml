@@ -144,6 +144,8 @@ ghc-options:
 - -fplugin=Polysemy.Plugin
 - -flate-specialise
 - -fspecialise-aggressively
+# https://well-typed.com/blog/2023/02/interface-files-with-core/
+- -fprefer-byte-code -fbyte-code-and-object-code
 
 cpp-options:
 - -DDEBUG
