@@ -77,15 +77,13 @@ spec_normalizePath = describe "normalizePath" do
   "@/x/@ & @/~y/@" `normalizesTo` "[@<x & @<~y]>@"
 
   -- inverse/backlinks with loops
-  -- these are complicated because there are potentially several ways of
-  -- expressing the same thing; trying to decide on a cannoical form
+  -- there's no super principled way to distinguish between cases like the
+  -- below; the normalization algorithm makes a deterministic but arbitrary
+  -- choice based on the Ord instance of the involved things
   "~@" `normalizesTo` "@"
   "~(@ & foo)" `normalizesTo` "@[foo]"
   "@ & ~foo" `normalizesTo` "@[foo]"
-  "~(@ & foo/bar)" `normalizesTo` "@[bar /| foo]" -- also @[bar /| foo]
-  -- there's no super principled way to distinguish between cases like the
-  -- below; the normalization algorithm makes a deterministic but arbitrary
-  -- choice based the Ord instance of the involved things
+  "~(@ & foo/bar)" `normalizesTo` "@[bar /| foo]"
   "@ & ~foo/bar" `normalizesTo` "@[~bar /| foo]"
   "@ & foo/~bar" `normalizesTo` "@[bar /| ~foo]"
   "~(@ & ~foo/bar)" `normalizesTo` "@[bar /| ~foo]"
