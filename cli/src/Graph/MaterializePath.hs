@@ -10,13 +10,7 @@ import Models.Node
 import Models.NormalizedPath
 import MyPrelude hiding ((\\))
 import Polysemy.State
-
-data MaterializedPath t = MaterializedPath
-  { path :: NormalizedPath NID t,
-    graph :: Graph t IsThin,
-    nonexistentNodes :: Set NID
-  }
-  deriving (Eq, Show, Generic)
+import Models.MaterializedPath
 
 {-# HLINT ignore materializePath "Functor law" #-}
 

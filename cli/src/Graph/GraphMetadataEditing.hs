@@ -2,11 +2,11 @@
 
 module Graph.GraphMetadataEditing where
 
-import Control.Lens (prism')
 import DAL.FileSystemOperations.Metadata
 import DAL.FileSystemOperations.MetadataWriteDiff
 import Error.UserError
 import Error.Warn
+import Models.Augmentations.IsThin
 import Models.Edge
 import Models.Graph (Graph, emptyGraph)
 import Models.Graph qualified
@@ -16,24 +16,6 @@ import MyPrelude
 import Polysemy.Scoped
 import Polysemy.State
 import Polysemy.Tagged
-
-data IsThin = Thin | Fetched
-  deriving (Eq, Show, Ord, Generic)
-
-instance ShowableAugmentation IsThin where
-  augmentationLabel = Nothing
-  defaultShowAugmentation = \case
-    Thin -> "thin"
-    Fetched -> "fetched"
-  shouldShowStandaloneAugmentation = True
-
-instance DefaultAugmentation IsThin where
-  defaultAugmentation = Thin
-
-onlyFetched :: Prism' (Node t IsThin) (Node t ())
-onlyFetched = prism' (fmap (const Fetched)) \case
-  n | n.augmentation == Fetched -> Just $ void n
-  _ -> Nothing
 
 -- | Marker indicating that something promises to only read the graph metadata.
 -- I gave up on trying to enforce this at the type level because it ended up

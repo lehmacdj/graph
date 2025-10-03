@@ -29,18 +29,19 @@ import Graph.Check
 import Graph.Effect
 import Graph.Export.FileSystem (exportToDirectory)
 import Graph.FreshNID
-import Graph.GraphMetadataEditing (GraphMetadataEditing, IsThin (Fetched))
+import Graph.GraphMetadataEditing (GraphMetadataEditing, GraphMetadataReading)
 import Graph.Import.ByteString
 import Graph.Import.FileSystem
-import Graph.MaterializePath (graph, materializePath, nonexistentNodes, path)
+import Graph.LegacyPathMaterialization
+import Graph.MaterializePath (materializePath)
 import Graph.NodeLocated
 import Graph.Time (taggingFreshNodesWithTime)
 import Graph.Utils
-import Graph.LegacyPathMaterialization
 import Models.Connect
 import Models.Edge
 import Models.Graph (subtractiveFilterGraph)
 import Models.History
+import Models.MaterializedPath
 import Models.NID
 import Models.Node
 import Models.NormalizedPath (leastConstrainedNormalizedPath, normalizePath)
@@ -168,6 +169,21 @@ guardDangerousDualizedOperation = do
     outputStrLn "the graph is currently dualized"
     outputStrLn "the operation you are attempting may be dangerous in that state"
     promptYesNo "proceed (y/n): " >>= bool (throw OperationCancelled) (pure ())
+
+interpretDirective ::
+  (Members [GraphMetadataReading, State History, GetLocation] effs) =>
+  SourceRange ->
+  Directive Identity Text ->
+  Sem effs (Path Text)
+interpretDirective _ = \case
+  LocationFromHistory i -> gets @History (Absolute . fst . backInTime i)
+  Targets p -> do
+    currentNid <- currentLocation
+    p' <- handleDirectivesWith interpretDirective p
+    let np = normalizePath p'
+    mp <- materializePath currentNid (leastConstrainedNormalizedPath np)
+    -- this is a little bit inefficient of an embedding, but not too bad
+    pure $ foldl' (Simple.:+) Zero (mapSet Absolute $ targets mp.path)
 
 interpretCommand ::
   ( Members [DisplayImage, Echo, Error UserError, SetLocation, GetLocation, Dualizeable] effs,
@@ -345,11 +361,12 @@ interpretCommand = \case
     nid <- currentLocation
     say $ "current location: " ++ tshow nid
     say $ "parsed path: " ++ tshow p
-    p' <- handleDirectivesWith (error "unimplemented") p
-    say $ "prenormal path: " ++ tshow p'
-    let np = normalizePath p'
-    say $ "normalized path: " ++ tshow np
-    mp <- scoped_ $ materializePath nid (leastConstrainedNormalizedPath np)
+    mp <- scoped_ do
+      p' <- handleDirectivesWith interpretDirective p
+      say $ "prenormal path: " ++ tshow p'
+      let np = normalizePath p'
+      say $ "normalized path: " ++ tshow np
+      materializePath nid (leastConstrainedNormalizedPath np)
     say $ "materialized path: " <> tshow mp.path
     if null mp.graph
       then say "no nodes materialized"

@@ -25,6 +25,7 @@ import MyPrelude
 -- Path t :\ Path t -- ^ set minus (useful with wild to restrict)
 -- Negate (Path t) -- ^ negate a path, if included obsolesces other operators
 -- KleeneStar (Path t) -- ^ necessary for expressing arbitrary graph traversals as paths
+-- NormalizedPath -- ^ embed an already normalized path, would be useful as an optimization
 --
 -- WARNING: when updating this type, update the {-# COMPLETE #-} pragmas
 -- in @Models.Path.*@ submodules too so that completeness checking works as

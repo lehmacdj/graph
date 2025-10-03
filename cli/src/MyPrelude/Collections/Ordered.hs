@@ -2,35 +2,29 @@
 
 module MyPrelude.Collections.Ordered
   ( module X,
-    module MyPrelude.Collections.Ordered,
   )
 where
 
 import ClassyPrelude
+import Control.Lens.Indexed
+  ( FoldableWithIndex,
+    FunctorWithIndex (imap),
+    TraversableWithIndex (..),
+    ifoldMap,
+  )
 import Data.Map.Ordered as X (OMap)
 import Data.Map.Ordered qualified as OMap
 import Data.Set.Ordered as X (OSet)
 import Data.Set.Ordered qualified as OSet
-import Language.Haskell.TH.Syntax (Code (Code, examineCode), Exp (AppE, VarE), Lift (..), ModName (ModName), Name (Name), NameFlavour (NameG), NameSpace (VarName), OccName (OccName), PkgName (PkgName), TExp (TExp))
-
-orderedContainersName :: String -> String -> Name
-orderedContainersName moduleName occName =
-  Name
-    (OccName occName)
-    (NameG VarName (PkgName "ordered-containers") (ModName moduleName))
+import Language.Haskell.TH.Syntax (Lift (..))
 
 -- * OSet
 
 instance (NFData a) => NFData (OSet a) where
   rnf = rnf . toList
 
-instance (Lift a) => Lift (OSet a) where
-  liftTyped x = Code $ do
-    TExp elems <- (liftTyped . toList $ x).examineCode
-    pure . TExp $
-      AppE
-        (VarE (orderedContainersName "Data.Set.Ordered" "fromList"))
-        elems
+instance (Lift a, Ord a) => Lift (OSet a) where
+  liftTyped x = [||OSet.fromList $$(liftTyped . toList $ x)||]
 
 type instance Element (OSet a) = a
 
@@ -63,13 +57,8 @@ instance (Ord a) => IsSet (OSet a) where
 instance (Ord k, NFData k, NFData v) => NFData (OMap k v) where
   rnf = rnf . mapToList
 
-instance (Lift k, Lift v) => Lift (OMap k v) where
-  liftTyped x = Code $ do
-    TExp assocs <- (liftTyped . OMap.assocs $ x).examineCode
-    pure . TExp $
-      AppE
-        (VarE (orderedContainersName "Data.Map.Ordered" "fromList"))
-        assocs
+instance (Lift k, Lift v, Ord k) => Lift (OMap k v) where
+  liftTyped x = [||OMap.fromList (OMap.assocs x)||]
 
 type instance Element (OMap k v) = v
 
@@ -123,3 +112,13 @@ instance (Ord k) => IsMap (OMap k v) where
 instance (Ord k) => HasKeysSet (OMap k v) where
   type KeySet (OMap k v) = OSet k
   keysSet = setFromList . map fst . OMap.assocs
+
+instance (Ord k) => FunctorWithIndex k (OMap k) where
+  imap f = OMap.fromList . map (\(k, v) -> (k, f k v)) . OMap.assocs
+
+instance (Ord k) => FoldableWithIndex k (OMap k) where
+  ifoldMap f = foldMap (uncurry f) . OMap.assocs
+
+instance (Ord k) => TraversableWithIndex k (OMap k) where
+  itraverse f m =
+    OMap.fromList <$> traverse (\(k, v) -> (k,) <$> f k v) (OMap.assocs m)

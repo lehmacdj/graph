@@ -1,4 +1,10 @@
-module Models.History (History (..), singletonHistory, pushHistory, backInTime) where
+module Models.History
+  ( History (..),
+    singletonHistory,
+    pushHistory,
+    backInTime,
+  )
+where
 
 import Models.NID (NID)
 import MyPrelude

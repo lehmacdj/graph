@@ -78,6 +78,7 @@ library
       Lang.Path.Partial
       Lang.Path.TH
       Lang.PathSpec
+      Models.Augmentations.IsThin
       Models.Common
       Models.Connect
       Models.DPath
@@ -86,6 +87,7 @@ library
       Models.GraphSpec
       Models.History
       Models.HistorySpec
+      Models.MaterializedPath
       Models.MiscSpec
       Models.NID
       Models.NIDSpec

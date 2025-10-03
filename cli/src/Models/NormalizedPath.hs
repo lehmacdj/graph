@@ -46,6 +46,7 @@ data PointlikeDeterministicPath a t
   = PointlikeDeterministicPath
   { -- | this anchor can only be unanchored if the loops set is empty
     anchor :: a,
+    -- | each of these can also be inverted, see `invertLoop` for details
     loops :: OSet (DPBranch a t)
   }
   deriving stock (Eq, Ord, Show, Generic, Lift)
@@ -61,6 +62,10 @@ specific :: (Ord t) => NID -> PointlikeDeterministicPath Anchor t
 specific nid = PointlikeDeterministicPath (Specific nid) mempty
 
 -- | Type of transition (literal or wild).
+-- TODO: give this a similar trees that grow treatment to Models.Path
+-- We can eliminate the invariant that NormalizedPath NID doesn't contain
+-- DPWild/DPRegex if we do that, or alternately include the original transition
+-- but include the capture groups/matched transitions in the result
 data DPTransition t
   = DPLiteral t
   | DPWild
@@ -315,6 +320,12 @@ invertLoop =
 isoLoop :: (Ord a, Ord t) => DPBranch a t -> DPBranch a t
 isoLoop =
   minOn (\x -> (backwardsCount x, x))
+    <$> id
+    <*> invertBranch . flipBranch
+
+worseLoops :: (Ord a, Ord t) => DPBranch a t -> DPBranch a t
+worseLoops =
+  maxOn (\x -> (backwardsCount x, x))
     <$> id
     <*> invertBranch . flipBranch
 
