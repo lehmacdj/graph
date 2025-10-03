@@ -36,6 +36,7 @@ pathTerm' pNID pTransition =
 pDirective :: Parser t -> Parser (Directive Identity t)
 pDirective pTransition =
   try (LocationFromHistory <$> pDirectiveNamed "history" number)
+    <|> try (LocationFromHistory 1 <$ symbol "%last")
     <|> (Flatten <$> pDirectiveNamed "flatten" (pPath pTransition))
 
 pDirectiveNamed :: String -> Parser a -> Parser a
@@ -116,6 +117,7 @@ test_pPath =
       parseFails "+foo",
       parseFails "~",
       parseFails "foo~bar",
+      parseFails "%last()",
       parseFails "re\""
     ]
   where
@@ -132,13 +134,15 @@ test_pDirective =
   testGroup
     "pDirective"
     [ "%history(23)" `parsesTo` LocationFromHistory 23,
-      "%history(-5)" `parsesTo` LocationFromHistory (-5),
+      "%history(-5)" `parsesTo` LocationFromHistory -5,
+      "%last" `parsesTo` LocationFromHistory 1,
       "%flatten(@000000000002)" `parsesTo` Flatten (Absolute (smallNID 2)),
       "%flatten(@/foo + #bar)"
         `parsesTo` Flatten
           ( (One :/ Literal "foo")
               :+ (Absolute tagsNID :/ Literal "bar")
           ),
+      parseFails "%last()",
       parseFails "%history()",
       parseFails "%history(foo)",
       parseFails "%flatten()",
