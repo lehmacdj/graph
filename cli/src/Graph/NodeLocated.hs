@@ -5,7 +5,7 @@ module Graph.NodeLocated
   )
 where
 
-import Models.History (History, addToHistory)
+import Models.History (History, pushHistory)
 import Models.NID (NID)
 import MyPrelude hiding (Reader, ask)
 import Polysemy.Output
@@ -31,4 +31,4 @@ runLocableHistoryState = subsumeReaderState (view #now) >>> runSetLocationHistor
 runSetLocationHistoryState ::
   (Member (State History) r) => Sem (SetLocation : r) ~> Sem r
 runSetLocationHistoryState = interpret $ \case
-  Output nid -> modify @History (addToHistory nid)
+  Output nid -> modify @History (pushHistory nid)

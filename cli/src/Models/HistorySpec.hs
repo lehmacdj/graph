@@ -8,8 +8,8 @@ history :: [Int] -> Int -> [Int] -> History
 history past now future =
   History (smallNID <$> past) (smallNID now) (smallNID <$> future)
 
-test_addToHistory :: TestTree
-test_addToHistory =
+test_pushHistory :: TestTree
+test_pushHistory =
   testGroup
     "add 0 to history"
     [ ath 0 (history [1, 0] 2 []) (history [2, 1, 0] 0 []),
@@ -19,7 +19,7 @@ test_addToHistory =
     ]
   where
     ath n h expected =
-      testCase name $ addToHistory (smallNID n) h @?= expected
+      testCase name $ pushHistory (smallNID n) h @?= expected
       where
         name = show h
 

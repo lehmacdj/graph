@@ -1,4 +1,4 @@
-module Models.History (History (..), singletonHistory, addToHistory, backInTime) where
+module Models.History (History (..), singletonHistory, pushHistory, backInTime) where
 
 import Models.NID (NID)
 import MyPrelude
@@ -17,9 +17,9 @@ data History = History
 singletonHistory :: NID -> History
 singletonHistory node = History [] node []
 
-addToHistory :: NID -> History -> History
-addToHistory n (History past now []) = History (now : past) n []
-addToHistory n (History past now (next : farFuture))
+pushHistory :: NID -> History -> History
+pushHistory n (History past now []) = History (now : past) n []
+pushHistory n (History past now (next : farFuture))
   -- preserve future when replaying it if possible
   | n == next = History (now : past) next farFuture
   | otherwise = History (now : past) n []
