@@ -117,5 +117,5 @@ convertDirectivesToErrors ::
   Parser (Path' 'Prenormal f t)
 convertDirectivesToErrors p = handleDirectivesWith interpretDirective =<< p
   where
-    interpretDirective PathAnnotation {..} directive = do
-      customFailure (IllegalDirective directive startPos endPos)
+    interpretDirective PathAnnotation {..} _ = do
+      customFailure (IllegalDirective startPos endPos)

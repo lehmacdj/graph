@@ -76,7 +76,7 @@ pDedup :: Parser Command
 pDedup = (commandFrom ["dedup", "dd"] $> Dedup) <*> transition
 
 pFlatten :: Parser Command
-pFlatten = (command "flatten" $> Flatten) <*> transition
+pFlatten = (command "flatten" $> Lang.Command.Flatten) <*> transition
 
 pShowImage :: Parser Command
 pShowImage = commandFrom ["show-image", "si"] $> ShowImage

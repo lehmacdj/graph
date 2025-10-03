@@ -59,7 +59,7 @@ data Path' (p :: PathPhase) f t
   | -- | intersection
     f (Path' p f t) ::& f (Path' p f t)
   | -- | A location in the history
-    Directive PathAnnotation (DirectiveVal p)
+    Directive PathAnnotation (DirectiveVal p f t)
   deriving (Generic)
 
 infixl 7 ::/
@@ -94,20 +94,30 @@ data PathAnnotation = PathAnnotation
 testAnn :: PathAnnotation
 testAnn = PathAnnotation (initialPos "<test>") (initialPos "<test>")
 
-newtype Directive = LocationFromHistory Int
-  deriving (Eq, Ord, Generic, Lift)
+data Directive p f t
+  = LocationFromHistory Int
+  | Flatten (Path' p f t)
+  deriving (Generic)
 
-instance Show Directive where
+deriving instance (Eq1 f, Path'Constraints Eq p f t) => Eq (Directive p f t)
+
+deriving instance (Ord1 f, Path'Constraints Ord p f t) => Ord (Directive p f t)
+
+deriving instance (Path'Constraints Lift p f t) => Lift (Directive p f t)
+
+instance (Show1 f, Path'Constraints Show p f t) => Show (Directive p f t) where
   showsPrec _ (LocationFromHistory i) =
     showString "%history(" . shows i . showString ")"
+  showsPrec _ (Flatten p) =
+    showString "%flatten(" . shows p . showString ")"
 
-type family DirectiveVal (p :: PathPhase) where
-  DirectiveVal 'WithDirectives = Directive
-  DirectiveVal 'Prenormal = Void
+type family DirectiveVal (p :: PathPhase) (f :: Type -> Type) (t :: Type) where
+  DirectiveVal 'WithDirectives f t = Directive 'WithDirectives f t
+  DirectiveVal 'Prenormal _ _ = Void
 
 handleDirectivesWith ::
   (Traversable f, Applicative g) =>
-  (forall a. PathAnnotation -> Directive -> g a) ->
+  (PathAnnotation -> Directive 'WithDirectives f t -> g (Path' 'Prenormal f t)) ->
   Path' 'WithDirectives f t ->
   g (Path' 'Prenormal f t)
 handleDirectivesWith interpretDirective = \case
@@ -136,20 +146,20 @@ handleDirectivesWith interpretDirective = \case
 -- | helper for producing the necessary constraints for a Path'
 type Path'Constraints ::
   (Type -> Constraint) -> PathPhase -> (Type -> Type) -> Type -> Constraint
-type Path'Constraints c p f t = (c t, c (DirectiveVal p), c (f (Path' p f t)))
+type Path'Constraints c p f t = (c t, c (DirectiveVal p f t), c (f (Path' p f t)))
 
 -- | helper for producing the necessary constraints for a Path' excluding the
 -- functorial type parameter
 type PathConstraints ::
   (Type -> Constraint) -> PathPhase -> Type -> Constraint
-type PathConstraints c p t = (c t, c (DirectiveVal p))
+type PathConstraints c p t = (c t, c (DirectiveVal p Identity t))
 
 -- * Instances
 
 deriving instance (Path'Constraints Lift p f t) => Lift (Path' p f t)
 
 showsPath ::
-  (PathConstraints Show p t) =>
+  (Show1 f, Path'Constraints Show p f t) =>
   (Int -> f (Path' p f t) -> ShowS) ->
   Int ->
   Path' p f t ->

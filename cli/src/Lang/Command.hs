@@ -247,7 +247,7 @@ interpretCommand = \case
       (\a s -> insertEdge (Edge nid (t ++ s) a))
       (toList ambiguities)
       suffixes
-  Flatten t -> do
+  Lang.Command.Flatten t -> do
     nid <- currentLocation
     let err =
           const
