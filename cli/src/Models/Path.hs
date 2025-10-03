@@ -57,7 +57,9 @@ data Path' (p :: PathPhase) f t
     f (Path' p f t) ::+ f (Path' p f t)
   | -- | intersection
     f (Path' p f t) ::& f (Path' p f t)
-  | -- | A location in the history
+  | -- | Directives are command like things that may appear in paths.
+    -- They can be interpreted into a path using application state, etc.
+    -- using 'handleDirectivesWith'.
     -- Currently I'm only including the source range for directives, but I'd
     -- like to add it to all path components eventually
     Directive SourceRange (DirectiveVal p f t)
@@ -82,8 +84,17 @@ data PathPhase
     Prenormal
 
 data Directive f t
-  = LocationFromHistory Int
-  | Flatten (Path' 'WithDirectives f t)
+  = -- | Reference a location in the location history of the graph CLI
+    -- resolves to `Absolute nid` where `nid` is the NID at that location
+    LocationFromHistory Int
+  | -- | Resolves to the set of targets of a path.
+    -- Among other things this is useful for filtering to a specific set of
+    -- nodes, e.g. `""/(@ & %targets(#foo/*))` materializes the transitions
+    -- which end in a node tagged `#foo`
+    -- This can also be used to bake the current location into a later location
+    -- in a path e.g. `*/%targets(@)` materializes only transitions from the
+    -- current location to itself.
+    Targets (Path' 'WithDirectives f t)
   deriving (Generic)
 
 deriving instance
@@ -104,7 +115,7 @@ showsDirective ::
   ShowS
 showsDirective showsPath' = \case
   LocationFromHistory i -> showString "%history(" . shows i . showString ")"
-  Flatten p -> showString "%flatten(" . showsPath' p . showString ")"
+  Targets p -> showString "%targets(" . showsPath' p . showString ")"
 
 instance
   (Show1 f, Path'Constraints Show 'WithDirectives f t) =>

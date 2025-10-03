@@ -37,7 +37,7 @@ pDirective :: Parser t -> Parser (Directive Identity t)
 pDirective pTransition =
   try (LocationFromHistory <$> pDirectiveNamed "history" number)
     <|> try (LocationFromHistory 1 <$ symbol "%last")
-    <|> (Flatten <$> pDirectiveNamed "flatten" (pPath pTransition))
+    <|> (Targets <$> pDirectiveNamed "targets" (pPath pTransition))
 
 pDirectiveNamed :: String -> Parser a -> Parser a
 pDirectiveNamed name = between (symbol ("%" ++ name ++ "(")) (symbol ")")
@@ -97,11 +97,11 @@ test_pPath =
       "foo/bar&(baz+qux)"
         `parsesTo` (Literal "foo" :/ Literal "bar" :& (Literal "baz" :+ Literal "qux")),
       "foo/(bar&baz+qux)/!" `parsesTo` (Literal "foo" :/ (Literal "bar" :& Literal "baz" :+ Literal "qux") :/ Zero),
-      "foo/%flatten(@000000000002 + re\"^foo$\")/!"
+      "foo/%targets(@000000000002 + re\"^foo$\")/!"
         `parsesTo` ( Literal "foo"
                        :/ Directive
                          testAnn
-                         ( Flatten
+                         ( Targets
                              (Absolute (smallNID 2) :+ RegexMatch [re|^foo$|])
                          )
                        :/ Zero
@@ -136,17 +136,17 @@ test_pDirective =
     [ "%history(23)" `parsesTo` LocationFromHistory 23,
       "%history(-5)" `parsesTo` LocationFromHistory -5,
       "%last" `parsesTo` LocationFromHistory 1,
-      "%flatten(@000000000002)" `parsesTo` Flatten (Absolute (smallNID 2)),
-      "%flatten(@/foo + #bar)"
-        `parsesTo` Flatten
+      "%targets(@000000000002)" `parsesTo` Targets (Absolute (smallNID 2)),
+      "%targets(@/foo + #bar)"
+        `parsesTo` Targets
           ( (One :/ Literal "foo")
               :+ (Absolute tagsNID :/ Literal "bar")
           ),
       parseFails "%last()",
       parseFails "%history()",
       parseFails "%history(foo)",
-      parseFails "%flatten()",
-      parseFails "%flatten(foo"
+      parseFails "%targets()",
+      parseFails "%targets(foo"
     ]
   where
     parsesTo :: String -> Directive Identity String -> TestTree
