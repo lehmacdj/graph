@@ -16,7 +16,7 @@ import Models.Path.Simple (Path)
 import Models.Path.Simple qualified as Simple
 import MyPrelude hiding (some, try)
 import TestPrelude hiding (some, try)
-import Text.Megaparsec
+import Text.Megaparsec (try)
 
 path' :: Parser (ParsedPath String)
 path' = pPath transition

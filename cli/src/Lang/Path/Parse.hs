@@ -5,6 +5,7 @@ module Lang.Path.Parse
     pPath',
     pathTerm,
     test_pPath,
+    test_pDirective,
   )
 where
 
@@ -29,7 +30,16 @@ pathTerm' pNID pTransition =
     <|> (symbol "!" $> Zero)
     <|> (RegexMatch <$> try pRegex)
     <|> (Literal <$> pTransition)
+    <|> (uncurry Directive <$> withSourceRange (pDirective pTransition))
     <|> parens (pPath' pNID pTransition)
+
+pDirective :: Parser t -> Parser (Directive Identity t)
+pDirective pTransition =
+  try (LocationFromHistory <$> pDirectiveNamed "history" number)
+    <|> (Flatten <$> pDirectiveNamed "flatten" (pPath pTransition))
+
+pDirectiveNamed :: String -> Parser a -> Parser a
+pDirectiveNamed name = between (symbol ("%" ++ name ++ "(")) (symbol ")")
 
 pRegex :: Parser CheckedRegex
 pRegex = do
@@ -86,6 +96,20 @@ test_pPath =
       "foo/bar&(baz+qux)"
         `parsesTo` (Literal "foo" :/ Literal "bar" :& (Literal "baz" :+ Literal "qux")),
       "foo/(bar&baz+qux)/!" `parsesTo` (Literal "foo" :/ (Literal "bar" :& Literal "baz" :+ Literal "qux") :/ Zero),
+      "foo/%flatten(@000000000002 + re\"^foo$\")/!"
+        `parsesTo` ( Literal "foo"
+                       :/ Directive
+                         testAnn
+                         ( Flatten
+                             (Absolute (smallNID 2) :+ RegexMatch [re|^foo$|])
+                         )
+                       :/ Zero
+                   ),
+      "foo/%history(2)/bar"
+        `parsesTo` ( Literal "foo"
+                       :/ Directive testAnn (LocationFromHistory 2)
+                       :/ Literal "bar"
+                   ),
       parseFails "foo/bar&",
       parseFails "foo/bar&+qux",
       parseFails "foo+",
@@ -96,6 +120,35 @@ test_pPath =
     ]
   where
     parsesTo :: String -> ParsedPath String -> TestTree
-    parsesTo input = testCase ("parse: " ++ show input) . testParserParses (pPath transition) input
+    parsesTo input =
+      testCase ("parse: " ++ show input)
+        . testParserParses (pPath transition) input
     parseFails input =
-      testCase ("parse fails: " ++ show input) $ testParserFails (pPath transition <* eof) input
+      testCase ("parse fails: " ++ show input) $
+        testParserFails (pPath transition <* eof) input
+
+test_pDirective :: TestTree
+test_pDirective =
+  testGroup
+    "pDirective"
+    [ "%history(23)" `parsesTo` LocationFromHistory 23,
+      "%history(-5)" `parsesTo` LocationFromHistory (-5),
+      "%flatten(@000000000002)" `parsesTo` Flatten (Absolute (smallNID 2)),
+      "%flatten(@/foo + #bar)"
+        `parsesTo` Flatten
+          ( (One :/ Literal "foo")
+              :+ (Absolute tagsNID :/ Literal "bar")
+          ),
+      parseFails "%history()",
+      parseFails "%history(foo)",
+      parseFails "%flatten()",
+      parseFails "%flatten(foo"
+    ]
+  where
+    parsesTo :: String -> Directive Identity String -> TestTree
+    parsesTo input =
+      testCase ("parse: " ++ show input)
+        . testParserParses (pDirective transition) input
+    parseFails input =
+      testCase ("parse fails: " ++ show input) $
+        testParserFails (pDirective transition <* eof) input

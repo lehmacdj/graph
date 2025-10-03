@@ -1,11 +1,11 @@
 module Lang.Path.TH where
 
 import Lang.Parsing (transition)
+import Lang.Parsing.Common
 import Lang.Path.Parse
 import Language.Haskell.TH
 import Language.Haskell.TH.Quote
 import MyPrelude
-import Text.Megaparsec (eof, parse)
 
 path :: QuasiQuoter
 path =
@@ -17,6 +17,6 @@ path =
     }
 
 pathExp :: String -> Q Exp
-pathExp s = case parse (pPath transition <* eof) "" s of
+pathExp s = case runParser (pPath transition <* eof) "" s of
   Left err -> fail $ "Parse error in path quasi-quoter: " ++ show err
   Right result -> [|result|]

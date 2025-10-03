@@ -1,3 +1,6 @@
 module MyPrelude exports Control.Lens
 module MyPrelude exports ClassyPrelude
 module ClassyPrelude exports Prelude
+module Models.Path.ParsedPath exports Models.Path
+module Models.Path.Simple exports Models.Path
+module Models.Path.PartialPath exports Models.Path

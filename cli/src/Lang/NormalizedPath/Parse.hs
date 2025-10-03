@@ -9,7 +9,7 @@ import Lang.Parsing
 import Models.NID
 import Models.NormalizedPath
 import MyPrelude hiding (try)
-import Text.Megaparsec (label, option, sepBy1, try)
+import Text.Megaparsec (try)
 import Text.Megaparsec.Char (char)
 
 -- | Parse a normalized path term (atom) - generalized version

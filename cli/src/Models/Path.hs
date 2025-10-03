@@ -3,16 +3,15 @@
 module Models.Path
   ( Path' (..),
     PathPhase (..),
-    PathAnnotation (..),
-    testAnn,
+    SourceRange (..),
     Directive (..),
     handleDirectivesWith,
   )
 where
 
+import Lang.Parsing.Common (SourceRange (..))
 import Models.NID
 import MyPrelude
-import Text.Megaparsec.Pos (SourcePos, initialPos)
 
 -- | The most general path type. Parametrized with a phase, a functor that
 -- allows wrapping nested paths, and the raw type of literals/transitions.
@@ -59,7 +58,9 @@ data Path' (p :: PathPhase) f t
   | -- | intersection
     f (Path' p f t) ::& f (Path' p f t)
   | -- | A location in the history
-    Directive PathAnnotation (DirectiveVal p f t)
+    -- Currently I'm only including the source range for directives, but I'd
+    -- like to add it to all path components eventually
+    Directive SourceRange (DirectiveVal p f t)
   deriving (Generic)
 
 infixl 7 ::/
@@ -80,20 +81,6 @@ data PathPhase
     -- dependencies necessary for normalization
     Prenormal
 
--- | Annotation for components of a path, indicating the start/end source
--- location.
---
--- Currently I'm only including this for directives, but I'd like to add it
--- to all path components eventually
-data PathAnnotation = PathAnnotation
-  { startPos :: SourcePos,
-    endPos :: SourcePos
-  }
-  deriving (Eq, Ord, Show, Generic, Lift)
-
-testAnn :: PathAnnotation
-testAnn = PathAnnotation (initialPos "<test>") (initialPos "<test>")
-
 data Directive f t
   = LocationFromHistory Int
   | Flatten (Path' 'WithDirectives f t)
@@ -111,14 +98,26 @@ deriving instance
   (Path'Constraints Lift 'WithDirectives f t) =>
   Lift (Directive f t)
 
+showsDirective ::
+  (Path' WithDirectives f t -> ShowS) ->
+  Directive f t ->
+  ShowS
+showsDirective showsPath' = \case
+  LocationFromHistory i -> showString "%history(" . shows i . showString ")"
+  Flatten p -> showString "%flatten(" . showsPath' p . showString ")"
+
 instance
   (Show1 f, Path'Constraints Show 'WithDirectives f t) =>
   Show (Directive f t)
   where
-  showsPrec _ (LocationFromHistory i) =
-    showString "%history(" . shows i . showString ")"
-  showsPrec _ (Flatten p) =
-    showString "%flatten(" . shows p . showString ")"
+  showsPrec _ = showsDirective shows
+
+instance
+  {-# OVERLAPPING #-}
+  (PathConstraints Show WithDirectives t) =>
+  Show (Directive Identity t)
+  where
+  showsPrec _ = showsDirective shows
 
 type family DirectiveVal (p :: PathPhase) (f :: Type -> Type) (t :: Type) where
   DirectiveVal 'WithDirectives f t = Directive f t
@@ -126,7 +125,7 @@ type family DirectiveVal (p :: PathPhase) (f :: Type -> Type) (t :: Type) where
 
 handleDirectivesWith ::
   (Traversable f, Applicative g) =>
-  (PathAnnotation -> Directive f t -> g (Path' 'Prenormal f t)) ->
+  (SourceRange -> Directive f t -> g (Path' 'Prenormal f t)) ->
   Path' 'WithDirectives f t ->
   g (Path' 'Prenormal f t)
 handleDirectivesWith interpretDirective = \case

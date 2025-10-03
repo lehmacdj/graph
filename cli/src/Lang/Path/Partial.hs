@@ -14,13 +14,13 @@ import Lang.Path.Parse
 import Models.Path.Simple
 import MyPrelude hiding (many, try)
 import TestPrelude hiding (many, try)
-import Text.Megaparsec
+import Text.Megaparsec (try)
 import Text.Megaparsec.Char
 
 -- | Try to parse a path, returning a partial path that is the last one
 -- in the input string, this partial path will be the input for completion
 getPartialPath :: String -> Maybe PartialPath
-getPartialPath i = case parse pLastPartialPath "<completion>" i of
+getPartialPath i = case runParser pLastPartialPath "<completion>" i of
   Left _ -> Nothing
   Right r -> Just r
 

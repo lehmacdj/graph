@@ -10,7 +10,7 @@ import Lang.Parsing.Common as X
 import Models.NID
 import Models.Path
 import MyPrelude hiding (many, some, try)
-import Text.Megaparsec
+import Text.Megaparsec (try)
 import Text.Megaparsec.Char
 import Text.Megaparsec.Char.Lexer qualified as L
 
@@ -117,5 +117,19 @@ convertDirectivesToErrors ::
   Parser (Path' 'Prenormal f t)
 convertDirectivesToErrors p = handleDirectivesWith interpretDirective =<< p
   where
-    interpretDirective PathAnnotation {..} _ = do
+    interpretDirective SourceRange {..} _ = do
       customFailure (IllegalDirective startPos endPos)
+
+getSourcePos' :: Parser SourcePos
+getSourcePos' = do
+  opts <- ask
+  case opts of
+    ParserOptions {useFakeSourceRanges = True} -> pure $ initialPos "<test>"
+    ParserOptions {useFakeSourceRanges = False} -> getSourcePos
+
+withSourceRange :: Parser a -> Parser (SourceRange, a)
+withSourceRange p = do
+  start <- getSourcePos'
+  a <- p
+  end <- getSourcePos'
+  pure (SourceRange start end, a)

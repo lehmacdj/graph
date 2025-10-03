@@ -1,7 +1,13 @@
-module Lang.Parsing.Common where
+module Lang.Parsing.Common
+  ( module X,
+    module Lang.Parsing.Common,
+  )
+where
 
 import MyPrelude
-import Text.Megaparsec
+import Text.Megaparsec hiding (runParser, runParser')
+import Text.Megaparsec as MP (runParser)
+import Text.Megaparsec as X hiding (runParser, runParser', try)
 
 data CustomParseError
   = IllegalDirective
@@ -14,7 +20,54 @@ instance ShowErrorComponent CustomParseError where
   showErrorComponent (IllegalDirective start end) =
     "Illegal directive " ++ " at " ++ show start ++ "-" ++ show end
 
+newtype ParserOptions = ParserOptions
+  { useFakeSourceRanges :: Bool
+  }
+  deriving (Eq, Show, Generic)
+
+defaultParserOptions :: ParserOptions
+defaultParserOptions = ParserOptions False
+
 -- | TODO: switch to Text input type
-type Parser = Parsec CustomParseError String
+type Parser = ReaderT ParserOptions (Parsec CustomParseError String)
 
 type ParseError' = ParseError String CustomParseError
+
+data SourceRange = SourceRange
+  { startPos :: SourcePos,
+    endPos :: SourcePos
+  }
+  deriving (Eq, Ord, Show, Generic, Lift)
+
+testAnn :: SourceRange
+testAnn = SourceRange (initialPos "<test>") (initialPos "<test>")
+
+runParser' ::
+  ParserOptions ->
+  Parser a ->
+  -- | The file name used in error messages
+  String ->
+  -- | The input to parse
+  String ->
+  Either (ParseErrorBundle String CustomParseError) a
+runParser' opts parser = MP.runParser (runReaderT parser opts)
+
+runParser ::
+  Parser a ->
+  -- | The file name used in error messages
+  String ->
+  -- | The input to parse
+  String ->
+  Either (ParseErrorBundle String CustomParseError) a
+runParser = runParser' defaultParserOptions
+
+runParserTest ::
+  Parser a ->
+  -- | The input to parse
+  String ->
+  Either (ParseErrorBundle String CustomParseError) a
+runParserTest p =
+  runParser'
+    (defaultParserOptions {useFakeSourceRanges = True})
+    p
+    "<test>"

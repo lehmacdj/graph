@@ -9,6 +9,7 @@ module Models.Path.ParsedPath
   )
 where
 
+import Lang.Parsing.Common
 import Models.Path as X
 import MyPrelude
 import TestPrelude
