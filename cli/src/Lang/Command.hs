@@ -43,7 +43,7 @@ import Models.Graph (subtractiveFilterGraph)
 import Models.History
 import Models.NID
 import Models.Node
-import Models.NormalizedPath (normalizePath)
+import Models.NormalizedPath (leastConstrainedNormalizedPath, normalizePath)
 import Models.Path.ParsedPath
 import Models.Path.Simple (Path)
 import Models.Path.Simple qualified as Simple
@@ -347,8 +347,9 @@ interpretCommand = \case
     say $ "parsed path: " ++ tshow p
     p' <- handleDirectivesWith (error "unimplemented") p
     say $ "prenormal path: " ++ tshow p'
-    say $ "normalized path: " ++ tshow (normalizePath p')
-    mp <- scoped_ $ materializePath nid p'
+    let np = normalizePath p'
+    say $ "normalized path: " ++ tshow np
+    mp <- scoped_ $ materializePath nid (leastConstrainedNormalizedPath np)
     say $ "materialized path: " <> tshow mp.path
     if null mp.graph
       then say "no nodes materialized"

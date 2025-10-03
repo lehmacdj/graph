@@ -8,7 +8,6 @@ import Models.Graph (Graph, emptyGraph)
 import Models.NID
 import Models.Node
 import Models.NormalizedPath
-import Models.Path.Simple
 import MyPrelude hiding ((\\))
 import Polysemy.State
 
@@ -29,10 +28,9 @@ materializePath ::
   ) =>
   -- | The node to start from
   NID ->
-  Path Text ->
+  NormalizedPath FullyAnchored Text ->
   Sem r (MaterializedPath Text)
-materializePath firstNid op = do
-  let normalizedPath = leastConstrainedNormalizedPath $ normalizePath op
+materializePath firstNid normalizedPath = do
   traverse (traverseDeterministicPath firstNid) (toList normalizedPath.union)
     & fmap (NormalizedPath . setFromList . concat)
     & cachingReadingInState
