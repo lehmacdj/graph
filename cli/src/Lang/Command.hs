@@ -36,7 +36,7 @@ import Graph.MaterializePath (graph, materializePath, nonexistentNodes, path)
 import Graph.NodeLocated
 import Graph.Time (taggingFreshNodesWithTime)
 import Graph.Utils
-import Lang.Path
+import Graph.LegacyPathMaterialization
 import Models.Connect
 import Models.Edge
 import Models.Graph (subtractiveFilterGraph)

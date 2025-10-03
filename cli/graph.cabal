@@ -59,6 +59,7 @@ library
       Graph.GraphMetadataEditing
       Graph.Import.ByteString
       Graph.Import.FileSystem
+      Graph.LegacyPathMaterialization
       Graph.MaterializePath
       Graph.NodeLocated
       Graph.SystemNodes
@@ -73,7 +74,6 @@ library
       Lang.Parsing
       Lang.Parsing.Common
       Lang.ParsingSpec
-      Lang.Path
       Lang.Path.Parse
       Lang.Path.Partial
       Lang.Path.TH

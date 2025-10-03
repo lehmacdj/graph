@@ -6,8 +6,8 @@
 --   starting node.
 --   Alternatively a path can be used as an action on a graph to add or equalize
 --   nodes, contingent on a source for new nodes potentially.
-module Lang.Path
-  ( module Lang.Path,
+module Graph.LegacyPathMaterialization
+  ( module Graph.LegacyPathMaterialization,
     module X,
   )
 where

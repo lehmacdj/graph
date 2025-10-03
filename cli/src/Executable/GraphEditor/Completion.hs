@@ -11,7 +11,7 @@ import Graph.AppInterpreters
 import Graph.NodeLocated
 import Graph.Utils
 import Lang.Parsing
-import Lang.Path
+import Graph.LegacyPathMaterialization
 import Lang.Path.Partial
 import Models.NID (nidDigits)
 import Models.Path.Simple qualified as Simple

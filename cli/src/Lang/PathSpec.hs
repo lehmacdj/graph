@@ -1,7 +1,7 @@
 module Lang.PathSpec where
 
 import Data.Set.Ordered qualified as OSet
-import Lang.Path
+import Graph.LegacyPathMaterialization
 import Models.Graph
 import Models.NID
 import Models.Node
