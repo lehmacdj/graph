@@ -94,30 +94,39 @@ data PathAnnotation = PathAnnotation
 testAnn :: PathAnnotation
 testAnn = PathAnnotation (initialPos "<test>") (initialPos "<test>")
 
-data Directive p f t
+data Directive f t
   = LocationFromHistory Int
-  | Flatten (Path' p f t)
+  | Flatten (Path' 'WithDirectives f t)
   deriving (Generic)
 
-deriving instance (Eq1 f, Path'Constraints Eq p f t) => Eq (Directive p f t)
+deriving instance
+  (Eq1 f, Path'Constraints Eq 'WithDirectives f t) =>
+  Eq (Directive f t)
 
-deriving instance (Ord1 f, Path'Constraints Ord p f t) => Ord (Directive p f t)
+deriving instance
+  (Ord1 f, Path'Constraints Ord 'WithDirectives f t) =>
+  Ord (Directive f t)
 
-deriving instance (Path'Constraints Lift p f t) => Lift (Directive p f t)
+deriving instance
+  (Path'Constraints Lift 'WithDirectives f t) =>
+  Lift (Directive f t)
 
-instance (Show1 f, Path'Constraints Show p f t) => Show (Directive p f t) where
+instance
+  (Show1 f, Path'Constraints Show 'WithDirectives f t) =>
+  Show (Directive f t)
+  where
   showsPrec _ (LocationFromHistory i) =
     showString "%history(" . shows i . showString ")"
   showsPrec _ (Flatten p) =
     showString "%flatten(" . shows p . showString ")"
 
 type family DirectiveVal (p :: PathPhase) (f :: Type -> Type) (t :: Type) where
-  DirectiveVal 'WithDirectives f t = Directive 'WithDirectives f t
+  DirectiveVal 'WithDirectives f t = Directive f t
   DirectiveVal 'Prenormal _ _ = Void
 
 handleDirectivesWith ::
   (Traversable f, Applicative g) =>
-  (PathAnnotation -> Directive 'WithDirectives f t -> g (Path' 'Prenormal f t)) ->
+  (PathAnnotation -> Directive f t -> g (Path' 'Prenormal f t)) ->
   Path' 'WithDirectives f t ->
   g (Path' 'Prenormal f t)
 handleDirectivesWith interpretDirective = \case
