@@ -69,7 +69,7 @@ repl ::
     Members [Embed IO, RawGraph] effs
   ) =>
   Sem effs ()
-repl = do
+repl = handleInterrupt repl $ withInterrupt do
   command <- getInputLine "g> "
   case withDefaultQuitParser parseCommand . pack <$> command of
     Nothing -> outputStrLn "Goodbye!"
@@ -108,8 +108,7 @@ main = withOptions $ \options -> do
   graphDirInitialization graphDir options
   nidGenerator <-
     maybe initStdGen (pure . mkStdGen) $
-      options
-        ^. #_testOnlyNidGenerationSeed
+      options ^. #_testOnlyNidGenerationSeed
   -- because we need the Env for the repl's completionFunction this is pretty
   -- fancy and uses mfix to tie the knot; it would probably be a better idea to
   -- break the cycle somehow to make this easier to reason about
