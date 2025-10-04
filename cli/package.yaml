@@ -175,16 +175,6 @@ executables:
     dependencies:
     - graph
 
-  scratch:
-    main:                Main.hs
-    source-dirs:         app/scratch
-    ghc-options:
-    - -threaded
-    - -rtsopts
-    - -with-rtsopts=-N
-    dependencies:
-    - graph
-
 tests:
   graph-test:
     main:                Main.hs
