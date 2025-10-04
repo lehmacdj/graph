@@ -8,9 +8,9 @@ module Models.Path.PartialPath
   )
 where
 
-import Lang.Parsing (ParseError')
 import Models.Path as X
 import MyPrelude
+import Utils.Parsing (ParseError')
 
 -- | PartialPath type (representing paths that may contain parse errors)
 type PartialPath = Path' WithDirectives (Either ParseError')

@@ -4,7 +4,8 @@ import Models.Connect
 import Models.Graph
 import Models.NID
 import Models.Node
-import TestPrelude
+import MyPrelude
+import Utils.Testing
 
 newtype TestTextAugmentation = TestTextAugmentation Text
   deriving stock (Eq, Show)
@@ -43,7 +44,7 @@ spec_at = do
       n1 =
         emptyNode (smallNID 1)
           & #incoming
-          .~ setFromList [Connect "0->1" (smallNID 0)]
+            .~ setFromList [Connect "0->1" (smallNID 0)]
   it "adds outgoing edges" do
     (minimalGraph & at (smallNID 0) ?~ n0') `shouldBe` insertNode n1 minimalGraph
   it "adds incoming edges" do

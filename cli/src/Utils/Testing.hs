@@ -1,6 +1,5 @@
-module TestPrelude
-  ( module MyPrelude,
-    module X,
+module Utils.Testing
+  ( module X,
     withTempGraph,
     withEmptyTempGraph,
     representedByJson,
@@ -18,8 +17,6 @@ where
 
 import DAL.Serialization (initializeGraph)
 import Data.Aeson
-import Data.Void
-import Lang.Parsing.Common
 import Models.Connect
 import Models.Edge
 import Models.Graph (Graph, emptyGraph, insertEdges, insertNodes)
@@ -36,6 +33,7 @@ import Test.Tasty as X
 import Test.Tasty.HUnit as X
 import Test.Tasty.Hspec (testSpec)
 import Test.Tasty.QuickCheck as X
+import Utils.Parsing.Common
 
 -- | initializes a graph that is either empty, or based on a template graph
 -- at the specified location

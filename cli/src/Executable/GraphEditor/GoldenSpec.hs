@@ -3,11 +3,12 @@ module Executable.GraphEditor.GoldenSpec where
 import DAL.DumpGraph
 import Data.Attoparsec.ByteString
 import Data.ByteString qualified as B
+import MyPrelude
 import System.FilePath
 import System.FilePath.Glob
 import System.Process.Typed
 import Test.Tasty.Golden
-import TestPrelude
+import Utils.Testing
 
 data GoldenTest = GoldenTest
   { -- | Relative path (from the root of the project) to a graph to use as a
@@ -83,18 +84,18 @@ runGraphEditor :: GoldenTest -> IO GoldenTest
 runGraphEditor test@GoldenTest {..} =
   withTempGraph (pathForTemplate <$> template) $ \tmpGraph -> do
     (stdOut', stdErr') <-
-      readProcess_
-        $ proc
+      readProcess_ $
+        proc
           "ge"
           [ "--test-only-nid-generation-seed",
             "0",
             "--test-only-monotonic-increasing-deterministic-time",
             tmpGraph
           ]
-        & setStdin (byteStringInput (fromStrict input))
+          & setStdin (byteStringInput (fromStrict input))
     graphDump' <- dumpGraph tmpGraph
-    pure
-      $ test
+    pure $
+      test
         { stdOut = toStrict stdOut',
           stdErr = toStrict stdErr',
           graphDump = toStrict $ builderToLazy graphDump'

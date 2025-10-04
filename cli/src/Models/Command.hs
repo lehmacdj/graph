@@ -9,7 +9,7 @@
 -- current node
 -- Commands that act on nodes should also act on at least deterministic
 -- paths and if possible nondeterministic paths too
-module Lang.Command where
+module Models.Command where
 
 import Control.Monad (zipWithM_)
 import DAL.DirectoryFormat (legacyNodeDataFile)
@@ -269,7 +269,7 @@ interpretCommand = \case
       (\a s -> insertEdge (Edge nid (t ++ s) a))
       (toList ambiguities)
       suffixes
-  Lang.Command.Flatten t -> do
+  Flatten t -> do
     nid <- currentLocation
     let err =
           const

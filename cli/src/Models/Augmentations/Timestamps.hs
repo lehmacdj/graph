@@ -2,10 +2,10 @@ module Models.Augmentations.Timestamps where
 
 import Graph.GraphMetadataEditing
 import Graph.SystemNodes
-import Lang.Path.TH
 import Models.Common
 import Models.NID
 import Models.Node
+import Models.Path.TH
 import MyPrelude
 
 newtype Timestamps = Timestamps {timestamps :: Set UTCTime}

@@ -8,16 +8,16 @@ import Effect.IOWrapper.GetTime
 import Error.UserError
 import Error.Warn
 import Graph.AppInterpreters
+import Graph.LegacyPathMaterialization
 import Graph.NodeLocated
 import Graph.Utils
-import Lang.Parsing
-import Graph.LegacyPathMaterialization
-import Lang.Path.Partial
 import Models.NID (nidDigits)
+import Models.PartialPath
 import Models.Path.Simple qualified as Simple
 import MyPrelude
 import System.Console.Haskeline
 import Utils.Base62 (isBase62Char)
+import Utils.Parsing
 
 commands :: [String]
 commands = []

@@ -1,6 +1,7 @@
 module MyPrelude.CollectionsSpec where
 
-import TestPrelude
+import MyPrelude
+import Utils.Testing
 
 spec_allPairs :: Spec
 spec_allPairs = do

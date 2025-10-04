@@ -1,11 +1,12 @@
 module Models.Augmentations.Tags where
 
 import Graph.GraphMetadataEditing
+import Graph.MaterializePath
 import Graph.SystemNodes
-import Lang.Path.TH
 import Models.Common
 import Models.NID
 import Models.Node
+import Models.Path.TH
 import MyPrelude
 
 newtype Tags = Tags {tags :: Set Text}

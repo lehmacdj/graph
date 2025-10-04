@@ -1,7 +1,8 @@
-module Lang.ParsingSpec (module Lang.ParsingSpec, eof) where
+module Utils.ParsingSpec (module Utils.ParsingSpec, eof) where
 
-import Lang.Parsing
-import TestPrelude
+import MyPrelude
+import Utils.Parsing
+import Utils.Testing
 
 testParserParses :: (Eq a, Show a) => Parser a -> Text -> a -> Assertion
 testParserParses parser string expected =

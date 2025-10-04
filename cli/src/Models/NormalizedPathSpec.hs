@@ -1,10 +1,11 @@
 module Models.NormalizedPathSpec where
 
-import Lang.NormalizedPath.Parse
-import Lang.Parsing
-import Lang.Path.Parse
 import Models.NormalizedPath
-import TestPrelude
+import Models.NormalizedPath.Parse
+import Models.Path.Parse
+import MyPrelude
+import Utils.Parsing
+import Utils.Testing
 
 spec_normalizePath :: Spec
 spec_normalizePath = describe "normalizePath" do

@@ -3,7 +3,8 @@ module Models.MiscSpec where
 import Models.Common
 import Models.NID
 import Models.Node
-import TestPrelude
+import MyPrelude
+import Utils.Testing
 
 data Unshowable = Unshowable
   deriving (Eq)

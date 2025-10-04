@@ -19,8 +19,8 @@ import Graph.FreshNID
 import Graph.GraphMetadataEditing (GraphMetadataEditing)
 import Graph.NodeLocated
 import Graph.SystemNodes.Init (createSystemNodes)
-import Lang.Command hiding (printTransitions)
-import Lang.Command.Parse
+import Models.Command hiding (printTransitions)
+import Models.Command.Parse
 import Models.History
 import Models.NID
 import MyPrelude

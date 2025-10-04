@@ -2,7 +2,8 @@ module DAL.DTOSpec where
 
 import DAL.DTO
 import Models.NID
-import TestPrelude
+import MyPrelude
+import Utils.Testing
 
 test_nodeDTO_backwardsCompat :: TestTree
 test_nodeDTO_backwardsCompat =

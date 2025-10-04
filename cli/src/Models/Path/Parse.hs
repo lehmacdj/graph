@@ -1,6 +1,6 @@
 -- | Megaparsec support for parsing strings that make up paths.
 -- Generic over the custom error type, it doesn't throw any.
-module Lang.Path.Parse
+module Models.Path.Parse
   ( pPath,
     pPath',
     pathTerm,
@@ -12,14 +12,14 @@ where
 import Control.Monad.Combinators.Expr
 import Data.Functor
 import Graph.SystemNodes (tagsNID)
-import Lang.Parsing
-import Lang.ParsingSpec
 import Models.NID
 import Models.Path.ParsedPath
 import MyPrelude hiding (try)
-import TestPrelude hiding (try)
 import Text.Megaparsec (try)
 import Text.Megaparsec.Char (char)
+import Utils.Parsing
+import Utils.ParsingSpec
+import Utils.Testing
 
 pathTerm' :: Parser NID -> Parser t -> Parser (ParsedPath t)
 pathTerm' pNID pTransition =

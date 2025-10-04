@@ -1,4 +1,4 @@
-module Lang.Path.Partial
+module Models.PartialPath
   ( getPartialPath,
     takeRelevantFromEnd,
     PartialPath (..),
@@ -8,14 +8,14 @@ module Lang.Path.Partial
 where
 
 import Graph.SystemNodes (tagsNID)
-import Lang.Parsing
-import Lang.ParsingSpec
-import Lang.Path.Parse
+import Models.Path.Parse
 import Models.Path.Simple
 import MyPrelude hiding (many, try)
-import TestPrelude hiding (many, try)
 import Text.Megaparsec (try)
 import Text.Megaparsec.Char
+import Utils.Parsing
+import Utils.ParsingSpec
+import Utils.Testing
 
 -- | Try to parse a path, returning a partial path that is the last one
 -- in the input string, this partial path will be the input for completion

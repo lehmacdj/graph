@@ -1,11 +1,11 @@
-module Lang.NormalizedPath.TH where
+module Models.NormalizedPath.TH where
 
-import Lang.NormalizedPath.Parse
-import Lang.Parsing (transition)
-import Lang.Parsing.Common
 import Language.Haskell.TH
 import Language.Haskell.TH.Quote
+import Models.NormalizedPath.Parse
 import MyPrelude
+import Utils.Parsing (transition)
+import Utils.Parsing.Common
 
 npath :: QuasiQuoter
 npath =

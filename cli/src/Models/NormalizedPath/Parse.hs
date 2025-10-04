@@ -1,16 +1,16 @@
-module Lang.NormalizedPath.Parse
+module Models.NormalizedPath.Parse
   ( pNormalizedPath,
     pNormalizedPath',
   )
 where
 
 import Data.Functor
-import Lang.Parsing
 import Models.NID
 import Models.NormalizedPath
 import MyPrelude hiding (try)
 import Text.Megaparsec (try)
 import Text.Megaparsec.Char (char)
+import Utils.Parsing
 
 -- | Parse a normalized path term (atom) - generalized version
 pNormalizedPath' :: (Ord t) => Parser NID -> Parser t -> Parser (NormalizedPath Anchor t)

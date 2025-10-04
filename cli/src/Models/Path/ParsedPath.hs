@@ -9,10 +9,10 @@ module Models.Path.ParsedPath
   )
 where
 
-import Lang.Parsing.Common
 import Models.Path as X
 import MyPrelude
-import TestPrelude
+import Utils.Parsing.Common
+import Utils.Testing
 
 -- | Represents a path that has been successfully parsed, but has had no
 -- further processing applied

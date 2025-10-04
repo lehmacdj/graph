@@ -1,4 +1,4 @@
-module Lang.PathSpec where
+module Graph.LegacyPathMaterializationSpec where
 
 import Data.Set.Ordered qualified as OSet
 import Graph.LegacyPathMaterialization
@@ -6,7 +6,8 @@ import Models.Graph
 import Models.NID
 import Models.Node
 import Models.Path.Simple
-import TestPrelude
+import MyPrelude
+import Utils.Testing
 
 testGraph :: Graph String ()
 testGraph =

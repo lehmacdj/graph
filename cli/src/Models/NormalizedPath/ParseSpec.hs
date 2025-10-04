@@ -1,12 +1,12 @@
-module Lang.NormalizedPath.ParseSpec where
+module Models.NormalizedPath.ParseSpec where
 
-import Lang.NormalizedPath.Parse
-import Lang.Parsing (transition)
-import Lang.ParsingSpec
 import Models.NID
 import Models.NormalizedPath
+import Models.NormalizedPath.Parse
 import MyPrelude hiding (union)
-import TestPrelude hiding (union)
+import Utils.Parsing (transition)
+import Utils.ParsingSpec
+import Utils.Testing
 
 test_pNormalizedPath :: TestTree
 test_pNormalizedPath =
@@ -140,7 +140,7 @@ branches :: [DPBranch Anchor String] -> NormalizedPath Anchor String
 branches bs =
   NormalizedPath . setFromList $
     [ Rooted (RootedDeterministicPath (singletonMap (Pointlike unanchored) (singletonSet b)) unanchored)
-      | b <- bs
+    | b <- bs
     ]
 
 singletonPointlike :: PointlikeDeterministicPath Anchor String -> NormalizedPath Anchor String

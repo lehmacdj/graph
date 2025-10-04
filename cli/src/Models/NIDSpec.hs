@@ -1,7 +1,8 @@
 module Models.NIDSpec where
 
 import Models.NID
-import TestPrelude
+import MyPrelude
+import Utils.Testing
 
 test_readShowNid :: TestTree
 test_readShowNid =

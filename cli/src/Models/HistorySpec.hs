@@ -2,7 +2,8 @@ module Models.HistorySpec where
 
 import Models.History
 import Models.NID
-import TestPrelude
+import MyPrelude
+import Utils.Testing
 
 history :: [Int] -> Int -> [Int] -> History
 history past now future =

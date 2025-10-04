@@ -9,9 +9,9 @@ module Models.Path
   )
 where
 
-import Lang.Parsing.Common (SourceRange (..))
 import Models.NID
 import MyPrelude
+import Utils.Parsing.Common (SourceRange (..))
 
 -- | The most general path type. Parametrized with a phase, a functor that
 -- allows wrapping nested paths, and the raw type of literals/transitions.

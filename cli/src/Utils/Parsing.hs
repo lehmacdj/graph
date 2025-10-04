@@ -1,18 +1,18 @@
-module Lang.Parsing
+module Utils.Parsing
   ( module X,
-    module Lang.Parsing,
+    module Utils.Parsing,
   )
 where
 
 import Control.Monad.Fail
 import Data.Char
-import Lang.Parsing.Common as X
 import Models.NID
 import Models.Path
 import MyPrelude hiding (many, some, try)
 import Text.Megaparsec (try)
 import Text.Megaparsec.Char
 import Text.Megaparsec.Char.Lexer qualified as L
+import Utils.Parsing.Common as X
 
 s :: Parser ()
 s = L.space space1 empty empty

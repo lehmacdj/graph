@@ -59,27 +59,18 @@ library
       Graph.Import.ByteString
       Graph.Import.FileSystem
       Graph.LegacyPathMaterialization
+      Graph.LegacyPathMaterializationSpec
       Graph.MaterializePath
       Graph.NodeLocated
       Graph.SystemNodes
       Graph.SystemNodes.Init
       Graph.Time
       Graph.Utils
-      Lang.Command
-      Lang.Command.Parse
-      Lang.NormalizedPath.Parse
-      Lang.NormalizedPath.ParseSpec
-      Lang.NormalizedPath.TH
-      Lang.Parsing
-      Lang.Parsing.Common
-      Lang.ParsingSpec
-      Lang.Path.Parse
-      Lang.Path.Partial
-      Lang.Path.TH
-      Lang.PathSpec
       Models.Augmentations.IsThin
       Models.Augmentations.Tags
       Models.Augmentations.Timestamps
+      Models.Command
+      Models.Command.Parse
       Models.Common
       Models.Connect
       Models.DPath
@@ -94,11 +85,17 @@ library
       Models.NIDSpec
       Models.Node
       Models.NormalizedPath
+      Models.NormalizedPath.Parse
+      Models.NormalizedPath.ParseSpec
+      Models.NormalizedPath.TH
       Models.NormalizedPathSpec
+      Models.PartialPath
       Models.Path
+      Models.Path.Parse
       Models.Path.ParsedPath
       Models.Path.PartialPath
       Models.Path.Simple
+      Models.Path.TH
       MyPrelude
       MyPrelude.Collections
       MyPrelude.Collections.Ordered
@@ -125,9 +122,12 @@ library
       System.MacOS.NSFileCoordinator
       System.MacOS.NSFileCoordinator.RawBindings
       System.MacOS.NSFileCoordinator.Types
-      TestPrelude
       Utils.Base62
+      Utils.Parsing
+      Utils.Parsing.Common
+      Utils.ParsingSpec
       Utils.Singleton
+      Utils.Testing
   other-modules:
       Paths_graph
   hs-source-dirs:

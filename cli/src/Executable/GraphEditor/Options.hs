@@ -4,8 +4,8 @@ module Executable.GraphEditor.Options
   )
 where
 
-import Lang.Command
-import Lang.Command.Parse
+import Models.Command
+import Models.Command.Parse
 import MyPrelude
 import Options.Applicative
 

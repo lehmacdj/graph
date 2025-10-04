@@ -1,6 +1,6 @@
-module Lang.Parsing.Common
+module Utils.Parsing.Common
   ( module X,
-    module Lang.Parsing.Common,
+    module Utils.Parsing.Common,
   )
 where
 

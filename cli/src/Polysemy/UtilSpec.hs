@@ -1,9 +1,10 @@
 module Polysemy.UtilSpec where
 
+import MyPrelude
 import Polysemy.Input
 import Polysemy.State
 import Polysemy.Util
-import TestPrelude
+import Utils.Testing
 
 -- | even after modifying the state variable used to initialize the Input
 -- the input should be the original value; i.e. the initialization action

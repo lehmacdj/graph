@@ -1,4 +1,4 @@
-module Lang.Command.Parse
+module Models.Command.Parse
   ( parseCommand,
     test_parseCommand,
   )
@@ -8,15 +8,15 @@ import Control.Arrow (left)
 import Data.Either (isLeft)
 import Data.Functor
 import Graph.SystemNodes (tagsNID)
-import Lang.Command
-import Lang.Parsing
-import Lang.Path.Parse
+import Models.Command
+import Models.Path.Parse
 import Models.Path.ParsedPath
 import Models.Path.Simple (Path)
 import Models.Path.Simple qualified as Simple
 import MyPrelude hiding (some, try)
-import TestPrelude hiding (some, try)
 import Text.Megaparsec (try)
+import Utils.Parsing
+import Utils.Testing
 
 path' :: Parser (ParsedPath String)
 path' = pPath transition
@@ -76,7 +76,7 @@ pDedup :: Parser Command
 pDedup = (commandFrom ["dedup", "dd"] $> Dedup) <*> transition
 
 pFlatten :: Parser Command
-pFlatten = (command "flatten" $> Lang.Command.Flatten) <*> transition
+pFlatten = (command "flatten" $> Flatten) <*> transition
 
 pShowImage :: Parser Command
 pShowImage = commandFrom ["show-image", "si"] $> ShowImage
