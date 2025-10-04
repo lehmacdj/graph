@@ -17,6 +17,6 @@ npath =
     }
 
 npathExp :: String -> Q Exp
-npathExp s = case runParser (pNormalizedPath transition <* eof) "" s of
+npathExp s = case runParser (pNormalizedPath transition <* eof) "" (pack s) of
   Left err -> fail $ "Parse error in npath quasi-quoter: " ++ show err
   Right result -> [|result|]

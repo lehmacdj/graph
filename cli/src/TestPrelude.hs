@@ -98,7 +98,7 @@ stronglyConnectedGraph :: [Int] -> Graph () ()
 stronglyConnectedGraph nids =
   disconnectedGraph nids & insertEdges (uncurry edge <$> allAnyOrderPairs nids)
 
-parseForTest :: String -> Parser a -> String -> IO a
+parseForTest :: String -> Parser a -> Text -> IO a
 parseForTest whatToParse parser input =
   case runParser (parser <* eof) ("<" <> whatToParse <> ">") input of
     Left err -> do

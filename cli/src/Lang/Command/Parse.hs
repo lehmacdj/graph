@@ -160,7 +160,7 @@ pCommand =
   try (Seq <$> (pCommandTerm `sepBy2` symbol ";"))
     <|> pCommandTerm
 
-parseCommand :: String -> Either String Command
+parseCommand :: Text -> Either String Command
 parseCommand = left errorBundlePretty . runParser pCommand "<interactive>"
 
 test_parseCommand :: TestTree
@@ -193,11 +193,13 @@ test_parseCommand =
       parseFails "t hello/world #"
     ]
   where
-    parsesTo string expected =
-      testCase ("parse: " ++ show string) $
+    parsesTo :: Text -> Command -> TestTree
+    parsesTo input expected =
+      testCase ("parse: " ++ show input) $
         Right expected
-          @=? parseCommand string
-    parseFails string =
-      testCase ("doesn't parse: " ++ show string) $
-        isLeft (parseCommand string)
+          @=? parseCommand input
+    parseFails :: Text -> TestTree
+    parseFails input =
+      testCase ("doesn't parse: " ++ show input) $
+        isLeft (parseCommand input)
           @? "parseCommand didn't fail"

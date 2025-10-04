@@ -80,7 +80,7 @@ failCompletionWithOriginalInputOnErrorOrWarning i =
 -- transition currently on as much as possible, then tries to complete from
 -- that location
 completePath :: Env -> (String, String) -> IO (String, [Completion])
-completePath env (i, _) = case getPartialPath (takeRelevantFromEnd i) of
+completePath env (i, _) = case getPartialPath (pack $ takeRelevantFromEnd i) of
   Nothing -> pure (i, [])
   Just (MissingSlash _) -> pure (i, [simpleCompletion "/"])
   Just (PartialPath pp end) ->

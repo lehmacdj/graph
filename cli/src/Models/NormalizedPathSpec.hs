@@ -8,7 +8,8 @@ import TestPrelude
 
 spec_normalizePath :: Spec
 spec_normalizePath = describe "normalizePath" do
-  let normalizesTo pathStr expectedStr =
+  let normalizesTo :: Text -> Text -> Spec
+      normalizesTo pathStr expectedStr =
         it (show pathStr <> " normalizes to " <> show expectedStr) do
           path <- parseForTest "path" (convertDirectivesToErrors (pPath' pSmallNID transition)) pathStr
           expected <- parseForTest "normalized path" (pNormalizedPath transition) expectedStr
@@ -92,7 +93,8 @@ spec_normalizePath = describe "normalizePath" do
 
 spec_leastConstrainedNormalizedPath :: Spec
 spec_leastConstrainedNormalizedPath = describe "leastConstrainedNormalizedPath" do
-  let whenLeastConstrainedIsEquivalentTo p expected =
+  let whenLeastConstrainedIsEquivalentTo :: Text -> Text -> Spec
+      whenLeastConstrainedIsEquivalentTo p expected =
         it (show p <> " when least constrained is equivalent to " <> show expected) do
           p' <- parseForTest "normalized path" (pNormalizedPath transition) p
           expected' <- parseForTest "normalized path" (pNormalizedPath transition) expected

@@ -119,11 +119,12 @@ test_pNormalizedPath =
       parseFails "a"
     ]
   where
-    parsesTo :: String -> NormalizedPath Anchor String -> TestTree
+    parsesTo :: Text -> NormalizedPath Anchor String -> TestTree
     parsesTo input expected =
       testCase ("parse: " ++ show input) $
-        testParserParses (pNormalizedPath transition <* eof) (unpack input) expected
+        testParserParses (pNormalizedPath transition <* eof) input expected
 
+    parseFails :: Text -> TestTree
     parseFails input =
       testCase ("parse fails: " ++ show input) $
         testParserFails (pNormalizedPath transition <* eof) input

@@ -53,7 +53,7 @@ data C c
 
 -- | Takes :q and :quit as quit and otherwise defers to the main parser
 withDefaultQuitParser ::
-  (String -> Either String c) -> String -> Either String (C c)
+  (Text -> Either String c) -> Text -> Either String (C c)
 withDefaultQuitParser p s
   | s == ":q" || s == ":quit" = Right Quit
   | otherwise = C <$> p s
@@ -71,7 +71,7 @@ repl ::
   Sem effs ()
 repl = do
   command <- getInputLine "g> "
-  case withDefaultQuitParser parseCommand <$> command of
+  case withDefaultQuitParser parseCommand . pack <$> command of
     Nothing -> outputStrLn "Goodbye!"
     Just (Right Quit) -> outputStrLn "Goodbye!"
     -- TODO: since we now interpret Haskeline as an effect we need to add a

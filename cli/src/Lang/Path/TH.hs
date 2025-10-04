@@ -17,6 +17,6 @@ path =
     }
 
 pathExp :: String -> Q Exp
-pathExp s = case runParser (pPath transition <* eof) "" s of
+pathExp s = case runParser (pPath transition <* eof) "" (pack s) of
   Left err -> fail $ "Parse error in path quasi-quoter: " ++ show err
   Right result -> [|result|]

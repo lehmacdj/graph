@@ -27,7 +27,7 @@ optionsP =
       )
     <*> optional
       ( option
-          (eitherReader parseCommand)
+          (eitherReader (parseCommand . pack))
           ( long "expression"
               <> short 'e'
               <> help "execute a single command"

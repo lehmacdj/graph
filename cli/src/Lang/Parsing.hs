@@ -32,7 +32,7 @@ isIdentChar = (||) <$> isAlphaNum <*> (`elem` extraIdentChars)
 identChar :: Parser Char
 identChar = alphaNumChar <|> oneOf extraIdentChars
 
-symbol :: String -> Parser String
+symbol :: Text -> Parser Text
 symbol = L.symbol s
 
 ident :: Parser String
@@ -94,10 +94,10 @@ brackets = between (symbol "[") (symbol "]")
 -- logic for argument separation as needed. All other parsers are expected to
 -- consume any following space indiscriminately.
 
-command :: String -> Parser String
+command :: Text -> Parser Text
 command i = L.lexeme s (string i <* lookAhead (space1 <|> eof <|> ((symbol ";" <|> symbol "}") $> ())))
 
-commandFrom :: [String] -> Parser String
+commandFrom :: [Text] -> Parser Text
 commandFrom [] = empty
 commandFrom [x] = command x
 commandFrom (x : xs) = try (command x) <|> commandFrom xs

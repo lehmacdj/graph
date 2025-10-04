@@ -39,8 +39,8 @@ pDirective pTransition =
     <|> try (LocationFromHistory 1 <$ symbol "%last")
     <|> (Targets <$> pDirectiveNamed "targets" (pPath pTransition))
 
-pDirectiveNamed :: String -> Parser a -> Parser a
-pDirectiveNamed name = between (symbol ("%" ++ name ++ "(")) (symbol ")")
+pDirectiveNamed :: Text -> Parser a -> Parser a
+pDirectiveNamed name = between (symbol ("%" <> name <> "(")) (symbol ")")
 
 pRegex :: Parser CheckedRegex
 pRegex = do
@@ -52,7 +52,7 @@ pRegex = do
 pathTerm :: Parser t -> Parser (ParsedPath t)
 pathTerm = pathTerm' pFullNID
 
-binary :: String -> (ParsedPath t -> ParsedPath t -> ParsedPath t) -> Operator Parser (ParsedPath t)
+binary :: Text -> (ParsedPath t -> ParsedPath t -> ParsedPath t) -> Operator Parser (ParsedPath t)
 binary name f = InfixL (f <$ symbol name)
 
 table :: [[Operator Parser (ParsedPath t)]]
@@ -121,10 +121,11 @@ test_pPath =
       parseFails "re\""
     ]
   where
-    parsesTo :: String -> ParsedPath String -> TestTree
+    parsesTo :: Text -> ParsedPath String -> TestTree
     parsesTo input =
       testCase ("parse: " ++ show input)
         . testParserParses (pPath transition) input
+    parseFails :: Text -> TestTree
     parseFails input =
       testCase ("parse fails: " ++ show input) $
         testParserFails (pPath transition <* eof) input
@@ -149,10 +150,11 @@ test_pDirective =
       parseFails "%targets(foo"
     ]
   where
-    parsesTo :: String -> Directive Identity String -> TestTree
+    parsesTo :: Text -> Directive Identity String -> TestTree
     parsesTo input =
       testCase ("parse: " ++ show input)
         . testParserParses (pDirective transition) input
+    parseFails :: Text -> TestTree
     parseFails input =
       testCase ("parse fails: " ++ show input) $
         testParserFails (pDirective transition <* eof) input

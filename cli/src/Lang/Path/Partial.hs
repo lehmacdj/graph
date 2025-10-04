@@ -19,7 +19,7 @@ import Text.Megaparsec.Char
 
 -- | Try to parse a path, returning a partial path that is the last one
 -- in the input string, this partial path will be the input for completion
-getPartialPath :: String -> Maybe PartialPath
+getPartialPath :: Text -> Maybe PartialPath
 getPartialPath i = case runParser pLastPartialPath "<completion>" i of
   Left _ -> Nothing
   Right r -> Just r

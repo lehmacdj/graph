@@ -28,10 +28,9 @@ newtype ParserOptions = ParserOptions
 defaultParserOptions :: ParserOptions
 defaultParserOptions = ParserOptions False
 
--- | TODO: switch to Text input type
-type Parser = ReaderT ParserOptions (Parsec CustomParseError String)
+type Parser = ReaderT ParserOptions (Parsec CustomParseError Text)
 
-type ParseError' = ParseError String CustomParseError
+type ParseError' = ParseError Text CustomParseError
 
 data SourceRange = SourceRange
   { startPos :: SourcePos,
@@ -48,8 +47,8 @@ runParser' ::
   -- | The file name used in error messages
   String ->
   -- | The input to parse
-  String ->
-  Either (ParseErrorBundle String CustomParseError) a
+  Text ->
+  Either (ParseErrorBundle Text CustomParseError) a
 runParser' opts parser = MP.runParser (runReaderT parser opts)
 
 runParser ::
@@ -57,15 +56,15 @@ runParser ::
   -- | The file name used in error messages
   String ->
   -- | The input to parse
-  String ->
-  Either (ParseErrorBundle String CustomParseError) a
+  Text ->
+  Either (ParseErrorBundle Text CustomParseError) a
 runParser = runParser' defaultParserOptions
 
 runParserTest ::
   Parser a ->
   -- | The input to parse
-  String ->
-  Either (ParseErrorBundle String CustomParseError) a
+  Text ->
+  Either (ParseErrorBundle Text CustomParseError) a
 runParserTest p =
   runParser'
     (defaultParserOptions {useFakeSourceRanges = True})
