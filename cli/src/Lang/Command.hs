@@ -33,7 +33,7 @@ import Graph.GraphMetadataEditing (GraphMetadataEditing, GraphMetadataReading)
 import Graph.Import.ByteString
 import Graph.Import.FileSystem
 import Graph.LegacyPathMaterialization
-import Graph.MaterializePath (materializePath)
+import Graph.MaterializePath (materializeNPath)
 import Graph.NodeLocated
 import Graph.Time (taggingFreshNodesWithTime)
 import Graph.Utils
@@ -171,7 +171,13 @@ guardDangerousDualizedOperation = do
     promptYesNo "proceed (y/n): " >>= bool (throw OperationCancelled) (pure ())
 
 interpretDirective ::
-  (Members [GraphMetadataReading, State History, GetLocation] effs) =>
+  ( Members
+      [ GraphMetadataReading,
+        State History,
+        GetLocation
+      ]
+      effs
+  ) =>
   SourceRange ->
   Directive Identity Text ->
   Sem effs (Path Text)
@@ -181,7 +187,7 @@ interpretDirective _ = \case
     currentNid <- currentLocation
     p' <- handleDirectivesWith interpretDirective p
     let np = normalizePath p'
-    mp <- materializePath currentNid (leastConstrainedNormalizedPath np)
+    mp <- materializeNPath currentNid (leastConstrainedNormalizedPath np)
     -- this is a little bit inefficient of an embedding, but not too bad
     pure $ foldl' (Simple.:+) Zero (mapSet Absolute $ targets mp.path)
 
@@ -366,7 +372,7 @@ interpretCommand = \case
       say $ "prenormal path: " ++ tshow p'
       let np = normalizePath p'
       say $ "normalized path: " ++ tshow np
-      materializePath nid (leastConstrainedNormalizedPath np)
+      materializeNPath nid (leastConstrainedNormalizedPath np)
     say $ "materialized path: " <> tshow mp.path
     if null mp.graph
       then say "no nodes materialized"

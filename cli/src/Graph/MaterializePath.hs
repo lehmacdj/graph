@@ -5,17 +5,29 @@ module Graph.MaterializePath where
 import Graph.GraphMetadataEditing
 import Models.Connect (Connect (..), matchConnect)
 import Models.Graph (Graph, emptyGraph)
+import Models.MaterializedPath
 import Models.NID
 import Models.Node
 import Models.NormalizedPath
+import Models.Path.Simple
 import MyPrelude hiding ((\\))
 import Polysemy.State
-import Models.MaterializedPath
+
+materializePath ::
+  forall r.
+  ( Members '[GraphMetadataReading] r,
+    HasCallStack
+  ) =>
+  NID ->
+  Path Text ->
+  Sem r (MaterializedPath Text)
+materializePath nid path =
+  materializeNPath nid (leastConstrainedNormalizedPath (normalizePath path))
 
 {-# HLINT ignore materializePath "Functor law" #-}
 
 -- | Traverse a path, fetching node metadata and noting which nodes are missing.
-materializePath ::
+materializeNPath ::
   forall r.
   ( Members '[GraphMetadataReading] r,
     HasCallStack
@@ -24,7 +36,7 @@ materializePath ::
   NID ->
   NormalizedPath FullyAnchored Text ->
   Sem r (MaterializedPath Text)
-materializePath firstNid normalizedPath = do
+materializeNPath firstNid normalizedPath = do
   traverse (traverseDeterministicPath firstNid) (toList normalizedPath.union)
     & fmap (NormalizedPath . setFromList . concat)
     & cachingReadingInState
