@@ -12,9 +12,7 @@ data Showable = Showable
   deriving (Eq)
 
 instance ShowableAugmentation Showable where
-  augmentationLabel = Just "showable"
-  defaultShowAugmentation = const "shown"
-  shouldShowStandaloneAugmentation = True
+  augmentationProperties = const (singletonMap "showable" (Just "shown"))
 
 spec_withoutShowingAugmentations :: Spec
 spec_withoutShowingAugmentations = do

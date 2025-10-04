@@ -30,6 +30,10 @@ MyPrelude is composed of several submodules:
   - They're already in use in the codebase
   - Order is semantically important
 - Available utilities:
+  - everything from `mono-traversable` unprefixed
+    - this is the default way to perform operations like conversions between collections, folds on collections, etc.
+    - e.g. `mapToList`, `setFromList`, etc.
+    - these are all polymorphic and work on arbitrary collections
   - `toSetOf`: Lens-based set construction
   - `mapSet`, `mapOSet`: Type-safe mapping over sets
   - `whenNonNull`: Execute action when collection is non-empty

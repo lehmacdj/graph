@@ -142,6 +142,7 @@ default-extensions:
 
 ghc-options:
 - -Wall
+- -O0 # always use no optimization (same as --fast)
 - -fplugin=Polysemy.Plugin
 - -flate-specialise
 - -fspecialise-aggressively
@@ -184,6 +185,5 @@ tests:
     - -rtsopts
     - -with-rtsopts=-N
     - -Wall
-    - -O0 # compile faster, equivalent to --fast
     dependencies:
     - graph

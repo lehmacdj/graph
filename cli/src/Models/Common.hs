@@ -5,7 +5,6 @@ module Models.Common where
 
 import Data.Constraint
 import Data.Constraint.Unsafe
-import Data.Functor.Classes
 import MyPrelude hiding ((\\))
 
 #ifdef DEBUG
@@ -24,8 +23,8 @@ data CompactNodeShowSettings a = CompactNodeShowSettings
     -- | Whether to show incoming connects
     showIncoming :: Bool,
     -- | Whether to show the augmentation; if so provide a name and way to show
-    -- it
-    showAugmentation :: Maybe (Maybe Text, a -> Text)
+    -- it. The function returns a map of properties to display.
+    showAugmentation :: Maybe (Maybe Text, a -> OMap Text (Maybe Text))
   }
 
 instance Contravariant CompactNodeShowSettings where
@@ -52,38 +51,23 @@ class CompactNodeShow n where
   nshowSettings :: CompactNodeShowSettings (Augmentation n) -> n -> Text
 
 class ShowableAugmentation a where
-  augmentationLabel :: Maybe Text
-  defaultShowAugmentation :: a -> Text
-  shouldShowStandaloneAugmentation :: Bool
+  augmentationProperties :: a -> OMap Text (Maybe Text)
 
 instance ShowableAugmentation Void where
-  augmentationLabel = Just "void"
-  defaultShowAugmentation = const "!"
-  shouldShowStandaloneAugmentation = False
+  augmentationProperties = const mempty
 
 instance ShowableAugmentation () where
-  augmentationLabel = Just "unit"
-  defaultShowAugmentation = const "()"
-  shouldShowStandaloneAugmentation = False
+  augmentationProperties = const mempty
 
 instance (ShowableAugmentation a) => ShowableAugmentation (Maybe a) where
-  augmentationLabel = augmentationLabel @a
-  defaultShowAugmentation maybeX =
-    pack $
-      liftShowsPrec
-        (\_ x -> (unpack (defaultShowAugmentation x :: Text) ++))
-        (error "shouldn't need showList")
-        0
-        maybeX
-        ""
-  shouldShowStandaloneAugmentation = True
+  augmentationProperties = \case
+    Nothing -> mempty
+    Just x -> augmentationProperties x
 
 newtype UnshownAugmentation a = UnshownAugmentation a
 
 instance ShowableAugmentation (UnshownAugmentation a) where
-  augmentationLabel = Just "unshown"
-  defaultShowAugmentation = const ""
-  shouldShowStandaloneAugmentation = False
+  augmentationProperties = const mempty
 
 withoutShowingAugmentations :: forall a b. ((ShowableAugmentation a) => b) -> b
 withoutShowingAugmentations x = x \\ e
@@ -123,7 +107,5 @@ nshowDefault =
   nshowWith \x ->
     x
       { showAugmentation =
-          justIfTrue
-            (shouldShowStandaloneAugmentation @a)
-            (augmentationLabel @a, defaultShowAugmentation @a)
+          Just (Nothing, augmentationProperties @a)
       }

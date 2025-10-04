@@ -19,9 +19,8 @@ instance DefaultAugmentation TestTextAugmentation where
 instance MonoidAugmentation TestTextAugmentation
 
 instance ShowableAugmentation TestTextAugmentation where
-  augmentationLabel = Just "testText"
-  defaultShowAugmentation = coerce
-  shouldShowStandaloneAugmentation = True
+  augmentationProperties (TestTextAugmentation txt) =
+    singletonMap "testText" (Just txt)
 
 spec_at :: Spec
 spec_at = do

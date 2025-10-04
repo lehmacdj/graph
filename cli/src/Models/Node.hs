@@ -89,7 +89,7 @@ instance
   nshowSettings settings@CompactNodeShowSettings {..} Node {..} =
     nshowSettings (unconsumed settings) nid ++ "{" ++ intercalate ", " reprParts ++ "}"
     where
-      reprParts = catMaybes [outgoingRepr, incomingRepr, augmentationRepr]
+      reprParts = catMaybes [outgoingRepr, incomingRepr] ++ augmentationReprs
       incomingRepr :: Maybe Text
       incomingRepr =
         justIfTrue showIncoming $
@@ -102,11 +102,23 @@ instance
           "out=["
             ++ intercalate ", " (nshowSettings (unconsumed settings) <$> toList outgoing)
             ++ "]"
-      augmentationRepr :: Maybe Text
-      augmentationRepr =
-        showAugmentation <&> \(mLabel, showAug) -> case mLabel of
-          Nothing -> showAug augmentation
-          Just label -> label ++ "=" ++ showAug augmentation
+      augmentationReprs :: [Text]
+      augmentationReprs =
+        showAugmentation & \case
+          Nothing -> []
+          Just (mLabel, showAug) ->
+            let properties = showAug augmentation
+                formatted = formatProperties properties
+             in case mLabel of
+                  Nothing -> [formatted | formatted /= ""]
+                  Just label -> [label ++ "=" ++ formatted | formatted /= ""]
+      formatProperties :: OMap Text (Maybe Text) -> Text
+      formatProperties props
+        | null props = ""
+        | otherwise = intercalate ", " (formatProperty <$> mapToList props)
+      formatProperty :: (Text, Maybe Text) -> Text
+      formatProperty (k, Nothing) = k
+      formatProperty (k, Just v) = k ++ "=" ++ v
 
 instance
   {-# OVERLAPPABLE #-}

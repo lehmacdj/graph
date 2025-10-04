@@ -8,11 +8,9 @@ data IsThin = Thin | Fetched
   deriving (Eq, Show, Ord, Generic)
 
 instance ShowableAugmentation IsThin where
-  augmentationLabel = Nothing
-  defaultShowAugmentation = \case
-    Thin -> "thin"
-    Fetched -> "fetched"
-  shouldShowStandaloneAugmentation = True
+  augmentationProperties = \case
+    Thin -> singletonMap "thin" Nothing
+    Fetched -> singletonMap "fetched" Nothing
 
 instance DefaultAugmentation IsThin where
   defaultAugmentation = Thin
