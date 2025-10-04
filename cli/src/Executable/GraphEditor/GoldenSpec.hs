@@ -1,5 +1,6 @@
 module Executable.GraphEditor.GoldenSpec where
 
+import DAL.DumpGraph
 import Data.Attoparsec.ByteString
 import Data.ByteString qualified as B
 import System.FilePath
@@ -91,12 +92,12 @@ runGraphEditor test@GoldenTest {..} =
             tmpGraph
           ]
         & setStdin (byteStringInput (fromStrict input))
-    (graphDump', _) <- readProcess_ $ proc "dump-graph" [tmpGraph]
+    graphDump' <- dumpGraph tmpGraph
     pure
       $ test
         { stdOut = toStrict stdOut',
           stdErr = toStrict stdErr',
-          graphDump = toStrict graphDump'
+          graphDump = toStrict $ builderToLazy graphDump'
         }
 
 mkGoldenTest :: FilePath -> TestTree

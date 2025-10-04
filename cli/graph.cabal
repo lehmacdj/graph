@@ -27,6 +27,7 @@ library
       DAL.DirectoryFormat
       DAL.DTO
       DAL.DTOSpec
+      DAL.DumpGraph
       DAL.FileSystemOperations.Data
       DAL.FileSystemOperations.Metadata
       DAL.FileSystemOperations.MetadataWriteDiff
@@ -44,7 +45,6 @@ library
       Error.Missing
       Error.UserError
       Error.Warn
-      Executable.DumpGraph
       Executable.GraphEditor
       Executable.GraphEditor.Completion
       Executable.GraphEditor.GoldenSpec
@@ -260,136 +260,6 @@ library
     frameworks:
         Foundation
   else
-
-executable dump-graph
-  main-is: Main.hs
-  other-modules:
-      Paths_graph
-  hs-source-dirs:
-      app/dump-graph
-  default-extensions:
-      BangPatterns
-      BlockArguments
-      CApiFFI
-      ConstraintKinds
-      DataKinds
-      DefaultSignatures
-      DeriveAnyClass
-      DeriveFoldable
-      DeriveFunctor
-      DeriveGeneric
-      DeriveLift
-      DeriveTraversable
-      DerivingStrategies
-      DerivingVia
-      DisambiguateRecordFields
-      DuplicateRecordFields
-      FlexibleContexts
-      FlexibleInstances
-      FunctionalDependencies
-      GADTs
-      GeneralizedNewtypeDeriving
-      ImportQualifiedPost
-      ImpredicativeTypes
-      LambdaCase
-      LexicalNegation
-      MultiParamTypeClasses
-      NamedFieldPuns
-      NoFieldSelectors
-      NoImplicitPrelude
-      OverloadedLabels
-      OverloadedRecordDot
-      OverloadedStrings
-      PatternSynonyms
-      PolyKinds
-      QuantifiedConstraints
-      QuasiQuotes
-      RankNTypes
-      RecordWildCards
-      ScopedTypeVariables
-      StandaloneDeriving
-      StandaloneKindSignatures
-      StrictData
-      TemplateHaskellQuotes
-      TupleSections
-      TypeApplications
-      TypeFamilies
-      TypeOperators
-      TypeSynonymInstances
-      ViewPatterns
-  ghc-options: -Wall -fplugin=Polysemy.Plugin -flate-specialise -fspecialise-aggressively -fprefer-byte-code -fbyte-code-and-object-code -threaded -rtsopts -with-rtsopts=-N
-  cpp-options: -DDEBUG
-  build-depends:
-      Glob
-    , SHA
-    , aeson
-    , attoparsec
-    , base >=4.7 && <5
-    , base-orphans
-    , base64
-    , base64-bytestring
-    , bytestring
-    , classy-prelude
-    , comonad
-    , conduit
-    , conduit-extra
-    , constraints
-    , containers
-    , deepseq
-    , directory
-    , directory-tree
-    , exceptions
-    , filepath
-    , foreign-store
-    , free
-    , generic-data
-    , generic-lens
-    , graph
-    , haskeline
-    , hspec
-    , hspec-expectations
-    , html-conduit
-    , http-conduit
-    , http-types
-    , inline-c
-    , inline-c-objc
-    , ixset-typed
-    , lens
-    , lens-regex-pcre
-    , megaparsec
-    , mono-traversable
-    , mtl
-    , optparse-applicative
-    , ordered-containers
-    , parser-combinators
-    , pcre-light
-    , polysemy
-    , polysemy-plugin
-    , polysemy-readline
-    , polysemy-zoo
-    , random
-    , random-shuffle
-    , resourcet
-    , semigroupoids
-    , tasty
-    , tasty-discover
-    , tasty-golden
-    , tasty-hspec
-    , tasty-hunit
-    , tasty-quickcheck
-    , template-haskell
-    , temporary
-    , text
-    , time
-    , transformers
-    , typed-process
-    , unix
-    , unliftio
-    , witherable
-    , wreq
-    , xdg-basedir
-    , xml-conduit
-  default-language: Haskell2010
 
 executable ge
   main-is: Main.hs
