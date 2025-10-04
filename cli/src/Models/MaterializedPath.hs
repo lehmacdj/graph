@@ -35,6 +35,9 @@ targets :: (ValidTransition t) => NormalizedPath NID t -> Set NID
 targets (NormalizedPath dps) = foldMap (singletonSet . dpTarget) dps
 
 -- | Get the final connects targeted by the NormalizedPath.
+-- This returns two layers of Set:
+-- * the outer set represents disjunction of DeterministicPaths
+-- * the inner set represents conjunction of edges within a DeterministicPath
 -- maybe this actually should belong in some Models.NormalizedPath submodule;
 -- it's here because typically this is used downstream of materializing a path
 finalNonLoopEdges :: forall t. (ValidTransition t) => NormalizedPath NID t -> Set (Set (Edge t))
