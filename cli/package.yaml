@@ -147,7 +147,8 @@ ghc-options:
 - -flate-specialise
 - -fspecialise-aggressively
 # https://well-typed.com/blog/2023/02/interface-files-with-core/
-- -fprefer-byte-code -fbyte-code-and-object-code
+# incompatible with inline-c
+# - -fprefer-byte-code -fbyte-code-and-object-code
 
 cpp-options:
 - -DDEBUG

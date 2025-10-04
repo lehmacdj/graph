@@ -78,6 +78,8 @@ library
       Lang.Path.TH
       Lang.PathSpec
       Models.Augmentations.IsThin
+      Models.Augmentations.Tags
+      Models.Augmentations.Timestamps
       Models.Common
       Models.Connect
       Models.DPath
@@ -180,7 +182,7 @@ library
       TypeOperators
       TypeSynonymInstances
       ViewPatterns
-  ghc-options: -Wall -fplugin=Polysemy.Plugin -flate-specialise -fspecialise-aggressively -fprefer-byte-code -fbyte-code-and-object-code
+  ghc-options: -Wall -O0 -fplugin=Polysemy.Plugin -flate-specialise -fspecialise-aggressively
   cpp-options: -DDEBUG
   build-depends:
       Glob
@@ -316,7 +318,7 @@ executable ge
       TypeOperators
       TypeSynonymInstances
       ViewPatterns
-  ghc-options: -Wall -fplugin=Polysemy.Plugin -flate-specialise -fspecialise-aggressively -fprefer-byte-code -fbyte-code-and-object-code -threaded -rtsopts -with-rtsopts=-N
+  ghc-options: -Wall -O0 -fplugin=Polysemy.Plugin -flate-specialise -fspecialise-aggressively -threaded -rtsopts -with-rtsopts=-N
   cpp-options: -DDEBUG
   build-depends:
       Glob
@@ -447,7 +449,7 @@ test-suite graph-test
       TypeOperators
       TypeSynonymInstances
       ViewPatterns
-  ghc-options: -Wall -fplugin=Polysemy.Plugin -flate-specialise -fspecialise-aggressively -fprefer-byte-code -fbyte-code-and-object-code -threaded -rtsopts -with-rtsopts=-N -Wall -O0
+  ghc-options: -Wall -O0 -fplugin=Polysemy.Plugin -flate-specialise -fspecialise-aggressively -threaded -rtsopts -with-rtsopts=-N -Wall
   cpp-options: -DDEBUG
   build-depends:
       Glob
