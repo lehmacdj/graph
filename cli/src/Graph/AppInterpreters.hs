@@ -31,10 +31,10 @@ import Polysemy.Input
 import Polysemy.Readline
 import Polysemy.Scoped
 import Polysemy.State
-import Polysemy.Util
 import System.Console.Haskeline (InputT)
 import System.Console.Haskeline qualified as H
 import System.Random
+import Utils.Polysemy
 
 data Env = Env
   { filePath :: IORef FilePath,

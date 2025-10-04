@@ -11,7 +11,7 @@ import MyPrelude hiding (Reader, ask)
 import Polysemy.Output
 import Polysemy.Reader
 import Polysemy.State
-import Polysemy.Util
+import Utils.Polysemy
 
 type GetLocation = Reader NID
 

@@ -23,7 +23,7 @@ import Models.Node
 import MyPrelude
 import Polysemy.Input
 import Polysemy.State
-import Polysemy.Util
+import Utils.Polysemy
 
 data ReadGraph t d m a where
   GetNode :: NID -> ReadGraph t d m (Maybe (Node t d))

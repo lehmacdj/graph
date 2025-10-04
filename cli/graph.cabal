@@ -111,9 +111,6 @@ library
       MyPrelude.Orphans
       MyPrelude.RawStrings
       MyPrelude.Regex
-      Polysemy.MTL
-      Polysemy.Util
-      Polysemy.UtilSpec
       Spec
       System.Directory.Clone
       System.IO.Term.BinarySerialize
@@ -126,6 +123,7 @@ library
       Utils.Parsing
       Utils.Parsing.Common
       Utils.ParsingSpec
+      Utils.Polysemy
       Utils.Singleton
       Utils.Testing
   other-modules:

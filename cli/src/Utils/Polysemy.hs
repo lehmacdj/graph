@@ -1,13 +1,18 @@
 {-# LANGUAGE AllowAmbiguousTypes #-}
 
-module Polysemy.Util where
+-- | Specialized utilities for Polysemy that aren't general enough to include
+-- in my prelude directly
+module Utils.Polysemy where
 
 import Control.Lens
+import Control.Monad.Reader qualified as MTL
+import Control.Monad.State qualified as MTL
 import MyPrelude hiding (Reader, ask, fromEither)
 import Polysemy.Error
 import Polysemy.Input
 import Polysemy.Reader
 import Polysemy.State
+import Utils.Testing
 
 data NoInputProvided = NoInputProvided
   deriving (Show, Eq, Ord)
@@ -211,6 +216,23 @@ runInputConstSem :: Sem r x -> Sem (Input x : r) a -> Sem r a
 runInputConstSem initializationAction action =
   initializationAction >>= \val -> runInputConst val action
 
+-- | even after modifying the state variable used to initialize the Input
+-- the input should be the original value; i.e. the initialization action
+-- should not be called multiple times
+unit_runInputConstSem_alwaysSame :: Assertion
+unit_runInputConstSem_alwaysSame =
+  (run . runState 0 . runInputConstSem initAction) action @=? (0, 0)
+  where
+    initAction :: (Member (State Int) r) => Sem r Int
+    initAction = get @Int
+    action :: (Members [State Int, Input Int] r) => Sem r Int
+    action = do
+      orig <- input @Int
+      modify @Int (+ 1)
+      newInput <- input @Int
+      put @Int newInput
+      pure orig
+
 -- | Run an error ignoring any result that fails and returning Nothing,
 -- returning Just only if the result is successful.
 runErrorMaybe :: Sem (Error e : r) a -> Sem r (Maybe a)
@@ -223,3 +245,20 @@ fromEitherSem = (>>= fromEither)
 fromEitherSemVia ::
   (Member (Error err) r) => (e -> err) -> Sem r (Either e a) -> Sem r a
 fromEitherSemVia mapper = fromEitherSem . fmap (first mapper)
+
+runStateMonadState ::
+  forall m s r a.
+  (MTL.MonadState s m, Member (Embed m) r) =>
+  Sem (State s : r) a ->
+  Sem r a
+runStateMonadState = interpret $ \case
+  Get -> embed MTL.get
+  Put x -> embed (MTL.put x)
+
+runInputMonadReader ::
+  forall m i r a.
+  (MTL.MonadReader i m, Member (Embed m) r) =>
+  Sem (Input i : r) a ->
+  Sem r a
+runInputMonadReader = interpret $ \case
+  Input -> embed MTL.ask
