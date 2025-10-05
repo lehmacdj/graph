@@ -21,7 +21,7 @@ instance MonoidAugmentation TestTextAugmentation
 
 instance ShowableAugmentation TestTextAugmentation where
   augmentationProperties (TestTextAugmentation txt) =
-    singletonMap "testText" (Just txt)
+    [(Just "testText", txt)]
 
 spec_at :: Spec
 spec_at = do

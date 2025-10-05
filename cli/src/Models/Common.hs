@@ -23,8 +23,8 @@ data CompactNodeShowSettings a = CompactNodeShowSettings
     -- | Whether to show incoming connects
     showIncoming :: Bool,
     -- | Whether to show the augmentation; if so provide a name and way to show
-    -- it. The function returns a map of properties to display.
-    showAugmentation :: Maybe (Maybe Text, a -> OMap Text (Maybe Text))
+    -- it. The function returns a list of properties to display.
+    showAugmentation :: Maybe (Maybe Text, a -> [(Maybe Text, Text)])
   }
 
 instance Contravariant CompactNodeShowSettings where
@@ -51,7 +51,7 @@ class CompactNodeShow n where
   nshowSettings :: CompactNodeShowSettings (Augmentation n) -> n -> Text
 
 class ShowableAugmentation a where
-  augmentationProperties :: a -> OMap Text (Maybe Text)
+  augmentationProperties :: a -> [(Maybe Text, Text)]
 
 instance ShowableAugmentation Void where
   augmentationProperties = const mempty

@@ -9,8 +9,8 @@ data IsThin = Thin | Fetched
 
 instance ShowableAugmentation IsThin where
   augmentationProperties = \case
-    Thin -> singletonMap "thin" Nothing
-    Fetched -> singletonMap "fetched" Nothing
+    Thin -> [(Nothing, "thin")]
+    Fetched -> [(Nothing, "fetched")]
 
 instance DefaultAugmentation IsThin where
   defaultAugmentation = Thin

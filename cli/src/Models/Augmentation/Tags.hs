@@ -16,9 +16,7 @@ newtype Tags = Tags {tags :: Set Text}
 
 instance ShowableAugmentation Tags where
   augmentationProperties (Tags ts) =
-    singletonMap "tags" . Just $
-      ("[" ++) . (++ "]") $
-        intercalate ", " (toList ts)
+    [(Just "tags", ("[" ++) . (++ "]") $ intercalate ", " (toList ts))]
 
 fetchTags ::
   (Members '[GraphMetadataReading] r) =>

@@ -13,7 +13,7 @@ data Showable = Showable
   deriving (Eq)
 
 instance ShowableAugmentation Showable where
-  augmentationProperties = const (singletonMap "showable" (Just "shown"))
+  augmentationProperties = const [(Just "showable", "shown")]
 
 spec_withoutShowingAugmentations :: Spec
 spec_withoutShowingAugmentations = do

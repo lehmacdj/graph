@@ -13,11 +13,9 @@ newtype Timestamps = Timestamps {timestamps :: Set UTCTime}
 
 instance ShowableAugmentation Timestamps where
   augmentationProperties (Timestamps ts) = case fromNullable ts of
-    Nothing -> singletonMap "timestamp" Nothing
+    Nothing -> [(Nothing, "timestamp")]
     Just ts' ->
-      singletonMap "timestamp" $
-        Just . pack $
-          formatTime defaultTimeLocale "%Y-%m-%d %H:%M" (maximum ts')
+      [(Just "timestamp", pack $ formatTime defaultTimeLocale "%Y-%m-%d %H:%M" (maximum ts'))]
 
 fetchTimestamps ::
   (Members '[GraphMetadataReading] r) =>

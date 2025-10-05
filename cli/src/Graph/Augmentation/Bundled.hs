@@ -121,18 +121,17 @@ spec_bundledShowable :: Spec
 spec_bundledShowable = do
   it "shows all properties" $
     augmentationProperties bundledExample1
-      `shouldBe` mapFromList
-        [ ("a", Just "42"),
-          ("b", Just "hello"),
-          ("c", Just "True"),
-          ("d", Just "3.14")
-        ]
-  it "earlier properties override later ones" $
+      `shouldBe` [ (Just "a", "42"),
+                   (Just "b", "hello"),
+                   (Just "c", "True"),
+                   (Just "d", "3.14")
+                 ]
+  it "duplicate properties all appear in order" $
     augmentationProperties bundledExample2
-      `shouldBe` mapFromList
-        [ ("a", Just "1"),
-          ("b", Just "hello")
-        ]
+      `shouldBe` [ (Just "a", "1"),
+                   (Just "b", "hello"),
+                   (Just "a", "2")
+                 ]
 
 -- * HasField
 
@@ -194,33 +193,32 @@ newtype TestA = TestA {a :: Int}
   deriving stock (Generic)
 
 instance ShowableAugmentation TestA where
-  augmentationProperties (TestA a) = singletonMap "a" (Just (tshow a))
+  augmentationProperties (TestA a) = [(Just "a", tshow a)]
 
 newtype TestB = TestB {b :: Text}
   deriving stock (Generic)
 
 instance ShowableAugmentation TestB where
-  augmentationProperties (TestB b) = singletonMap "b" (Just b)
+  augmentationProperties (TestB b) = [(Just "b", b)]
 
 newtype TestC = TestC {c :: Bool}
   deriving stock (Generic)
 
 instance ShowableAugmentation TestC where
-  augmentationProperties (TestC c) = singletonMap "c" (Just (tshow c))
+  augmentationProperties (TestC c) = [(Just "c", tshow c)]
 
 newtype TestD = TestD {d :: Double}
   deriving stock (Generic)
 
 instance ShowableAugmentation TestD where
-  augmentationProperties (TestD d) = singletonMap "d" (Just (tshow d))
+  augmentationProperties (TestD d) = [(Just "d", tshow d)]
 
 data TestAB = TestAB {a :: Int, b :: Text}
   deriving stock (Generic)
 
 instance ShowableAugmentation TestAB where
   augmentationProperties (TestAB a b) =
-    singletonMap "a" (Just (tshow a))
-      <> singletonMap "b" (Just b)
+    [(Just "a", tshow a), (Just "b", b)]
 
 bundledExample1 :: Bundled '[TestA, TestB, TestC, TestD]
 bundledExample1 =

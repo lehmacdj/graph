@@ -112,13 +112,13 @@ instance
              in case mLabel of
                   Nothing -> [formatted | formatted /= ""]
                   Just label -> [label ++ "=" ++ formatted | formatted /= ""]
-      formatProperties :: OMap Text (Maybe Text) -> Text
+      formatProperties :: [(Maybe Text, Text)] -> Text
       formatProperties props
         | null props = ""
-        | otherwise = intercalate ", " (formatProperty <$> mapToList props)
-      formatProperty :: (Text, Maybe Text) -> Text
-      formatProperty (k, Nothing) = k
-      formatProperty (k, Just v) = k ++ "=" ++ v
+        | otherwise = intercalate ", " (formatProperty <$> props)
+      formatProperty :: (Maybe Text, Text) -> Text
+      formatProperty (Nothing, v) = v
+      formatProperty (Just k, v) = k ++ "=" ++ v
 
 instance
   {-# OVERLAPPABLE #-}
