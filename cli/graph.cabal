@@ -50,7 +50,9 @@ library
       Executable.GraphEditor.GoldenSpec
       Executable.GraphEditor.Options
       Graph.AppInterpreters
+      Graph.Augmentation
       Graph.Check
+      Graph.Command
       Graph.Effect
       Graph.Export.FileSystem
       Graph.FreshNID
@@ -66,9 +68,9 @@ library
       Graph.SystemNodes.Init
       Graph.Time
       Graph.Utils
-      Models.Augmentations.IsThin
-      Models.Augmentations.Tags
-      Models.Augmentations.Timestamps
+      Models.Augmentation.IsThin
+      Models.Augmentation.Tags
+      Models.Augmentation.Timestamps
       Models.Command
       Models.Command.Parse
       Models.Common

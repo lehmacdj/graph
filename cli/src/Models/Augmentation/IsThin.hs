@@ -1,4 +1,4 @@
-module Models.Augmentations.IsThin where
+module Models.Augmentation.IsThin where
 
 import Models.Common
 import Models.Node

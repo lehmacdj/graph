@@ -6,7 +6,7 @@ import DAL.FileSystemOperations.Metadata
 import DAL.FileSystemOperations.MetadataWriteDiff
 import Error.UserError
 import Error.Warn
-import Models.Augmentations.IsThin
+import Models.Augmentation.IsThin
 import Models.Edge
 import Models.Graph (Graph, emptyGraph)
 import Models.Graph qualified

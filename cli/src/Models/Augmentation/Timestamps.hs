@@ -1,4 +1,4 @@
-module Models.Augmentations.Timestamps where
+module Models.Augmentation.Timestamps where
 
 import Graph.GraphMetadataEditing
 import Graph.SystemNodes

@@ -111,6 +111,9 @@ test_pPath =
                        :/ Directive testAnn (LocationFromHistory 2)
                        :/ Literal "bar"
                    ),
+      -- approximation of the pattern we use to detect paths
+      "~*/%{Absolute nid}"
+        `parsesTo` (Backwards Wild :/ Directive testAnn (Splice "Absolute nid")),
       parseFails "foo/bar&",
       parseFails "foo/bar&+qux",
       parseFails "foo+",
@@ -143,6 +146,10 @@ test_pDirective =
           ( (One :/ Literal "foo")
               :+ (Absolute tagsNID :/ Literal "bar")
           ),
+      -- this needs to be Haskell code to actually work, but we just want to
+      -- parse anything here
+      "%{some text here}" `parsesTo` Splice "some text here",
+      "%{Absolute nid}" `parsesTo` Splice "Absolute nid",
       parseFails "%last()",
       parseFails "%history()",
       parseFails "%history(foo)",

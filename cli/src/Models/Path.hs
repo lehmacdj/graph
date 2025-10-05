@@ -183,21 +183,21 @@ handleDirectivesQ interpretDirective = \case
   Literal x -> [|Literal x|]
   Absolute nid -> [|Absolute nid|]
   Backwards' (Identity p) ->
-    [|Backwards' $(handleDirectivesQ interpretDirective p)|]
+    [|Backwards' (Identity $(handleDirectivesQ interpretDirective p))|]
   Identity l ::/ Identity r ->
     [|
-      $(handleDirectivesQ interpretDirective l)
-        ::/ $(handleDirectivesQ interpretDirective r)
+      Identity $(handleDirectivesQ interpretDirective l)
+        ::/ Identity $(handleDirectivesQ interpretDirective r)
       |]
   Identity l ::+ Identity r ->
     [|
-      $(handleDirectivesQ interpretDirective l)
-        ::+ $(handleDirectivesQ interpretDirective r)
+      Identity $(handleDirectivesQ interpretDirective l)
+        ::+ Identity $(handleDirectivesQ interpretDirective r)
       |]
   Identity l ::& Identity r ->
     [|
-      $(handleDirectivesQ interpretDirective l)
-        ::& $(handleDirectivesQ interpretDirective r)
+      Identity $(handleDirectivesQ interpretDirective l)
+        ::& Identity $(handleDirectivesQ interpretDirective r)
       |]
   Directive ann directive -> interpretDirective ann directive
 

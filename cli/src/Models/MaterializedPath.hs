@@ -1,12 +1,12 @@
 module Models.MaterializedPath
   ( MaterializedPath (..),
-    targets,
+    getTargets,
     finalNonLoopEdges,
     module X,
   )
 where
 
-import Models.Augmentations.IsThin as X
+import Models.Augmentation.IsThin as X
 import Models.Common
 import Models.Edge
 import Models.Graph
@@ -31,8 +31,8 @@ dpTarget = \case
 -- | Get the set of all nodes targeted by the NormalizedPath
 -- maybe this actually should belong in some Models.NormalizedPath submodule;
 -- it's here because typically this is used downstream of materializing a path
-targets :: (ValidTransition t) => NormalizedPath NID t -> Set NID
-targets (NormalizedPath dps) = foldMap (singletonSet . dpTarget) dps
+getTargets :: (ValidTransition t) => NormalizedPath NID t -> Set NID
+getTargets (NormalizedPath dps) = foldMap (singletonSet . dpTarget) dps
 
 -- | Get the final connects targeted by the NormalizedPath.
 -- This returns two layers of Set:

@@ -18,6 +18,9 @@ import Utils.Testing
 s :: Parser ()
 s = L.space space1 empty empty
 
+whitespace :: Parser ()
+whitespace = s
+
 lexeme :: Parser a -> Parser a
 lexeme = L.lexeme s
 

@@ -14,12 +14,12 @@ import Effect.IOWrapper.Web
 import Executable.GraphEditor.Completion
 import Executable.GraphEditor.Options
 import Graph.AppInterpreters
+import Graph.Command
 import Graph.Effect
 import Graph.FreshNID
 import Graph.GraphMetadataEditing (GraphMetadataEditing)
 import Graph.NodeLocated
 import Graph.SystemNodes.Init (createSystemNodes)
-import Models.Command hiding (printTransitions)
 import Models.Command.Parse
 import Models.History
 import Models.NID
