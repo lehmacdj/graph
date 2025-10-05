@@ -18,7 +18,6 @@ import MyPrelude hiding (try)
 import Text.Megaparsec (try)
 import Text.Megaparsec.Char (char)
 import Utils.Parsing
-import Utils.ParsingSpec
 import Utils.Testing
 
 pathTerm' :: Parser NID -> Parser t -> Parser (ParsedPath t)

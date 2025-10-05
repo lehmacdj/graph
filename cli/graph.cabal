@@ -122,7 +122,6 @@ library
       Utils.Base62
       Utils.Parsing
       Utils.Parsing.Common
-      Utils.ParsingSpec
       Utils.Polysemy
       Utils.Singleton
       Utils.Testing

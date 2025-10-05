@@ -12,6 +12,8 @@ module Utils.Testing
     disconnectedGraph,
     stronglyConnectedGraph,
     parseForTest,
+    testParserParses,
+    testParserFails,
   )
 where
 
@@ -103,3 +105,15 @@ parseForTest whatToParse parser input =
       expectationFailure $ "Failed to parse: " <> errorBundlePretty err
       error "unreachable"
     Right result -> pure result
+
+testParserParses :: (Eq a, Show a) => Parser a -> Text -> a -> Assertion
+testParserParses parser string expected =
+  case runParserTest parser string of
+    Right actual -> actual @=? expected
+    Left err -> assertFailure $ "expected: " ++ show expected ++ "\nbut parser failed with:\n" ++ errorBundlePretty err
+
+testParserFails :: (Eq a, Show a) => Parser a -> Text -> Assertion
+testParserFails parser string =
+  case runParserTest parser string of
+    Right x -> assertFailure $ "expected parser to fail, but it succeeded producing: " ++ show x
+    Left _ -> pure ()

@@ -14,7 +14,6 @@ import MyPrelude hiding (many, try)
 import Text.Megaparsec (try)
 import Text.Megaparsec.Char
 import Utils.Parsing
-import Utils.ParsingSpec
 import Utils.Testing
 
 -- | Try to parse a path, returning a partial path that is the last one

@@ -4,8 +4,7 @@ import Models.NID
 import Models.NormalizedPath
 import Models.NormalizedPath.Parse
 import MyPrelude hiding (union)
-import Utils.Parsing (transition)
-import Utils.ParsingSpec
+import Utils.Parsing (eof, transition)
 import Utils.Testing
 
 test_pNormalizedPath :: TestTree

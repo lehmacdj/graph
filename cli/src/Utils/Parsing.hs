@@ -13,6 +13,7 @@ import Text.Megaparsec (try)
 import Text.Megaparsec.Char
 import Text.Megaparsec.Char.Lexer qualified as L
 import Utils.Parsing.Common as X
+import Utils.Testing
 
 s :: Parser ()
 s = L.space space1 empty empty
@@ -133,3 +134,24 @@ withSourceRange p = do
   a <- p
   end <- getSourcePos'
   pure (SourceRange start end, a)
+
+debugParser :: (Eq a, Show a) => Parser a -> Text -> IO ()
+debugParser parser input = do
+  case runParserTest parser input of
+    Right x -> say $ "Parser succeeded with: " ++ tshow x
+    Left err -> say $ "Parser failed with:\n" ++ pack (errorBundlePretty err)
+
+unit_command_emptyStillRequiresSpace :: Assertion
+unit_command_emptyStillRequiresSpace = testParserFails (command "") "1"
+
+unit_command_eofTerminated :: Assertion
+unit_command_eofTerminated = testParserParses (command "t") "t" "t"
+
+unit_command_unterminated :: Assertion
+unit_command_unterminated = testParserFails (command "t") "tf"
+
+unit_command_incomplete :: Assertion
+unit_command_incomplete = testParserFails (command "tf") "t"
+
+unit_command_spaceTerminated :: Assertion
+unit_command_spaceTerminated = testParserParses (command "t") "t blech" "t"
