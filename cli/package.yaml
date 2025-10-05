@@ -82,9 +82,11 @@ dependencies:
 - text
 - time
 - transformers
+- type-map
 - typed-process
 - unix
 - unliftio
+- vector
 - witherable
 - wreq
 - xdg-basedir
@@ -129,6 +131,7 @@ default-extensions:
 - QuasiQuotes
 - RankNTypes
 - RecordWildCards
+- RoleAnnotations
 - ScopedTypeVariables
 - StandaloneDeriving
 - StandaloneKindSignatures
@@ -148,8 +151,7 @@ ghc-options:
 - -flate-specialise
 - -fspecialise-aggressively
 # https://well-typed.com/blog/2023/02/interface-files-with-core/
-# incompatible with inline-c
-# - -fprefer-byte-code -fbyte-code-and-object-code
+- -fprefer-byte-code -fbyte-code-and-object-code
 
 cpp-options:
 - -DDEBUG

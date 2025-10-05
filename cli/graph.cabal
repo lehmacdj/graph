@@ -51,6 +51,7 @@ library
       Executable.GraphEditor.Options
       Graph.AppInterpreters
       Graph.Augmentation
+      Graph.Augmentation.Bundled
       Graph.Check
       Graph.Command
       Graph.Effect
@@ -170,6 +171,7 @@ library
       QuasiQuotes
       RankNTypes
       RecordWildCards
+      RoleAnnotations
       ScopedTypeVariables
       StandaloneDeriving
       StandaloneKindSignatures
@@ -181,7 +183,7 @@ library
       TypeOperators
       TypeSynonymInstances
       ViewPatterns
-  ghc-options: -Wall -O0 -fplugin=Polysemy.Plugin -flate-specialise -fspecialise-aggressively
+  ghc-options: -Wall -O0 -fplugin=Polysemy.Plugin -flate-specialise -fspecialise-aggressively -fprefer-byte-code -fbyte-code-and-object-code
   cpp-options: -DDEBUG
   build-depends:
       Glob
@@ -246,9 +248,11 @@ library
     , text
     , time
     , transformers
+    , type-map
     , typed-process
     , unix
     , unliftio
+    , vector
     , witherable
     , wreq
     , xdg-basedir
@@ -307,6 +311,7 @@ executable ge
       QuasiQuotes
       RankNTypes
       RecordWildCards
+      RoleAnnotations
       ScopedTypeVariables
       StandaloneDeriving
       StandaloneKindSignatures
@@ -318,7 +323,7 @@ executable ge
       TypeOperators
       TypeSynonymInstances
       ViewPatterns
-  ghc-options: -Wall -O0 -fplugin=Polysemy.Plugin -flate-specialise -fspecialise-aggressively -threaded -rtsopts -with-rtsopts=-N
+  ghc-options: -Wall -O0 -fplugin=Polysemy.Plugin -flate-specialise -fspecialise-aggressively -fprefer-byte-code -fbyte-code-and-object-code -threaded -rtsopts -with-rtsopts=-N
   cpp-options: -DDEBUG
   build-depends:
       Glob
@@ -384,9 +389,11 @@ executable ge
     , text
     , time
     , transformers
+    , type-map
     , typed-process
     , unix
     , unliftio
+    , vector
     , witherable
     , wreq
     , xdg-basedir
@@ -439,6 +446,7 @@ test-suite graph-test
       QuasiQuotes
       RankNTypes
       RecordWildCards
+      RoleAnnotations
       ScopedTypeVariables
       StandaloneDeriving
       StandaloneKindSignatures
@@ -450,7 +458,7 @@ test-suite graph-test
       TypeOperators
       TypeSynonymInstances
       ViewPatterns
-  ghc-options: -Wall -O0 -fplugin=Polysemy.Plugin -flate-specialise -fspecialise-aggressively -threaded -rtsopts -with-rtsopts=-N -Wall
+  ghc-options: -Wall -O0 -fplugin=Polysemy.Plugin -flate-specialise -fspecialise-aggressively -fprefer-byte-code -fbyte-code-and-object-code -threaded -rtsopts -with-rtsopts=-N -Wall
   cpp-options: -DDEBUG
   build-depends:
       Glob
@@ -516,9 +524,11 @@ test-suite graph-test
     , text
     , time
     , transformers
+    , type-map
     , typed-process
     , unix
     , unliftio
+    , vector
     , witherable
     , wreq
     , xdg-basedir
