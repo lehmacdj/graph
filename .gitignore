@@ -6,6 +6,10 @@
 **/dist/
 **/dist-newstyle/
 
+# haskell profiling files
+*.prof
+*.svg
+
 # files for xcode
 **/*.xcodeproj/xcuserdata/
 **/*.xcodeproj/project.xcworkspace/xcuserdata/
