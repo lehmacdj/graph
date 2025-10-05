@@ -14,7 +14,7 @@ import Data.Functor
 import Graph.SystemNodes (tagsNID)
 import Models.NID
 import Models.Path.ParsedPath
-import MyPrelude hiding (try)
+import MyPrelude hiding (many, try)
 import Text.Megaparsec (try)
 import Text.Megaparsec.Char (char)
 import Utils.Parsing
@@ -37,6 +37,7 @@ pDirective pTransition =
   try (LocationFromHistory <$> pDirectiveNamed "history" number)
     <|> try (LocationFromHistory 1 <$ symbol "%last")
     <|> (Targets <$> pDirectiveNamed "targets" (pPath pTransition))
+    <|> (Splice <$> between (symbol "%{") (symbol "}") (many (noneOf ['}'])))
 
 pDirectiveNamed :: Text -> Parser a -> Parser a
 pDirectiveNamed name = between (symbol ("%" <> name <> "(")) (symbol ")")

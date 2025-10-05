@@ -6,9 +6,11 @@ module Models.Path
     SourceRange (..),
     Directive (..),
     handleDirectivesWith,
+    handleDirectivesQ,
   )
 where
 
+import Language.Haskell.TH (Exp, Q)
 import Models.NID
 import MyPrelude
 import Utils.Parsing.Common (SourceRange (..))
@@ -96,6 +98,9 @@ data Directive f t
     -- in a path e.g. `*/%targets(@)` materializes only transitions from the
     -- current location to itself.
     Targets (Path' 'WithDirectives f t)
+  | -- | A splice of a Haskell expression that resolves to a Path
+    -- This is used by the QuasiQuoter, the CLI does not support this
+    Splice String
   deriving (Generic)
 
 deriving instance
@@ -117,6 +122,7 @@ showsDirective ::
 showsDirective showsPath' = \case
   LocationFromHistory i -> showString "%history(" . shows i . showString ")"
   Targets p -> showString "%targets(" . showsPath' p . showString ")"
+  Splice expr -> showString "%{" . shows expr . showString "}"
 
 instance
   (Show1 f, Path'Constraints Show 'WithDirectives f t) =>
@@ -161,6 +167,38 @@ handleDirectivesWith interpretDirective = \case
     (::&)
       <$> traverse (handleDirectivesWith interpretDirective) l
       <*> traverse (handleDirectivesWith interpretDirective) r
+  Directive ann directive -> interpretDirective ann directive
+
+handleDirectivesQ ::
+  (Lift t) =>
+  -- | function returning a TH expression that has type @Path 'Prenormal f t@
+  (SourceRange -> Directive Identity t -> Q Exp) ->
+  Path' 'WithDirectives Identity t ->
+  Q Exp
+handleDirectivesQ interpretDirective = \case
+  One -> [|One|]
+  Zero -> [|Zero|]
+  Wild -> [|Wild|]
+  RegexMatch r -> [|RegexMatch r|]
+  Literal x -> [|Literal x|]
+  Absolute nid -> [|Absolute nid|]
+  Backwards' (Identity p) ->
+    [|Backwards' $(handleDirectivesQ interpretDirective p)|]
+  Identity l ::/ Identity r ->
+    [|
+      $(handleDirectivesQ interpretDirective l)
+        ::/ $(handleDirectivesQ interpretDirective r)
+      |]
+  Identity l ::+ Identity r ->
+    [|
+      $(handleDirectivesQ interpretDirective l)
+        ::+ $(handleDirectivesQ interpretDirective r)
+      |]
+  Identity l ::& Identity r ->
+    [|
+      $(handleDirectivesQ interpretDirective l)
+        ::& $(handleDirectivesQ interpretDirective r)
+      |]
   Directive ann directive -> interpretDirective ann directive
 
 -- | helper for producing the necessary constraints for a Path'

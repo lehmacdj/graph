@@ -42,6 +42,7 @@ dependencies:
 - free
 - generic-data
 - generic-lens
+- ghc-hs-meta
 - Glob
 - haskeline
 - hspec

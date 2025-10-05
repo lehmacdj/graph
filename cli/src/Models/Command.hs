@@ -174,14 +174,15 @@ interpretDirective ::
   ( Members
       [ GraphMetadataReading,
         State History,
-        GetLocation
+        GetLocation,
+        Error UserError
       ]
       effs
   ) =>
   SourceRange ->
   Directive Identity Text ->
   Sem effs (Path Text)
-interpretDirective _ = \case
+interpretDirective sourceRange = \case
   LocationFromHistory i -> gets @History (Absolute . fst . backInTime i)
   Targets p -> do
     currentNid <- currentLocation
@@ -190,6 +191,16 @@ interpretDirective _ = \case
     mp <- materializeNPath currentNid (leastConstrainedNormalizedPath np)
     -- this is a little bit inefficient of an embedding, but not too bad
     pure $ foldl' (Simple.:+) Zero (mapSet Absolute $ targets mp.path)
+  Splice expr ->
+    throw $
+      OtherError $
+        "the splice directive %{"
+          ++ pack expr
+          ++ "} is not supported in the CLI"
+          ++ " it is only supported in the QuasiQuoter"
+          ++ "\n"
+          ++ "at "
+          ++ tshow sourceRange
 
 interpretCommand ::
   ( Members [DisplayImage, Echo, Error UserError, SetLocation, GetLocation, Dualizeable] effs,

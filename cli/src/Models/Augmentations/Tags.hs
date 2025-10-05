@@ -21,7 +21,11 @@ fetchTags ::
   (Members '[GraphMetadataReading] r) =>
   NID ->
   Sem r Tags
-fetchTags nid = undefined
+fetchTags nid =
+  (materializePath nid [path| ~*/%{Absolute tagsNID} |]) . path
+    & finalNonLoopEdges
+    & concat
+    & Tags
 
 writeTags ::
   (Members '[GraphMetadataEditing] r) =>

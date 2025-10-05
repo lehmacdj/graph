@@ -24,7 +24,7 @@ materializePath ::
 materializePath nid path =
   materializeNPath nid (leastConstrainedNormalizedPath (normalizePath path))
 
-{-# HLINT ignore materializePath "Functor law" #-}
+{-# HLINT ignore materializeNPath "Functor law" #-}
 
 -- | Traverse a path, fetching node metadata and noting which nodes are missing.
 materializeNPath ::

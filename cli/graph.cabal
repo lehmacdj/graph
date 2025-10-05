@@ -206,6 +206,7 @@ library
     , free
     , generic-data
     , generic-lens
+    , ghc-hs-meta
     , haskeline
     , hspec
     , hspec-expectations
@@ -342,6 +343,7 @@ executable ge
     , free
     , generic-data
     , generic-lens
+    , ghc-hs-meta
     , graph
     , haskeline
     , hspec
@@ -473,6 +475,7 @@ test-suite graph-test
     , free
     , generic-data
     , generic-lens
+    , ghc-hs-meta
     , graph
     , haskeline
     , hspec
