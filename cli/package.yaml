@@ -146,12 +146,14 @@ default-extensions:
 
 ghc-options:
 - -Wall
-- -O0 # always use no optimization (same as --fast)
 - -fplugin=Polysemy.Plugin
 - -flate-specialise
 - -fspecialise-aggressively
 # https://well-typed.com/blog/2023/02/interface-files-with-core/
-- -fprefer-byte-code -fbyte-code-and-object-code
+# - -fprefer-byte-code -fbyte-code-and-object-code
+# -fobject-code is necessary to make inline-c work in GHCi
+# when attempting to run with -fbyte-code, it crashes with missing symbols
+- -fobject-code
 
 cpp-options:
 - -DDEBUG
@@ -163,8 +165,6 @@ library:
       then:
         extra-libraries: [ objc ]
         frameworks: [ Foundation ]
-        # this makes inline-c work in GHCi
-        ghc-options: -fobject-code
       else:
         extra-libraries: []
         frameworks: []
