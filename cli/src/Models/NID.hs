@@ -37,9 +37,9 @@ nidDigits = 12
 -- - because they mess up double click to select word in some browsers/terminals
 -- thus we get 62 characters to work with
 --
--- We represent these IDs using a string because it's not worth deserializing
--- them to a more compact format. We verify that they are valid before
--- converting them to this newtype however.
+-- We represent these IDs using a string. This makes comparing them potentially
+-- quite slow because we use them as keys in `Map`. Perhaps worth revisiting
+-- or using a HashMap instead.
 newtype NID = UnsafeNID {representation :: Text}
   deriving (Eq, Ord, Generic, Lift)
   deriving newtype (NFData, Hashable)
