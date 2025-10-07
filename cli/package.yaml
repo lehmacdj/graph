@@ -50,6 +50,7 @@ dependencies:
 - html-conduit
 - http-conduit
 - http-types
+- file-io
 - inline-c
 - inline-c-objc
 - ixset-typed

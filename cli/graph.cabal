@@ -111,6 +111,7 @@ library
       MyPrelude.MaybeEither
       MyPrelude.MonadApplicative
       MyPrelude.Orphans
+      MyPrelude.OsPath
       MyPrelude.RawStrings
       MyPrelude.Regex
       Spec
@@ -204,6 +205,7 @@ library
     , directory
     , directory-tree
     , exceptions
+    , file-io
     , filepath
     , foreign-store
     , free
@@ -343,6 +345,7 @@ executable ge
     , directory
     , directory-tree
     , exceptions
+    , file-io
     , filepath
     , foreign-store
     , free
@@ -478,6 +481,7 @@ test-suite graph-test
     , directory
     , directory-tree
     , exceptions
+    , file-io
     , filepath
     , foreign-store
     , free

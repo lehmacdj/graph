@@ -13,6 +13,8 @@ module MyPrelude
   )
 where
 
+-- also hide these when we are ready to use OsPath; import MyPrelude.OsPath as X
+-- , readFile, readFileUtf8, writeFile, writeFileUtf8, (<.>), (</>)
 import ClassyPrelude hiding (fromException, nonNull, throwString)
 import Control.Comonad as X
 import Control.DeepSeq as X
@@ -42,6 +44,8 @@ import MyPrelude.Orphans as X ()
 import MyPrelude.RawStrings as X
 import MyPrelude.Regex as X
 import Prelude as X (Show (showsPrec), ShowS, fail, showParen, showString, shows)
+
+-- import MyPrelude.OsPath as X
 
 unconsumed :: (Contravariant f) => f a -> f Void
 unconsumed = contramap absurd
