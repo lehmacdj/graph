@@ -88,7 +88,8 @@ data NSErrorException = NSErrorException
   { domain :: Text,
     code :: Int
   }
-  deriving (Show, Exception)
+  deriving stock (Show, Generic)
+  deriving anyclass (NFData, Exception)
 
 #ifdef darwin_HOST_OS
 

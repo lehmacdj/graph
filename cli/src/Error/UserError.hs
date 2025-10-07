@@ -33,7 +33,7 @@ data UserError
   | WebError HttpException
   | FailedToDeserializeNode NID String
   | FileCoordinationError NSErrorException
-  deriving (Generic)
+  deriving stock (Generic)
 
 instance Show UserError where
   show (OtherError s) = unpack s

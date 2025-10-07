@@ -8,11 +8,11 @@ import Data.Constraint.Unsafe
 import MyPrelude hiding ((\\))
 
 #ifdef DEBUG
-type ValidTransition t = (Eq t, Ord t, Show t, HasCallStack)
-type ValidTransitionNCS t = (Eq t, Ord t, Show t)
+type ValidTransition t = (Eq t, Ord t, Show t, NFData t, HasCallStack)
+type ValidTransitionNCS t = (Eq t, Ord t, NFData t, Show t)
 #else
-type ValidTransition t = (Eq t, Ord t)
-type ValidTransitionNCS t = (Eq t, Ord t)
+type ValidTransition t = (Eq t, Ord t, NFData t)
+type ValidTransitionNCS t = (Eq t, Ord t, NFData t)
 #endif
 
 data CompactNodeShowSettings a = CompactNodeShowSettings

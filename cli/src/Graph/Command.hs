@@ -302,7 +302,8 @@ interpretCommand = \case
       --   else do
       --     say "fetched graph:"
       --     sayShow $ subtractiveFilterGraph (\n -> n.augmentation == Fetched) mp.graph
-      say $ "nonexistent nodes: " ++ tshow mp.nonexistentNodes
+      unless (null mp.nonexistentNodes) $
+        say ("nonexistent nodes: " ++ tshow mp.nonexistentNodes)
       targets <- traverse (getNodeWith fetchTags) (toList (getTargets mp.path))
       when (null targets) do
         say "no targets"

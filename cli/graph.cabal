@@ -102,6 +102,7 @@ library
       MyPrelude.Collections
       MyPrelude.Collections.Ordered
       MyPrelude.CollectionsSpec
+      MyPrelude.Conc
       MyPrelude.EarlyReturn
       MyPrelude.Effect
       MyPrelude.Function
@@ -218,6 +219,7 @@ library
     , html-conduit
     , http-conduit
     , http-types
+    , indexed-traversable
     , inline-c
     , inline-c-objc
     , ixset-typed
@@ -359,6 +361,7 @@ executable ge
     , html-conduit
     , http-conduit
     , http-types
+    , indexed-traversable
     , inline-c
     , inline-c-objc
     , ixset-typed
@@ -495,6 +498,7 @@ test-suite graph-test
     , html-conduit
     , http-conduit
     , http-types
+    , indexed-traversable
     , inline-c
     , inline-c-objc
     , ixset-typed

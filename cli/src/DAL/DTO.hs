@@ -54,11 +54,14 @@ connectFromDTO ConnectDTO {..} = Connect {transition = t, node = n}
 
 decodeNode ::
   forall t effs.
-  (Ord t, FromJSON t, Member (Error UserError) effs) =>
+  (Ord t, NFData t, FromJSON t, Member (Error UserError) effs) =>
   NID ->
   ByteString ->
   Sem effs (Node t ())
-decodeNode nid =
-  throwLeft
-    . bimap (FailedToDeserializeNode nid) nodeFromDTO
-    . (eitherDecodeStrict @(NodeDTO t))
+decodeNode nid input = do
+  decoded <-
+    throwLeft
+      . bimap (FailedToDeserializeNode nid) nodeFromDTO
+      . (eitherDecodeStrict @(NodeDTO t))
+      $ input
+  pure $! force decoded

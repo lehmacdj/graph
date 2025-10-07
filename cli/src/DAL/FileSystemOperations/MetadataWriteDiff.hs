@@ -2,7 +2,7 @@
 
 module DAL.FileSystemOperations.MetadataWriteDiff where
 
-import Control.Lens (ifor, ifor_)
+import Control.Lens (ifor)
 import Control.Monad.Trans.Cont
 import DAL.DirectoryFormat
 import DAL.FileSystemOperations.Metadata
@@ -44,9 +44,9 @@ writeGraphDiff_
   readNodeMetadata'
   writeNodeMetadata'
   deleteNodeMetadata'
-  loaded
-  changes
-  deletedEdges = do
+  (force -> loaded)
+  (force -> changes)
+  (force -> deletedEdges) = do
     let finalNodes :: Set (Node Text ())
         finalNodes = setFromList $ nodesOf changes
         loadedNodes :: Set (Node Text ())
@@ -77,31 +77,32 @@ writeGraphDiff_
             beginWriting nid options =
               ContT $
                 unwrappingWriter (wrappedWriters ^. at nid . to (unwrapEx "missing writer")) options
-        upToDateNodes' <- ifor readingPaths \nid _ -> evalContT do
-          path <- beginReading nid defaultReadingOptions
-          upToDateNode <- lift . unliftIO $ readNodeMetadata' nid path
-          -- if the node was loaded, we require that it is the same now as it was
-          -- when loading, if it wasn't the node is up to date inherently
-          pure
-            if maybe True (== upToDateNode) $ loaded ^. at nid
-              then Just upToDateNode
-              else Nothing
+        upToDateNodes' <- ipooledForConcurrentlyN 300 readingPaths \nid _ ->
+          evaluateDeep =<< evalContT do
+            path <- beginReading nid defaultReadingOptions
+            upToDateNode <- lift . unliftIO $ readNodeMetadata' nid path
+            _ <- evaluateDeep upToDateNode
+            -- if the node was loaded, we require that it is the same now as it was
+            -- when loading, if it wasn't the node is up to date inherently
+            pure
+              if maybe True (== upToDateNode) $ loaded ^. at nid
+                then Just upToDateNode
+                else Nothing
         let notUpToDateNids = keysSet $ filterMap (== Nothing) upToDateNodes'
         unless (null notUpToDateNids)
           $ unliftIO
             . throwText
           $ "The following nodes were changed before trying to write the diff: "
             ++ tshow notUpToDateNids
-        let upToDateNodes :: Map NID (Maybe (Node Text ()))
-            upToDateNodes = map (unwrapEx "node exists due to above check") upToDateNodes'
-        ifor_ writingPaths \nid _ -> do
+        let upToDateNodes = map (unwrapEx "node exists due to above check") upToDateNodes'
+        ipooledForConcurrentlyN_ 300 writingPaths \nid _ -> do
           let upToDateNode =
                 unwrapEx "upToDateNode exists for nodes we are writing" $
                   upToDateNodes ^. at nid
           let changedNode =
                 (changes ^. at nid)
                   <&> withoutEdges deletedEdges . maybe id mergeNodesEx upToDateNode
-          evalContT $ case (upToDateNode, changedNode) of
+          evalContT case (upToDateNode, changedNode) of
             (Just _, Nothing) -> do
               path <- beginWriting nid defaultWritingOptions {forDeleting = True}
               lift . unliftIO $ deleteNodeMetadata' path

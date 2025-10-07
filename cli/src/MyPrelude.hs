@@ -32,6 +32,7 @@ import GHC.TypeLits as X hiding (Text)
 import Generic.Data as X (Generically (..), Generically1 (..))
 import Language.Haskell.TH.Syntax as X (Lift)
 import MyPrelude.Collections as X
+import MyPrelude.Conc as X
 import MyPrelude.EarlyReturn as X
 import MyPrelude.Effect as X
 import MyPrelude.Function as X

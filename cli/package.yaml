@@ -58,6 +58,7 @@ dependencies:
 - lens-regex-pcre
 - megaparsec
 - mono-traversable
+- indexed-traversable
 - mtl
 - optparse-applicative
 - ordered-containers
