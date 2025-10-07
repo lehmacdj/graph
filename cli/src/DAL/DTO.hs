@@ -6,6 +6,7 @@
 module DAL.DTO where
 
 import Data.Aeson
+import Error.UserError
 import Models.Connect
 import Models.NID
 import Models.Node
@@ -50,3 +51,14 @@ connectToDTO Connect {..} = ConnectDTO {t = transition, n = node}
 
 connectFromDTO :: ConnectDTO t -> Connect t
 connectFromDTO ConnectDTO {..} = Connect {transition = t, node = n}
+
+decodeNode ::
+  forall t effs.
+  (Ord t, FromJSON t, Member (Error UserError) effs) =>
+  NID ->
+  ByteString ->
+  Sem effs (Node t ())
+decodeNode nid =
+  throwLeft
+    . bimap (FailedToDeserializeNode nid) nodeFromDTO
+    . (eitherDecodeStrict @(NodeDTO t))

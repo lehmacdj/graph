@@ -32,7 +32,6 @@ library
       DAL.FileSystemOperations.Metadata
       DAL.FileSystemOperations.MetadataWriteDiff
       DAL.Interpreters
-      DAL.JSON
       DAL.RawGraph
       DAL.Serialization
       Effect.IOWrapper.DisplayImage

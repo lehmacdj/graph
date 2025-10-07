@@ -22,3 +22,6 @@ instance
   FromJSON (FastGenericEncoding a)
   where
   parseJSON = fmap GenericEncodingAeson . genericParseJSON defaultOptions
+
+encodeJSON :: (ToJSON a) => a -> LByteString
+encodeJSON = encode

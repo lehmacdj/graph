@@ -33,7 +33,7 @@ makeSem ''GraphMetadataFilesystemOperationsWriteDiff
 
 writeGraphDiff_ ::
   (Members [RawGraph, Embed IO, Error UserError] effs) =>
-  (FilePath -> Sem '[RawGraph, Error UserError, Embed IO, Final IO] (Maybe (Node Text ()))) ->
+  (NID -> FilePath -> Sem '[RawGraph, Error UserError, Embed IO, Final IO] (Maybe (Node Text ()))) ->
   (FilePath -> Node Text () -> Sem '[RawGraph, Error UserError, Embed IO, Final IO] ()) ->
   (FilePath -> Sem '[RawGraph, Error UserError, Embed IO, Final IO] ()) ->
   Map NID (Maybe (Node Text ())) ->
@@ -79,7 +79,7 @@ writeGraphDiff_
                 unwrappingWriter (wrappedWriters ^. at nid . to (unwrapEx "missing writer")) options
         upToDateNodes' <- ifor readingPaths \nid _ -> evalContT do
           path <- beginReading nid defaultReadingOptions
-          upToDateNode <- lift . unliftIO $ readNodeMetadata' path
+          upToDateNode <- lift . unliftIO $ readNodeMetadata' nid path
           -- if the node was loaded, we require that it is the same now as it was
           -- when loading, if it wasn't the node is up to date inherently
           pure

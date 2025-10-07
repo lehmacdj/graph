@@ -14,6 +14,7 @@ module System.MacOS.NSFileCoordinator
     WrappedWriter (..),
     unwrappingWriter,
     coordinateAccessing,
+    allocateNSArray,
     ReadingOptions (..),
     defaultReadingOptions,
     WritingOptions (..),

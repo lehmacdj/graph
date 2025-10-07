@@ -67,7 +67,7 @@ serializeNodeEx n base = do
 
 deserializeNodeF ::
   forall t effs.
-  ( FromJSON (NodeDTO t),
+  ( FromJSON t,
     ValidTransition t,
     Member (Error UserError) effs,
     Member (Embed IO) effs
@@ -84,7 +84,7 @@ deserializeNodeF base nid = do
 -- Nothing. No attempt is made to read the data from the disk.
 deserializeNodeWithoutDataF ::
   forall t effs.
-  ( FromJSON (NodeDTO t),
+  ( FromJSON t,
     ValidTransition t,
     Member (Error UserError) effs,
     Member (Embed IO) effs
@@ -94,11 +94,7 @@ deserializeNodeWithoutDataF ::
   Sem effs (Node t (Maybe ByteString))
 deserializeNodeWithoutDataF base nid = do
   fileContents <- embedCatchingErrors (B.readFile (metadataFile base nid))
-  throwLeft
-    . bimap AesonDeserialize (($> Nothing) . nodeFromDTO)
-    . Aeson.eitherDecode
-    . fromStrict
-    $ fileContents
+  ($> Nothing) <$> decodeNode nid fileContents
 
 deserializeNode ::
   forall t m.
@@ -139,8 +135,8 @@ removeNode base nid = do
 -- ignore nodes that don't exist or if an error occurs
 withSerializedNode ::
   forall t.
-  ( FromJSON (NodeDTO t),
-    ToJSON (NodeDTO t),
+  ( FromJSON t,
+    ToJSON t,
     ValidTransition t
   ) =>
   (Node t (Maybe ByteString) -> Node t (Maybe ByteString)) ->

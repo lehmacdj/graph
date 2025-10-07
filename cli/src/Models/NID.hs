@@ -87,8 +87,9 @@ instance CompactNodeShow NID where
 -- | Attoparsec parser for NID
 parseNID :: Parser NID
 parseNID = do
-  nidStr <- A.count nidDigits (A.satisfy isBase62Char)
-  pure $ UnsafeNID (pack nidStr)
+  nidStr <- A.take nidDigits
+  unless (all isBase62Char nidStr) $ fail "invalid base62 character in NID"
+  pure $ UnsafeNID nidStr
 
 spec_parseNID :: Spec
 spec_parseNID = do

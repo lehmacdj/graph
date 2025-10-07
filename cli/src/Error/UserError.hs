@@ -31,8 +31,7 @@ data UserError
     -- all the way up to the user.
     MissingNode NID (Maybe Text)
   | WebError HttpException
-  | -- | deserialization fails
-    AesonDeserialize String
+  | FailedToDeserializeNode NID String
   | FileCoordinationError NSErrorException
   deriving (Generic)
 
@@ -48,7 +47,8 @@ instance Show UserError where
       ++ " is missing"
       ++ maybe "" ((" for reason " ++) . unpack) reason
   show (WebError e) = show e
-  show (AesonDeserialize e) = "failed to deserialize JSON: " ++ e
+  show (FailedToDeserializeNode nid e) =
+    "failed to deserialize JSON for " ++ show nid ++ ": " ++ e
   show (FileCoordinationError e) = "error while file coordinating: " ++ show e
 
 -- | order preserving union of the errors in the different error types

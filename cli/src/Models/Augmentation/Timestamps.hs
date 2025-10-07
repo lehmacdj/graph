@@ -1,11 +1,8 @@
 module Models.Augmentation.Timestamps where
 
 import Graph.GraphMetadataEditing
-import Graph.SystemNodes
 import Models.Common
 import Models.NID
-import Models.Node
-import Models.Path.TH
 import MyPrelude
 
 newtype Timestamps = Timestamps {timestamps :: Set UTCTime}
@@ -21,11 +18,11 @@ fetchTimestamps ::
   (Members '[GraphMetadataReading] r) =>
   NID ->
   Sem r Timestamps
-fetchTimestamps nid = undefined
+fetchTimestamps _ = error "unimplemented"
 
 writeTimestamps ::
   (Members '[GraphMetadataEditing] r) =>
   NID ->
   Timestamps ->
   Sem r ()
-writeTimestamps nid timestamps = undefined
+writeTimestamps _ _ = error "unimplemented"

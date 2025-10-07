@@ -4,7 +4,6 @@ module DAL.FileSystemOperations.Metadata where
 
 import DAL.DTO
 import DAL.DirectoryFormat
-import DAL.JSON
 import DAL.RawGraph
 import Error.Missing
 import Error.UserError
@@ -24,16 +23,16 @@ makeSem ''GraphMetadataFilesystemOperations
 readNodeMetadata_ ::
   (Members [Embed IO, Error UserError] effs) =>
   Bool ->
+  NID ->
   FilePath ->
   Sem effs (Maybe (Node Text ()))
-readNodeMetadata_ shouldCoordinate path = withEarlyReturn do
+readNodeMetadata_ shouldCoordinate nid path = withEarlyReturn do
   result <- embedCatchingErrors $
     (if shouldCoordinate then coordinateReading path False defaultReadingOptions else ($ path)) $
       \path' ->
         try @IO @IOError $ readFile path'
   serialized <- either (const $ returnEarly Nothing) pure result
-  dto <- decodeJSON serialized
-  pure $ Just (nodeFromDTO dto)
+  Just <$> decodeNode nid serialized
 
 writeNodeMetadata_ ::
   (Members [Embed IO, Error UserError] effs) =>
@@ -67,7 +66,7 @@ runGraphMetadataFilesystemOperationsIO ::
 runGraphMetadataFilesystemOperationsIO = interpret \case
   ReadNodeMetadata nid -> do
     path <- getMetadataFile nid
-    node <- readNodeMetadata_ True path
+    node <- readNodeMetadata_ True nid path
     withJust node $ \n ->
       unless (n.nid == nid) $
         sayErr $
@@ -84,6 +83,6 @@ runGraphMetadataFilesystemOperationsDryRun ::
   Sem (GraphMetadataFilesystemOperations : r) a ->
   Sem r a
 runGraphMetadataFilesystemOperationsDryRun = interpret \case
-  ReadNodeMetadata nid -> readNodeMetadata_ True =<< getMetadataFile nid
+  ReadNodeMetadata nid -> readNodeMetadata_ True nid =<< getMetadataFile nid
   WriteNodeMetadata node -> say $ "Would write node: " <> tshow node
   DeleteNodeMetadata nid -> say $ "Would delete node with NID: " <> tshow nid

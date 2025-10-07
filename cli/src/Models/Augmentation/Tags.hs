@@ -32,4 +32,4 @@ writeTags ::
   NID ->
   Tags ->
   Sem r ()
-writeTags nid tags = undefined
+writeTags _ _ = error "unimplemented"
