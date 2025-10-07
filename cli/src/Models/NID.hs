@@ -4,17 +4,23 @@ module Models.NID
     smallNID,
     unsafeNID,
     nidDigits,
+    nidRepresentation,
+    parseNID,
+    spec_parseNID,
   )
 where
 
 import Control.DeepSeq
 import Data.Aeson
 import Data.Aeson.Types (toJSONKeyText)
+import Data.Attoparsec.Text (Parser)
+import Data.Attoparsec.Text qualified as A
 import GHC.Generics
 import Models.Common
 import MyPrelude
 import System.Random
 import System.Random.Stateful (Uniform (..), uniformRM)
+import Test.Hspec (Spec, it, shouldBe, shouldSatisfy)
 import Text.Read
 import Utils.Base62 (base62Chars, isBase62Char)
 
@@ -54,6 +60,9 @@ instance Uniform NID where
 nilNID :: NID
 nilNID = UnsafeNID (replicate nidDigits '0')
 
+nidRepresentation :: NID -> Text
+nidRepresentation (UnsafeNID t) = t
+
 -- | Note: this is for testing only, it's not guaranteed to be unique
 -- the approach used for converting the Int into a NID is naive leads to the
 -- same input for different inputs. This is safe for ints < 62^10
@@ -75,26 +84,51 @@ instance CompactNodeShow NID where
     (if showNidAtSign then "@" else "")
       ++ drop (max (nidDigits - nidLength) 0) nid.representation
 
+-- | Attoparsec parser for NID
+parseNID :: Parser NID
+parseNID = do
+  nidStr <- A.count nidDigits (A.satisfy isBase62Char)
+  pure $ UnsafeNID (pack nidStr)
+
+spec_parseNID :: Spec
+spec_parseNID = do
+  let testParseIsUnsafeNID s =
+        it ("parses " <> show s) $
+          A.parseOnly (parseNID <* A.endOfInput) s
+            `shouldBe` Right (UnsafeNID s)
+  testParseIsUnsafeNID "0123456789ab"
+  testParseIsUnsafeNID "000000000000"
+  let testParseFails s =
+        it ("fails to parse " <> show s) $
+          A.parseOnly (parseNID <* A.endOfInput) s
+            `shouldSatisfy` isLeft
+  testParseFails "" -- too short
+  testParseFails "0123456789a" -- too short
+  testParseFails "0123456789abc" -- too long
+  testParseFails "0123456789a!" -- invalid char
+  testParseFails "01234-6789ab" -- invalid char
+  testParseFails "01234_6789ab" -- invalid char
+  testParseFails "01234/6789ab" -- invalid char
+  testParseFails "01234+6789ab" -- invalid char
+  testParseFails "01234 6789ab" -- invalid char
+
 instance Show NID where
-  -- kind of a hack: but we rely on NID's show/read for serialization so it
-  -- must always consistently be the max length
-  -- we should stop using Read for deserialization and then include the @ sign
-  -- here
-  show = unpack . nshowSettings defaultCompactNodeShowSettings {showNidAtSign = False}
+  show = unpack . nshow
 
 instance Read NID where
-  readsPrec _ x
-    | all isBase62Char x && length x == nidDigits = [(UnsafeNID (pack x), "")]
-    | otherwise = []
+  readsPrec _ x =
+    case A.parseOnly (parseNID <* A.endOfInput) (pack x) of
+      Right nid -> [(nid, "")]
+      Left _ -> []
 
 instance ToJSON NID where
   toEncoding = toEncoding . (.representation)
 
 instance FromJSON NID where
   parseJSON = withText "NID" $ \t ->
-    readMay (unpack t) & \case
-      Nothing -> fail "failed to parse NID"
-      Just x -> pure x
+    case A.parseOnly (parseNID <* A.endOfInput) t of
+      Left err -> fail $ "failed to parse NID: " <> err
+      Right nid -> pure nid
 
 instance ToJSONKey NID where
   toJSONKey = toJSONKeyText (.representation)
@@ -102,9 +136,9 @@ instance ToJSONKey NID where
 instance FromJSONKey NID where
   fromJSONKey = FromJSONKeyTextParser p
     where
-      p t = case readMay (unpack t) of
-        Nothing -> fail "failed to parse NID"
-        Just x -> pure x
+      p t = case A.parseOnly (parseNID <* A.endOfInput) t of
+        Left err -> fail $ "failed to parse NID: " <> err
+        Right nid -> pure nid
 
 -- | Unsafe method for constructing an NID from a string.
 -- While checked (crashes if not nidDigits long & uses characters outside of

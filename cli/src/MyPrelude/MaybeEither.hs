@@ -1,8 +1,13 @@
-module MyPrelude.MaybeEither where
+module MyPrelude.MaybeEither
+  ( module MyPrelude.MaybeEither,
+    module X,
+  )
+where
 
 import ClassyPrelude
 import Data.Bifoldable (Bifoldable)
 import Data.Bitraversable (Bitraversable (bitraverse))
+import Data.Either as X (isLeft, isRight)
 import Data.Functor.Alt (Alt ((<!>)))
 import Data.Functor.Apply (Apply ((<.>)))
 import GHC.Stack (HasCallStack)

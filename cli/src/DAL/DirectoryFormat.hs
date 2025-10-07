@@ -5,13 +5,13 @@ import Models.NID
 import MyPrelude
 
 metadataFile :: FilePath -> NID -> FilePath
-metadataFile base nid = base </> (show nid ++ ".json")
+metadataFile base nid = base </> (unpack (nidRepresentation nid) ++ ".json")
 
 legacyNodeDataFile :: FilePath -> NID -> FilePath
 legacyNodeDataFile base nid = nodeDataFile base nid ".data"
 
 nodeDataFile :: FilePath -> NID -> String -> FilePath
-nodeDataFile base nid extension = base </> (show nid ++ extension)
+nodeDataFile base nid extension = base </> (unpack (nidRepresentation nid) ++ extension)
 
 getMetadataFile :: (Member RawGraph effs) => NID -> Sem effs FilePath
 getMetadataFile nid = metadataFile <$> getGraphFilePath <*> pure nid
