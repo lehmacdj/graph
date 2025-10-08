@@ -6,7 +6,7 @@ cd world/"!"
 cd @000000000000
 ls
 ==========stdout==========
-g> g> g> g> g> g> "hello" at O8OhMSVtjevt
+g> g> g> g> g> g> "hello" at @O8OhMSVtjevt
 g> Goodbye!
 ==========stderr==========
 ==========graph-dump==========

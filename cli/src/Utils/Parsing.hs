@@ -12,6 +12,7 @@ import MyPrelude hiding (many, some, try)
 import Text.Megaparsec (try)
 import Text.Megaparsec.Char
 import Text.Megaparsec.Char.Lexer qualified as L
+import Utils.Base62 (isBase62Char)
 import Utils.Parsing.Common as X
 import Utils.Testing
 
@@ -51,19 +52,13 @@ transition = ident <|> stringLiteral
 ttransition :: Parser Text
 ttransition = pack <$> (ident <|> stringLiteral)
 
--- | chars allowed in base 62 nids
-base62Chars :: String
-base62Chars = ['a' .. 'z'] ++ ['A' .. 'Z'] ++ ['0' .. '9']
-
 pFullNID :: Parser NID
 pFullNID = L.lexeme s (char '@' *> p)
   where
     p = do
-      chars <- replicateM nidDigits $ oneOf base62Chars :: Parser String
-      case readMay chars of
-        Just nid -> pure nid
-        Nothing ->
-          fail "couldn't parse NID"
+      nidStr <- pack <$> replicateM nidDigits anySingle
+      unless (all isBase62Char nidStr) $ fail "invalid base62 character in NID"
+      pure $ unsafeNID nidStr
 
 -- | Parse a small integer and convert to NID
 pSmallNID :: Parser NID

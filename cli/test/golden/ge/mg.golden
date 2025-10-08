@@ -5,9 +5,9 @@ cd a
 d
 ls
 ==========stdout==========
-g> g> g> g> g> "00:00:00.000000000000" at w4VxcgSm0Js6
-"a" at 000000000000
-"b" at 000000000000
+g> g> g> g> g> "00:00:00.000000000000" at @w4VxcgSm0Js6
+"a" at @000000000000
+"b" at @000000000000
 g> Goodbye!
 ==========stderr==========
 cd needs a path that resolves to a single node

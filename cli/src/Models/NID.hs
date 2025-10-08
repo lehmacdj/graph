@@ -114,11 +114,11 @@ spec_parseNID = do
   testParseFails "01234 6789ab" -- invalid char
 
 instance Show NID where
-  show = unpack . nshow
+  show = unpack . nshowWith \s -> s {nidLength = maxBound}
 
 instance Read NID where
   readsPrec _ x =
-    case A.parseOnly (parseNID <* A.endOfInput) (pack x) of
+    case A.parseOnly (A.char '@' *> parseNID <* A.endOfInput) (pack x) of
       Right nid -> [(nid, "")]
       Left _ -> []
 
@@ -147,6 +147,7 @@ instance FromJSONKey NID where
 -- it violates random generation of ids (which is important for avoiding
 -- collisions)
 unsafeNID :: (HasCallStack) => Text -> NID
-unsafeNID t =
-  fromMaybe (error $ show t <> " doesn't meet precondition") $
-    readMay t
+unsafeNID t
+  | length t == nidDigits && all isBase62Char t = UnsafeNID t
+  | otherwise =
+      error $ "unsafeNID: input does not meet precondition: " <> show t

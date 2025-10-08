@@ -47,7 +47,7 @@ getAllNodeIds :: (MonadIO m) => FilePath -> m [NID]
 getAllNodeIds base = do
   files <- liftIO $ listDirectory base
   let linkFiles = filter (".json" `isSuffixOf`) files
-      nodes = mapMaybe (readMay . dropExtension) linkFiles
+      nodes = mapMaybe (readMay . ("@" ++) . dropExtension) linkFiles
   pure nodes
 
 serializeNodeEx ::

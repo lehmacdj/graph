@@ -227,7 +227,7 @@ showsPath _ _ Zero = showString "!"
 showsPath _ _ Wild = showString "*"
 showsPath _ _ (Literal x) = shows x
 showsPath _ _ (RegexMatch r) = shows r
-showsPath _ _ (Absolute nid) = showString "@" . shows nid
+showsPath _ _ (Absolute nid) = shows nid
 showsPath showF d (Backwards' p) =
   showParen (d > 8) $ showString "~" . showF 8 p
 showsPath showF d (l ::/ r) =

@@ -10,11 +10,11 @@ mg a + b/c/d
 cd a
 :d
 ==========stdout==========
-g> g> g> g> g> g> 000000000000
+g> g> g> g> g> g> @000000000000
 g> g> g> g> current node:
 @O8OhMSVtjevt{out=[@O8OhMSVtjevt via "a", @Pqf7kGOdKJIr via "b"]}
 history:
-History {past = [O8OhMSVtjevt,000000000000,000000000000,OBlFGnwL1N3D,Pqf7kGOdKJIr,000000000000], now = O8OhMSVtjevt, future = []}
+History {past = [@O8OhMSVtjevt,@000000000000,@000000000000,@OBlFGnwL1N3D,@Pqf7kGOdKJIr,@000000000000], now = @O8OhMSVtjevt, future = []}
 g> Goodbye!
 ==========stderr==========
 ==========graph-dump==========
