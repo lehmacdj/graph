@@ -50,7 +50,6 @@ library
       Executable.GraphEditor.Options
       Graph.AppInterpreters
       Graph.Augmentation
-      Graph.Augmentation.Bundled
       Graph.Check
       Graph.Command
       Graph.Effect
@@ -68,6 +67,7 @@ library
       Graph.SystemNodes.Init
       Graph.Time
       Graph.Utils
+      Models.Augmentation.Bundled
       Models.Augmentation.IsThin
       Models.Augmentation.Tags
       Models.Augmentation.Timestamps

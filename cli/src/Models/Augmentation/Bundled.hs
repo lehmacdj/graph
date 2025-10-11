@@ -1,9 +1,12 @@
 {-# LANGUAGE AllowAmbiguousTypes #-}
 {-# LANGUAGE UndecidableInstances #-}
 
-module Graph.Augmentation.Bundled
+module Models.Augmentation.Bundled
   ( lookupA,
+    lensA,
+    injDefaultA,
     replaceA,
+    updateA,
     insertA,
     bundled,
     bundling,
@@ -24,6 +27,7 @@ import GHC.Base (Any)
 import GHC.Generics (C, D, M1, Meta (..), S, (:*:))
 import GHC.Records (HasField (..))
 import Models.Common
+import Models.Node (DefaultAugmentation (..))
 import MyPrelude
 import Unsafe.Coerce (unsafeCoerce)
 import Utils.Testing
@@ -35,6 +39,7 @@ type family Indicies (ts :: [Type]) :: [(Type, Type)] where
 type role Bundled nominal
 
 newtype Bundled ts = Bundled (TMap.TypeVector (Indicies ts))
+  deriving stock (Generic)
 
 lookupA ::
   forall t ts.
@@ -42,6 +47,12 @@ lookupA ::
   Bundled ts ->
   TMap.Lookup t (Indicies ts)
 lookupA (Bundled v) = TMap.index @t @(Indicies ts) v
+
+lensA ::
+  forall t ts.
+  (KnownNat (TMap.Index t (Indicies ts))) =>
+  Lens' (Bundled ts) (TMap.Lookup t (Indicies ts))
+lensA = lens (lookupA @t) (flip (replaceA @t))
 
 replaceA ::
   forall t ts.
@@ -54,6 +65,14 @@ replaceA a (Bundled v) = Bundled $ updateTypeVector v
     updateTypeVector (TypeVector m) =
       TypeVector $ m Vector.// [(na, unsafeCoerce a :: Any)]
     na = fromInteger (natVal (Proxy @(TMap.Index t (Indicies ts)))) :: Int
+
+updateA ::
+  forall t ts.
+  (KnownNat (TMap.Index t (Indicies ts))) =>
+  (TMap.Lookup t (Indicies ts) -> TMap.Lookup t (Indicies ts)) ->
+  Bundled ts ->
+  Bundled ts
+updateA f b = replaceA @t (f (lookupA @t b)) b
 
 insertA ::
   forall t ts.
@@ -70,6 +89,15 @@ bundled a = Bundled $ TMap.cons @a a TMap.empty
 
 bundling :: (nid -> Sem r a) -> nid -> Sem r (Bundled '[a])
 bundling f = fmap bundled . f
+
+injDefaultA ::
+  forall t ts.
+  ( KnownNat (TMap.Index t (Indicies ts)),
+    DefaultAugmentation (Bundled ts)
+  ) =>
+  TMap.Lookup t (Indicies ts) ->
+  Bundled ts
+injDefaultA t = replaceA @t t defaultAugmentation
 
 (#|) ::
   forall a b m nid.
@@ -132,6 +160,53 @@ spec_bundledShowable = do
                    (Just "b", "hello"),
                    (Just "a", "2")
                  ]
+
+-- * DefaultAugmentation
+
+instance DefaultAugmentation (Bundled '[]) where
+  defaultAugmentation = Bundled TMap.empty
+
+instance
+  forall t ts.
+  (DefaultAugmentation t, DefaultAugmentation (Bundled ts)) =>
+  DefaultAugmentation (Bundled (t : ts))
+  where
+  defaultAugmentation =
+    defaultAugmentation @t
+      `insertA` defaultAugmentation @(Bundled ts)
+
+-- * Eq
+
+instance Eq (Bundled '[]) where
+  _ == _ = True
+
+instance
+  forall t ts.
+  (Eq t, Eq (Bundled ts)) =>
+  Eq (Bundled (t : ts))
+  where
+  b1 == b2 =
+    (lookupA @t b1 == lookupA @t b2)
+      && (Bundled @ts (tailTypeVector v1) == Bundled @ts (tailTypeVector v2))
+    where
+      Bundled v1 = b1
+      Bundled v2 = b2
+      tailTypeVector ::
+        TypeVector ('(t, t) ': Indicies ts) -> TypeVector (Indicies ts)
+      tailTypeVector (TypeVector m) = TypeVector (Vector.tail m)
+
+-- * NFData
+
+instance NFData (Bundled '[]) where
+  rnf = rwhnf
+
+instance forall t ts. (NFData t, NFData (Bundled ts)) => NFData (Bundled (t : ts)) where
+  rnf b = rnf (lookupA @t b) `seq` rnf (Bundled @ts (tailTypeVector v))
+    where
+      Bundled v = b
+      tailTypeVector ::
+        TypeVector ('(t, t) ': Indicies ts) -> TypeVector (Indicies ts)
+      tailTypeVector (TypeVector m) = TypeVector (Vector.tail m)
 
 -- * HasField
 
