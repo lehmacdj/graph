@@ -14,8 +14,3 @@ instance ShowableAugmentation IsThin where
 
 instance DefaultAugmentation IsThin where
   defaultAugmentation = Thin
-
-onlyFetched :: Prism' (Node t IsThin) (Node t ())
-onlyFetched = prism' (fmap (const Fetched)) \case
-  n | n.augmentation == Fetched -> Just $ void n
-  _ -> Nothing

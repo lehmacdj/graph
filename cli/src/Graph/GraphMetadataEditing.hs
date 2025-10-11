@@ -73,7 +73,9 @@ cachingReadingInState ::
 cachingReadingInState = interpret \case
   GetNodeMetadata nid -> withEarlyReturn do
     whenM (gets @(Set NID) (member nid)) (returnEarly Nothing)
-    cached <- gets @(Graph t IsThin) $ preview (ix nid . onlyFetched)
+    cached <-
+      gets @(Graph t IsThin) $
+        preview (ix nid . asideMetadata (only Fetched))
     withJust cached (returnEarly . Just)
     n <-
       getNodeMetadata nid `onNothingM` do
