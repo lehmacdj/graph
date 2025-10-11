@@ -34,6 +34,7 @@ import Control.Lens as X
     Traversal',
     ala,
     alaf,
+    aside,
     at,
     au,
     filtered,
@@ -41,6 +42,7 @@ import Control.Lens as X
     foldMapOf,
     foldOf,
     folded,
+    from,
     has,
     hasn't,
     ifiltered,
@@ -52,6 +54,7 @@ import Control.Lens as X
     itoList,
     itraversed,
     ix,
+    lens,
     mapped,
     mapping,
     nearly,
@@ -84,12 +87,15 @@ import Control.Lens as X
     _Right,
   )
 import Control.Lens.Extras as X (is)
+import Control.Lens.Internal.Getter as X (AlongsideLeft, AlongsideRight)
+import Data.Bitraversable as X (Bitraversable)
 import Data.Generics.Labels as X
 import Data.Generics.Wrapped as X (_Unwrapped, _Wrapped)
 import Data.IxSet.Typed qualified as IxSet
 import Data.List as X (iterate, transpose)
 import Data.List.NonEmpty as X (NonEmpty (..))
 import Data.Map.Strict qualified as Map
+import Data.Profunctor.Rep as X (Representable)
 import Data.Set qualified as Set
 import Data.Set.Lens as X (setmapped)
 import GHC.Stack (HasCallStack)

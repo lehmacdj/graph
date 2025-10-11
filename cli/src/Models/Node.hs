@@ -213,3 +213,26 @@ traceGetNodeMetadata ::
 traceGetNodeMetadata getNodeMetadata nid =
   traceMaybeNode nid <$> getNodeMetadata nid
 {-# WARNING traceGetNodeMetadata "Leaving traces in code" #-}
+
+separatedAugmentation ::
+  Iso (Node' t t' a) (Node' t t' b) (Node' t t' (), a) (Node' t t' (), b)
+separatedAugmentation =
+  iso
+    (\n -> (n {augmentation = ()}, n.augmentation))
+    (\(n, a) -> n {augmentation = a})
+{-# INLINE separatedAugmentation #-}
+
+alongsideMetadata ::
+  (Functor f) =>
+  LensLike (AlongsideRight f (Node' t t' ())) s s' a b ->
+  LensLike f (Node' t t' s) (Node' t t' s') (Node' t t' a) (Node' t t' b)
+alongsideMetadata o =
+  separatedAugmentation . alongside id o . from separatedAugmentation
+{-# INLINE alongsideMetadata #-}
+
+asideMetadata ::
+  forall f g a b t t'.
+  APrism f g a b ->
+  Prism (Node' t t' f) (Node' t t' g) (Node' t t' a) (Node' t t' b)
+asideMetadata p = separatedAugmentation . aside p . from separatedAugmentation
+{-# INLINE asideMetadata #-}
