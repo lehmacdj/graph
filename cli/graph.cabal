@@ -69,6 +69,7 @@ library
       Graph.Utils
       Models.Augmentation.Bundled
       Models.Augmentation.IsThin
+      Models.Augmentation.NodeEdits
       Models.Augmentation.Tags
       Models.Augmentation.Timestamps
       Models.Command
