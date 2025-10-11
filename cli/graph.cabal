@@ -237,6 +237,7 @@ library
     , polysemy-plugin
     , polysemy-readline
     , polysemy-zoo
+    , profunctors
     , random
     , random-shuffle
     , resourcet
@@ -379,6 +380,7 @@ executable ge
     , polysemy-plugin
     , polysemy-readline
     , polysemy-zoo
+    , profunctors
     , random
     , random-shuffle
     , resourcet
@@ -516,6 +518,7 @@ test-suite graph-test
     , polysemy-plugin
     , polysemy-readline
     , polysemy-zoo
+    , profunctors
     , random
     , random-shuffle
     , resourcet
