@@ -6,30 +6,39 @@ import Error.UserError
 import MyPrelude
 import Polysemy.Error
 
+type RawGraphUserErrorIO = [RawGraph, Error UserError, Embed IO, Final IO]
+
 -- | Function for "unlifting" a computation that uses the RawGraph effect
 runRawGraphUserErrorIO ::
   FilePath ->
-  Sem [RawGraph, Error UserError, Embed IO, Final IO] a ->
+  Sem RawGraphUserErrorIO a ->
   IO (Either UserError a)
 runRawGraphUserErrorIO path =
   runFinal . embedToFinal . errorToIOFinal . runRawGraphWithPath path
 
-newtype UnliftRawGraphUserErrorIO = UnliftRawGraphUserErrorIO
-  { unRunRawGraphUserErrorIO ::
-      forall a.
-      Sem [RawGraph, Error UserError, Embed IO, Final IO] a ->
-      IO a
-  }
-
 withUnliftIORawGraphUserError ::
   (Members [RawGraph, Error UserError, Embed IO] r) =>
-  (UnliftRawGraphUserErrorIO -> IO a) ->
+  (UnliftIO (Sem RawGraphUserErrorIO) -> IO a) ->
   Sem r a
 withUnliftIORawGraphUserError f = do
   graphPath <- getGraphFilePath
   fromException @UserError $
     f
-      ( UnliftRawGraphUserErrorIO $ \action -> do
+      ( UnliftIO $ \action -> do
           result <- runRawGraphUserErrorIO graphPath action
+          either E.throw pure result
+      )
+
+withUnliftIORawGraphUserError' ::
+  (Members [RawGraph, Error UserError, Embed IO] r) =>
+  (forall x. m x -> Sem RawGraphUserErrorIO x) ->
+  (UnliftIO m -> IO a) ->
+  Sem r a
+withUnliftIORawGraphUserError' extraInterpreters f = do
+  graphPath <- getGraphFilePath
+  fromException @UserError $
+    f
+      ( UnliftIO $ \action -> do
+          result <- runRawGraphUserErrorIO graphPath $ extraInterpreters action
           either E.throw pure result
       )

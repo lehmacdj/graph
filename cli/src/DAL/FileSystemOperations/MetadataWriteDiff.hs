@@ -48,7 +48,7 @@ writeGraphDiff_
       ifor (changes <> asLoaded) \nid _ -> getMetadataFile nid <&> (,False)
     let blanketReadingOptions = defaultReadingOptions
         blanketWritingOptions = defaultWritingOptions
-    withUnliftIORawGraphUserError \(UnliftRawGraphUserErrorIO unliftIO) ->
+    withUnliftIORawGraphUserError \(UnliftIO unliftIO) ->
       coordinateAccessing FilesToCoordinate {..} \wrappedReaders wrappedWriters -> do
         let beginReading ::
               forall a. (HasCallStack) => NID -> ReadingOptions -> ContT a IO FilePath
