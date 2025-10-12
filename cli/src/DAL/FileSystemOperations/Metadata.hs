@@ -61,12 +61,13 @@ deleteNodeMetadata_ shouldCoordinate path = do
 
 runGraphMetadataFilesystemOperationsIO ::
   (Members [RawGraph, Embed IO, Error UserError] r) =>
+  Bool ->
   Sem (GraphMetadataFilesystemOperations : r) a ->
   Sem r a
-runGraphMetadataFilesystemOperationsIO = interpret \case
+runGraphMetadataFilesystemOperationsIO useCoordination = interpret \case
   ReadNodeMetadata nid -> do
     path <- getMetadataFile nid
-    node <- readNodeMetadata_ True nid path
+    node <- readNodeMetadata_ useCoordination nid path
     withJust node $ \n ->
       unless (n.nid == nid) $
         sayErr $
@@ -75,14 +76,19 @@ runGraphMetadataFilesystemOperationsIO = interpret \case
             <> ". File contains NID "
             <> tshow n.nid
     pure node
-  WriteNodeMetadata node -> (\x -> writeNodeMetadata_ True x node) =<< getMetadataFile node.nid
-  DeleteNodeMetadata nid -> deleteNodeMetadata_ True =<< getMetadataFile nid
+  WriteNodeMetadata node -> do
+    f <- getMetadataFile node.nid
+    writeNodeMetadata_ useCoordination f node
+  DeleteNodeMetadata nid ->
+    deleteNodeMetadata_ useCoordination =<< getMetadataFile nid
 
 runGraphMetadataFilesystemOperationsDryRun ::
   (Members [RawGraph, Embed IO, Error UserError] r) =>
+  Bool ->
   Sem (GraphMetadataFilesystemOperations : r) a ->
   Sem r a
-runGraphMetadataFilesystemOperationsDryRun = interpret \case
-  ReadNodeMetadata nid -> readNodeMetadata_ True nid =<< getMetadataFile nid
+runGraphMetadataFilesystemOperationsDryRun useCoordination = interpret \case
+  ReadNodeMetadata nid ->
+    runGraphMetadataFilesystemOperationsIO useCoordination (readNodeMetadata nid)
   WriteNodeMetadata node -> say $ "Would write node: " <> tshow node
   DeleteNodeMetadata nid -> say $ "Would delete node with NID: " <> tshow nid
