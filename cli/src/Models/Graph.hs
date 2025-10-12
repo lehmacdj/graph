@@ -131,6 +131,9 @@ instance MonoFoldable (Graph t a) where
 instance MonoFunctor (Graph t a) where
   omap f = over #nodeMap (omap f)
 
+-- TODO: it's quite janky for Functor (Graph t) to map over augmentations but
+-- MonoFunctor (Graph t a) to map over nodes, maybe we should remove the
+-- Functor instance
 instance Functor (Graph t) where
   fmap f = Graph . fmap (fmap f) . (.nodeMap)
 

@@ -58,6 +58,18 @@ forgetLeft :: Either e a -> Maybe a
 forgetLeft (Right x) = Just x
 forgetLeft (Left _) = Nothing
 
+onLeft :: (Applicative m) => Either e a -> (e -> m a) -> m a
+onLeft = flip (`either` pure)
+
+onLeft_ :: (Applicative m) => Either e a -> m a -> m a
+onLeft_ e = onLeft e . const
+
+onRight :: (Applicative m) => Either a e -> (e -> m a) -> m a
+onRight = flip (either pure)
+
+onRight_ :: (Applicative m) => Either a e -> m a -> m a
+onRight_ e = onRight e . const
+
 justIfTrue :: Bool -> a -> Maybe a
 justIfTrue True x = Just x
 justIfTrue False _ = Nothing

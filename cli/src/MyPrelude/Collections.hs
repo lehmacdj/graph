@@ -48,6 +48,10 @@ import Control.Lens as X
     ifiltered,
     ifoldMapOf,
     ifolded,
+    ifor,
+    iforOf,
+    iforOf_,
+    imap,
     indexed,
     isn't,
     iso,
@@ -64,6 +68,7 @@ import Control.Lens as X
     over,
     preview,
     prism',
+    selfIndex,
     set,
     to,
     toListOf,
@@ -101,6 +106,9 @@ import Data.Set.Lens as X (setmapped)
 import GHC.Stack (HasCallStack)
 import MyPrelude.Collections.Ordered as X
 import MyPrelude.Orphans ()
+
+ofolded :: (MonoFoldable mono) => Fold mono (Element mono)
+ofolded = folding toList
 
 -- | Copied from cabal codebase
 toSetOf :: Getting (Set a) s a -> s -> Set a
