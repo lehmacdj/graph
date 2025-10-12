@@ -2,7 +2,6 @@
 
 module DAL.FileSystemOperations.MetadataWriteDiff where
 
-import Control.Monad.Trans.Cont
 import DAL.DirectoryFormat
 import DAL.FileSystemOperations.Metadata
 import DAL.Interpreters
@@ -50,20 +49,17 @@ writeGraphDiff_
         blanketWritingOptions = defaultWritingOptions
     withUnliftIORawGraphUserError \(UnliftIO unliftIO) ->
       coordinateAccessing FilesToCoordinate {..} \wrappedReaders wrappedWriters -> do
-        let beginReading ::
-              forall a. (HasCallStack) => NID -> ReadingOptions -> ContT a IO FilePath
-            beginReading nid options =
-              ContT $
-                unwrappingReader (wrappedReaders ^. at nid . to (unwrapEx "missing reader")) options
-        let beginWriting ::
-              forall a. (HasCallStack) => NID -> WritingOptions -> ContT a IO FilePath
-            beginWriting nid options =
-              ContT $
-                unwrappingWriter (wrappedWriters ^. at nid . to (unwrapEx "missing writer")) options
+        let withReading ::
+              forall a. (HasCallStack) => NID -> ReadingOptions -> (FilePath -> IO a) -> IO a
+            withReading nid =
+              unwrappingReader (wrappedReaders ^. at nid . to (unwrapEx "missing reader"))
+        let withWriting ::
+              forall a. (HasCallStack) => NID -> WritingOptions -> (FilePath -> IO a) -> IO a
+            withWriting nid =
+              unwrappingWriter (wrappedWriters ^. at nid . to (unwrapEx "missing writer"))
         upToDateNodes' <- ipooledForConcurrentlyN 300 readingPaths \nid _ ->
-          evalContT do
-            path <- beginReading nid defaultReadingOptions
-            upToDateNode <- lift . unliftIO $ readNodeMetadata' nid path
+          withReading nid defaultReadingOptions $ \path -> do
+            upToDateNode <- unliftIO $ readNodeMetadata' nid path
             _ <- evaluateDeep upToDateNode
             -- if the node was loaded, we require that it is the same now as it was
             -- when loading, if it wasn't the node is up to date inherently
@@ -86,17 +82,17 @@ writeGraphDiff_
           let changedNode =
                 unwrapEx "changedNode exists for nodes we are writing" $
                   changes ^. at nid
-          evalContT case (upToDateNode, changedNode) of
-            (Just _, Nothing) -> do
-              path <- beginWriting nid defaultWritingOptions {forDeleting = True}
-              lift . unliftIO $ deleteNodeMetadata' path
-            (Nothing, Just node) -> do
-              path <- beginWriting nid defaultWritingOptions
-              lift . unliftIO $ writeNodeMetadata' path node
+          case (upToDateNode, changedNode) of
+            (Just _, Nothing) ->
+              withWriting nid defaultWritingOptions {forDeleting = True} $
+                unliftIO . deleteNodeMetadata'
+            (Nothing, Just node) ->
+              withWriting nid defaultWritingOptions $ \path ->
+                unliftIO $ writeNodeMetadata' path node
             (Just upToDateNode', Just changedNode')
-              | upToDateNode' /= changedNode' -> do
-                  path <- beginWriting nid defaultWritingOptions
-                  lift . unliftIO $ writeNodeMetadata' path changedNode'
+              | upToDateNode' /= changedNode' ->
+                  withWriting nid defaultWritingOptions \path ->
+                    unliftIO $ writeNodeMetadata' path changedNode'
               | otherwise ->
                   -- node didn't change
                   pure ()
