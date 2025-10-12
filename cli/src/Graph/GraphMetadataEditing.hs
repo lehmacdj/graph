@@ -4,18 +4,20 @@ module Graph.GraphMetadataEditing where
 
 import DAL.FileSystemOperations.Metadata
 import DAL.FileSystemOperations.MetadataWriteDiff
+import Data.Map.Strict qualified as Map
 import Error.UserError
 import Error.Warn
+import Models.Augmentation.Bundled
 import Models.Augmentation.IsThin
+import Models.Augmentation.NodeEdits
 import Models.Edge
-import Models.Graph (Graph, emptyGraph)
+import Models.Graph (Graph (..), emptyGraph)
 import Models.Graph qualified
 import Models.NID
 import Models.Node
 import MyPrelude
 import Polysemy.Scoped
 import Polysemy.State
-import Polysemy.Tagged
 
 -- | Marker indicating that something promises to only read the graph metadata.
 -- I gave up on trying to enforce this at the type level because it ended up
@@ -35,6 +37,11 @@ data GraphMetadataEditing' t m a where
   -- node, but you'd probably want to build that by intercepting
   -- GraphMetadataFilesystemOperations to only update when the FS is actually
   -- updated)
+  -- I may want to turn this into an assertion that the node needs to be created
+  -- and allow nodes to not be created if we insert an edge to a non-existing
+  -- node and then later remove that same edge without committing the changes to
+  -- the disk inbetween. If we do this, it would be essential to actually create
+  -- edges.
   TouchNode :: NID -> GraphMetadataEditing' t m ()
   DeleteNode :: NID -> GraphMetadataEditing' t m ()
   InsertEdge :: Edge t -> GraphMetadataEditing' t m ()
@@ -64,7 +71,13 @@ cachingReadingInMemory =
 cachingReadingInState ::
   forall t a r.
   ( Member (GraphMetadataReading' t) r,
-    Members [State (Graph t IsThin), State (Set NID)] r,
+    Members
+      [ -- the graph as it's been fetched so far
+        State (Graph t IsThin),
+        -- the set of nodes we tried to fetch but did not exist
+        State (Set NID)
+      ]
+      r,
     ValidTransition t,
     HasCallStack
   ) =>
@@ -155,14 +168,132 @@ runGraphMetadataEditing = interpret \case
     withJust sink \sink' ->
       writeNodeMetadata (sink' & #incoming %~ deleteSet (inConnect edge))
 
--- Auxilliary type for @Tagged@ in @runCachedGraphMetadataEditing@
-data CachedGraphMetadataEditingTag
-  = Cache
-  | Underlying
-  | AsLoaded
-  | Changes
-  | DeletedNodes
-  | DeletedEdges
+type GraphWithEdits = Graph Text (Bundled [NodeEdits Text, IsThin])
+
+-- | This is very cool, but what if we just cache at the FileSystemOperations
+-- level instead of caching here where it's much more difficult to reconcile
+-- changes after the fact? Downside: this would mean keeping in memory the
+-- the parsed representations of all nodes that have been read, but this is
+-- essentially done when we cache the entire graph anyways I think
+--
+-- Doing this would also make it a bit easier to stat files before reading them
+-- to reduce redundant reads
+--
+-- It does probably make concurrent reading/writing a bit more difficult in
+-- practice, but I haven't implemented this yet anyways
+cachingGraphMetadataEditingInState ::
+  forall r a.
+  ( Member GraphMetadataFilesystemOperations r,
+    Members
+      [ -- the graph as it's been fetched so far (including changes we made)
+        State GraphWithEdits,
+        -- the set of nodes that should be considered non-existing
+        -- nodes end up in this set either if:
+        -- - we fetched them and they did not exist
+        -- - we deleted them and they haven't been re-created since
+        State (Set NID),
+        -- nodes as they were when we loaded them
+        State (Map NID (Maybe (Node Text ())))
+      ]
+      r,
+    HasCallStack
+  ) =>
+  Sem (GraphMetadataEditing' Text : r) a ->
+  Sem r a
+cachingGraphMetadataEditingInState = interpret \case
+  GetNodeMetadata nid -> withEarlyReturn do
+    -- if a node is in the deleted set, we need to treat it as non-existing
+    whenM (gets @(Set NID) (member nid)) (returnEarly Nothing)
+    cached <- gets @GraphWithEdits (preview (ix nid))
+    -- if we've already fetched this node, we can trust it and return it
+    let onlyFetched =
+          _Just . alongsideMetadata (lensA @IsThin) . asideMetadata (only Fetched)
+    withJust (preview onlyFetched cached :: Maybe (Node Text ())) (returnEarly . Just . void)
+    n <- readNodeMetadata nid
+    modify' @(Map NID (Maybe (Node Text ()))) $ at nid ?~ n
+    let cached' = fromMaybe (emptyNode nid) cached
+        n' =
+          n
+            <&> applyEdits cached'.augmentation.edits
+              . ($> (cached'.augmentation & lensA @IsThin .~ Fetched))
+    modify' @GraphWithEdits $ at nid .~ n'
+    pure $! void <$> n'
+  TouchNode nid -> do
+    modify' @(Set NID) $ deleteSet nid
+    modify' @GraphWithEdits $
+      at nid
+        %~ Just . \case
+          Nothing ->
+            emptyNode @() nid
+              $> injDefaultA @(NodeEdits Text) (NodeEdits (singleton Touch))
+          Just node ->
+            node & #augmentation %~ updateA @(NodeEdits Text) (appendEdit Touch)
+  DeleteNode nid -> do
+    -- ensure node has been loaded if it exists so we know which edges to delete
+    n <- cachingGraphMetadataEditingInState (getNodeMetadata nid)
+    forOf_ (_Just . #outgoing . folded) n $ \n' ->
+      modify' @GraphWithEdits (Models.Graph.deleteEdge (nid `outgoingEdge` n'))
+    forOf_ (_Just . #incoming . folded) n $ \n' ->
+      modify' @GraphWithEdits (Models.Graph.deleteEdge (n' `incomingEdge` nid))
+    modify' @(Set NID) $ insertSet nid
+    modify' @GraphWithEdits $
+      at nid . _Just
+        -- edges of the node have already been deleted from the deleteEdge
+        -- calls above
+        %~ (#augmentation %~ updateA @(NodeEdits Text) (appendEdit Delete))
+  InsertEdge edge -> do
+    modify' @(Set NID) $ deleteSet edge.source . deleteSet edge.sink
+    modify' @GraphWithEdits $
+      id @_ @GraphWithEdits
+        . ( at edge.source
+              %~ Just . \case
+                Nothing ->
+                  outStubNode'
+                    edge
+                    ( injDefaultA @(NodeEdits Text)
+                        (NodeEdits (singleton (InsertOutgoing (outConnect edge))))
+                    )
+                Just n ->
+                  n
+                    & #outgoing %~ insertSet (outConnect edge)
+                    & #augmentation
+                      %~ updateA @(NodeEdits Text)
+                        (appendEdit (InsertOutgoing (outConnect edge)))
+          )
+        . ( at edge.sink
+              %~ Just . \case
+                Nothing ->
+                  inStubNode'
+                    edge
+                    ( injDefaultA @(NodeEdits Text)
+                        (NodeEdits (singleton (InsertIncoming (inConnect edge))))
+                    )
+                Just n ->
+                  n
+                    & #incoming %~ insertSet (inConnect edge)
+                    & #augmentation
+                      %~ updateA @(NodeEdits Text)
+                        (appendEdit (InsertIncoming (inConnect edge)))
+          )
+  DeleteEdge edge -> do
+    modify' @GraphWithEdits $
+      id @_ @GraphWithEdits
+        . ( ix edge.source
+              %~ ( (#outgoing %~ deleteSet (outConnect edge))
+                     . ( #augmentation
+                           %~ updateA @(NodeEdits Text)
+                             (appendEdit (DeleteOutgoing (outConnect edge)))
+                       )
+                 )
+          )
+        . ( ix edge.sink
+              %~ ( (#incoming %~ deleteSet (inConnect edge))
+                     . ( #augmentation
+                           %~ updateA @(NodeEdits Text)
+                             (appendEdit (DeleteIncoming (inConnect edge)))
+                       )
+                 )
+          )
 
 -- | Update a graph transactionally by first building up a diff of all changes
 -- in memory and then writing them to the disk using
@@ -180,93 +311,32 @@ runGraphMetadataEditingTransactionally ::
   Sem (GraphMetadataEditing : r) a ->
   Sem r a
 runGraphMetadataEditingTransactionally action = do
-  -- the way I'm implementing transactional behavior is based on my
-  -- understanding of C#'s Unit of Work pattern, thus my interpreter that
-  -- builds up the effects representing the changes before we write them
-  -- is called @runUnitOfWork@
-  let runUnitOfWork ::
-        forall q b.
-        ( Members
-            [ Tagged Cache GraphMetadataEditing,
-              Tagged Underlying GraphMetadataFilesystemOperations,
-              Tagged AsLoaded (State (Map NID (Maybe (Node Text ())))),
-              Tagged Changes (State (Graph Text ())),
-              Tagged DeletedEdges (State (Set (Edge Text)))
-            ]
-            q
-        ) =>
-        Sem (GraphMetadataEditing : q) b ->
-        Sem q b
-      runUnitOfWork = interpret @GraphMetadataEditing \case
-        GetNodeMetadata nid -> withEarlyReturn do
-          changesNode <- tag @Cache $ getNodeMetadata nid
-          loadedNode <- tag @AsLoaded $ gets $ view (at nid)
-          whenJust loadedNode do
-            -- when loaded it is safe to rely on the cache because we
-            -- populated the cache from the underlying node
-            -- (and reconciled with pending changes we had already made)
-            returnEarly changesNode
-          underlyingNode <- tag @Underlying $ readNodeMetadata nid
-          tag @AsLoaded $ modify $ at nid ?~ underlyingNode
-          deletedEdges <- tag @DeletedEdges $ get
-          -- we might already have a node in the cache even if we did not load
-          -- because we create nodes for any changes we make
-          let reconciledNode =
-                mergeMaybes mergeNodesEx underlyingNode changesNode
-                  <&> withoutEdges deletedEdges
-          tag @Changes $ modify $ at nid .~ reconciledNode
-          pure reconciledNode
-        TouchNode nid -> tag @Cache $ touchNode nid
-        DeleteNode nid -> withEarlyReturn do
-          -- we need to load the node to know what edges to delete
-          -- deferring the read would just make our lives harder so we do it now
-          maybeLoadedNode <- runUnitOfWork (getNodeMetadata nid)
-          loadedNode <- unwrapReturningDefault () maybeLoadedNode
-          let edges =
-                mempty
-                  & union (mapSet (nid `outgoingEdge`) loadedNode.outgoing)
-                  & union (mapSet (`incomingEdge` nid) loadedNode.incoming)
-          -- delete edges first to account for DeletedEdges properly
-          -- (i.e. only add to it to the set if not deleted from Cache)
-          for_ edges $ runUnitOfWork . deleteEdge
-          tag @Cache $ deleteNode nid
-        InsertEdge edge -> do
-          tag @Cache $ insertEdge edge
-          tag @DeletedEdges $ modify $ deleteSet edge
-        DeleteEdge edge -> do
-          hasEdge <- tag @Changes $ gets (`Models.Graph.containsEdge` edge)
-          tag @Cache $ deleteEdge edge
-          unless hasEdge $ tag @DeletedEdges $ modify $ insertSet edge
-  let applyGraphDiff (deletedEdges, (loaded, (changes, result))) =
-        writeGraphDiff loaded changes deletedEdges >> pure result
+  let applyGraphDiff (nonExistent, (asLoaded, (Graph nodeMap, result))) = do
+        let changes :: Map NID (Maybe (Node Text ()))
+            changes = flip Map.mapMaybeWithKey nodeMap \nid node ->
+              -- the node or Nothing if it should be deleted
+              let deleted = justIfTrue (nid `notMember` nonExistent) (void node)
+               in -- we only need to edit the nodes that actually changed
+                  -- this is any node with non-null edits that is different from
+                  -- how it was when we loaded it
+                  justIfTrue
+                    ( not (null node.augmentation.edits)
+                        && Just deleted /= asLoaded ^. at nid
+                    )
+                    deleted
+        writeGraphDiff asLoaded changes
+        pure result
   action
-    -- we use this to load nodes from the underlying storage
-    -- we write data back to the disk directly with @writeGraphDiff@
-    & raiseUnder @(Tagged Underlying GraphMetadataFilesystemOperations)
-    -- state that we use to save up the "unit of work" that we will write back
-    -- to the disk at once later
     & raiseUnder3
-      @(Tagged Changes (State (Graph Text ())))
-      @(Tagged AsLoaded (State (Map NID (Maybe (Node Text ())))))
-      @(Tagged DeletedEdges (State (Set (Edge Text))))
+      @(State GraphWithEdits)
+      @(State (Map NID (Maybe (Node Text ()))))
+      @(State (Set NID))
     -- this just exists so that we can avoid duplicating the implementation of
     -- runInMemoryGraphMetadataEditing
-    & raiseUnder @(Tagged Cache GraphMetadataEditing)
-    -- build up the unit of work in the effects above
-    & runUnitOfWork
-    -- run the Cache GraphMetadataEditing effect
-    & raiseUnder @(State (Graph Text ()))
-    & tag @Changes
-      . runInMemoryGraphMetadataEditing
-      . untag @Cache
+    & cachingGraphMetadataEditingInState
     & runState Models.Graph.emptyGraph
-      . untag @Changes
     & runState mempty
-      . untag @AsLoaded
     & runState mempty
-      . untag @DeletedEdges
-    & subsume
-      . untag @Underlying
     & (>>= applyGraphDiff)
 
 -- | If I move to Effectful there is Effectful.Provider_ that does something
