@@ -197,7 +197,7 @@ runWriteGraphState ::
   (Member (State (Graph t (Maybe ByteString))) effs, ValidTransition t) =>
   Sem (WriteGraph t ': effs) ~> Sem effs
 runWriteGraphState = interpret $ \case
-  TouchNode nid -> modify (G.insertNode (emptyNode' nid) :: Graph t (Maybe ByteString) -> Graph t (Maybe ByteString))
+  TouchNode nid -> modify (G.insertNode (emptyNode nid) :: Graph t (Maybe ByteString) -> Graph t (Maybe ByteString))
   DeleteNode nid -> modify (G.delNode nid :: Graph t (Maybe ByteString) -> Graph t (Maybe ByteString))
   InsertEdge e -> modify (G.insertEdge e)
   DeleteEdge e -> modify (G.deleteEdge e)
@@ -264,7 +264,7 @@ runWriteGraphIODualizeable dir = reinterpret $ \case
   TouchNode nid ->
     whenM (not <$> S2.doesNodeExist dir nid) $
       embedCatchingErrors $
-        S2.serializeNodeEx (emptyNode' nid :: Node t (Maybe ByteString)) dir
+        S2.serializeNodeEx (emptyNode nid :: Node t (Maybe ByteString)) dir
   DeleteNode nid -> do
     n <- S2.deserializeNodeF @t dir nid
     let del = Set.filter ((/= nid) . view #node) :: Set (Connect t) -> Set (Connect t)

@@ -39,9 +39,12 @@ import Control.Lens as X
     au,
     filtered,
     filteredBy,
+    firstOf,
     foldMapOf,
     foldOf,
     folded,
+    forOf,
+    forOf_,
     from,
     has,
     hasn't,
@@ -66,6 +69,7 @@ import Control.Lens as X
     non',
     only,
     over,
+    pre,
     preview,
     prism',
     selfIndex,
@@ -92,7 +96,7 @@ import Control.Lens as X
     _Right,
   )
 import Control.Lens.Extras as X (is)
-import Control.Lens.Internal.Getter as X (AlongsideLeft, AlongsideRight)
+import Control.Lens.Internal.Getter as X (AlongsideLeft (..), AlongsideRight (..))
 import Data.Bitraversable as X (Bitraversable)
 import Data.Generics.Labels as X
 import Data.Generics.Wrapped as X (_Unwrapped, _Wrapped)

@@ -140,19 +140,25 @@ outdegree = #outgoing . to Set.size
 
 -- | Warning! It is up to the user of the graph to ensure that node ids are
 -- unique within the graph
-emptyNode :: (Ord t, DefaultAugmentation a) => NID -> Node t a
-emptyNode i = Node i mempty mempty defaultAugmentation
+emptyNode :: forall a t. (Ord t, DefaultAugmentation a) => NID -> Node t a
+emptyNode i = emptyNode' i defaultAugmentation
 
 -- | Warning! It is up to the user of the graph to ensure that node ids are
 -- unique within the graph
-emptyNode' :: (Ord t) => NID -> Node t (Maybe a)
-emptyNode' = emptyNode
+emptyNode' :: forall a t. (Ord t) => NID -> a -> Node t a
+emptyNode' i = Node i mempty mempty
 
 inStubNode :: (Ord t, DefaultAugmentation a) => Edge t -> Node t a
 inStubNode e = Node e.sink (singleton $ inConnect e) mempty defaultAugmentation
 
+inStubNode' :: (Ord t) => Edge t -> a -> Node t a
+inStubNode' e = Node e.sink (singleton $ inConnect e) mempty
+
 outStubNode :: (Ord t, DefaultAugmentation a) => Edge t -> Node t a
 outStubNode e = Node e.source mempty (singleton $ outConnect e) defaultAugmentation
+
+outStubNode' :: (Ord t) => Edge t -> a -> Node t a
+outStubNode' e = Node e.source mempty (singleton $ outConnect e)
 
 dualizeNode :: Node t a -> Node t a
 dualizeNode (Node nid i o x) = Node nid o i x

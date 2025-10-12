@@ -123,7 +123,7 @@ doesNodeExist base nid = liftIO $ do
 initializeGraph :: (MonadIO m) => FilePath -> m ()
 initializeGraph base = liftIO $ do
   createDirectoryIfMissing True base
-  serializeNodeEx (emptyNode @String @() nilNID $> Nothing) base
+  serializeNodeEx (emptyNode @() @String nilNID $> Nothing) base
 
 removeNode :: (MonadIO m) => FilePath -> NID -> m ()
 removeNode base nid = do

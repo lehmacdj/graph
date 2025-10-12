@@ -2,9 +2,8 @@
 
 module MyPrelude.Orphans where
 
-import Data.Functor.Identity
+import ClassyPrelude
 import Data.IxSet.Typed
-import Data.MonoTraversable
 import Language.Haskell.TH.Syntax (Lift (..))
 import Text.Megaparsec.Pos (Pos, SourcePos (..), mkPos, unPos)
 
