@@ -69,11 +69,10 @@ writeGraphDiff_
                 | otherwise -> Nothing
               Nothing -> Just upToDateNode
         let notUpToDateNids = keysSet $ filterMap (== Nothing) upToDateNodes'
-        unless (null notUpToDateNids)
-          $ unliftIO
-            . throwText
-          $ "The following nodes were changed before trying to write the diff: "
-            ++ tshow notUpToDateNids
+        unless (null notUpToDateNids) $
+          unliftIO . throwText $
+            "The following nodes were changed before trying to write the diff: "
+              ++ tshow notUpToDateNids
         let upToDateNodes = map (unwrapEx "node exists due to above check") upToDateNodes'
         ipooledForConcurrentlyN_ 300 writingPaths \nid _ -> do
           let upToDateNode =
