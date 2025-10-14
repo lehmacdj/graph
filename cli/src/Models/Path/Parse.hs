@@ -26,7 +26,11 @@ pathTerm' pNID pTransition =
     <|> try ((Absolute tagsNID :/) . Literal <$> (char '#' *> pTransition))
     <|> (symbol "@" $> One)
     <|> (symbol "*" $> Wild)
-    <|> (symbol "!" $> Zero)
+    <|> (symbol "%never" $> Zero)
+    <|> between
+      (symbol "!{")
+      (symbol "}")
+      (ExcludingNIDs . setFromList <$> pNID `sepEndBy1` symbol ",")
     <|> (RegexMatch <$> try pRegex)
     <|> (Literal <$> pTransition)
     <|> (uncurry Directive <$> withSourceRange (pDirective pTransition))
@@ -76,9 +80,11 @@ test_pPath =
     [ "#foo" `parsesTo` (Absolute tagsNID :/ Literal "foo"),
       "@" `parsesTo` One,
       "*" `parsesTo` Wild,
-      "!" `parsesTo` Zero,
+      "%never" `parsesTo` Zero,
       "foo" `parsesTo` Literal "foo",
       "@000000000002" `parsesTo` Absolute (smallNID 2),
+      "!{ @000000000001, } " `parsesTo` ExcludingNIDs (setFromList [smallNID 1]),
+      "!{@000000000001, @000000000002}" `parsesTo` ExcludingNIDs (setFromList [smallNID 1, smallNID 2]),
       "foo/@000000000002" `parsesTo` (Literal "foo" :/ Absolute (smallNID 2)),
       "foo/bar" `parsesTo` (Literal "foo" :/ Literal "bar"),
       "re\"^foo.*bar$\"" `parsesTo` RegexMatch [re|^foo.*bar$|],
@@ -93,11 +99,11 @@ test_pPath =
       "foo / bar & baz" `parsesTo` (Literal "foo" :/ Literal "bar" :& Literal "baz"),
       "foo/bar&baz+qux"
         `parsesTo` (Literal "foo" :/ Literal "bar" :& Literal "baz" :+ Literal "qux"),
-      "foo/bar&baz+qux/!" `parsesTo` (Literal "foo" :/ Literal "bar" :& Literal "baz" :+ Literal "qux" :/ Zero),
+      "foo/bar&baz+qux/%never" `parsesTo` (Literal "foo" :/ Literal "bar" :& Literal "baz" :+ Literal "qux" :/ Zero),
       "foo/bar&(baz+qux)"
         `parsesTo` (Literal "foo" :/ Literal "bar" :& (Literal "baz" :+ Literal "qux")),
-      "foo/(bar&baz+qux)/!" `parsesTo` (Literal "foo" :/ (Literal "bar" :& Literal "baz" :+ Literal "qux") :/ Zero),
-      "foo/%targets(@000000000002 + re\"^foo$\")/!"
+      "foo/(bar&baz+qux)/%never" `parsesTo` (Literal "foo" :/ (Literal "bar" :& Literal "baz" :+ Literal "qux") :/ Zero),
+      "foo/%targets(@000000000002 + re\"^foo$\")/%never"
         `parsesTo` ( Literal "foo"
                        :/ Directive
                          testAnn
@@ -121,7 +127,10 @@ test_pPath =
       parseFails "~",
       parseFails "foo~bar",
       parseFails "%last()",
-      parseFails "re\""
+      parseFails "re\"",
+      -- we could allow this, but seems wise to exclude for ambiguity reasons
+      parseFails "!@000000000001",
+      parseFails "!{}"
     ]
   where
     parsesTo :: Text -> ParsedPath String -> TestTree

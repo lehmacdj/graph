@@ -21,11 +21,17 @@ import Utils.Parsing.Common (SourceRange (..))
 -- There are also submodules that expose simpler path types with common
 -- parameters, e.g. @Models.Path.Simple@ exposes the simple Path type
 --
+-- Semantically a path has two kinds of components:
+-- * Those specifying a node, e.g. `@12`, `@`, `@ & a/b`, `!@3`
+-- * Those specifying a transition, e.g. `a`, `*`, `~a`
+--
 -- There's some constructors that I'd like to add, but haven't either because I
 -- haven't needed them and/or because they would complicate the implementation
 -- more than is worthwhile:
 -- Path t :\ Path t -- ^ set minus (useful with wild to restrict)
 -- Negate (Path t) -- ^ negate a path, if included obsolesces other operators
+--    this is very hard, consider not(a/b), which theoretically would need to
+--    include paths of any length that don't match a/b
 -- KleeneStar (Path t) -- ^ necessary for expressing arbitrary graph traversals as paths
 -- NormalizedPath -- ^ embed an already normalized path, would be useful as an optimization
 --
@@ -49,6 +55,9 @@ data Path' (p :: PathPhase) f t
     -- if at the start of a path. Creates Pointlike paths when :&-ed with
     -- other paths
     Absolute NID
+  | -- | negative assertion for some set of NIDs, written `!{@1, @2}`
+    -- otherwise acts as an anchor, i.e. `@` when used as a node-location
+    ExcludingNIDs (Set NID)
   | -- | backlink-ify. traversing Backwards (Literal t) traverses the backlink
     -- (Literal t) instead, likewise for Wild. It inverts the order of paths and
     -- has no effect on node-location specifying path components or
@@ -153,6 +162,7 @@ handleDirectivesWith interpretDirective = \case
   RegexMatch r -> pure (RegexMatch r)
   Literal x -> pure (Literal x)
   Absolute nid -> pure (Absolute nid)
+  ExcludingNIDs nids -> pure (ExcludingNIDs nids)
   Backwards' p ->
     Backwards' <$> traverse (handleDirectivesWith interpretDirective) p
   l ::/ r ->
@@ -182,6 +192,7 @@ handleDirectivesQ interpretDirective = \case
   RegexMatch r -> [|RegexMatch r|]
   Literal x -> [|Literal x|]
   Absolute nid -> [|Absolute nid|]
+  ExcludingNIDs nids -> [|ExcludingNIDs nids|]
   Backwards' (Identity p) ->
     [|Backwards' (Identity $(handleDirectivesQ interpretDirective p))|]
   Identity l ::/ Identity r ->
@@ -228,6 +239,9 @@ showsPath _ _ Wild = showString "*"
 showsPath _ _ (Literal x) = shows x
 showsPath _ _ (RegexMatch r) = shows r
 showsPath _ _ (Absolute nid) = shows nid
+showsPath _ _ (ExcludingNIDs nids) =
+  let commaSep = intercalate "," $ mapSet show nids
+   in showString "!{" . showString commaSep . showString "}"
 showsPath showF d (Backwards' p) =
   showParen (d > 8) $ showString "~" . showF 8 p
 showsPath showF d (l ::/ r) =

@@ -21,6 +21,16 @@ spec_normalizePath = describe "normalizePath" do
   "foo" `normalizesTo` "[foo]"
   "*" `normalizesTo` "[*]"
 
+  -- merging anchors
+  "@ & @" `normalizesTo` "@"
+  "@1 & @" `normalizesTo` "@1"
+  "@ & @1" `normalizesTo` "@1"
+  "@1 & @2" `normalizesTo` "%never"
+  "!{@1} & @2" `normalizesTo` "@2"
+  "!{@1, @2} & @2" `normalizesTo` "%never"
+  "!{@1, @2} & @" `normalizesTo` "!{@1, @2}"
+  "!{@1, @2} & !{@3, @4}" `normalizesTo` "!{@1, @2, @3, @4}"
+
   -- Union tests
   "foo + bar" `normalizesTo` "[foo] + [bar]"
   "@ + foo" `normalizesTo` "@ + [foo]"
@@ -61,9 +71,9 @@ spec_normalizePath = describe "normalizePath" do
   "@1/foo & @1/bar/@2" `normalizesTo` "[@1<foo & @1<bar]>@2"
   "baz/(@/foo & @1/bar)" `normalizesTo` "[baz/@1|(foo & bar)]"
   "foo/@/(@/bar & @2/baz)" `normalizesTo` "[foo/@2|(bar & baz)]"
-  "@1 & @2" `normalizesTo` "!"
-  "foo & !" `normalizesTo` "!"
-  "! + foo" `normalizesTo` "[foo]"
+  "@1 & @2" `normalizesTo` "%never"
+  "foo & %never" `normalizesTo` "%never"
+  "%never + foo" `normalizesTo` "[foo]"
 
   -- nested rooted paths
   "(@1/a & @2/b)/@/(c & d)" `normalizesTo` "[[@1<a & @2<b]>@<(c & d)]"

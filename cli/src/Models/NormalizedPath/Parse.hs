@@ -17,7 +17,7 @@ pNormalizedPath' :: (Ord t) => Parser NID -> Parser t -> Parser (NormalizedPath 
 pNormalizedPath' pNID pTransition =
   fmap (NormalizedPath . setFromList) $
     (pDeterministicPath pNID pTransition `sepBy1` symbol "+")
-      <|> (symbol "!" $> [])
+      <|> (symbol "%never" $> [])
 
 -- | Parse a normalized path term (atom)
 pNormalizedPath :: (Ord t) => Parser t -> Parser (NormalizedPath Anchor t)
@@ -87,11 +87,16 @@ pRootedBranchSet pNID pTransition =
   where
     pMultiple = parens (pBranch pNID pTransition `sepBy1` symbol "&")
 
--- | Parse explicit anchor: "@", "@nid"
+-- | Parse explicit anchor: "@", "@nid", "!{@nid, @nid2, ...}"
 pExplicitAnchor :: Parser NID -> Parser Anchor
 pExplicitAnchor pNID =
   label "explicit anchor" $
-    try (Specific <$> pNID) <|> (symbol "@" $> JoinPoint)
+    try (Specific <$> pNID)
+      <|> between
+        (symbol "!{")
+        (symbol "}")
+        (JoinPoint . setFromList <$> pNID `sepEndBy1` symbol ",")
+      <|> (symbol "@" $> JoinPoint mempty)
 
 -- | Parse root branches: "@<branches & @nid<branches & ..."
 pRootBranches ::

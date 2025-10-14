@@ -68,7 +68,9 @@ materializeNPath firstNid normalizedPath = do
         FSpecific fnid
           | not isRoot && nid /= fnid -> returnEarly []
           | otherwise -> pure fnid
-        FJoinPoint -> pure nid
+        FJoinPoint {..}
+          | nid `notMember` excluding -> pure nid
+          | otherwise -> returnEarly []
       loops' <- traverseBranches nid' loops
       pure $
         loops'

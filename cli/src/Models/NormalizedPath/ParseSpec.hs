@@ -17,12 +17,15 @@ test_pNormalizedPath =
       "[~a]" `parsesTo` singletonBranch (DPIncoming (DPLiteral "a")),
       "[~*]" `parsesTo` singletonBranch (DPIncoming DPWild),
       -- PointlikeDeterministicPath
-      "@" `parsesTo` singletonPointlike (PointlikeDeterministicPath JoinPoint mempty),
+      "@" `parsesTo` singletonPointlike (PointlikeDeterministicPath (JoinPoint mempty) mempty),
       "@1" `parsesTo` singletonPointlike (PointlikeDeterministicPath (Specific (smallNID 1)) mempty),
-      "@[a]" `parsesTo` singletonPointlike (PointlikeDeterministicPath JoinPoint (singletonSet (DPOutgoing (DPLiteral "a")))),
-      "@[~a]" `parsesTo` singletonPointlike (PointlikeDeterministicPath JoinPoint (singletonSet (DPIncoming (DPLiteral "a")))),
-      "@[a & *]" `parsesTo` singletonPointlike (PointlikeDeterministicPath JoinPoint (setFromList [DPOutgoing (DPLiteral "a"), DPOutgoing DPWild])),
-      "@[a & ~*]" `parsesTo` singletonPointlike (PointlikeDeterministicPath JoinPoint (setFromList [DPOutgoing (DPLiteral "a"), DPIncoming DPWild])),
+      "!{@1}" `parsesTo` NormalizedPath (setFromList [Pointlike (PointlikeDeterministicPath (JoinPoint (setFromList [smallNID 1])) mempty)]),
+      "!{@1,@2}" `parsesTo` NormalizedPath (setFromList [Pointlike (PointlikeDeterministicPath (JoinPoint (setFromList [smallNID 1, smallNID 2])) mempty)]),
+      "!{@1, @2,}" `parsesTo` NormalizedPath (setFromList [Pointlike (PointlikeDeterministicPath (JoinPoint (setFromList [smallNID 1, smallNID 2])) mempty)]),
+      "@[a]" `parsesTo` singletonPointlike (PointlikeDeterministicPath (JoinPoint mempty) (singletonSet (DPOutgoing (DPLiteral "a")))),
+      "@[~a]" `parsesTo` singletonPointlike (PointlikeDeterministicPath (JoinPoint mempty) (singletonSet (DPIncoming (DPLiteral "a")))),
+      "@[a & *]" `parsesTo` singletonPointlike (PointlikeDeterministicPath (JoinPoint mempty) (setFromList [DPOutgoing (DPLiteral "a"), DPOutgoing DPWild])),
+      "@[a & ~*]" `parsesTo` singletonPointlike (PointlikeDeterministicPath (JoinPoint mempty) (setFromList [DPOutgoing (DPLiteral "a"), DPIncoming DPWild])),
       "@1[a]" `parsesTo` singletonPointlike (PointlikeDeterministicPath (Specific (smallNID 1)) (singletonSet (DPOutgoing (DPLiteral "a")))),
       "@42[a & b]" `parsesTo` singletonPointlike (PointlikeDeterministicPath (Specific (smallNID 42)) (setFromList [DPOutgoing (DPLiteral "a"), DPOutgoing (DPLiteral "b")])),
       -- sequences
@@ -54,7 +57,7 @@ test_pNormalizedPath =
         `parsesTo` singletonRooted
           ( RootedDeterministicPath
               ( mapFromList
-                  [ (Pointlike $ PointlikeDeterministicPath JoinPoint (singletonSet (DPOutgoing DPWild)), singletonSet (DPOutgoing (DPLiteral "a"))),
+                  [ (Pointlike $ PointlikeDeterministicPath (JoinPoint mempty) (singletonSet (DPOutgoing DPWild)), singletonSet (DPOutgoing (DPLiteral "a"))),
                     (Pointlike unanchored, singletonSet (DPOutgoing (DPLiteral "b")))
                   ]
               )
@@ -65,7 +68,7 @@ test_pNormalizedPath =
         `parsesTo` singletonRooted
           ( RootedDeterministicPath
               ( mapFromList
-                  [ (Pointlike $ PointlikeDeterministicPath JoinPoint (singletonSet (DPOutgoing DPWild)), singletonSet (DPOutgoing (DPLiteral "a"))),
+                  [ (Pointlike $ PointlikeDeterministicPath (JoinPoint mempty) (singletonSet (DPOutgoing DPWild)), singletonSet (DPOutgoing (DPLiteral "a"))),
                     (Pointlike unanchored, singletonSet (DPOutgoing (DPLiteral "b")))
                   ]
               )
@@ -79,7 +82,7 @@ test_pNormalizedPath =
           ),
       "[a] + [b]" `parsesTo` branches [DPOutgoing (DPLiteral "a"), DPOutgoing (DPLiteral "b")],
       "[a] + [b] + [c]" `parsesTo` branches [DPOutgoing (DPLiteral "a"), DPOutgoing (DPLiteral "b"), DPOutgoing (DPLiteral "c")],
-      "!" `parsesTo` NormalizedPath mempty,
+      "%never" `parsesTo` NormalizedPath mempty,
       "@ + [a]"
         `parsesTo` NormalizedPath
           ( setFromList
@@ -118,12 +121,12 @@ test_pNormalizedPath =
       parseFails "a"
     ]
   where
-    parsesTo :: Text -> NormalizedPath Anchor String -> TestTree
+    parsesTo :: (HasCallStack) => Text -> NormalizedPath Anchor String -> TestTree
     parsesTo input expected =
       testCase ("parse: " ++ show input) $
         testParserParses (pNormalizedPath transition <* eof) input expected
 
-    parseFails :: Text -> TestTree
+    parseFails :: (HasCallStack) => Text -> TestTree
     parseFails input =
       testCase ("parse fails: " ++ show input) $
         testParserFails (pNormalizedPath transition <* eof) input
@@ -139,7 +142,7 @@ branches :: [DPBranch Anchor String] -> NormalizedPath Anchor String
 branches bs =
   NormalizedPath . setFromList $
     [ Rooted (RootedDeterministicPath (singletonMap (Pointlike unanchored) (singletonSet b)) unanchored)
-    | b <- bs
+      | b <- bs
     ]
 
 singletonPointlike :: PointlikeDeterministicPath Anchor String -> NormalizedPath Anchor String

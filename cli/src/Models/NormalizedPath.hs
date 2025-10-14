@@ -8,11 +8,16 @@ import Models.NID
 import Models.Path.Simple
 import MyPrelude
 
-data Anchor = Unanchored | JoinPoint | Specific NID
+data Anchor
+  = Unanchored
+  | JoinPoint {excluding :: Set NID}
+  | Specific NID
   deriving stock (Eq, Ord, Show, Generic, Lift)
   deriving anyclass (NFData)
 
-data FullyAnchored = FJoinPoint | FSpecific NID
+data FullyAnchored
+  = FJoinPoint {excluding :: Set NID}
+  | FSpecific NID
   deriving stock (Eq, Ord, Show, Generic, Lift)
   deriving anyclass (NFData)
 
@@ -56,7 +61,7 @@ unanchored :: (Ord t) => PointlikeDeterministicPath Anchor t
 unanchored = PointlikeDeterministicPath Unanchored mempty
 
 joinPoint :: (Ord t) => PointlikeDeterministicPath Anchor t
-joinPoint = PointlikeDeterministicPath JoinPoint mempty
+joinPoint = PointlikeDeterministicPath (JoinPoint mempty) mempty
 
 specific :: (Ord t) => NID -> PointlikeDeterministicPath Anchor t
 specific nid = PointlikeDeterministicPath (Specific nid) mempty
@@ -105,7 +110,7 @@ pointify (branchify -> (roots, branches, target)) = do
   Just
     protoPoint
       { loops = protoPoint.loops <> branches,
-        anchor = fromJustEx $ mergeAnchor JoinPoint protoPoint.anchor
+        anchor = fromJustEx $ mergeAnchor (JoinPoint mempty) protoPoint.anchor
       }
 
 -- | Split the root off each Rooted key in the rootBranches and convert the
@@ -184,9 +189,14 @@ intersectDeterministicPaths (Pointlike p1) (Rooted (pointify -> maybeP2)) = do
 mergeAnchor :: Anchor -> Anchor -> Maybe Anchor
 mergeAnchor Unanchored a = Just a
 mergeAnchor a Unanchored = Just a
-mergeAnchor JoinPoint (Specific nid) = Just (Specific nid)
-mergeAnchor (Specific nid) JoinPoint = Just (Specific nid)
-mergeAnchor JoinPoint JoinPoint = Just JoinPoint
+mergeAnchor JoinPoint {..} (Specific nid)
+  | nid `notMember` excluding = Just (Specific nid)
+  | otherwise = Nothing
+mergeAnchor (Specific nid) JoinPoint {..}
+  | nid `notMember` excluding = Just (Specific nid)
+  | otherwise = Nothing
+mergeAnchor JoinPoint {excluding = e1} JoinPoint {excluding = e2} =
+  Just $ JoinPoint (e1 `union` e2)
 mergeAnchor (Specific nid1) (Specific nid2)
   | nid1 == nid2 = Just (Specific nid1)
   | otherwise = Nothing
@@ -356,6 +366,9 @@ normalizePath = \case
     NormalizedPath . singletonSet . Pointlike $ joinPoint
   Absolute nid ->
     NormalizedPath . singletonSet . Pointlike $ specific nid
+  ExcludingNIDs nids ->
+    NormalizedPath . singletonSet . Pointlike $
+      PointlikeDeterministicPath (JoinPoint nids) mempty
   Wild ->
     NormalizedPath . singletonSet . Rooted $
       smartBuildRootedDeterministicPath
@@ -457,7 +470,7 @@ leastConstrainedNormalizedPath =
                         ( singletonSet $
                             smartBuildSequence
                               (singletonSet b1)
-                              (PointlikeDeterministicPath FJoinPoint mempty)
+                              (PointlikeDeterministicPath (FJoinPoint mempty) mempty)
                               (singletonSet b2)
                         )
                   )
@@ -468,8 +481,8 @@ leastConstrainedNormalizedPath =
             (unions $ mapOSet convertBranch bs)
 
     convertAnchor = \case
-      Unanchored -> FJoinPoint
-      JoinPoint -> FJoinPoint
+      Unanchored -> FJoinPoint mempty
+      JoinPoint {..} -> FJoinPoint {..}
       Specific nid -> FSpecific nid
 
     convertPointlike (PointlikeDeterministicPath Unanchored (toList -> (_ : _))) =
@@ -535,8 +548,8 @@ leastNodesNormalizedPath =
         (mapOSet convertBranch loops)
 
     convertAnchor = \case
-      Unanchored -> FJoinPoint
-      JoinPoint -> FJoinPoint
+      Unanchored -> FJoinPoint mempty
+      JoinPoint {..} -> FJoinPoint {..}
       Specific nid -> FSpecific nid
 
     convertBranch :: (HasCallStack) => DPBranch Anchor t -> DPBranch FullyAnchored t

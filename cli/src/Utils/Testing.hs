@@ -98,7 +98,8 @@ stronglyConnectedGraph :: [Int] -> Graph () ()
 stronglyConnectedGraph nids =
   disconnectedGraph nids & insertEdges (uncurry edge <$> allAnyOrderPairs nids)
 
-parseForTest :: String -> Parser a -> Text -> IO a
+parseForTest ::
+  (HasCallStack) => String -> Parser a -> Text -> IO a
 parseForTest whatToParse parser input =
   case runParser (parser <* eof) ("<" <> whatToParse <> ">") input of
     Left err -> do
@@ -106,14 +107,18 @@ parseForTest whatToParse parser input =
       error "unreachable"
     Right result -> pure result
 
-testParserParses :: (Eq a, Show a) => Parser a -> Text -> a -> Assertion
+testParserParses ::
+  (Eq a, Show a, HasCallStack) => Parser a -> Text -> a -> Assertion
 testParserParses parser string expected =
   case runParserTest parser string of
     Right actual -> actual @=? expected
     Left err -> assertFailure $ "expected: " ++ show expected ++ "\nbut parser failed with:\n" ++ errorBundlePretty err
 
-testParserFails :: (Eq a, Show a) => Parser a -> Text -> Assertion
+testParserFails ::
+  (Eq a, Show a, HasCallStack) => Parser a -> Text -> Assertion
 testParserFails parser string =
   case runParserTest parser string of
-    Right x -> assertFailure $ "expected parser to fail, but it succeeded producing: " ++ show x
+    Right x ->
+      assertFailure $
+        "expected parser to fail, but it succeeded producing: " ++ show x
     Left _ -> pure ()
