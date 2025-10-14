@@ -170,17 +170,6 @@ runGraphMetadataEditing = interpret \case
 
 type GraphWithEdits = Graph Text (Bundled [NodeEdits Text, IsThin])
 
--- | This is very cool, but what if we just cache at the FileSystemOperations
--- level instead of caching here where it's much more difficult to reconcile
--- changes after the fact? Downside: this would mean keeping in memory the
--- the parsed representations of all nodes that have been read, but this is
--- essentially done when we cache the entire graph anyways I think
---
--- Doing this would also make it a bit easier to stat files before reading them
--- to reduce redundant reads
---
--- It does probably make concurrent reading/writing a bit more difficult in
--- practice, but I haven't implemented this yet anyways
 cachingGraphMetadataEditingInState ::
   forall r a.
   ( Member GraphMetadataFilesystemOperations r,
