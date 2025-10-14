@@ -4,6 +4,9 @@ module MyPrelude
     unconsumed,
     traceWith,
     traceShowWith,
+    traceMarkerM,
+    traceMarker,
+    traceMarkerIO,
     nonNull,
     minOn,
     maxOn,
@@ -58,6 +61,19 @@ traceWith f a = Debug.Trace.trace (unpack (f a)) a
 traceShowWith :: (Show b) => (a -> b) -> a -> a
 traceShowWith = traceWith . (tshow .)
 {-# WARNING traceShowWith "Don't leave traces in code" #-}
+
+traceMarkerM :: (Applicative m) => String -> m ()
+traceMarkerM marker = Debug.Trace.traceMarker marker $ pure ()
+{-# NOINLINE traceMarkerM #-}
+{-# WARNING traceMarkerM "Don't leave traces in code" #-}
+
+traceMarker :: String -> a -> a
+traceMarker = Debug.Trace.traceMarker
+{-# WARNING traceMarker "Don't leave traces in code" #-}
+
+traceMarkerIO :: String -> IO ()
+traceMarkerIO = Debug.Trace.traceMarkerIO
+{-# WARNING traceMarkerIO "Don't leave traces in code" #-}
 
 nonNull ::
   (MonoFoldable mono, MonoFoldable mono') =>
