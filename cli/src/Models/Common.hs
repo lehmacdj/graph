@@ -50,6 +50,15 @@ class CompactNodeShow n where
   minimumNidLength :: CompactNodeShowSettings a -> n -> Int
   nshowSettings :: CompactNodeShowSettings (Augmentation n) -> n -> Text
 
+instance (CompactNodeShow a) => CompactNodeShow (Maybe a) where
+  type Augmentation (Maybe a) = Augmentation a
+  minimumNidLength settings = \case
+    Nothing -> 0
+    Just x -> minimumNidLength settings x
+  nshowSettings settings = \case
+    Nothing -> "Nothing"
+    Just x -> "Just " <> nshowSettings settings x
+
 class ShowableAugmentation a where
   augmentationProperties :: a -> [(Maybe Text, Text)]
 

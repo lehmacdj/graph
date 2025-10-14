@@ -203,7 +203,7 @@ cachingGraphMetadataEditingInState = interpret \case
     let cached' = fromMaybe (emptyNode nid) cached
         n' =
           n
-            <&> applyEdits cached'.augmentation.edits
+            <&> applyEditsPreservingDeleted cached'.augmentation.edits
               . ($> (cached'.augmentation & lensA @IsThin .~ Fetched))
     modify' @GraphWithEdits $ at nid .~ n'
     pure $! void <$> n'
@@ -301,19 +301,18 @@ runGraphMetadataEditingTransactionally ::
   Sem r a
 runGraphMetadataEditingTransactionally action = do
   let applyGraphDiff (nonExistent, (asLoaded, (Graph nodeMap, result))) = do
-        let changes :: Map NID (Maybe (Node Text ()))
-            changes = flip Map.mapMaybeWithKey nodeMap \nid node ->
+        let allChanges = flip Map.mapMaybeWithKey nodeMap \nid node ->
               -- the node or Nothing if it should be deleted
               let deleted = justIfTrue (nid `notMember` nonExistent) (void node)
                in -- we only need to edit the nodes that actually changed
                   -- this is any node with non-null edits that is different from
                   -- how it was when we loaded it
                   justIfTrue
-                    ( not (null node.augmentation.edits)
-                        && Just deleted /= asLoaded ^. at nid
+                    (not (null node.augmentation.edits))
+                    ( node ^. #augmentation . lensA @(NodeEdits Text),
+                      Just deleted
                     )
-                    deleted
-        writeGraphDiff asLoaded changes
+        writeGraphDiff asLoaded (fst <$> allChanges) (snd <$> allChanges)
         pure result
   action
     & raiseUnder3

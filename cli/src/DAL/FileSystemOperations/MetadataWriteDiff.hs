@@ -8,6 +8,7 @@ import DAL.Interpreters
 import DAL.RawGraph
 import Error.Missing
 import Error.UserError
+import Models.Augmentation.NodeEdits
 import Models.NID
 import Models.Node
 import MyPrelude
@@ -20,7 +21,12 @@ data GraphMetadataFilesystemOperationsWriteDiff m a where
     Map NID (Maybe (Node Text ())) ->
     -- | Changes that need to be written to the underlying filesystem, if a
     -- node is Nothing it should be deleted
-    Map NID (Maybe (Node Text ())) ->
+    Map NID (NodeEdits Text) ->
+    -- | Debug only parameter that indicates the data we expect to be written
+    -- Since we read the node from the filesystem and then apply edits when
+    -- writing the diff the two should be identical.
+    -- Nothing indicates that the node should be deleted
+    Map NID (Maybe (Maybe (Node Text ()))) ->
     GraphMetadataFilesystemOperationsWriteDiff m ()
 
 makeSem ''GraphMetadataFilesystemOperationsWriteDiff
@@ -31,20 +37,21 @@ writeGraphDiff_ ::
   (FilePath -> Node Text () -> Sem RawGraphUserErrorIO ()) ->
   (FilePath -> Sem RawGraphUserErrorIO ()) ->
   Map NID (Maybe (Node Text ())) ->
-  Map NID (Maybe (Node Text ())) ->
+  Map NID (NodeEdits Text) ->
+  Map NID (Maybe (Maybe (Node Text ()))) ->
   Sem r ()
 writeGraphDiff_
   readNodeMetadata'
   writeNodeMetadata'
   deleteNodeMetadata'
   (force -> asLoaded)
-  (force -> changes) = do
-    writingPaths <-
-      ifor changes \nid _ -> getMetadataFile nid <&> (,False)
-    readingPaths <-
-      -- we need to read every node we write to, plus any node that was loaded
-      -- to check that nothing changed since we started the transaction
-      ifor (changes <> asLoaded) \nid _ -> getMetadataFile nid <&> (,False)
+  (force -> changes)
+  changedNodes = do
+    writingPaths <- ifor changes \nid _ -> getMetadataFile nid <&> (,False)
+    -- we need to read every node we write to, plus any node that was loaded
+    -- to check that nothing changed since we started the transaction
+    let nodesToRead = mapFromSet $ keysSet changes <> keysSet asLoaded
+    readingPaths <- ifor nodesToRead \nid _ -> getMetadataFile nid <&> (,False)
     let blanketReadingOptions = defaultReadingOptions
         blanketWritingOptions = defaultWritingOptions
     withUnliftIORawGraphUserError \(UnliftIO unliftIO) ->
@@ -75,13 +82,31 @@ writeGraphDiff_
               ++ tshow notUpToDateNids
         let upToDateNodes = map (unwrapEx "node exists due to above check") upToDateNodes'
         ipooledForConcurrentlyN_ 300 writingPaths \nid _ -> do
-          let upToDateNode =
+          let upToDateNode :: Maybe (Node Text ())
+              upToDateNode =
                 unwrapEx "upToDateNode exists for nodes we are writing" $
                   upToDateNodes ^. at nid
+          let nodeChanges :: Seq (NodeEdit Text)
+              nodeChanges =
+                unwrapEx "changes exists for nodes we are writing" $
+                  changes ^? ix nid . #edits
           let changedNode =
-                unwrapEx "changedNode exists for nodes we are writing" $
-                  changes ^. at nid
+                applyEditsCreatingNonExistent nodeChanges nid upToDateNode
+              expectedChangedNode = changedNodes ^. at nid
           case (upToDateNode, changedNode) of
+            (_, _)
+              | isNothing expectedChangedNode || Just (Just changedNode) /= expectedChangedNode ->
+                  let nshowIncoming :: (CompactNodeShow n) => n -> String
+                      nshowIncoming =
+                        unpack . nshowWith (\s -> s {showIncoming = True})
+                   in error . unlines $
+                        [ "applying changes to node from disk "
+                            <> "did not yield expected result!",
+                          "expected:\n" <> nshowIncoming expectedChangedNode,
+                          "read from disk:\n" <> nshowIncoming upToDateNode,
+                          "changes to apply:\n" <> show nodeChanges,
+                          "after applying changes:\n" <> nshowIncoming changedNode
+                        ]
             (Just _, Nothing) ->
               withWriting nid defaultWritingOptions {forDeleting = True} $
                 unliftIO . deleteNodeMetadata'
@@ -104,23 +129,25 @@ runGraphMetadataFilesystemOperationsWriteDiffIO ::
   Sem (GraphMetadataFilesystemOperationsWriteDiff ': effs) a ->
   Sem effs a
 runGraphMetadataFilesystemOperationsWriteDiffIO = interpret \case
-  WriteGraphDiff asLoaded changes ->
+  WriteGraphDiff asLoaded changes changedNodes ->
     writeGraphDiff_
       (readNodeMetadata_ False)
       (writeNodeMetadata_ False)
       (deleteNodeMetadata_ False)
       asLoaded
       changes
+      changedNodes
 
 runGraphMetadataFilesystemOperationsWriteDiffDryRun ::
   (Members [RawGraph, Embed IO, Error UserError] effs) =>
   Sem (GraphMetadataFilesystemOperationsWriteDiff ': effs) a ->
   Sem effs a
 runGraphMetadataFilesystemOperationsWriteDiffDryRun = interpret \case
-  WriteGraphDiff asLoaded changes -> do
+  WriteGraphDiff asLoaded changes changedNodes -> do
     writeGraphDiff_
       (readNodeMetadata_ False)
       (\path node -> say $ "would write: " <> tshow node <> " -> " <> tshow path)
       (\path -> say $ "would delete at path: " <> tshow path)
       asLoaded
       changes
+      changedNodes
