@@ -26,7 +26,7 @@ data GraphMetadataFilesystemOperationsWriteDiff m a where
     -- Since we read the node from the filesystem and then apply edits when
     -- writing the diff the two should be identical.
     -- Nothing indicates that the node should be deleted
-    Map NID (Maybe (Maybe (Node Text ()))) ->
+    Map NID (Maybe (Node Text ())) ->
     GraphMetadataFilesystemOperationsWriteDiff m ()
 
 makeSem ''GraphMetadataFilesystemOperationsWriteDiff
@@ -38,7 +38,7 @@ writeGraphDiff_ ::
   (FilePath -> Sem RawGraphUserErrorIO ()) ->
   Map NID (Maybe (Node Text ())) ->
   Map NID (NodeEdits Text) ->
-  Map NID (Maybe (Maybe (Node Text ()))) ->
+  Map NID (Maybe (Node Text ())) ->
   Sem r ()
 writeGraphDiff_
   readNodeMetadata'
@@ -93,9 +93,9 @@ writeGraphDiff_
           let changedNode =
                 applyEditsCreatingNonExistent nodeChanges nid upToDateNode
               expectedChangedNode = changedNodes ^. at nid
-          case (upToDateNode, changedNode) of
-            (_, _)
-              | isNothing expectedChangedNode || Just (Just changedNode) /= expectedChangedNode ->
+          case (upToDateNode, changedNode, expectedChangedNode) of
+            (_, _, Just expectedChangedNode')
+              | changedNode /= expectedChangedNode' ->
                   let nshowIncoming :: (CompactNodeShow n) => n -> String
                       nshowIncoming =
                         unpack . nshowWith (\s -> s {showIncoming = True})
@@ -103,24 +103,24 @@ writeGraphDiff_
                         [ "applying changes to node from disk "
                             <> "did not yield expected result!",
                           "expected:\n" <> nshowIncoming expectedChangedNode,
-                          "read from disk:\n" <> nshowIncoming upToDateNode,
                           "changes to apply:\n" <> show nodeChanges,
+                          "read from disk:\n" <> nshowIncoming upToDateNode,
                           "after applying changes:\n" <> nshowIncoming changedNode
                         ]
-            (Just _, Nothing) ->
+            (Just _, Nothing, _) ->
               withWriting nid defaultWritingOptions {forDeleting = True} $
                 unliftIO . deleteNodeMetadata'
-            (Nothing, Just node) ->
+            (Nothing, Just node, _) ->
               withWriting nid defaultWritingOptions $ \path ->
                 unliftIO $ writeNodeMetadata' path node
-            (Just upToDateNode', Just changedNode')
+            (Just upToDateNode', Just changedNode', _)
               | upToDateNode' /= changedNode' ->
                   withWriting nid defaultWritingOptions \path ->
                     unliftIO $ writeNodeMetadata' path changedNode'
               | otherwise ->
                   -- node didn't change
                   pure ()
-            (Nothing, Nothing) ->
+            (Nothing, Nothing, _) ->
               -- node never existed and still doesn't exist
               pure ()
 

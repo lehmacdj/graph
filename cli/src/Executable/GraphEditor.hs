@@ -24,8 +24,8 @@ import Models.Command.Parse
 import Models.History
 import Models.NID
 import MyPrelude
-import Polysemy.Internal.Scoped (Scoped)
 import Polysemy.Readline
+import Polysemy.Scoped
 import Polysemy.State
 import System.Console.Haskeline qualified as H
 import System.Directory (createDirectoryIfMissing, doesDirectoryExist)
@@ -124,5 +124,5 @@ main = withOptions $ \options -> do
           then filesystemBehaviorIO
           else filesystemBehaviorDryRun
   runAppEffects printingErrorsAndWarnings timeBehavior filesystemBehavior env do
-    createSystemNodes
+    scoped_ createSystemNodes
     maybe repl interpretCommand (view #_executeExpression options)

@@ -310,9 +310,9 @@ runGraphMetadataEditingTransactionally action = do
                   justIfTrue
                     (not (null node.augmentation.edits))
                     ( node ^. #augmentation . lensA @(NodeEdits Text),
-                      Just deleted
+                      justIfTrue (has (ix nid) asLoaded) deleted
                     )
-        writeGraphDiff asLoaded (fst <$> allChanges) (snd <$> allChanges)
+        writeGraphDiff asLoaded (fst <$> allChanges) (Map.mapMaybe snd allChanges)
         pure result
   action
     & raiseUnder3

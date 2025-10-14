@@ -90,6 +90,7 @@ runGraphEditor test@GoldenTest {..} =
           [ "--test-only-nid-generation-seed",
             "0",
             "--test-only-monotonic-increasing-deterministic-time",
+            "--no-dry-run-writing",
             tmpGraph
           ]
           & setStdin (byteStringInput (fromStrict input))

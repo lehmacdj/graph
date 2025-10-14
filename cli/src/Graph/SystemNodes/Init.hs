@@ -3,13 +3,13 @@ module Graph.SystemNodes.Init
   )
 where
 
-import Graph.Effect
+import Graph.GraphMetadataEditing
 import Graph.SystemNodes
 import Models.Edge
 import Models.NID
 import MyPrelude
 
-createSystemNodes :: (HasGraph String effs) => Sem effs ()
+createSystemNodes :: (Member GraphMetadataEditing effs) => Sem effs ()
 createSystemNodes = do
   touchNode systemNodeNID
   touchNode nilNID
