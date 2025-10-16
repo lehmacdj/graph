@@ -62,6 +62,7 @@ import Control.Lens as X
     itraversed,
     ix,
     lens,
+    mapMOf,
     mapped,
     mapping,
     nearly,

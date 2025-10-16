@@ -1,13 +1,13 @@
 -- | Megaparsec support for parsing strings that make up paths.
 -- Generic over the custom error type, it doesn't throw any.
-module Models.Path.Parse
-  ( pPath,
-    pPath',
-    pathTerm,
-    test_pPath,
-    test_pDirective,
-  )
-where
+module Models.Path.Parse where
+
+-- ( pPath,
+--   pPath',
+--   pathTerm,
+--   test_pPath,
+--   test_pDirective,
+-- )
 
 import Control.Monad.Combinators.Expr
 import Data.Functor
@@ -48,9 +48,12 @@ pDirectiveNamed name = between (symbol ("%" <> name <> "(")) (symbol ")")
 
 pRegex :: Parser CheckedRegex
 pRegex = do
-  str <- symbol "re" *> stringLiteral
+  _ <- symbol "re"
+  str <-
+    between (char '"') (char '"') (takeWhileP Nothing (/= '"'))
+      <|> between (char '\'') (char '\'') (takeWhileP Nothing (/= '\''))
   str
-    & compileRegex . encodeUtf8 . pack
+    & compileRegex . encodeUtf8
     & codiagonal . bimap fail pure
 
 pathTerm :: Parser t -> Parser (ParsedPath t)
@@ -120,6 +123,18 @@ test_pPath =
       -- approximation of the pattern we use to detect paths
       "~*/%{Absolute nid}"
         `parsesTo` (Backwards Wild :/ Directive testAnn (Splice "Absolute nid")),
+      "re\"asdf\"" `parsesTo` RegexMatch [re|asdf|],
+      "re'asdf'" `parsesTo` RegexMatch [re|asdf|],
+      "re'\\.'" `parsesTo` RegexMatch [re|\.|],
+      "~re\"asdf\"" `parsesTo` Backwards (RegexMatch [re|asdf|]),
+      -- escape sequences need to not be interpreted in regexes
+      [rq|~re"\."|] `parsesTo` Backwards (RegexMatch [re|\.|]),
+      -- regression: caught this as an error while working on Graph.Timestamps
+      [rq|~re"[0-9]{2}:[0-9]{2}:[0-9]{2}\.[0-9]{12}"|]
+        `parsesTo` Backwards
+          (RegexMatch [re|[0-9]{2}:[0-9]{2}:[0-9]{2}\.[0-9]{12}|]),
+      [rq|%{excludedLargeSystemNodes}|]
+        `parsesTo` Directive testAnn (Splice "excludedLargeSystemNodes"),
       parseFails "foo/bar&",
       parseFails "foo/bar&+qux",
       parseFails "foo+",

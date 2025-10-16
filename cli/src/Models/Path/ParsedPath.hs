@@ -115,3 +115,10 @@ spec_showPath = describe "Show Path" $ do
   it "LocationFromHistory" $
     show (Directive testAnn (LocationFromHistory -23) :: TPath)
       `shouldBe` [rq|%history(-23)|]
+  it "complex" $
+    show
+      ( Backwards (RegexMatch [re|[0-9]{2}:[0-9]{2}:[0-9]{2}\.[0-9]{12}|])
+          :/ Directive testAnn (Splice "excludedLargeSystemNodes") ::
+          TPath
+      )
+      `shouldBe` [rq|~re"[0-9]{2}:[0-9]{2}:[0-9]{2}\.[0-9]{12}" / %{excludedLargeSystemNodes}|]

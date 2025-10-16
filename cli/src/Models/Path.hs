@@ -131,7 +131,7 @@ showsDirective ::
 showsDirective showsPath' = \case
   LocationFromHistory i -> showString "%history(" . shows i . showString ")"
   Targets p -> showString "%targets(" . showsPath' p . showString ")"
-  Splice expr -> showString "%{" . shows expr . showString "}"
+  Splice expr -> showString "%{" . showString expr . showString "}"
 
 instance
   (Show1 f, Path'Constraints Show 'WithDirectives f t) =>

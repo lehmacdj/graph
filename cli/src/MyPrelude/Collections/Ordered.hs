@@ -58,7 +58,7 @@ instance (Ord k, NFData k, NFData v) => NFData (OMap k v) where
   rnf = rnf . mapToList
 
 instance (Lift k, Lift v, Ord k) => Lift (OMap k v) where
-  liftTyped x = [||OMap.fromList (OMap.assocs x)||]
+  liftTyped x = [||OMap.fromList $$(liftTyped (OMap.assocs x))||]
 
 type instance Element (OMap k v) = v
 

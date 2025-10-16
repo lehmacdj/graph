@@ -47,7 +47,10 @@ instance NFData CheckedRegex where
       rnf (unsafeCoerce options :: [CInt])
 
 instance Show CheckedRegex where
-  show (UnsafeCheckedRegex p _ _) = "re" ++ show p
+  show (UnsafeCheckedRegex p _ _) =
+    -- we need to avoid escaping the backslashes pattern since we don't require
+    -- them when parsing
+    "re\"" ++ asString (unpack (decodeUtf8 p)) ++ "\""
 
 -- | Smart constructor that validates the regex pattern
 compileRegex :: ByteString -> Either String CheckedRegex
