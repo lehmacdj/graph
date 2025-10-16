@@ -2,6 +2,7 @@ module Models.Augmentation.Tags where
 
 import Graph.GraphMetadataEditing
 import Graph.MaterializePath
+import Graph.Paths
 import Graph.SystemNodes
 import Models.Common
 import Models.Edge
@@ -17,12 +18,6 @@ newtype Tags = Tags {tags :: Set Text}
 instance ShowableAugmentation Tags where
   augmentationProperties (Tags ts) =
     [(Just "tags", ("[" ++) . (++ "]") $ intercalate ", " (toList ts))]
-
--- | These system nodes can be fairly large and take a long-ish time to parse /
--- traverse so we explicitly include them from the tag traversal
-excludedLargeSystemNodes :: Path Text
-excludedLargeSystemNodes =
-  ExcludingNIDs $ setFromList [fileHashesNID, importUrlsNID, sequenceIDsNID]
 
 fetchTags ::
   (Members '[GraphMetadataReading] r) =>

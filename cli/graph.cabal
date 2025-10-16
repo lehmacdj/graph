@@ -63,6 +63,7 @@ library
       Graph.LegacyPathMaterializationSpec
       Graph.MaterializePath
       Graph.NodeLocated
+      Graph.Paths
       Graph.SystemNodes
       Graph.SystemNodes.Init
       Graph.Time
