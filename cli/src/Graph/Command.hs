@@ -26,7 +26,9 @@ import Graph.MaterializePath (materializeNPath)
 import Graph.NodeLocated
 import Graph.Time (taggingFreshNodesWithTime)
 import Graph.Utils
+import Models.Augmentation.Bundled
 import Models.Augmentation.Tags
+import Models.Augmentation.Timestamps
 import Models.Command
 import Models.Connect
 import Models.Edge
@@ -304,7 +306,9 @@ interpretCommand = \case
       --     sayShow $ subtractiveFilterGraph (\n -> n.augmentation == Fetched) mp.graph
       unless (null mp.nonexistentNodes) $
         say ("nonexistent nodes: " ++ tshow mp.nonexistentNodes)
-      targets <- traverse (getNodeWith fetchTags) (toList (getTargets mp.path))
+      targets <-
+        for (toList (getTargets mp.path)) $
+          getNodeWith (fetchTags #| fetchTimestamps)
       when (null targets) do
         say "no targets"
       for_ targets $ \n -> maybe (say $ tshow n ++ "did not exist") sayShow n

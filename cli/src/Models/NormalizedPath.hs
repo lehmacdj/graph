@@ -222,14 +222,14 @@ smartBuildSequence ::
   PointlikeDeterministicPath a t ->
   OSet (DPBranch a t) ->
   DPBranch a t
-smartBuildSequence bs1 midpoint bs2
-  | null bs1 || null bs2 =
+smartBuildSequence as1 midpoint bs2
+  | null as1 || null bs2 =
       error "invariant broken: both branch sets must be nonempty"
-  | otherwise = case toList bs1 of
+  | otherwise = case toList as1 of
       [DPSequence leftBs leftMid leftRightBs] ->
         DPSequence leftBs leftMid . singletonSet $
           smartBuildSequence leftRightBs midpoint bs2
-      _ -> DPSequence bs1 midpoint bs2
+      _ -> DPSequence as1 midpoint bs2
 
 smartBuildRootedDeterministicPath ::
   (HasCallStack, Ord t, Ord a) =>
@@ -291,9 +291,9 @@ invertBranch :: (Ord a, Ord t) => DPBranch a t -> DPBranch a t
 invertBranch = \case
   DPOutgoing trans -> DPIncoming trans
   DPIncoming trans -> DPOutgoing trans
-  DPSequence bs1 midpoint bs2 ->
+  DPSequence as1 midpoint bs2 ->
     DPSequence
-      (mapOSet invertBranch bs1)
+      (mapOSet invertBranch as1)
       (invertPointlike midpoint)
       (mapOSet invertBranch bs2)
 
@@ -301,20 +301,20 @@ flipBranch :: (Ord a, Ord t) => DPBranch a t -> DPBranch a t
 flipBranch = \case
   DPOutgoing trans -> DPOutgoing trans
   DPIncoming trans -> DPIncoming trans
-  DPSequence bs1 m12 bs23 ->
+  DPSequence as1 m12 bs23 ->
     case flipBranch <$> toList bs23 of
       [] -> error "invariant broken: both branch sets must be nonempty"
       [DPSequence bs2 m23 bs3] ->
         smartBuildSequence bs3 (invertPointlike m23) $
-          singletonSet (smartBuildSequence bs2 (invertPointlike m12) bs1)
-      xs -> smartBuildSequence (setFromList xs) (invertPointlike m12) bs1
+          singletonSet (smartBuildSequence bs2 (invertPointlike m12) as1)
+      xs -> smartBuildSequence (setFromList xs) (invertPointlike m12) as1
 
 backwardsCount :: DPBranch a t -> Int
 backwardsCount = \case
   DPOutgoing _ -> 0
   DPIncoming _ -> 1
-  DPSequence bs1 _ bs2 ->
-    alaf Sum foldMap backwardsCount bs1
+  DPSequence as1 _ bs2 ->
+    alaf Sum foldMap backwardsCount as1
       + alaf Sum foldMap backwardsCount bs2
 
 -- | There's two valid ways to flip a branch if it's the loop of a pointlike
@@ -499,8 +499,8 @@ leastConstrainedNormalizedPath =
     convertBranch = \case
       DPOutgoing t -> singletonSet $ DPOutgoing t
       DPIncoming t -> singletonSet $ DPIncoming t
-      DPSequence bs1 midpoint bs2 -> do
-        let bs1' = unions (mapOSet convertBranch bs1)
+      DPSequence as1 midpoint bs2 -> do
+        let as1' = unions (mapOSet convertBranch as1)
         let bs2' = unions (mapOSet convertBranch bs2)
         case midpoint.anchor of
           Unanchored
@@ -512,9 +512,9 @@ leastConstrainedNormalizedPath =
                         (convertPointlike joinPoint)
                         (singletonSet y)
                   )
-                  (bs1' `cartesianProductSet` bs2')
+                  (as1' `cartesianProductSet` bs2')
             | otherwise -> error "broken invariant: Unanchored path with loops"
-          _ -> singletonSet $ DPSequence bs1' (convertPointlike midpoint) bs2'
+          _ -> singletonSet $ DPSequence as1' (convertPointlike midpoint) bs2'
 
 -- | Assign one JoinPoint to each Unanchored anchor
 leastNodesNormalizedPath ::
@@ -522,42 +522,53 @@ leastNodesNormalizedPath ::
   (Ord t) =>
   NormalizedPath Anchor t ->
   NormalizedPath FullyAnchored t
-leastNodesNormalizedPath =
-  over (_Unwrapped . setmapped) convertDeterministicPath
+leastNodesNormalizedPath path =
+  runIdentity $ traverseAnchors (Identity . convertAnchor) path
   where
-    convertDeterministicPath = \case
-      Rooted p -> Rooted $ convertRooted p
-      Pointlike p -> Pointlike $ convertPointlike p
-
-    convertRooted ::
-      (HasCallStack) =>
-      RootedDeterministicPath Anchor t ->
-      RootedDeterministicPath FullyAnchored t
-    convertRooted (RootedDeterministicPath rootBranches target) =
-      smartBuildRootedDeterministicPath
-        ( mapKeysWith union convertDeterministicPath $
-            map (mapOSet convertBranch) rootBranches
-        )
-        (convertPointlike target)
-
-    convertPointlike (PointlikeDeterministicPath Unanchored (toList -> (_ : _))) =
-      error "broken invariant: Unanchored path with loops"
-    convertPointlike (PointlikeDeterministicPath anchor loops) =
-      PointlikeDeterministicPath
-        (convertAnchor anchor)
-        (mapOSet convertBranch loops)
-
+    convertAnchor :: Anchor -> FullyAnchored
     convertAnchor = \case
       Unanchored -> FJoinPoint mempty
       JoinPoint {..} -> FJoinPoint {..}
       Specific nid -> FSpecific nid
 
-    convertBranch :: (HasCallStack) => DPBranch Anchor t -> DPBranch FullyAnchored t
+traverseAnchors ::
+  forall f t a b.
+  (Applicative f, Ord t, Ord b, Ord a) =>
+  (a -> f b) ->
+  NormalizedPath a t ->
+  f (NormalizedPath b t)
+traverseAnchors f (NormalizedPath paths) =
+  NormalizedPath . setFromList <$> traverse convertDeterministicPath (toList paths)
+  where
+    convertDeterministicPath :: DeterministicPath a t -> f (DeterministicPath b t)
+    convertDeterministicPath = \case
+      Rooted p -> Rooted <$> convertRooted p
+      Pointlike p -> Pointlike <$> convertPointlike p
+
+    convertRooted :: RootedDeterministicPath a t -> f (RootedDeterministicPath b t)
+    convertRooted (RootedDeterministicPath rootBranches target) =
+      smartBuildRootedDeterministicPath . mapFromList
+        <$> traverse convertRootBranch (mapToList rootBranches)
+        <*> convertPointlike target
+      where
+        convertRootBranch :: (DeterministicPath a t, OSet (DPBranch a t)) -> f (DeterministicPath b t, OSet (DPBranch b t))
+        convertRootBranch (dp, branches) =
+          (,)
+            <$> convertDeterministicPath dp
+            <*> (setFromList <$> traverse convertBranch (toList branches))
+
+    convertPointlike :: PointlikeDeterministicPath a t -> f (PointlikeDeterministicPath b t)
+    convertPointlike (PointlikeDeterministicPath anchor loops) =
+      PointlikeDeterministicPath
+        <$> f anchor
+        <*> (setFromList <$> traverse convertBranch (toList loops))
+
+    convertBranch :: DPBranch a t -> f (DPBranch b t)
     convertBranch = \case
-      DPOutgoing t -> DPOutgoing t
-      DPIncoming t -> DPIncoming t
-      DPSequence bs1 midpoint bs2 ->
-        smartBuildSequence
-          (mapOSet convertBranch bs1)
-          (convertPointlike midpoint)
-          (mapOSet convertBranch bs2)
+      DPOutgoing t -> pure $ DPOutgoing t
+      DPIncoming t -> pure $ DPIncoming t
+      DPSequence as1 midpoint as2 ->
+        smartBuildSequence . setFromList
+          <$> traverse convertBranch (toList as1)
+          <*> convertPointlike midpoint
+          <*> (setFromList <$> traverse convertBranch (toList as2))

@@ -10,6 +10,13 @@ import Graph.Utils
 import MyPrelude
 import Polysemy.State
 
+-- | Parse a time from its components.
+timeFromDateStrings ::
+  (MonadFail m) => String -> String -> String -> String -> m UTCTime
+timeFromDateStrings year month day time =
+  parseTimeM True defaultTimeLocale "%Y%m%d%H:%M:%S.%q" $
+    concat [year, month, day, time]
+
 timeToDateStrings :: UTCTime -> NonNull [String]
 timeToDateStrings time =
   impureNonNull
