@@ -102,8 +102,8 @@ graphDirInitialization graphDir options = do
       unlessM (doesNodeExist graphDir nilNID) $
         error "couldn't find origin node in graph "
 
-main :: IO ()
-main = withOptions $ \options -> do
+geMain :: IO ()
+geMain = withOptions $ \options -> do
   let graphDir = view #_graphLocation options
   graphDirInitialization graphDir options
   nidGenerator <-
