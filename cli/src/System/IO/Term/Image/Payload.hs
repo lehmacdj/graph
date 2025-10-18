@@ -3,7 +3,6 @@
 --    https://iterm2.com/documentation-images.html
 module System.IO.Term.Image.Payload where
 
-import Control.Lens
 import Control.Monad.State
 import Data.ByteString.Base64.Lazy
 import Data.ByteString.Builder
@@ -29,43 +28,43 @@ instance BinarySerialize Dimension where
 
 data PayloadArgs = PayloadArgs
   { -- | needs to be base 64 encoded
-    _payloadArgsFilename :: Maybe FilePath,
+    payloadArgsFilename :: Maybe FilePath,
     -- | size in bytes
-    _payloadArgsSize :: Maybe Int,
-    _payloadArgsWidth :: Dimension,
-    _payloadArgsHeight :: Dimension,
+    payloadArgsSize :: Maybe Int,
+    payloadArgsWidth :: Dimension,
+    payloadArgsHeight :: Dimension,
     -- | default true, {1, 0} encoding
-    _payloadArgsPreserveAspectRatio :: Bool,
+    payloadArgsPreserveAspectRatio :: Bool,
     -- | should the image be inlined, default true {1, 0}
-    _payloadArgsInline :: Bool
+    payloadArgsInline :: Bool
   }
   deriving (Show, Eq, Ord, Generic)
 
 instance BinarySerialize PayloadArgs where
   intoBuilder a = (`execState` "") $ do
     withJust
-      (view #_payloadArgsFilename a)
+      a.payloadArgsFilename
       ( \x ->
           modify (<> ("name=" <> fnEncode x <> ";"))
       )
     withJust
-      (view #_payloadArgsSize a)
+      a.payloadArgsSize
       ( \x ->
           modify (<> ("size=" <> fromString (show x) <> ";"))
       )
-    modify (<> ("width=" <> intoBuilder (view #_payloadArgsWidth a) <> ";"))
-    modify (<> ("height=" <> intoBuilder (view #_payloadArgsHeight a) <> ";"))
-    modify (<> ("preserveAspectRatio=" <> bEncode (view #_payloadArgsPreserveAspectRatio a) <> ";"))
-    modify (<> ("inline=" <> bEncode (view #_payloadArgsInline a)))
+    modify (<> ("width=" <> intoBuilder a.payloadArgsWidth <> ";"))
+    modify (<> ("height=" <> intoBuilder a.payloadArgsHeight <> ";"))
+    modify (<> ("preserveAspectRatio=" <> bEncode a.payloadArgsPreserveAspectRatio <> ";"))
+    modify (<> ("inline=" <> bEncode a.payloadArgsInline))
     where
       fnEncode = lazyByteString . encode . fromString
       bEncode True = "1"
       bEncode False = "0"
 
 data Payload = Payload
-  { _payloadArgs :: PayloadArgs,
+  { payloadArgs :: PayloadArgs,
     -- | needs to be base 64 encoded
-    _payloadData :: LByteString
+    payloadData :: LByteString
   }
   deriving (Show, Eq, Ord, Generic)
 
@@ -76,8 +75,8 @@ instance BinarySerialize Payload where
       <> "1337"
       <> ";"
       <> "File=["
-      <> intoBuilder (view #_payloadArgs p)
+      <> intoBuilder p.payloadArgs
       <> "]"
       <> ":"
-      <> lazyByteString (encode (view #_payloadData p))
+      <> lazyByteString (encode p.payloadData)
       <> charUtf8 '\x07'

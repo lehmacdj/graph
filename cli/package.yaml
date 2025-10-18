@@ -68,6 +68,8 @@ dependencies:
 - polysemy-plugin
 - polysemy-readline
 - polysemy-zoo
+- prettyprinter
+- prettyprinter-ansi-terminal
 - profunctors
 - random
 - random-shuffle

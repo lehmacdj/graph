@@ -1,6 +1,5 @@
 module Executable.GraphEditor where
 
-import Control.Lens hiding (index)
 import Control.Monad.Fix
 import DAL.RawGraph
 import DAL.Serialization (doesNodeExist, initializeGraph)
@@ -86,7 +85,7 @@ repl = handleInterrupt repl $ withInterrupt do
 graphDirInitialization :: FilePath -> Options -> IO ()
 graphDirInitialization graphDir options = do
   graphDirExists <- doesDirectoryExist graphDir
-  if view #_createNew options
+  if options.createNew
     then
       if graphDirExists
         then
@@ -104,25 +103,27 @@ graphDirInitialization graphDir options = do
 
 geMain :: IO ()
 geMain = withOptions $ \options -> do
-  let graphDir = view #_graphLocation options
+  let graphDir = options.graphLocation
   graphDirInitialization graphDir options
   nidGenerator <-
-    maybe initStdGen (pure . mkStdGen) $
-      options ^. #_testOnlyNidGenerationSeed
+    maybe
+      initStdGen
+      (pure . mkStdGen)
+      options.testOnlyNidGenerationSeed
   -- because we need the Env for the repl's completionFunction this is pretty
   -- fancy and uses mfix to tie the knot; it would probably be a better idea to
   -- break the cycle somehow to make this easier to reason about
   env <- mfix (initEnv graphDir nidGenerator <=< defReplSettings)
   let timeBehavior :: (Member (Embed IO) effs) => Sem (GetTime : effs) ~> Sem effs
       timeBehavior
-        | options ^. #_testOnlyMonotonicIncreasingDeterministicTime =
+        | options.testOnlyMonotonicIncreasingDeterministicTime =
             interpretTimeAsMonotonicIncreasingUnixTime
         | otherwise = interpretTimeAsIO
   let filesystemBehavior :: FilesystemOperationsBehavior
       filesystemBehavior =
-        if options ^. #_noDryRunWriting
+        if options.noDryRunWriting
           then filesystemBehaviorIO
           else filesystemBehaviorDryRun
   runAppEffects printingErrorsAndWarnings timeBehavior filesystemBehavior env do
     scoped_ createSystemNodes
-    maybe repl interpretCommand (view #_executeExpression options)
+    maybe repl interpretCommand options.executeExpression

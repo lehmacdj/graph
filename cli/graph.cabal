@@ -238,6 +238,8 @@ library
     , polysemy-plugin
     , polysemy-readline
     , polysemy-zoo
+    , prettyprinter
+    , prettyprinter-ansi-terminal
     , profunctors
     , random
     , random-shuffle
@@ -381,6 +383,8 @@ executable ge
     , polysemy-plugin
     , polysemy-readline
     , polysemy-zoo
+    , prettyprinter
+    , prettyprinter-ansi-terminal
     , profunctors
     , random
     , random-shuffle
@@ -519,6 +523,8 @@ test-suite graph-test
     , polysemy-plugin
     , polysemy-readline
     , polysemy-zoo
+    , prettyprinter
+    , prettyprinter-ansi-terminal
     , profunctors
     , random
     , random-shuffle

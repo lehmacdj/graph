@@ -1,5 +1,5 @@
 module Executable.GraphEditor.Options
-  ( Options,
+  ( Options (..),
     withOptions,
   )
 where
@@ -10,12 +10,12 @@ import MyPrelude
 import Options.Applicative
 
 data Options = Options
-  { _graphLocation :: FilePath,
-    _executeExpression :: Maybe Command,
-    _createNew :: Bool,
-    _testOnlyNidGenerationSeed :: Maybe Int,
-    _testOnlyMonotonicIncreasingDeterministicTime :: Bool,
-    _noDryRunWriting :: Bool
+  { graphLocation :: FilePath,
+    executeExpression :: Maybe Command,
+    createNew :: Bool,
+    testOnlyNidGenerationSeed :: Maybe Int,
+    testOnlyMonotonicIncreasingDeterministicTime :: Bool,
+    noDryRunWriting :: Bool
   }
   deriving (Show, Generic)
 
