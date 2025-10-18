@@ -87,6 +87,7 @@ completePath env (i, _) = case getPartialPath (pack $ takeRelevantFromEnd i) of
     runAppEffects
       (failCompletionWithOriginalInputOnErrorOrWarning i)
       interpretTimeAsIO
+      filesystemBehaviorDryRun
       env
       $ do
         let p = foldr (Simple.:/) Simple.One pp

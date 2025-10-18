@@ -118,6 +118,11 @@ main = withOptions $ \options -> do
         | options ^. #_testOnlyMonotonicIncreasingDeterministicTime =
             interpretTimeAsMonotonicIncreasingUnixTime
         | otherwise = interpretTimeAsIO
-  runAppEffects printingErrorsAndWarnings timeBehavior env do
+  let filesystemBehavior :: FilesystemOperationsBehavior
+      filesystemBehavior =
+        if options ^. #_noDryRunWriting
+          then filesystemBehaviorIO
+          else filesystemBehaviorDryRun
+  runAppEffects printingErrorsAndWarnings timeBehavior filesystemBehavior env do
     createSystemNodes
     maybe repl interpretCommand (view #_executeExpression options)

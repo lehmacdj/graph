@@ -119,20 +119,38 @@ type TimeBehavior =
   (Member (Embed IO) r) =>
   Sem (GetTime : r) ~> Sem r
 
+type FilesystemOperationsBehavior =
+  forall r a.
+  ( Members [RawGraph, Embed IO, Error UserError] r
+  ) =>
+  Sem (GraphMetadataFilesystemOperations : GraphMetadataFilesystemOperationsWriteDiff : GraphDataFilesystemOperations : r) a ->
+  Sem r a
+
+filesystemBehaviorDryRun :: FilesystemOperationsBehavior
+filesystemBehaviorDryRun =
+  runGraphMetadataFilesystemOperationsDryRun True
+    >>> runGraphMetadataFilesystemOperationsWriteDiffDryRun
+    >>> runGraphDataFilesystemOperationsDryRun
+
+filesystemBehaviorIO :: FilesystemOperationsBehavior
+filesystemBehaviorIO =
+  runGraphMetadataFilesystemOperationsIO True
+    >>> runGraphMetadataFilesystemOperationsWriteDiffIO
+    >>> runGraphDataFilesystemOperationsIO
+
 runIOWrapperEffects ::
   ( Members PermissiveDependencyEffects r,
     Members ErrorEffects r
   ) =>
   TimeBehavior ->
+  FilesystemOperationsBehavior ->
   Sem (Concat IOWrapperEffects r) ~> Sem r
-runIOWrapperEffects timeBehavior =
+runIOWrapperEffects timeBehavior filesystemBehavior =
   runWebIO
     >>> runFileSystemIO
     >>> runFileTypeOracle
     >>> timeBehavior
-    >>> runGraphMetadataFilesystemOperationsDryRun True
-    >>> runGraphMetadataFilesystemOperationsWriteDiffDryRun
-    >>> runGraphDataFilesystemOperationsDryRun
+    >>> filesystemBehavior
     >>> subsume
     >>> interpretEditorAsIOVim
     >>> interpretDisplayImageIO
@@ -222,12 +240,13 @@ type AppEffects =
 runAppEffects ::
   ErrorHandlingBehavior a ->
   TimeBehavior ->
+  FilesystemOperationsBehavior ->
   Env ->
   Sem AppEffects a ->
   IO a
-runAppEffects errorHandlingBehavior timeBehavior env =
+runAppEffects errorHandlingBehavior timeBehavior filesystemBehavior env =
   runGraphEditorEffects
-    >>> runIOWrapperEffects timeBehavior
+    >>> runIOWrapperEffects timeBehavior filesystemBehavior
     >>> runErrorEffects errorHandlingBehavior
     >>> runPermissiveDependencyEffectsEnv
     >>> runFinalEffects env

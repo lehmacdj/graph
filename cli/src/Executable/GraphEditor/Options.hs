@@ -14,7 +14,8 @@ data Options = Options
     _executeExpression :: Maybe Command,
     _createNew :: Bool,
     _testOnlyNidGenerationSeed :: Maybe Int,
-    _testOnlyMonotonicIncreasingDeterministicTime :: Bool
+    _testOnlyMonotonicIncreasingDeterministicTime :: Bool,
+    _noDryRunWriting :: Bool
   }
   deriving (Show, Generic)
 
@@ -48,6 +49,10 @@ optionsP =
       ( long "test-only-monotonic-increasing-deterministic-time"
           <> help "use a deterministic time that increases monotonically"
           <> internal
+      )
+    <*> switch
+      ( long "no-dry-run-writing"
+          <> help "actually write to the filesystem instead of dry-run mode"
       )
 
 optionsPI :: ParserInfo Options
