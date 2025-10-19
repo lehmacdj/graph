@@ -105,7 +105,7 @@ type family PathVal (p :: PathPhase) (t :: Type) :: Type where
   PathVal 'WithDirectives t = Path' 'WithDirectives t
   PathVal 'Prenormal t = Path' 'Prenormal t
 
-data Directive t
+data Directive (p :: PathPhase) t
   = -- | Reference a location in the location history of the graph CLI
     -- resolves to `Absolute nid` where `nid` is the NID at that location
     LocationFromHistory Int
@@ -116,47 +116,47 @@ data Directive t
     -- This can also be used to bake the current location into a later location
     -- in a path e.g. `*/%targets(@)` materializes only transitions from the
     -- current location to itself.
-    Targets (Path' 'WithDirectives t)
+    Targets (PathVal p t)
   | -- | A splice of a Haskell expression that resolves to a Path
     -- This is used by the QuasiQuoter, the CLI does not support this
     Splice String
   deriving (Generic)
 
 deriving instance
-  (Path'Constraints Eq 'WithDirectives t) =>
-  Eq (Directive t)
+  (Path'Constraints Eq p t) =>
+  Eq (Directive p t)
 
 deriving instance
-  (Path'Constraints Ord 'WithDirectives t) =>
-  Ord (Directive t)
+  (Path'Constraints Ord p t) =>
+  Ord (Directive p t)
 
 deriving instance
-  (Path'Constraints Lift 'WithDirectives t) =>
-  Lift (Directive t)
+  (Path'Constraints Lift p t) =>
+  Lift (Directive p t)
 
 showsDirective ::
-  (Path' 'WithDirectives t -> ShowS) ->
-  Directive t ->
+  (Show t, Show (PathVal p t)) =>
+  Directive p t ->
   ShowS
-showsDirective showsPath' = \case
+showsDirective = \case
   LocationFromHistory i -> showString "%history(" . shows i . showString ")"
-  Targets p -> showString "%targets(" . showsPath' p . showString ")"
+  Targets p -> showString "%targets(" . shows p . showString ")"
   Splice expr -> showString "%{" . showString expr . showString "}"
 
 instance
-  (Path'Constraints Show 'WithDirectives t) =>
-  Show (Directive t)
+  (Path'Constraints Show p t) =>
+  Show (Directive p t)
   where
-  showsPrec _ = showsDirective shows
+  showsPrec _ = showsDirective
 
 type family DirectiveVal (p :: PathPhase) (t :: Type) :: Type where
-  DirectiveVal 'Partial t = Directive t
-  DirectiveVal 'WithDirectives t = Directive t
+  DirectiveVal 'Partial t = Directive 'Partial t
+  DirectiveVal 'WithDirectives t = Directive 'WithDirectives t
   DirectiveVal 'Prenormal _ = Void
 
 handleDirectivesWith ::
   (Applicative g) =>
-  (SourceRange -> Directive t -> g (Path' 'Prenormal t)) ->
+  (SourceRange -> Directive 'WithDirectives t -> g (Path' 'Prenormal t)) ->
   Path' 'WithDirectives t ->
   g (Path' 'Prenormal t)
 handleDirectivesWith interpretDirective = \case
@@ -186,7 +186,7 @@ handleDirectivesWith interpretDirective = \case
 handleDirectivesQ ::
   (Lift t) =>
   -- | function returning a TH expression that has type @Path 'Prenormal t@
-  (SourceRange -> Directive t -> Q Exp) ->
+  (SourceRange -> Directive 'WithDirectives t -> Q Exp) ->
   Path' 'WithDirectives t ->
   Q Exp
 handleDirectivesQ interpretDirective = \case
