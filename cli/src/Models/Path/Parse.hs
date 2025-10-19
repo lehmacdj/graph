@@ -36,7 +36,7 @@ pathTerm' pNID pTransition =
     <|> (uncurry Directive <$> withSourceRange (pDirective pTransition))
     <|> parens (pPath' pNID pTransition)
 
-pDirective :: Parser t -> Parser (Directive Identity t)
+pDirective :: Parser t -> Parser (Directive t)
 pDirective pTransition =
   try (LocationFromHistory <$> pDirectiveNamed "history" number)
     <|> try (LocationFromHistory 1 <$ symbol "%last")
@@ -181,7 +181,7 @@ test_pDirective =
       parseFails "%targets(foo"
     ]
   where
-    parsesTo :: Text -> Directive Identity String -> TestTree
+    parsesTo :: Text -> Directive String -> TestTree
     parsesTo input =
       testCase ("parse: " ++ show input)
         . testParserParses (pDirective transition) input

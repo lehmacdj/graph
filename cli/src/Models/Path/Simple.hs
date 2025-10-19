@@ -12,23 +12,23 @@ import Models.Path as X
 import MyPrelude
 
 -- | Simple Path type (representing elaborated paths)
-type Path = Path' Prenormal Identity
+type Path = Path' 'Prenormal
 
 pattern Backwards :: Path t -> Path t
-pattern Backwards p = Backwards' (Identity p)
+pattern Backwards p = Backwards' p
 
 pattern (:/) :: Path t -> Path t -> Path t
-pattern l :/ r = Identity l ::/ Identity r
+pattern l :/ r = l ::/ r
 
 infixl 7 :/
 
 pattern (:+) :: Path t -> Path t -> Path t
-pattern l :+ r = Identity l ::+ Identity r
+pattern l :+ r = l ::+ r
 
 infixl 5 :+
 
 pattern (:&) :: Path t -> Path t -> Path t
-pattern l :& r = Identity l ::& Identity r
+pattern l :& r = l ::& r
 
 infixl 6 :&
 
@@ -39,6 +39,7 @@ infixl 6 :&
   Literal,
   RegexMatch,
   Absolute,
+  ExcludingNIDs,
   Backwards,
   (:/),
   (:+),

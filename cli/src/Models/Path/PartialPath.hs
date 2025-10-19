@@ -13,7 +13,7 @@ import MyPrelude
 import Utils.Parsing (ParseError')
 
 -- | PartialPath type (representing paths that may contain parse errors)
-type PartialPath = Path' WithDirectives (Either ParseError')
+type PartialPath = Path' 'Partial
 
 pattern Backwards :: Either ParseError' (PartialPath t) -> PartialPath t
 pattern Backwards p = Backwards' p
@@ -49,9 +49,10 @@ infixl 6 :&
   Literal,
   RegexMatch,
   Absolute,
+  ExcludingNIDs,
   Backwards,
   (:/),
   (:+),
   (:&),
-  LocationFromHistory
+  Directive
   #-}

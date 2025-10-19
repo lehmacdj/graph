@@ -25,7 +25,7 @@ pathExp s = case runParser (whitespace *> pPath transition <* eof) "" (pack s) o
   Right result -> handleDirectivesQ interpretSplice result
   where
     -- Interpret Splice directives as TH expressions
-    interpretSplice :: SourceRange -> Directive Identity String -> Q Exp
+    interpretSplice :: SourceRange -> Directive String -> Q Exp
     interpretSplice _ = \case
       LocationFromHistory _ ->
         fail "LocationFromHistory directive cannot be used in path quasi-quoter"

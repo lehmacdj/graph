@@ -16,23 +16,23 @@ import Utils.Testing
 
 -- | Represents a path that has been successfully parsed, but has had no
 -- further processing applied
-type ParsedPath = Path' WithDirectives Identity
+type ParsedPath = Path' 'WithDirectives
 
 pattern Backwards :: ParsedPath t -> ParsedPath t
-pattern Backwards p = Backwards' (Identity p)
+pattern Backwards p = Backwards' p
 
 pattern (:/) :: ParsedPath t -> ParsedPath t -> ParsedPath t
-pattern l :/ r = Identity l ::/ Identity r
+pattern l :/ r = l ::/ r
 
 infixl 7 :/
 
 pattern (:+) :: ParsedPath t -> ParsedPath t -> ParsedPath t
-pattern l :+ r = Identity l ::+ Identity r
+pattern l :+ r = l ::+ r
 
 infixl 5 :+
 
 pattern (:&) :: ParsedPath t -> ParsedPath t -> ParsedPath t
-pattern l :& r = Identity l ::& Identity r
+pattern l :& r = l ::& r
 
 infixl 6 :&
 
@@ -43,6 +43,7 @@ infixl 6 :&
   Literal,
   RegexMatch,
   Absolute,
+  ExcludingNIDs,
   Backwards,
   (:/),
   (:+),

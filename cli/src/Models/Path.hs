@@ -13,10 +13,10 @@ where
 import Language.Haskell.TH (Exp, Q)
 import Models.NID
 import MyPrelude
-import Utils.Parsing.Common (SourceRange (..))
+import Utils.Parsing.Common (ParseError', SourceRange (..))
 
--- | The most general path type. Parametrized with a phase, a functor that
--- allows wrapping nested paths, and the raw type of literals/transitions.
+-- | The most general path type. Parametrized with a phase and the raw type of
+-- literals/transitions.
 --
 -- There are also submodules that expose simpler path types with common
 -- parameters, e.g. @Models.Path.Simple@ exposes the simple Path type
@@ -38,7 +38,7 @@ import Utils.Parsing.Common (SourceRange (..))
 -- WARNING: when updating this type, update the {-# COMPLETE #-} pragmas
 -- in @Models.Path.*@ submodules too so that completeness checking works as
 -- expected
-data Path' (p :: PathPhase) f t
+data Path' (p :: PathPhase) t
   = -- | Stay at a specific location / the current location.
     -- Acts as a join point forcing intersections of a path that end in it to
     -- match at the same node (e.g. `(a/@ & b)/c` is equivalent to `(a & b)
@@ -62,19 +62,19 @@ data Path' (p :: PathPhase) f t
     -- (Literal t) instead, likewise for Wild. It inverts the order of paths and
     -- has no effect on node-location specifying path components or
     -- intersection/union operators
-    Backwards' (f (Path' p f t))
+    Backwards' (PathVal p t)
   | -- | sequence
-    f (Path' p f t) ::/ f (Path' p f t)
+    PathVal p t ::/ PathVal p t
   | -- | union
-    f (Path' p f t) ::+ f (Path' p f t)
+    PathVal p t ::+ PathVal p t
   | -- | intersection
-    f (Path' p f t) ::& f (Path' p f t)
+    PathVal p t ::& PathVal p t
   | -- | Directives are command like things that may appear in paths.
     -- They can be interpreted into a path using application state, etc.
     -- using 'handleDirectivesWith'.
     -- Currently I'm only including the source range for directives, but I'd
     -- like to add it to all path components eventually
-    Directive SourceRange (DirectiveVal p f t)
+    Directive SourceRange (DirectiveVal p t)
   deriving (Generic)
 
 infixl 7 ::/
@@ -88,14 +88,24 @@ infixl 6 ::&
 -- | Compilation phase of a path
 -- Used for "Trees That Grow" style extensions
 data PathPhase
-  = -- | paths may contain directives that need to be resolved before the path
+  = -- | Partially parsed paths that may contain parse errors
+    -- We will use this for providing precise completions of paths + as the
+    -- return value of parsers that recover and return more than 1 parse failure
+    Partial
+  | -- | paths may contain directives that need to be resolved before the path
     -- can be normalized
     WithDirectives
   | -- | Plain paths that are ready for normalization. These paths have no
     -- dependencies necessary for normalization
     Prenormal
 
-data Directive f t
+-- | Determines how nested paths are wrapped based on the phase
+type family PathVal (p :: PathPhase) (t :: Type) :: Type where
+  PathVal 'Partial t = Either ParseError' (Path' 'Partial t)
+  PathVal 'WithDirectives t = Path' 'WithDirectives t
+  PathVal 'Prenormal t = Path' 'Prenormal t
+
+data Directive t
   = -- | Reference a location in the location history of the graph CLI
     -- resolves to `Absolute nid` where `nid` is the NID at that location
     LocationFromHistory Int
@@ -106,27 +116,27 @@ data Directive f t
     -- This can also be used to bake the current location into a later location
     -- in a path e.g. `*/%targets(@)` materializes only transitions from the
     -- current location to itself.
-    Targets (Path' 'WithDirectives f t)
+    Targets (Path' 'WithDirectives t)
   | -- | A splice of a Haskell expression that resolves to a Path
     -- This is used by the QuasiQuoter, the CLI does not support this
     Splice String
   deriving (Generic)
 
 deriving instance
-  (Eq1 f, Path'Constraints Eq 'WithDirectives f t) =>
-  Eq (Directive f t)
+  (Path'Constraints Eq 'WithDirectives t) =>
+  Eq (Directive t)
 
 deriving instance
-  (Ord1 f, Path'Constraints Ord 'WithDirectives f t) =>
-  Ord (Directive f t)
+  (Path'Constraints Ord 'WithDirectives t) =>
+  Ord (Directive t)
 
 deriving instance
-  (Path'Constraints Lift 'WithDirectives f t) =>
-  Lift (Directive f t)
+  (Path'Constraints Lift 'WithDirectives t) =>
+  Lift (Directive t)
 
 showsDirective ::
-  (Path' WithDirectives f t -> ShowS) ->
-  Directive f t ->
+  (Path' 'WithDirectives t -> ShowS) ->
+  Directive t ->
   ShowS
 showsDirective showsPath' = \case
   LocationFromHistory i -> showString "%history(" . shows i . showString ")"
@@ -134,27 +144,21 @@ showsDirective showsPath' = \case
   Splice expr -> showString "%{" . showString expr . showString "}"
 
 instance
-  (Show1 f, Path'Constraints Show 'WithDirectives f t) =>
-  Show (Directive f t)
+  (Path'Constraints Show 'WithDirectives t) =>
+  Show (Directive t)
   where
   showsPrec _ = showsDirective shows
 
-instance
-  {-# OVERLAPPING #-}
-  (PathConstraints Show WithDirectives t) =>
-  Show (Directive Identity t)
-  where
-  showsPrec _ = showsDirective shows
-
-type family DirectiveVal (p :: PathPhase) (f :: Type -> Type) (t :: Type) where
-  DirectiveVal 'WithDirectives f t = Directive f t
-  DirectiveVal 'Prenormal _ _ = Void
+type family DirectiveVal (p :: PathPhase) (t :: Type) :: Type where
+  DirectiveVal 'Partial t = Directive t
+  DirectiveVal 'WithDirectives t = Directive t
+  DirectiveVal 'Prenormal _ = Void
 
 handleDirectivesWith ::
-  (Traversable f, Applicative g) =>
-  (SourceRange -> Directive f t -> g (Path' 'Prenormal f t)) ->
-  Path' 'WithDirectives f t ->
-  g (Path' 'Prenormal f t)
+  (Applicative g) =>
+  (SourceRange -> Directive t -> g (Path' 'Prenormal t)) ->
+  Path' 'WithDirectives t ->
+  g (Path' 'Prenormal t)
 handleDirectivesWith interpretDirective = \case
   One -> pure One
   Zero -> pure Zero
@@ -164,26 +168,26 @@ handleDirectivesWith interpretDirective = \case
   Absolute nid -> pure (Absolute nid)
   ExcludingNIDs nids -> pure (ExcludingNIDs nids)
   Backwards' p ->
-    Backwards' <$> traverse (handleDirectivesWith interpretDirective) p
+    Backwards' <$> handleDirectivesWith interpretDirective p
   l ::/ r ->
     (::/)
-      <$> traverse (handleDirectivesWith interpretDirective) l
-      <*> traverse (handleDirectivesWith interpretDirective) r
+      <$> handleDirectivesWith interpretDirective l
+      <*> handleDirectivesWith interpretDirective r
   l ::+ r ->
     (::+)
-      <$> traverse (handleDirectivesWith interpretDirective) l
-      <*> traverse (handleDirectivesWith interpretDirective) r
+      <$> handleDirectivesWith interpretDirective l
+      <*> handleDirectivesWith interpretDirective r
   l ::& r ->
     (::&)
-      <$> traverse (handleDirectivesWith interpretDirective) l
-      <*> traverse (handleDirectivesWith interpretDirective) r
+      <$> handleDirectivesWith interpretDirective l
+      <*> handleDirectivesWith interpretDirective r
   Directive ann directive -> interpretDirective ann directive
 
 handleDirectivesQ ::
   (Lift t) =>
-  -- | function returning a TH expression that has type @Path 'Prenormal f t@
-  (SourceRange -> Directive Identity t -> Q Exp) ->
-  Path' 'WithDirectives Identity t ->
+  -- | function returning a TH expression that has type @Path 'Prenormal t@
+  (SourceRange -> Directive t -> Q Exp) ->
+  Path' 'WithDirectives t ->
   Q Exp
 handleDirectivesQ interpretDirective = \case
   One -> [|One|]
@@ -193,77 +197,65 @@ handleDirectivesQ interpretDirective = \case
   Literal x -> [|Literal x|]
   Absolute nid -> [|Absolute nid|]
   ExcludingNIDs nids -> [|ExcludingNIDs nids|]
-  Backwards' (Identity p) ->
-    [|Backwards' (Identity $(handleDirectivesQ interpretDirective p))|]
-  Identity l ::/ Identity r ->
+  Backwards' p ->
+    [|Backwards' $(handleDirectivesQ interpretDirective p)|]
+  l ::/ r ->
     [|
-      Identity $(handleDirectivesQ interpretDirective l)
-        ::/ Identity $(handleDirectivesQ interpretDirective r)
+      $(handleDirectivesQ interpretDirective l)
+        ::/ $(handleDirectivesQ interpretDirective r)
       |]
-  Identity l ::+ Identity r ->
+  l ::+ r ->
     [|
-      Identity $(handleDirectivesQ interpretDirective l)
-        ::+ Identity $(handleDirectivesQ interpretDirective r)
+      $(handleDirectivesQ interpretDirective l)
+        ::+ $(handleDirectivesQ interpretDirective r)
       |]
-  Identity l ::& Identity r ->
+  l ::& r ->
     [|
-      Identity $(handleDirectivesQ interpretDirective l)
-        ::& Identity $(handleDirectivesQ interpretDirective r)
+      $(handleDirectivesQ interpretDirective l)
+        ::& $(handleDirectivesQ interpretDirective r)
       |]
   Directive ann directive -> interpretDirective ann directive
 
 -- | helper for producing the necessary constraints for a Path'
 type Path'Constraints ::
-  (Type -> Constraint) -> PathPhase -> (Type -> Type) -> Type -> Constraint
-type Path'Constraints c p f t = (c t, c (DirectiveVal p f t), c (f (Path' p f t)))
-
--- | helper for producing the necessary constraints for a Path' excluding the
--- functorial type parameter
-type PathConstraints ::
   (Type -> Constraint) -> PathPhase -> Type -> Constraint
-type PathConstraints c p t = (c t, c (DirectiveVal p Identity t))
+type Path'Constraints c p t = (c t, c (DirectiveVal p t), c (PathVal p t))
 
 -- * Instances
 
-deriving instance (Path'Constraints Lift p f t) => Lift (Path' p f t)
+deriving instance (Path'Constraints Lift p t) => Lift (Path' p t)
 
 showsPath ::
-  (Show1 f, Path'Constraints Show p f t) =>
-  (Int -> f (Path' p f t) -> ShowS) ->
+  forall p t.
+  (Path'Constraints Show p t) =>
   Int ->
-  Path' p f t ->
+  Path' p t ->
   ShowS
-showsPath _ _ One = showString "@"
-showsPath _ _ Zero = showString "!"
-showsPath _ _ Wild = showString "*"
-showsPath _ _ (Literal x) = shows x
-showsPath _ _ (RegexMatch r) = shows r
-showsPath _ _ (Absolute nid) = shows nid
-showsPath _ _ (ExcludingNIDs nids) =
+showsPath _ One = showString "@"
+showsPath _ Zero = showString "!"
+showsPath _ Wild = showString "*"
+showsPath _ (Literal x) = shows x
+showsPath _ (RegexMatch r) = shows r
+showsPath _ (Absolute nid) = shows nid
+showsPath _ (ExcludingNIDs nids) =
   let commaSep = intercalate "," $ mapSet show nids
    in showString "!{" . showString commaSep . showString "}"
-showsPath showF d (Backwards' p) =
-  showParen (d > 8) $ showString "~" . showF 8 p
-showsPath showF d (l ::/ r) =
-  showParen (d > 7) $ showF 8 l . showString " / " . showF 8 r
-showsPath showF d (l ::& r) =
-  showParen (d > 6) $ showF 7 l . showString " & " . showF 7 r
-showsPath showF d (l ::+ r) =
-  showParen (d > 5) $ showF 6 l . showString " + " . showF 6 r
-showsPath _ _ (Directive _ d) = shows d
+showsPath d (Backwards' p) =
+  showParen (d > 8) $ showString "~" . showsPrec 8 p
+showsPath d (l ::/ r) =
+  showParen (d > 7) $
+    showsPrec 8 l . showString " / " . showsPrec 8 r
+showsPath d (l ::& r) =
+  showParen (d > 6) $
+    showsPrec 7 l . showString " & " . showsPrec 7 r
+showsPath d (l ::+ r) =
+  showParen (d > 5) $
+    showsPrec 6 l . showString " + " . showsPrec 6 r
+showsPath _ (Directive _ d) = shows d
 
-instance (Show1 f, Path'Constraints Show p f t) => Show (Path' p f t) where
-  showsPrec = showsPath showsPath1
-    where
-      showsPath1 :: (Show1 f, Show t) => Int -> f (Path' p f t) -> ShowS
-      showsPath1 = liftShowsPrec (showsPath showsPath1) showList
+instance (Path'Constraints Show p t) => Show (Path' p t) where
+  showsPrec = showsPath @p
 
-instance {-# OVERLAPPING #-} (PathConstraints Show p t) => Show (Path' p Identity t) where
-  showsPrec = showsPath skipIdentity
-    where
-      skipIdentity :: (Show t) => Int -> Identity (Path' p Identity t) -> ShowS
-      skipIdentity prec (Identity p) = showsPath skipIdentity prec p
+deriving instance (Path'Constraints Eq p t) => Eq (Path' p t)
 
-deriving instance (Eq1 f, Path'Constraints Eq p f t) => Eq (Path' p f t)
-
-deriving instance (Ord1 f, Path'Constraints Ord p f t) => Ord (Path' p f t)
+deriving instance (Path'Constraints Ord p t) => Ord (Path' p t)
