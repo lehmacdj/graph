@@ -62,10 +62,6 @@ initEnv graphDir nidGenerator _replSettings =
 printingErrorsAndWarnings :: ErrorHandlingBehavior ()
 printingErrorsAndWarnings = printWarnings >>> printErrors
 
-type family Concat (a :: [k]) (b :: [k]) :: [k] where
-  Concat '[] b = b
-  Concat (a ': as) b = a ': Concat as b
-
 type GraphEditorEffects :: [Effect]
 type GraphEditorEffects =
   [ FreshNID,

@@ -117,6 +117,8 @@ library
       MyPrelude.OsPath
       MyPrelude.RawStrings
       MyPrelude.Regex
+      MyPrelude.Type
+      MyPrelude.Vary
       Spec
       System.Directory.Clone
       System.IO.Term.BinarySerialize
@@ -192,6 +194,7 @@ library
       Glob
     , SHA
     , aeson
+    , ansi-terminal
     , attoparsec
     , base >=4.7 && <5
     , base-orphans
@@ -260,6 +263,7 @@ library
     , typed-process
     , unix
     , unliftio
+    , vary
     , vector
     , witherable
     , wreq
@@ -336,6 +340,7 @@ executable ge
       Glob
     , SHA
     , aeson
+    , ansi-terminal
     , attoparsec
     , base >=4.7 && <5
     , base-orphans
@@ -405,6 +410,7 @@ executable ge
     , typed-process
     , unix
     , unliftio
+    , vary
     , vector
     , witherable
     , wreq
@@ -476,6 +482,7 @@ test-suite graph-test
       Glob
     , SHA
     , aeson
+    , ansi-terminal
     , attoparsec
     , base >=4.7 && <5
     , base-orphans
@@ -545,6 +552,7 @@ test-suite graph-test
     , typed-process
     , unix
     , unliftio
+    , vary
     , vector
     , witherable
     , wreq

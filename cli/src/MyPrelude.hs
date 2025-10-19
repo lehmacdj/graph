@@ -24,7 +24,6 @@ import Control.DeepSeq as X
 import Data.Coerce as X (Coercible, coerce)
 import Data.Constraint as X (Constraint)
 import Data.Functor.Contravariant as X
-import Data.Kind as X (Type)
 import Data.Orphans ()
 import Data.Proxy as X (Proxy (..))
 import Data.Void as X
@@ -47,6 +46,8 @@ import MyPrelude.MonadApplicative as X
 import MyPrelude.Orphans as X ()
 import MyPrelude.RawStrings as X
 import MyPrelude.Regex as X
+import MyPrelude.Type as X
+import MyPrelude.Vary as X
 import Prelude as X (MonadFail (..), Show (showsPrec), ShowS, fail, showParen, showString, shows)
 
 -- import MyPrelude.OsPath as X
