@@ -34,7 +34,7 @@ import Test.Hspec.Expectations as X
 import Test.Tasty as X
 import Test.Tasty.HUnit as X
 import Test.Tasty.Hspec (testSpec)
-import Test.Tasty.QuickCheck as X
+import Test.Tasty.QuickCheck as X hiding (label)
 import Utils.Parsing.Common
 
 -- | initializes a graph that is either empty, or based on a template graph

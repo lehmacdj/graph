@@ -59,15 +59,12 @@ pRegex = do
 pathTerm :: Parser t -> Parser (ParsedPath t)
 pathTerm = pathTerm' pFullNID
 
-binary :: Text -> (ParsedPath t -> ParsedPath t -> ParsedPath t) -> Operator Parser (ParsedPath t)
-binary name f = InfixL (f <$ symbol name)
-
 table :: [[Operator Parser (ParsedPath t)]]
 table =
   [ [Prefix (Backwards <$ symbol "~")],
-    [binary "/" (:/)],
-    [binary "&" (:&)],
-    [binary "+" (:+)]
+    [InfixL $ (:/) <$ symbol "/"],
+    [InfixL $ (:&) <$ symbol "&"],
+    [InfixL $ (:+) <$ symbol "+"]
   ]
 
 pPath' :: Parser NID -> Parser t -> Parser (ParsedPath t)
