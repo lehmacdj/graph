@@ -54,6 +54,7 @@ resolvePathSuccesses nid = \case
     pure . setFromList $ matchConnect x n.outgoing
   RegexMatch _ -> error "regex not supported in old paths"
   Absolute nid -> pure $ singleton nid
+  ExcludingNIDs _ -> error "excluding not supported in old paths"
   Backwards _ -> error "can't use backwards with old paths"
   p :/ q -> do
     pResolved <- toList <$> resolvePathSuccesses nid p
@@ -80,6 +81,7 @@ resolvePathSuccessesDetail' nid = \case
     getNode nid' <&> \case
       Nothing -> OSet.empty
       Just _ -> OSet.singleton $ DPath nid' [] nid' []
+  ExcludingNIDs _ -> error "excluding not supported in old paths"
   Wild ->
     getNodeSem nid <&> \n -> OSet.fromList $ do
       Connect t nid' <- n ^.. #outgoing . folded
@@ -253,6 +255,7 @@ listifyNewPath = \case
   RegexMatch _ -> error "regex not supported in old paths"
   Backwards _ -> error "can't use backwards with old paths"
   Absolute nid -> Set.singleton (Just nid, [])
+  ExcludingNIDs _ -> error "excluding not supported in old paths"
   p1 :/ p2 -> Set.fromList $ do
     (nid, p1') <- toList $ listifyNewPath p1
     p2' <- toList $ assertListifiedRelativePath $ listifyNewPath p2

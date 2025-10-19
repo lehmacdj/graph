@@ -2,7 +2,6 @@ module Models.NormalizedPath.TH where
 
 import Language.Haskell.TH
 import Language.Haskell.TH.Quote
-import Language.Haskell.TH.Syntax (unTypeQ)
 import Models.NID
 import Models.NormalizedPath
 import Models.NormalizedPath.Parse

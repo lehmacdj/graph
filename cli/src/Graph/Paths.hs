@@ -3,7 +3,6 @@ module Graph.Paths where
 
 import Graph.SystemNodes
 import Models.Path.Simple
-import Models.Path.TH
 import MyPrelude
 
 -- | These system nodes can be fairly large and take a long-ish time to parse /
