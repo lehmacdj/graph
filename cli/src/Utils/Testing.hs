@@ -112,7 +112,10 @@ testParserParses ::
 testParserParses parser string expected =
   case runParserTest parser string of
     Right actual -> actual @=? expected
-    Left err -> assertFailure $ "expected: " ++ show expected ++ "\nbut parser failed with:\n" ++ errorBundlePretty err
+    Left err ->
+      assertFailure $
+        ("expected: " ++ show expected ++ "\n")
+          ++ ("but parser failed with:\n" ++ errorBundlePretty err)
 
 testParserFails ::
   (Eq a, Show a, HasCallStack) => Parser a -> Text -> Assertion
