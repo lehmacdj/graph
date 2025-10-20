@@ -2,13 +2,6 @@
 -- Generic over the custom error type, it doesn't throw any.
 module Models.Path.Parse where
 
--- ( pPath,
---   pPath',
---   pathTerm,
---   test_pPath,
---   test_pDirective,
--- )
-
 import Control.Monad.Combinators.Expr
 import Data.Functor
 import Graph.SystemNodes (tagsNID)
@@ -47,7 +40,7 @@ pDirectiveNamed :: Text -> Parser a -> Parser a
 pDirectiveNamed name = between (symbol ("%" <> name <> "(")) (symbol ")")
 
 pRegex :: Parser CheckedRegex
-pRegex = do
+pRegex = label "re\"<regex>\"" do
   _ <- symbol "re"
   str <-
     between (char '"') (char '"') (takeWhileP Nothing (/= '"'))

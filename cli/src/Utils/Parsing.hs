@@ -44,16 +44,19 @@ ident :: Parser String
 ident = L.lexeme s $ some identChar
 
 stringLiteral :: Parser String
-stringLiteral = L.lexeme s $ char '"' >> manyTill L.charLiteral (char '"')
+stringLiteral =
+  label "<string literal>" $
+    L.lexeme s $
+      char '"' >> manyTill L.charLiteral (char '"')
 
 transition :: Parser String
-transition = ident <|> stringLiteral
+transition = ident <|> stringLiteral <?> "<transition>"
 
 ttransition :: Parser Text
-ttransition = pack <$> (ident <|> stringLiteral)
+ttransition = pack <$> transition
 
 pFullNID :: Parser NID
-pFullNID = L.lexeme s (char '@' *> p)
+pFullNID = L.lexeme s (char '@' *> p) <?> "@<nid>"
   where
     p = do
       nidStr <- pack <$> replicateM nidDigits anySingle
@@ -68,7 +71,7 @@ positiveNumber :: Parser Int
 positiveNumber = L.lexeme s L.decimal
 
 number :: Parser Int
-number = do
+number = label "<integer>" do
   minusSign <- optional (symbol "-")
   n <- positiveNumber
   case minusSign of
