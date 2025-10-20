@@ -9,7 +9,6 @@ module Models.Path.Simple
 where
 
 import Models.Path as X
-import MyPrelude
 
 -- | Simple Path type (representing elaborated paths)
 type Path = Path' 'Prenormal

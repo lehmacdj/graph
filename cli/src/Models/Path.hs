@@ -62,19 +62,21 @@ data Path' (p :: PathPhase) t
     -- (Literal t) instead, likewise for Wild. It inverts the order of paths and
     -- has no effect on node-location specifying path components or
     -- intersection/union operators
-    Backwards' (PathVal p t)
+    Backwards' (Path' p t)
   | -- | sequence
-    PathVal p t ::/ PathVal p t
+    Path' p t ::/ Path' p t
   | -- | union
-    PathVal p t ::+ PathVal p t
+    Path' p t ::+ Path' p t
   | -- | intersection
-    PathVal p t ::& PathVal p t
+    Path' p t ::& Path' p t
   | -- | Directives are command like things that may appear in paths.
     -- They can be interpreted into a path using application state, etc.
     -- using 'handleDirectivesWith'.
     -- Currently I'm only including the source range for directives, but I'd
     -- like to add it to all path components eventually
     Directive SourceRange (DirectiveVal p t)
+  | -- | A hole representing a parse error. Only available in the Partial phase.
+    Hole (HoleVal p)
   deriving (Generic)
 
 infixl 7 ::/
@@ -99,11 +101,11 @@ data PathPhase
     -- dependencies necessary for normalization
     Prenormal
 
--- | Determines how nested paths are wrapped based on the phase
-type family PathVal (p :: PathPhase) (t :: Type) :: Type where
-  PathVal 'Partial t = Either ParseError' (Path' 'Partial t)
-  PathVal 'WithDirectives t = Path' 'WithDirectives t
-  PathVal 'Prenormal t = Path' 'Prenormal t
+-- | Determines what type of holes/errors can appear in a path based on the phase
+type family HoleVal (p :: PathPhase) :: Type where
+  HoleVal 'Partial = ParseError'
+  HoleVal 'WithDirectives = Void
+  HoleVal 'Prenormal = Void
 
 data Directive (p :: PathPhase) t
   = -- | Reference a location in the location history of the graph CLI
@@ -116,7 +118,7 @@ data Directive (p :: PathPhase) t
     -- This can also be used to bake the current location into a later location
     -- in a path e.g. `*/%targets(@)` materializes only transitions from the
     -- current location to itself.
-    Targets (PathVal p t)
+    Targets (Path' p t)
   | -- | A splice of a Haskell expression that resolves to a Path
     -- This is used by the QuasiQuoter, the CLI does not support this
     Splice String
@@ -135,7 +137,7 @@ deriving instance
   Lift (Directive p t)
 
 showsDirective ::
-  (Show t, Show (PathVal p t)) =>
+  (Path'Constraints Show p t) =>
   Directive p t ->
   ShowS
 showsDirective = \case
@@ -219,7 +221,7 @@ handleDirectivesQ interpretDirective = \case
 -- | helper for producing the necessary constraints for a Path'
 type Path'Constraints ::
   (Type -> Constraint) -> PathPhase -> Type -> Constraint
-type Path'Constraints c p t = (c t, c (DirectiveVal p t), c (PathVal p t))
+type Path'Constraints c p t = (c t, c (DirectiveVal p t), c (HoleVal p))
 
 -- * Instances
 
@@ -252,6 +254,7 @@ showsPath d (l ::+ r) =
   showParen (d > 5) $
     showsPrec 6 l . showString " + " . showsPrec 6 r
 showsPath _ (Directive _ d) = shows d
+showsPath _ (Hole err) = shows err
 
 instance (Path'Constraints Show p t) => Show (Path' p t) where
   showsPrec = showsPath @p

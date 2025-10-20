@@ -9,34 +9,32 @@ module Models.Path.PartialPath
 where
 
 import Models.Path as X
-import MyPrelude
-import Utils.Parsing (ParseError')
 
 -- | PartialPath type (representing paths that may contain parse errors)
 type PartialPath = Path' 'Partial
 
-pattern Backwards :: Either ParseError' (PartialPath t) -> PartialPath t
+pattern Backwards :: PartialPath t -> PartialPath t
 pattern Backwards p = Backwards' p
 
 pattern (:/) ::
-  Either ParseError' (PartialPath t) ->
-  Either ParseError' (PartialPath t) ->
+  PartialPath t ->
+  PartialPath t ->
   PartialPath t
 pattern l :/ r = l ::/ r
 
 infixl 7 :/
 
 pattern (:+) ::
-  Either ParseError' (PartialPath t) ->
-  Either ParseError' (PartialPath t) ->
+  PartialPath t ->
+  PartialPath t ->
   PartialPath t
 pattern l :+ r = l ::+ r
 
 infixl 5 :+
 
 pattern (:&) ::
-  Either ParseError' (PartialPath t) ->
-  Either ParseError' (PartialPath t) ->
+  PartialPath t ->
+  PartialPath t ->
   PartialPath t
 pattern l :& r = l ::& r
 
@@ -54,5 +52,6 @@ infixl 6 :&
   (:/),
   (:+),
   (:&),
-  Directive
+  Directive,
+  Hole
   #-}
