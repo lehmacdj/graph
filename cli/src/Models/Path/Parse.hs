@@ -6,15 +6,16 @@ import Control.Monad.Combinators.Expr
 import Data.Functor
 import Graph.SystemNodes (tagsNID)
 import Models.NID
-import Models.Path.ParsedPath
+import Models.Path.ParsedPath (ParsedPath)
+import Models.Path.PartialPath
 import MyPrelude hiding (many, try)
 import Text.Megaparsec (try)
 import Text.Megaparsec.Char (char)
 import Utils.Parsing
 import Utils.Testing
 
-pathTerm' :: Parser NID -> Parser t -> Parser (ParsedPath t)
-pathTerm' pNID pTransition =
+partialPathTerm' :: Parser NID -> Parser t -> Parser (PartialPath t)
+partialPathTerm' pNID pTransition =
   try (Absolute <$> pNID)
     <|> try ((Absolute tagsNID :/) . Literal <$> (char '#' *> pTransition))
     <|> (symbol "@" $> One)
@@ -27,13 +28,13 @@ pathTerm' pNID pTransition =
     <|> (RegexMatch <$> try pRegex)
     <|> (Literal <$> pTransition)
     <|> (uncurry Directive <$> withSourceRange (pDirective pTransition))
-    <|> parens (pPath' pNID pTransition)
+    <|> parens (pPartialPath' pNID pTransition)
 
-pDirective :: Parser t -> Parser (Directive 'WithDirectives t)
+pDirective :: Parser t -> Parser (Directive 'Partial t)
 pDirective pTransition =
   try (LocationFromHistory <$> pDirectiveNamed "history" number)
     <|> try (LocationFromHistory 1 <$ symbol "%last")
-    <|> (Targets <$> pDirectiveNamed "targets" (pPath pTransition))
+    <|> (Targets <$> pDirectiveNamed "targets" (pPartialPath pTransition))
     <|> (Splice <$> between (symbol "%{") (symbol "}") (many (noneOf ['}'])))
 
 pDirectiveNamed :: Text -> Parser a -> Parser a
@@ -49,10 +50,13 @@ pRegex = label "re\"<regex>\"" do
     & compileRegex . encodeUtf8
     & codiagonal . bimap fail pure
 
-pathTerm :: Parser t -> Parser (ParsedPath t)
-pathTerm = pathTerm' pFullNID
+partialPathTerm :: Parser t -> Parser (PartialPath t)
+partialPathTerm = partialPathTerm' pFullNID
 
-table :: [[Operator Parser (ParsedPath t)]]
+pathTerm :: Parser t -> Parser (ParsedPath t)
+pathTerm = parsedParserFromPartialParser . partialPathTerm
+
+table :: [[Operator Parser (PartialPath t)]]
 table =
   [ [Prefix (Backwards <$ symbol "~")],
     [InfixL $ (:/) <$ symbol "/"],
@@ -60,11 +64,28 @@ table =
     [InfixL $ (:+) <$ symbol "+"]
   ]
 
+pPartialPath' :: Parser NID -> Parser t -> Parser (PartialPath t)
+pPartialPath' pNID pTransition =
+  makeExprParser (partialPathTerm' pNID pTransition) table
+
+pPartialPath :: Parser t -> Parser (PartialPath t)
+pPartialPath = pPartialPath' pFullNID
+
+registerErrors :: Either (NonNull [ParseError']) a -> Parser a
+registerErrors = \case
+  Left (splitFirst -> (e, es)) -> do
+    for_ es registerParseError
+    parseError e
+  Right p -> pure p
+
+parsedParserFromPartialParser :: Parser (PartialPath t) -> Parser (ParsedPath t)
+parsedParserFromPartialParser p = p >>= registerErrors . parsedFromPartial
+
 pPath' :: Parser NID -> Parser t -> Parser (ParsedPath t)
-pPath' pNID pTransition = makeExprParser (pathTerm' pNID pTransition) table
+pPath' pNID = parsedParserFromPartialParser . pPartialPath' pNID
 
 pPath :: Parser t -> Parser (ParsedPath t)
-pPath = pPath' pFullNID
+pPath = parsedParserFromPartialParser . pPartialPath
 
 test_pPath :: TestTree
 test_pPath =
@@ -138,14 +159,14 @@ test_pPath =
       parseFails "!{}"
     ]
   where
-    parsesTo :: Text -> ParsedPath String -> TestTree
+    parsesTo :: Text -> PartialPath String -> TestTree
     parsesTo input =
       testCase ("parse: " ++ show input)
-        . testParserParses (pPath transition) input
+        . testParserParses (pPartialPath transition) input
     parseFails :: Text -> TestTree
     parseFails input =
       testCase ("parse fails: " ++ show input) $
-        testParserFails (pPath transition <* eof) input
+        testParserFails (pPartialPath transition <* eof) input
 
 test_pDirective :: TestTree
 test_pDirective =
@@ -171,7 +192,7 @@ test_pDirective =
       parseFails "%targets(foo"
     ]
   where
-    parsesTo :: Text -> Directive 'WithDirectives String -> TestTree
+    parsesTo :: Text -> Directive 'Partial String -> TestTree
     parsesTo input =
       testCase ("parse: " ++ show input)
         . testParserParses (pDirective transition) input
