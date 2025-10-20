@@ -24,7 +24,7 @@ getLegacyPartialPath i = case runParser pLastLegacyPartialPath "<completion>" i 
   Right r -> Just r
 
 pPathSegment :: Parser Path
-pPathSegment = convertDirectivesToErrors (pathTerm ttransition)
+pPathSegment = convertDirectivesToErrors pathTerm
 
 -- | a list of path segments that are interpreted as being separated by
 -- concatenation, followed by a string that represents a partial transition or something else
@@ -53,7 +53,7 @@ pLegacyPartialPath = do
 pLastLegacyPartialPath :: Parser LegacyPartialPath
 pLastLegacyPartialPath =
   try (c *> pLegacyPartialPath <* eof)
-    <|> (c *> pPath ttransition *> pLegacyPartialPath <* eof)
+    <|> (c *> pPath *> pLegacyPartialPath <* eof)
   where
     c = lexeme (many (oneOf (":.-_" :: String) <|> alphaNumChar) <* lookAhead s)
 

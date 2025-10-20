@@ -14,8 +14,8 @@ import Text.Megaparsec.Char (char)
 import Utils.Parsing
 import Utils.Testing
 
-partialPathTerm' :: Parser NID -> Parser Text -> Parser PartialPath
-partialPathTerm' pNID pTransition =
+partialPathTerm' :: Parser NID -> Parser PartialPath
+partialPathTerm' pNID =
   try (Absolute <$> pNID)
     <|> try ((Absolute tagsNID :/) . Literal <$> (char '#' *> pTransition))
     <|> (symbol "@" $> One)
@@ -27,14 +27,14 @@ partialPathTerm' pNID pTransition =
       (ExcludingNIDs . setFromList <$> pNID `sepEndBy1` symbol ",")
     <|> (RegexMatch <$> try pRegex)
     <|> (Literal <$> pTransition)
-    <|> (uncurry Directive <$> withSourceRange (pDirective pTransition))
-    <|> parens (pPartialPath' pNID pTransition)
+    <|> (uncurry Directive <$> withSourceRange pDirective)
+    <|> parens (pPartialPath' pNID)
 
-pDirective :: Parser Text -> Parser (Directive 'Partial)
-pDirective pTransition =
+pDirective :: Parser (Directive 'Partial)
+pDirective =
   try (LocationFromHistory <$> pDirectiveNamed "history" number)
     <|> try (LocationFromHistory 1 <$ symbol "%last")
-    <|> (Targets <$> pDirectiveNamed "targets" (pPartialPath pTransition))
+    <|> (Targets <$> pDirectiveNamed "targets" pPartialPath)
     <|> (Splice <$> between (symbol "%{") (symbol "}") (many (noneOf ['}'])))
 
 pDirectiveNamed :: Text -> Parser a -> Parser a
@@ -50,11 +50,11 @@ pRegex = label "re\"<regex>\"" do
     & compileRegex . encodeUtf8
     & codiagonal . bimap fail pure
 
-partialPathTerm :: Parser Text -> Parser PartialPath
+partialPathTerm :: Parser PartialPath
 partialPathTerm = partialPathTerm' pFullNID
 
-pathTerm :: Parser Text -> Parser ParsedPath
-pathTerm = parsedParserFromPartialParser . partialPathTerm
+pathTerm :: Parser ParsedPath
+pathTerm = parsedParserFromPartialParser partialPathTerm
 
 table :: [[Operator Parser PartialPath]]
 table =
@@ -64,11 +64,11 @@ table =
     [InfixL $ (:+) <$ symbol "+"]
   ]
 
-pPartialPath' :: Parser NID -> Parser Text -> Parser PartialPath
-pPartialPath' pNID pTransition =
-  makeExprParser (partialPathTerm' pNID pTransition) table
+pPartialPath' :: Parser NID -> Parser PartialPath
+pPartialPath' pNID =
+  makeExprParser (partialPathTerm' pNID) table
 
-pPartialPath :: Parser Text -> Parser PartialPath
+pPartialPath :: Parser PartialPath
 pPartialPath = pPartialPath' pFullNID
 
 registerErrors :: Either (NonNull [ParseError']) a -> Parser a
@@ -81,11 +81,11 @@ registerErrors = \case
 parsedParserFromPartialParser :: Parser PartialPath -> Parser ParsedPath
 parsedParserFromPartialParser p = p >>= registerErrors . parsedFromPartial
 
-pPath' :: Parser NID -> Parser Text -> Parser ParsedPath
-pPath' pNID = parsedParserFromPartialParser . pPartialPath' pNID
+pPath' :: Parser NID -> Parser ParsedPath
+pPath' pNID = parsedParserFromPartialParser (pPartialPath' pNID)
 
-pPath :: Parser Text -> Parser ParsedPath
-pPath = parsedParserFromPartialParser . pPartialPath
+pPath :: Parser ParsedPath
+pPath = parsedParserFromPartialParser pPartialPath
 
 test_pPath :: TestTree
 test_pPath =
@@ -162,11 +162,11 @@ test_pPath =
     parsesTo :: Text -> PartialPath -> TestTree
     parsesTo input =
       testCase ("parse: " ++ show input)
-        . testParserParses (pPartialPath ttransition) input
+        . testParserParses pPartialPath input
     parseFails :: Text -> TestTree
     parseFails input =
       testCase ("parse fails: " ++ show input) $
-        testParserFails (pPartialPath ttransition <* eof) input
+        testParserFails (pPartialPath <* eof) input
 
 test_pDirective :: TestTree
 test_pDirective =
@@ -195,8 +195,8 @@ test_pDirective =
     parsesTo :: Text -> Directive 'Partial -> TestTree
     parsesTo input =
       testCase ("parse: " ++ show input)
-        . testParserParses (pDirective ttransition) input
+        . testParserParses pDirective input
     parseFails :: Text -> TestTree
     parseFails input =
       testCase ("parse fails: " ++ show input) $
-        testParserFails (pDirective ttransition <* eof) input
+        testParserFails (pDirective <* eof) input

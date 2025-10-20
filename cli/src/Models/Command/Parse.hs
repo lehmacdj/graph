@@ -16,14 +16,8 @@ import Text.Megaparsec (try)
 import Utils.Parsing
 import Utils.Testing
 
-path' :: Parser ParsedPath
-path' = pPath ttransition
-
 path :: Parser Path
-path = convertDirectivesToErrors path'
-
-tpath :: Parser ParsedPath
-tpath = pPath ttransition
+path = convertDirectivesToErrors pPath
 
 pChangeNode :: Parser Command
 pChangeNode = (command "cd" $> ChangeNode) <*> path
@@ -38,19 +32,19 @@ pMerge :: Parser Command
 pMerge = (command "mg" $> Merge) <*> path
 
 pClone :: Parser Command
-pClone = (command "cl" $> Clone) <*> path <*> ttransition
+pClone = (command "cl" $> Clone) <*> path <*> pTransition
 
 pList :: Parser Command
 pList = command "ls" $> ListOut
 
 pQuery :: Parser Command
-pQuery = (commandFrom ["q", "query"] $> Query) <*> path <*> ttransition
+pQuery = (commandFrom ["q", "query"] $> Query) <*> path <*> pTransition
 
 pTag :: Parser Command
 pTag = (commandFrom ["tag", "t"] $> Tag) <*> path <*> path
 
 pText :: Parser Command
-pText = (commandFrom ["text", "mkt"] $> Text) <*> ttransition <*> (pack <$> some anySingle)
+pText = (commandFrom ["text", "mkt"] $> Text) <*> pTransition <*> (pack <$> some anySingle)
 
 pDescribe :: Parser Command
 pDescribe = (commandFrom ["describe", "desc"] $> Describe) <*> (pack <$> some anySingle)
@@ -71,10 +65,10 @@ pDebug :: Parser Command
 pDebug = commandFrom [":debug", ":d"] $> Debug
 
 pDedup :: Parser Command
-pDedup = (commandFrom ["dedup", "dd"] $> Dedup) <*> ttransition
+pDedup = (commandFrom ["dedup", "dd"] $> Dedup) <*> pTransition
 
 pFlatten :: Parser Command
-pFlatten = (command "flatten" $> Flatten) <*> ttransition
+pFlatten = (command "flatten" $> Flatten) <*> pTransition
 
 pShowImage :: Parser Command
 pShowImage = commandFrom ["show-image", "si"] $> ShowImage
@@ -110,13 +104,13 @@ pMaterialize :: Parser Command
 pMaterialize = (command "materialize" $> Materialize) <*> some anySingle
 
 pCollect :: Parser Command
-pCollect = (command "collect" $> Collect) <*> ttransition
+pCollect = (command "collect" $> Collect) <*> pTransition
 
 pAddText :: Parser Command
 pAddText = (commandFrom ["add-text", "al"] $> AddText) <*> anyText
 
 pV2Path :: Parser Command
-pV2Path = (commandFrom ["debug-v2-path", "v2"] $> V2Path) <*> tpath
+pV2Path = (commandFrom ["debug-v2-path", "v2"] $> V2Path) <*> pPath
 
 pCommandTerm :: Parser Command
 pCommandTerm =

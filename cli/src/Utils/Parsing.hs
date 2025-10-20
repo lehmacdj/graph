@@ -40,20 +40,17 @@ identChar = alphaNumChar <|> oneOf extraIdentChars
 symbol :: Text -> Parser Text
 symbol = L.symbol s
 
-ident :: Parser String
-ident = L.lexeme s $ some identChar
+ident :: Parser Text
+ident = L.lexeme s $ pack <$> some identChar
 
-stringLiteral :: Parser String
+stringLiteral :: Parser Text
 stringLiteral =
   label "<string literal>" $
     L.lexeme s $
-      char '"' >> manyTill L.charLiteral (char '"')
+      pack <$> (char '"' >> manyTill L.charLiteral (char '"'))
 
-transition :: Parser String
-transition = ident <|> stringLiteral <?> "<transition>"
-
-ttransition :: Parser Text
-ttransition = pack <$> transition
+pTransition :: Parser Text
+pTransition = ident <|> stringLiteral <?> "<transition>"
 
 pFullNID :: Parser NID
 pFullNID = L.lexeme s (char '@' *> p) <?> "@<nid>"

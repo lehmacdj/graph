@@ -6,7 +6,7 @@ import Models.NID
 import Models.NormalizedPath
 import Models.NormalizedPath.Parse
 import MyPrelude
-import Utils.Parsing (ttransition, whitespace)
+import Utils.Parsing (whitespace)
 import Utils.Parsing.Common
 
 npath :: QuasiQuoter
@@ -39,7 +39,7 @@ npathExp' ::
   String ->
   Code m (NormalizedPath a)
 npathExp' specializeAnchors s = do
-  case runParser (whitespace *> pNormalizedPath ttransition <* eof) "" (pack s) of
+  case runParser (whitespace *> pNormalizedPath <* eof) "" (pack s) of
     Left err ->
       Code . fail $
         "Parse error in npath quasi-quoter: " ++ errorBundlePretty err

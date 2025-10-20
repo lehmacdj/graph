@@ -13,53 +13,53 @@ import Text.Megaparsec.Char (char)
 import Utils.Parsing
 
 -- | Parse a normalized path term (atom) - generalized version
-pNormalizedPath' :: Parser NID -> Parser Text -> Parser (NormalizedPath Anchor)
-pNormalizedPath' pNID pTransition =
+pNormalizedPath' :: Parser NID -> Parser (NormalizedPath Anchor)
+pNormalizedPath' pNID =
   fmap (NormalizedPath . setFromList) $
-    (pDeterministicPath pNID pTransition `sepBy1` symbol "+")
+    (pDeterministicPath pNID `sepBy1` symbol "+")
       <|> (symbol "%never" $> [])
 
 -- | Parse a normalized path term (atom)
-pNormalizedPath :: Parser Text -> Parser (NormalizedPath Anchor)
+pNormalizedPath :: Parser (NormalizedPath Anchor)
 pNormalizedPath = pNormalizedPath' pSmallNID
 
-pDeterministicPath :: Parser NID -> Parser Text -> Parser (DeterministicPath Anchor)
-pDeterministicPath pNID pTransition =
+pDeterministicPath :: Parser NID -> Parser (DeterministicPath Anchor)
+pDeterministicPath pNID =
   label "deterministic path" $
-    try (Pointlike <$> pPointlike pNID pTransition)
-      <|> (Rooted <$> pRootedPath pNID pTransition)
+    try (Pointlike <$> pPointlike pNID)
+      <|> (Rooted <$> pRootedPath pNID)
 
-pSingleBranch :: Parser Text -> Parser (DPBranch Anchor)
-pSingleBranch pTransition =
+pSingleBranch :: Parser (DPBranch Anchor)
+pSingleBranch =
   label "single branch" $
     try (symbol "~*" $> DPIncoming DPWild)
       <|> (symbol "*" $> DPOutgoing DPWild)
       <|> try (DPIncoming . DPLiteral <$> (char '~' *> pTransition))
       <|> (DPOutgoing . DPLiteral <$> pTransition)
 
-pBranch :: Parser NID -> Parser Text -> Parser (DPBranch Anchor)
-pBranch pNID pTransition =
+pBranch :: Parser NID -> Parser (DPBranch Anchor)
+pBranch pNID =
   label "branch" $
-    try (pSequence pNID pTransition) <|> pSingleBranch pTransition
+    try (pSequence pNID) <|> pSingleBranch
 
 -- | Parse pointlike deterministic path: "@[loops]" or "@nid[loops]"
-pPointlike :: Parser NID -> Parser Text -> Parser (PointlikeDeterministicPath Anchor)
-pPointlike pNID pTransition = label "pointlike" do
+pPointlike :: Parser NID -> Parser (PointlikeDeterministicPath Anchor)
+pPointlike pNID = label "pointlike" do
   anchor <- pExplicitAnchor pNID
-  loops <- option [] $ brackets (pBranch pNID pTransition `sepBy1` symbol "&")
+  loops <- option [] $ brackets (pBranch pNID `sepBy1` symbol "&")
   pure $ PointlikeDeterministicPath anchor (setFromList loops)
 
 -- | Parse rooted deterministic path: "[@<branches]", "[@<branches]>target", "[branches]"
-pRootedPath :: Parser NID -> Parser Text -> Parser (RootedDeterministicPath Anchor)
-pRootedPath pNID pTransition = label "rooted path" do
-  rootBranches <- brackets (pRootBranches pNID pTransition)
-  target <- option unanchored (pTarget pNID pTransition)
+pRootedPath :: Parser NID -> Parser (RootedDeterministicPath Anchor)
+pRootedPath pNID = label "rooted path" do
+  rootBranches <- brackets (pRootBranches pNID)
+  target <- option unanchored (pTarget pNID)
   pure $ RootedDeterministicPath rootBranches target
 
 -- | Parse sequence branch using /| operator: "a/@|b", "a/|b", "(a & b)/@|c"
-pSequence :: Parser NID -> Parser Text -> Parser (DPBranch Anchor)
-pSequence pNID pTransition = label "sequence" do
-  (initial, splitFirst -> ((m, b), rest)) <- pSequenceBranchSet pNID pTransition `via1` pMidpoint
+pSequence :: Parser NID -> Parser (DPBranch Anchor)
+pSequence pNID = label "sequence" do
+  (initial, splitFirst -> ((m, b), rest)) <- pSequenceBranchSet pNID `via1` pMidpoint
   pure . uncurry ($) $
     foldl'
       (\(acc, x) (n, y) -> (acc . singletonSet . DPSequence x n, y))
@@ -67,25 +67,25 @@ pSequence pNID pTransition = label "sequence" do
       rest
   where
     pMidpoint =
-      symbol "/" *> option unanchored (pPointlike pNID pTransition) <* symbol "|"
+      symbol "/" *> option unanchored (pPointlike pNID) <* symbol "|"
 
 -- | Parse a set of branches separated by &
-pSequenceBranchSet :: Parser NID -> Parser Text -> Parser (OSet (DPBranch Anchor))
-pSequenceBranchSet pNID pTransition =
+pSequenceBranchSet :: Parser NID -> Parser (OSet (DPBranch Anchor))
+pSequenceBranchSet pNID =
   label "sequence branch set" $
     try (setFromList <$> pMultiple)
-      <|> (singletonSet <$> pSingleBranch pTransition)
+      <|> (singletonSet <$> pSingleBranch)
   where
-    pMultiple = parens (pBranch pNID pTransition `sepBy1` symbol "&")
+    pMultiple = parens (pBranch pNID `sepBy1` symbol "&")
 
 -- | Parse a set of branches separated by &
-pRootedBranchSet :: Parser NID -> Parser Text -> Parser (OSet (DPBranch Anchor))
-pRootedBranchSet pNID pTransition =
+pRootedBranchSet :: Parser NID -> Parser (OSet (DPBranch Anchor))
+pRootedBranchSet pNID =
   label "rooted branch set" $
-    try (singletonSet <$> pBranch pNID pTransition)
+    try (singletonSet <$> pBranch pNID)
       <|> (setFromList <$> pMultiple)
   where
-    pMultiple = parens (pBranch pNID pTransition `sepBy1` symbol "&")
+    pMultiple = parens (pBranch pNID `sepBy1` symbol "&")
 
 -- | Parse explicit anchor: "@", "@nid", "!{@nid, @nid2, ...}"
 pExplicitAnchor :: Parser NID -> Parser Anchor
@@ -101,25 +101,23 @@ pExplicitAnchor pNID =
 -- | Parse root branches: "@<branches & @nid<branches & ..."
 pRootBranches ::
   Parser NID ->
-  Parser Text ->
   Parser (OMap (DeterministicPath Anchor) (OSet (DPBranch Anchor)))
-pRootBranches pNID pTransition = label "root branches" do
-  branches <- sepBy1 (pRootBranch pNID pTransition) (symbol "&")
+pRootBranches pNID = label "root branches" do
+  branches <- sepBy1 (pRootBranch pNID) (symbol "&")
   pure $ unionsWith (<>) $ uncurry singletonMap <$> branches
 
 pRootBranch ::
   Parser NID ->
-  Parser Text ->
   Parser (DeterministicPath Anchor, OSet (DPBranch Anchor))
-pRootBranch pNID pTransition = label "root branch" do
+pRootBranch pNID = label "root branch" do
   root <-
     option
       (Pointlike unanchored)
-      (pDeterministicPath pNID pTransition <* symbol "<")
-  branches <- pRootedBranchSet pNID pTransition
+      (pDeterministicPath pNID <* symbol "<")
+  branches <- pRootedBranchSet pNID
   pure (root, branches)
 
-pTarget :: Parser NID -> Parser Text -> Parser (PointlikeDeterministicPath Anchor)
-pTarget pNID pTransition =
+pTarget :: Parser NID -> Parser (PointlikeDeterministicPath Anchor)
+pTarget pNID =
   label "target" $
-    char '>' *> pPointlike pNID pTransition
+    char '>' *> pPointlike pNID

@@ -4,7 +4,7 @@ import Models.NID
 import Models.NormalizedPath
 import Models.NormalizedPath.Parse
 import MyPrelude hiding (union)
-import Utils.Parsing (eof, ttransition)
+import Utils.Parsing (eof)
 import Utils.Testing
 
 test_pNormalizedPath :: TestTree
@@ -124,12 +124,12 @@ test_pNormalizedPath =
     parsesTo :: (HasCallStack) => Text -> NormalizedPath Anchor -> TestTree
     parsesTo input expected =
       testCase ("parse: " ++ show input) $
-        testParserParses (pNormalizedPath ttransition <* eof) input expected
+        testParserParses (pNormalizedPath <* eof) input expected
 
     parseFails :: (HasCallStack) => Text -> TestTree
     parseFails input =
       testCase ("parse fails: " ++ show input) $
-        testParserFails (pNormalizedPath ttransition <* eof) input
+        testParserFails (pNormalizedPath <* eof) input
 
 singletonBranch :: DPBranch Anchor -> NormalizedPath Anchor
 singletonBranch branch =
