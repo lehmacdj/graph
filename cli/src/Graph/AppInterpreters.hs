@@ -65,9 +65,9 @@ printingErrorsAndWarnings = printWarnings >>> printErrors
 type GraphEditorEffects :: [Effect]
 type GraphEditorEffects =
   [ FreshNID,
-    ReadGraph String (Maybe ByteString),
-    ReadGraphDataless String,
-    WriteGraph String,
+    ReadGraph Text (Maybe ByteString),
+    ReadGraphDataless Text,
+    WriteGraph Text,
     Scoped_ GraphMetadataEditing,
     -- GraphDataEditing,
     Dualizeable,
@@ -87,9 +87,9 @@ runGraphEditorEffects =
     >>> runFreshNIDRandom
     >>> subsume
     >>> raise3Under @(Input FilePath)
-    >>> applyInput2 (runReadGraphDualizeableIO @String)
-    >>> applyInput2 (runReadGraphDatalessDualizeableIO @String)
-    >>> applyInput2 (runWriteGraphDualizeableIO @String)
+    >>> applyInput2 (runReadGraphDualizeableIO @Text)
+    >>> applyInput2 (runReadGraphDatalessDualizeableIO @Text)
+    >>> applyInput2 (runWriteGraphDualizeableIO @Text)
     >>> supplyInputVia getGraphFilePath
     >>> runScopedGraphMetadataEditingTransactionally
     >>> subsume

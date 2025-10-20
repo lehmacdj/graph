@@ -180,7 +180,7 @@ cloneNode nid = do
 -- defined in the graph. It will probably overwrite stuff in unpredictable
 -- ways in that case.
 unsafeRenumberNode ::
-  (Member (Error Missing) effs, HasGraph String effs) =>
+  (Member (Error Missing) effs, HasGraph Text effs) =>
   -- | Node to rewrite on left, number to be rewritten to on right
   (NID, NID) ->
   Sem effs ()
@@ -188,5 +188,5 @@ unsafeRenumberNode (nid, nid') = do
   n <- getNodeSem nid
   let i = selfLoopify nid nid' n.incoming
       o = selfLoopify nid nid' n.outgoing
-  insertNode @String (Node nid' i o n.rawData)
-  deleteNode @String nid
+  insertNode @Text (Node nid' i o n.rawData)
+  deleteNode @Text nid

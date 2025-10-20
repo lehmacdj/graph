@@ -17,20 +17,20 @@ timeFromDateStrings year month day time =
   parseTimeM True defaultTimeLocale "%Y%m%d%H:%M:%S.%q" $
     concat [year, month, day, time]
 
-timeToDateStrings :: UTCTime -> NonNull [String]
+timeToDateStrings :: UTCTime -> NonNull [Text]
 timeToDateStrings time =
   impureNonNull
-    [ formatTime' "%Y" time,
-      formatTime' "%m" time,
-      formatTime' "%d" time,
-      formatTime' "%H:%M:%S.%q" time
+    [ pack (formatTime' "%Y" time),
+      pack (formatTime' "%m" time),
+      pack (formatTime' "%d" time),
+      pack (formatTime' "%H:%M:%S.%q" time)
     ]
   where
     formatTime' = formatTime defaultTimeLocale
 
 -- | Tag the current node with a path to it that represents the current time
 tagWithTime ::
-  (Members [FreshNID, Error Missing, GetTime] effs, HasGraph String effs) =>
+  (Members [FreshNID, Error Missing, GetTime] effs, HasGraph Text effs) =>
   NID ->
   Sem effs ()
 tagWithTime targetNID = do
@@ -40,7 +40,7 @@ tagWithTime targetNID = do
 -- | Intercept FreshNID effects & tag all fresh NIDs created with the date
 taggingFreshNodesWithTime ::
   forall a effs.
-  (Members [FreshNID, Error Missing, GetTime] effs, HasGraph String effs) =>
+  (Members [FreshNID, Error Missing, GetTime] effs, HasGraph Text effs) =>
   Sem effs a ->
   Sem effs a
 taggingFreshNodesWithTime action = evalState @(Set NID) mempty $ do

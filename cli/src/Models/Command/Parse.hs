@@ -16,10 +16,10 @@ import Text.Megaparsec (try)
 import Utils.Parsing
 import Utils.Testing
 
-path' :: Parser (ParsedPath String)
-path' = pPath transition
+path' :: Parser (ParsedPath Text)
+path' = pPath ttransition
 
-path :: Parser (Path String)
+path :: Parser (Path Text)
 path = convertDirectivesToErrors path'
 
 tpath :: Parser (ParsedPath Text)
@@ -38,22 +38,22 @@ pMerge :: Parser Command
 pMerge = (command "mg" $> Merge) <*> path
 
 pClone :: Parser Command
-pClone = (command "cl" $> Clone) <*> path <*> transition
+pClone = (command "cl" $> Clone) <*> path <*> ttransition
 
 pList :: Parser Command
 pList = command "ls" $> ListOut
 
 pQuery :: Parser Command
-pQuery = (commandFrom ["q", "query"] $> Query) <*> path <*> transition
+pQuery = (commandFrom ["q", "query"] $> Query) <*> path <*> ttransition
 
 pTag :: Parser Command
 pTag = (commandFrom ["tag", "t"] $> Tag) <*> path <*> path
 
 pText :: Parser Command
-pText = (commandFrom ["text", "mkt"] $> Text) <*> transition <*> some anySingle
+pText = (commandFrom ["text", "mkt"] $> Text) <*> ttransition <*> (pack <$> some anySingle)
 
 pDescribe :: Parser Command
-pDescribe = (commandFrom ["describe", "desc"] $> Describe) <*> some anySingle
+pDescribe = (commandFrom ["describe", "desc"] $> Describe) <*> (pack <$> some anySingle)
 
 pRemove :: Parser Command
 pRemove = (command "rm" $> Remove) <*> path
@@ -71,10 +71,10 @@ pDebug :: Parser Command
 pDebug = commandFrom [":debug", ":d"] $> Debug
 
 pDedup :: Parser Command
-pDedup = (commandFrom ["dedup", "dd"] $> Dedup) <*> transition
+pDedup = (commandFrom ["dedup", "dd"] $> Dedup) <*> ttransition
 
 pFlatten :: Parser Command
-pFlatten = (command "flatten" $> Flatten) <*> transition
+pFlatten = (command "flatten" $> Flatten) <*> ttransition
 
 pShowImage :: Parser Command
 pShowImage = commandFrom ["show-image", "si"] $> ShowImage
@@ -110,7 +110,7 @@ pMaterialize :: Parser Command
 pMaterialize = (command "materialize" $> Materialize) <*> some anySingle
 
 pCollect :: Parser Command
-pCollect = (command "collect" $> Collect) <*> transition
+pCollect = (command "collect" $> Collect) <*> ttransition
 
 pAddText :: Parser Command
 pAddText = (commandFrom ["add-text", "al"] $> AddText) <*> anyText

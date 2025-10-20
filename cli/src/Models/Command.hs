@@ -17,39 +17,39 @@ import MyPrelude
 
 data Command
   = -- | cd
-    ChangeNode (Path String)
+    ChangeNode (Path Text)
   | -- | d
     Dualize
   | -- | mk
-    Make (Path String)
+    Make (Path Text)
   | -- | mg
-    Merge (Path String)
+    Merge (Path Text)
   | -- | cl
-    Clone (Path String) String
+    Clone (Path Text) Text
   | -- | ls
     ListOut
   | -- | q
-    Query (Path String) String
+    Query (Path Text) Text
   | -- | t
-    Tag (Path String) (Path String)
-  | Text String String
+    Tag (Path Text) (Path Text)
+  | Text Text Text
   | -- | desc
-    Describe String
+    Describe Text
   | -- | rm
-    Remove (Path String)
+    Remove (Path Text)
   | -- | rmnf
-    RemoveNode (Path String)
+    RemoveNode (Path Text)
   | -- | at
-    At (Path String) Command
+    At (Path Text) Command
   | -- | dd
-    Dedup String
+    Dedup Text
   | -- | flatten:
     -- Takes every node transition/* and creates edges transition to them.
     -- The purpose of this is to convert from a form where things have explicit
     -- but unnecessary names to a form where the edge is the only identifiying
     -- attribute.
     -- This can be considered to be the inverse of dedup in a sense
-    Flatten String
+    Flatten Text
   | -- | nid
     NodeId
   | -- | :d
@@ -67,12 +67,12 @@ data Command
   | -- | fix
     Fix
   | -- | mv
-    Move (Path String) (Path String)
+    Move (Path Text) (Path Text)
   | -- | rn
-    Rename (Path String) (Path String)
+    Rename (Path Text) (Path Text)
   | -- | alias, cp: while cp is misleading it's similar enough to shell cp that
     -- naming it cp is better for muscle memory + al is already taken by add link
-    Alias (Path String) (Path String)
+    Alias (Path Text) (Path Text)
   | -- | vi
     Edit
   | -- | back: Go back in history by a certain number of steps. Greater number
@@ -86,7 +86,7 @@ data Command
     Materialize FilePath
   | -- | Collect same transitions into a transition to a single node that
     -- transitions to the nodes the previous transition used to
-    Collect String
+    Collect Text
   | -- | Execute a list of commands sequentially
     Seq (TwoElemList Command)
   | -- | debug-v2-path, v2

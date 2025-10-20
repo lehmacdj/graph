@@ -93,10 +93,10 @@ completePath env (i, _) = case getLegacyPartialPath (pack $ takeRelevantFromEnd 
         let p = foldr (Simple.:/) Simple.One pp
         nid <- currentLocation
         ntids <- toList <$> subsumeUserError (resolvePathSuccesses nid p)
-        nts <- getNodes @String ntids
+        nts <- getNodes @Text ntids
         let octs =
               -- outgoing connect transitions
-              toListOf (folded . #outgoing . folded . #transition) nts
+              map unpack $ toListOf (folded . #outgoing . folded . #transition) nts
         pure (fromMaybe i (stripPrefix (reverse end) i), mkCompleter octs end)
 
 completeNID :: Env -> (String, String) -> IO (String, [Completion])

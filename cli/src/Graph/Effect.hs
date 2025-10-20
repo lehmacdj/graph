@@ -230,7 +230,7 @@ runWriteStringGraph ::
       ]
       r
   ) =>
-  Sem (WriteGraph String : r) a ->
+  Sem (WriteGraph Text : r) a ->
   Sem r a
 runWriteStringGraph = interpret $ \case
   TouchNode nid -> touchNode nid

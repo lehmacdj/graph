@@ -23,14 +23,14 @@ getLegacyPartialPath i = case runParser pLastLegacyPartialPath "<completion>" i 
   Left _ -> Nothing
   Right r -> Just r
 
-pPathSegment :: Parser (Path String)
-pPathSegment = convertDirectivesToErrors (pathTerm transition)
+pPathSegment :: Parser (Path Text)
+pPathSegment = convertDirectivesToErrors (pathTerm ttransition)
 
 -- | a list of path segments that are interpreted as being separated by
 -- concatenation, followed by a string that represents a partial transition or something else
 data LegacyPartialPath
-  = LegacyPartialPath [Path String] String
-  | MissingSlash [Path String]
+  = LegacyPartialPath [Path Text] String
+  | MissingSlash [Path Text]
   deriving (Show, Eq, Ord)
 
 pLegacyPartialPath :: Parser LegacyPartialPath
@@ -42,9 +42,9 @@ pLegacyPartialPath = do
   case prepath' of
     Right prepath -> pure $ LegacyPartialPath prepath ""
     Left prepath -> case unsnoc prepath of
-      Just (path, Literal end) -> pure $ LegacyPartialPath path end
+      Just (path, Literal end) -> pure $ LegacyPartialPath path (unpack end)
       -- this is the case when parsing a tag-like path like "#foobar"
-      Just ([], tn@(Absolute _) :/ Literal end) -> pure $ LegacyPartialPath [tn] end
+      Just ([], tn@(Absolute _) :/ Literal end) -> pure $ LegacyPartialPath [tn] (unpack end)
       -- if the last thing in the path isn't a literal, we can't complete it
       -- and the only thing that could come next is a slash
       Just _ -> pure $ MissingSlash prepath
@@ -53,7 +53,7 @@ pLegacyPartialPath = do
 pLastLegacyPartialPath :: Parser LegacyPartialPath
 pLastLegacyPartialPath =
   try (c *> pLegacyPartialPath <* eof)
-    <|> (c *> pPath transition *> pLegacyPartialPath <* eof)
+    <|> (c *> pPath ttransition *> pLegacyPartialPath <* eof)
   where
     c = lexeme (many (oneOf (":.-_" :: String) <|> alphaNumChar) <* lookAhead s)
 

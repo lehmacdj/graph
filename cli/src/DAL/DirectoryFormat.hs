@@ -5,7 +5,7 @@ import Models.NID
 import MyPrelude
 
 metadataFile :: FilePath -> NID -> FilePath
-metadataFile base nid = base </> (unpack (nidRepresentation nid :: Text) ++ ".json")
+metadataFile base nid = base </> (unpack (nidRepresentation nid) ++ ".json")
 
 legacyNodeDataFile :: FilePath -> NID -> FilePath
 legacyNodeDataFile base nid = nodeDataFile base nid ".data"

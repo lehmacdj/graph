@@ -20,12 +20,12 @@ import Models.Edge
 import MyPrelude
 import System.Directory.Tree hiding (readDirectory)
 
-computeSHA :: ByteString -> String
-computeSHA = showDigest . sha512 . fromStrict
+computeSHA :: ByteString -> Text
+computeSHA = pack . showDigest . sha512 . fromStrict
 
 importDirectory ::
   ( Members [GetTime, FreshNID, FileSystem, Echo, Error Missing] effs,
-    HasGraph String effs
+    HasGraph Text effs
   ) =>
   FilePath ->
   NID ->
@@ -41,7 +41,7 @@ importDirectory base nid = do
   addDirectories fileTree nid
 
 addDirectories ::
-  (Members [FreshNID, Error Missing, GetTime] effs, HasGraph String effs) =>
+  (Members [FreshNID, Error Missing, GetTime] effs, HasGraph Text effs) =>
   DirTree ByteString ->
   NID ->
   Sem effs ()
@@ -50,12 +50,12 @@ addDirectories dt' root = do
         File fn cs -> do
           nid' <- importData cs
           -- TODO: possibly add handling of filename extensions, to categorize
-          insertEdge (Edge nid fn nid')
+          insertEdge (Edge nid (pack fn :: Text) nid')
         Dir fn [] -> do
-          _ <- taggingFreshNodesWithTime $ nid `transitionsVia` fn
+          _ <- taggingFreshNodesWithTime $ nid `transitionsVia` (pack fn :: Text)
           pure ()
         Dir fn (x : xs) -> do
-          nid' <- taggingFreshNodesWithTime $ nid `transitionsVia` fn
+          nid' <- taggingFreshNodesWithTime $ nid `transitionsVia` (pack fn :: Text)
           -- dfs down x
           go x nid'
           -- then continue evaluating at this point

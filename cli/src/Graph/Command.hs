@@ -56,7 +56,7 @@ singleErr cmd xs =
 
 printTransitions ::
   (Member Echo effs) =>
-  Set (Connect String) ->
+  Set (Connect Text) ->
   Sem effs ()
 printTransitions = mapM_ (echo . dtransition)
   where
@@ -125,7 +125,7 @@ interpretCommand ::
     -- scripts, and then rewrite materialize and any other commands that
     -- require this outside of
     Members [RawGraph, Embed IO] effs,
-    HasGraph String effs
+    HasGraph Text effs
   ) =>
   Command ->
   Sem effs ()
@@ -144,7 +144,7 @@ interpretCommand = \case
     nid <- currentLocation
     nids <- subsumeUserError (resolvePathSuccessesDetail' nid p)
     whenNonNull (mapMaybe successfulDPathEndpoint $ toList nids) $ \xs -> do
-      nid' <- subsumeUserError (Graph.Utils.mergeNodes @String xs)
+      nid' <- subsumeUserError (Graph.Utils.mergeNodes @Text xs)
       changeLocation nid'
   Remove p -> do
     nid <- currentLocation
@@ -152,31 +152,31 @@ interpretCommand = \case
   RemoveNode p -> do
     nid <- currentLocation
     nids <- subsumeUserError (resolvePathSuccesses nid p)
-    forM_ nids $ deleteNode @String
+    forM_ nids $ deleteNode @Text
   Clone p t -> do
     nid <- currentLocation
     let err = singleErr "clone"
     nid' <- the' err =<< subsumeUserError (resolvePathSuccesses nid p)
-    nid'' <- (subsumeUserError . taggingFreshNodesWithTime) (cloneNode @String nid')
+    nid'' <- (subsumeUserError . taggingFreshNodesWithTime) (cloneNode @Text nid')
     cnid <- currentLocation
     insertEdge $ Edge cnid t nid''
   Query p t -> do
     nid <- currentLocation
     nids <- subsumeUserError (resolvePathSuccesses nid p)
     nnid <- (subsumeUserError . taggingFreshNodesWithTime) (nid `transitionsFreshVia` t)
-    _ <- subsumeUserError (Graph.Utils.mergeNodes @String (nnid `ncons` toList nids))
+    _ <- subsumeUserError (Graph.Utils.mergeNodes @Text (nnid `ncons` toList nids))
     pure ()
   Tag p q -> do
     nid <- currentLocation
     let err = singleErr "the last argument of tag"
     target <- the' err =<< subsumeUserError (resolvePathSuccesses nid q)
     nnids <- (subsumeUserError . taggingFreshNodesWithTime) (mkPath nid (p Simple.:/ Literal ""))
-    _ <- subsumeUserError (Graph.Utils.mergeNodes @String (target `ncons` toList nnids))
+    _ <- subsumeUserError (Graph.Utils.mergeNodes @Text (target `ncons` toList nnids))
     pure ()
   Text t s -> do
     nid <- currentLocation
     vNid <- the' (error "only creating one path") =<< (subsumeUserError . taggingFreshNodesWithTime) (mkPath nid (Literal t))
-    setData vNid (Just (encodeUtf8 (fromString s)))
+    setData vNid (Just (encodeUtf8 s))
   Describe d -> interpretCommand (Text "description" d)
   At p c -> do
     nid <- currentLocation
@@ -191,7 +191,7 @@ interpretCommand = \case
           | otherwise = show <$> ([1 ..] :: [Int])
     forM_ ambiguities $ \amb -> deleteEdge (Edge nid t amb)
     zipWithM_
-      (\a s -> insertEdge (Edge nid (t ++ s) a))
+      (\a s -> insertEdge (Edge nid (t <> pack s) a))
       (toList ambiguities)
       suffixes
   Flatten t -> do
@@ -208,7 +208,7 @@ interpretCommand = \case
     n <- subsumeUserError currentNode
     printTransitions n.outgoing
   ShowImage -> do
-    n <- subsumeUserError (currentNode @String)
+    n <- subsumeUserError (currentNode @Text)
     forM_ n.rawData $ subsumeUserError @Missing . displayImage . fromStrict
   -- it probably would make sense to factor these commands out into separate
   -- layers of commands that can be handled at different levels
@@ -233,9 +233,9 @@ interpretCommand = \case
     echo "history:"
     get @History >>= echo . show
   -- echo "node-ids in the graph:"
-  -- nodeManifest @String >>= echo . show
-  Check -> reportToConsole @String (fsck @String)
-  Fix -> fixErrors @String (fsck @String)
+  -- nodeManifest @Text >>= echo . show
+  Check -> reportToConsole @Text (fsck @Text)
+  Fix -> fixErrors @Text (fsck @Text)
   Move p q -> do
     nid <- currentLocation
     let err = singleErr "the last argument of mv"
