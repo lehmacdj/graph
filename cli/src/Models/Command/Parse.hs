@@ -4,7 +4,6 @@ module Models.Command.Parse
   )
 where
 
-import Control.Arrow (left)
 import Data.Functor
 import Graph.SystemNodes (tagsNID)
 import Models.Command

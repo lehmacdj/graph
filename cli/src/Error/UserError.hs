@@ -6,7 +6,6 @@ module Error.UserError
   )
 where
 
-import Control.Arrow (left)
 import Control.Exception qualified as E
 import Control.Lens
 import Models.NID (NID)

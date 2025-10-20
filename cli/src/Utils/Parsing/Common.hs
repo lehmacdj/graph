@@ -8,6 +8,7 @@ import MyPrelude
 import Text.Megaparsec hiding (runParser, runParser')
 import Text.Megaparsec as MP (runParser)
 import Text.Megaparsec as X hiding (runParser, runParser', try)
+import Text.Megaparsec.State as X (initialPosState)
 
 data CustomParseError
   = IllegalDirective
@@ -31,6 +32,8 @@ defaultParserOptions = ParserOptions False
 type Parser = ReaderT ParserOptions (Parsec CustomParseError Text)
 
 type ParseError' = ParseError Text CustomParseError
+
+type ParseErrorBundle' = ParseErrorBundle Text CustomParseError
 
 data SourceRange = SourceRange
   { startPos :: SourcePos,

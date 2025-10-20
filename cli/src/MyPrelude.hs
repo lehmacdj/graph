@@ -19,6 +19,7 @@ where
 -- also hide these when we are ready to use OsPath; import MyPrelude.OsPath as X
 -- , readFile, readFileUtf8, writeFile, writeFileUtf8, (<.>), (</>)
 import ClassyPrelude hiding (fromException, nonNull, throwString)
+import Control.Arrow as X (left, right)
 import Control.Comonad as X
 import Control.DeepSeq as X
 import Data.Coerce as X (Coercible, coerce)

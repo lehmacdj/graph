@@ -7,13 +7,14 @@ module Models.Path
     Directive (..),
     handleDirectivesWith,
     handleDirectivesQ,
+    parsedFromPartial,
   )
 where
 
 import Language.Haskell.TH (Exp, Q)
 import Models.NID
 import MyPrelude
-import Utils.Parsing.Common (ParseError', SourceRange (..))
+import Utils.Parsing.Common
 
 -- | The most general path type. Parametrized with a phase and the raw type of
 -- literals/transitions.
@@ -217,6 +218,32 @@ handleDirectivesQ interpretDirective = \case
         ::& $(handleDirectivesQ interpretDirective r)
       |]
   Directive ann directive -> interpretDirective ann directive
+
+-- | Convert a PartialPath to a ParsedPath, collecting all parse errors.
+-- Returns either a list of all errors found, or a successfully parsed path.
+parsedFromPartial ::
+  Path' 'Partial t ->
+  Either (NonNull [ParseError']) (Path' 'WithDirectives t)
+parsedFromPartial = (.either) . go
+  where
+    go = \case
+      One -> pure One
+      Zero -> pure Zero
+      Wild -> pure Wild
+      RegexMatch r -> pure (RegexMatch r)
+      Literal x -> pure (Literal x)
+      Absolute nid -> pure (Absolute nid)
+      ExcludingNIDs nids -> pure (ExcludingNIDs nids)
+      Backwards' p -> Backwards' <$> go p
+      l ::/ r -> (::/) <$> go l <*> go r
+      l ::+ r -> (::+) <$> go l <*> go r
+      l ::& r -> (::&) <$> go l <*> go r
+      Directive ann directive -> Directive ann <$> goDirective directive
+      Hole err -> Validation (Left (singletonNN err))
+    goDirective = \case
+      LocationFromHistory i -> pure (LocationFromHistory i)
+      Targets p -> Targets <$> go p
+      Splice s -> pure (Splice s)
 
 -- | helper for producing the necessary constraints for a Path'
 type Path'Constraints ::
