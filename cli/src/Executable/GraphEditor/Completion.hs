@@ -11,8 +11,8 @@ import Graph.AppInterpreters
 import Graph.LegacyPathMaterialization
 import Graph.NodeLocated
 import Graph.Utils
+import Models.LegacyPartialPath
 import Models.NID (nidDigits)
-import Models.PartialPath
 import Models.Path.Simple qualified as Simple
 import MyPrelude
 import System.Console.Haskeline
@@ -80,10 +80,10 @@ failCompletionWithOriginalInputOnErrorOrWarning i =
 -- transition currently on as much as possible, then tries to complete from
 -- that location
 completePath :: Env -> (String, String) -> IO (String, [Completion])
-completePath env (i, _) = case getPartialPath (pack $ takeRelevantFromEnd i) of
+completePath env (i, _) = case getLegacyPartialPath (pack $ takeRelevantFromEnd i) of
   Nothing -> pure (i, [])
   Just (MissingSlash _) -> pure (i, [simpleCompletion "/"])
-  Just (PartialPath pp end) ->
+  Just (LegacyPartialPath pp end) ->
     runAppEffects
       (failCompletionWithOriginalInputOnErrorOrWarning i)
       interpretTimeAsIO

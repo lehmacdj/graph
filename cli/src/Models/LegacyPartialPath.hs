@@ -1,9 +1,9 @@
-module Models.PartialPath
-  ( getPartialPath,
+module Models.LegacyPartialPath
+  ( getLegacyPartialPath,
     takeRelevantFromEnd,
-    PartialPath (..),
+    LegacyPartialPath (..),
     test_takeRelevantFromEnd,
-    test_pPartialPath,
+    test_pLegacyPartialPath,
   )
 where
 
@@ -18,8 +18,8 @@ import Utils.Testing
 
 -- | Try to parse a path, returning a partial path that is the last one
 -- in the input string, this partial path will be the input for completion
-getPartialPath :: Text -> Maybe PartialPath
-getPartialPath i = case runParser pLastPartialPath "<completion>" i of
+getLegacyPartialPath :: Text -> Maybe LegacyPartialPath
+getLegacyPartialPath i = case runParser pLastLegacyPartialPath "<completion>" i of
   Left _ -> Nothing
   Right r -> Just r
 
@@ -28,35 +28,32 @@ pPathSegment = convertDirectivesToErrors (pathTerm transition)
 
 -- | a list of path segments that are interpreted as being separated by
 -- concatenation, followed by a string that represents a partial transition or something else
-data PartialPath
-  = PartialPath [Path String] String
+data LegacyPartialPath
+  = LegacyPartialPath [Path String] String
   | MissingSlash [Path String]
   deriving (Show, Eq, Ord)
 
-pPartialPath :: Parser PartialPath
-pPartialPath = do
+pLegacyPartialPath :: Parser LegacyPartialPath
+pLegacyPartialPath = do
   prepath' <-
     try (Right [Absolute tagsNID] <$ (symbol "#" *> eof))
       <|> try (Left <$> pPathSegment `sepBy` symbol "/")
       <|> (Right <$> pPathSegment `endBy` symbol "/")
   case prepath' of
-    Right prepath -> pure $ PartialPath prepath ""
+    Right prepath -> pure $ LegacyPartialPath prepath ""
     Left prepath -> case unsnoc prepath of
-      Just (path, Literal end) -> pure $ PartialPath path end
+      Just (path, Literal end) -> pure $ LegacyPartialPath path end
       -- this is the case when parsing a tag-like path like "#foobar"
-      Just ([], tn@(Absolute _) :/ Literal end) -> pure $ PartialPath [tn] end
+      Just ([], tn@(Absolute _) :/ Literal end) -> pure $ LegacyPartialPath [tn] end
       -- if the last thing in the path isn't a literal, we can't complete it
       -- and the only thing that could come next is a slash
       Just _ -> pure $ MissingSlash prepath
-      Nothing -> pure $ PartialPath [] ""
+      Nothing -> pure $ LegacyPartialPath [] ""
 
-pLastPartialPath :: Parser PartialPath
-pLastPartialPath =
-  try (c *> pPartialPath <* eof)
-    <|> c
-    *> pPath transition
-    *> pPartialPath
-    <* eof
+pLastLegacyPartialPath :: Parser LegacyPartialPath
+pLastLegacyPartialPath =
+  try (c *> pLegacyPartialPath <* eof)
+    <|> (c *> pPath transition *> pLegacyPartialPath <* eof)
   where
     c = lexeme (many (oneOf (":.-_" :: String) <|> alphaNumChar) <* lookAhead s)
 
@@ -84,18 +81,18 @@ takeRelevantFromEnd i = go (0 :: Int) i False ""
     go 0 ('&' : rest) _ acc = go 0 rest True acc
     go n (x : rest) d acc = go n rest d (consUnless d x acc)
 
-test_pPartialPath :: TestTree
-test_pPartialPath =
+test_pLegacyPartialPath :: TestTree
+test_pLegacyPartialPath =
   testGroup
-    "pPartialPath"
-    [ "#" `parsesTo` PartialPath [Absolute tagsNID] "",
-      "#foo" `parsesTo` PartialPath [Absolute tagsNID] "foo",
+    "pLegacyPartialPath"
+    [ "#" `parsesTo` LegacyPartialPath [Absolute tagsNID] "",
+      "#foo" `parsesTo` LegacyPartialPath [Absolute tagsNID] "foo",
       "(a + b)" `parsesTo` MissingSlash [Literal "a" :+ Literal "b"],
-      "a/b/" `parsesTo` PartialPath [Literal "a", Literal "b"] "",
-      "a/b" `parsesTo` PartialPath [Literal "a"] "b"
+      "a/b/" `parsesTo` LegacyPartialPath [Literal "a", Literal "b"] "",
+      "a/b" `parsesTo` LegacyPartialPath [Literal "a"] "b"
     ]
   where
-    parsesTo i = testCase ("parse: " ++ show i) . testParserParses pPartialPath i
+    parsesTo i = testCase ("parse: " ++ show i) . testParserParses pLegacyPartialPath i
 
 test_takeRelevantFromEnd :: TestTree
 test_takeRelevantFromEnd =

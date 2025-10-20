@@ -83,6 +83,7 @@ library
       Models.GraphSpec
       Models.History
       Models.HistorySpec
+      Models.LegacyPartialPath
       Models.MaterializedPath
       Models.MiscSpec
       Models.NID
@@ -93,7 +94,6 @@ library
       Models.NormalizedPath.ParseSpec
       Models.NormalizedPath.TH
       Models.NormalizedPathSpec
-      Models.PartialPath
       Models.Path
       Models.Path.Parse
       Models.Path.ParsedPath
