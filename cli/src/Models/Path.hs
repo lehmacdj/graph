@@ -234,7 +234,7 @@ showsPath ::
   Path' p t ->
   ShowS
 showsPath _ One = showString "@"
-showsPath _ Zero = showString "!"
+showsPath _ Zero = showString "%never"
 showsPath _ Wild = showString "*"
 showsPath _ (Literal x) = shows x
 showsPath _ (RegexMatch r) = shows r

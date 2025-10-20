@@ -61,7 +61,7 @@ spec_showPath = describe "Show Path" $ do
       `shouldBe` [rq|@|]
   it "Zero" $
     show (Zero :: TPath)
-      `shouldBe` [rq|!|]
+      `shouldBe` [rq|%never|]
   it "Wild" $
     show (Wild :: TPath)
       `shouldBe` [rq|*|]
