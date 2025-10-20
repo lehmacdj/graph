@@ -17,30 +17,30 @@ import MyPrelude
 
 data Command
   = -- | cd
-    ChangeNode (Path Text)
+    ChangeNode Path
   | -- | d
     Dualize
   | -- | mk
-    Make (Path Text)
+    Make Path
   | -- | mg
-    Merge (Path Text)
+    Merge Path
   | -- | cl
-    Clone (Path Text) Text
+    Clone Path Text
   | -- | ls
     ListOut
   | -- | q
-    Query (Path Text) Text
+    Query Path Text
   | -- | t
-    Tag (Path Text) (Path Text)
+    Tag Path Path
   | Text Text Text
   | -- | desc
     Describe Text
   | -- | rm
-    Remove (Path Text)
+    Remove Path
   | -- | rmnf
-    RemoveNode (Path Text)
+    RemoveNode Path
   | -- | at
-    At (Path Text) Command
+    At Path Command
   | -- | dd
     Dedup Text
   | -- | flatten:
@@ -67,12 +67,12 @@ data Command
   | -- | fix
     Fix
   | -- | mv
-    Move (Path Text) (Path Text)
+    Move Path Path
   | -- | rn
-    Rename (Path Text) (Path Text)
+    Rename Path Path
   | -- | alias, cp: while cp is misleading it's similar enough to shell cp that
     -- naming it cp is better for muscle memory + al is already taken by add link
-    Alias (Path Text) (Path Text)
+    Alias Path Path
   | -- | vi
     Edit
   | -- | back: Go back in history by a certain number of steps. Greater number
@@ -90,5 +90,5 @@ data Command
   | -- | Execute a list of commands sequentially
     Seq (TwoElemList Command)
   | -- | debug-v2-path, v2
-    V2Path (ParsedPath Text)
+    V2Path ParsedPath
   deriving (Eq, Show, Ord, Generic)

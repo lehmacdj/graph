@@ -12,8 +12,8 @@ spec_normalizePath = describe "normalizePath" do
   let normalizesTo :: Text -> Text -> Spec
       normalizesTo pathStr expectedStr =
         it (show pathStr <> " normalizes to " <> show expectedStr) do
-          path <- parseForTest "path" (convertDirectivesToErrors (pPath' pSmallNID transition)) pathStr
-          expected <- parseForTest "normalized path" (pNormalizedPath transition) expectedStr
+          path <- parseForTest "path" (convertDirectivesToErrors (pPath' pSmallNID ttransition)) pathStr
+          expected <- parseForTest "normalized path" (pNormalizedPath ttransition) expectedStr
           normalizePath path `shouldBe` expected
 
   -- Basic path normalization tests
@@ -107,8 +107,8 @@ spec_leastConstrainedNormalizedPath = describe "leastConstrainedNormalizedPath" 
   let whenLeastConstrainedIsEquivalentTo :: Text -> Text -> Spec
       whenLeastConstrainedIsEquivalentTo p expected =
         it (show p <> " when least constrained is equivalent to " <> show expected) do
-          p' <- parseForTest "normalized path" (pNormalizedPath transition) p
-          expected' <- parseForTest "normalized path" (pNormalizedPath transition) expected
+          p' <- parseForTest "normalized path" (pNormalizedPath ttransition) p
+          expected' <- parseForTest "normalized path" (pNormalizedPath ttransition) expected
           leastConstrainedNormalizedPath p' `shouldBe` leastNodesNormalizedPath expected'
   "[(a & b)/|(c & d)]"
     `whenLeastConstrainedIsEquivalentTo` "[@<a/@|c & @<a/@|d & @<b/@|c & @<b/@|d]>@"

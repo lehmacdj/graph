@@ -6,7 +6,7 @@ import Language.Haskell.TH.Quote
 import Models.Path.Parse
 import Models.Path.Simple
 import MyPrelude
-import Utils.Parsing (transition, whitespace)
+import Utils.Parsing (ttransition, whitespace)
 import Utils.Parsing.Common
 
 path :: QuasiQuoter
@@ -19,13 +19,13 @@ path =
     }
 
 pathExp :: String -> Q Exp
-pathExp s = case runParser (whitespace *> pPath transition <* eof) "" (pack s) of
+pathExp s = case runParser (whitespace *> pPath ttransition <* eof) "" (pack s) of
   Left err ->
     fail $ "Parse error in path quasi-quoter: " ++ errorBundlePretty err
   Right result -> handleDirectivesQ interpretSplice result
   where
     -- Interpret Splice directives as TH expressions
-    interpretSplice :: SourceRange -> Directive 'WithDirectives String -> Q Exp
+    interpretSplice :: SourceRange -> Directive 'WithDirectives -> Q Exp
     interpretSplice _ = \case
       LocationFromHistory _ ->
         fail "LocationFromHistory directive cannot be used in path quasi-quoter"

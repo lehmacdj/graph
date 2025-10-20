@@ -16,8 +16,8 @@ import Models.NID
 import MyPrelude
 import Utils.Parsing.Common
 
--- | The most general path type. Parametrized with a phase and the raw type of
--- literals/transitions.
+-- | The most general path type. Parametrized with a phase which is used for
+-- "Trees that grow" style machinery.
 --
 -- There are also submodules that expose simpler path types with common
 -- parameters, e.g. @Models.Path.Simple@ exposes the simple Path type
@@ -29,17 +29,17 @@ import Utils.Parsing.Common
 -- There's some constructors that I'd like to add, but haven't either because I
 -- haven't needed them and/or because they would complicate the implementation
 -- more than is worthwhile:
--- Path t :\ Path t -- ^ set minus (useful with wild to restrict)
--- Negate (Path t) -- ^ negate a path, if included obsolesces other operators
+-- Path :\ Path -- ^ set minus (useful with wild to restrict)
+-- Negate Path -- ^ negate a path, if included obsolesces other operators
 --    this is very hard, consider not(a/b), which theoretically would need to
 --    include paths of any length that don't match a/b
--- KleeneStar (Path t) -- ^ necessary for expressing arbitrary graph traversals as paths
+-- KleeneStar Path -- ^ necessary for expressing arbitrary graph traversals as paths
 -- NormalizedPath -- ^ embed an already normalized path, would be useful as an optimization
 --
 -- WARNING: when updating this type, update the {-# COMPLETE #-} pragmas
 -- in @Models.Path.*@ submodules too so that completeness checking works as
 -- expected
-data Path' (p :: PathPhase) t
+data Path' (p :: PathPhase)
   = -- | Stay at a specific location / the current location.
     -- Acts as a join point forcing intersections of a path that end in it to
     -- match at the same node (e.g. `(a/@ & b)/c` is equivalent to `(a & b)
@@ -51,7 +51,7 @@ data Path' (p :: PathPhase) t
     Wild
   | -- | match a regex
     RegexMatch CheckedRegex
-  | Literal t
+  | Literal Text
   | -- | marks a specific NID. Acts like an anchor if after a :/, and as a root
     -- if at the start of a path. Creates Pointlike paths when :&-ed with
     -- other paths
@@ -63,19 +63,19 @@ data Path' (p :: PathPhase) t
     -- (Literal t) instead, likewise for Wild. It inverts the order of paths and
     -- has no effect on node-location specifying path components or
     -- intersection/union operators
-    Backwards' (Path' p t)
+    Backwards' (Path' p)
   | -- | sequence
-    Path' p t ::/ Path' p t
+    Path' p ::/ Path' p
   | -- | union
-    Path' p t ::+ Path' p t
+    Path' p ::+ Path' p
   | -- | intersection
-    Path' p t ::& Path' p t
+    Path' p ::& Path' p
   | -- | Directives are command like things that may appear in paths.
     -- They can be interpreted into a path using application state, etc.
     -- using 'handleDirectivesWith'.
     -- Currently I'm only including the source range for directives, but I'd
     -- like to add it to all path components eventually
-    Directive SourceRange (DirectiveVal p t)
+    Directive SourceRange (DirectiveVal p)
   | -- | A hole representing a parse error. Only available in the Partial phase.
     Hole (HoleVal p)
   deriving (Generic)
@@ -108,7 +108,7 @@ type family HoleVal (p :: PathPhase) :: Type where
   HoleVal 'WithDirectives = Void
   HoleVal 'Prenormal = Void
 
-data Directive (p :: PathPhase) t
+data Directive (p :: PathPhase)
   = -- | Reference a location in the location history of the graph CLI
     -- resolves to `Absolute nid` where `nid` is the NID at that location
     LocationFromHistory Int
@@ -119,27 +119,27 @@ data Directive (p :: PathPhase) t
     -- This can also be used to bake the current location into a later location
     -- in a path e.g. `*/%targets(@)` materializes only transitions from the
     -- current location to itself.
-    Targets (Path' p t)
+    Targets (Path' p)
   | -- | A splice of a Haskell expression that resolves to a Path
     -- This is used by the QuasiQuoter, the CLI does not support this
     Splice String
   deriving (Generic)
 
 deriving instance
-  (Path'Constraints Eq p t) =>
-  Eq (Directive p t)
+  (Path'Constraints Eq p) =>
+  Eq (Directive p)
 
 deriving instance
-  (Path'Constraints Ord p t) =>
-  Ord (Directive p t)
+  (Path'Constraints Ord p) =>
+  Ord (Directive p)
 
 deriving instance
-  (Path'Constraints Lift p t) =>
-  Lift (Directive p t)
+  (Path'Constraints Lift p) =>
+  Lift (Directive p)
 
 showsDirective ::
-  (Path'Constraints Show p t) =>
-  Directive p t ->
+  (Path'Constraints Show p) =>
+  Directive p ->
   ShowS
 showsDirective = \case
   LocationFromHistory i -> showString "%history(" . shows i . showString ")"
@@ -147,21 +147,21 @@ showsDirective = \case
   Splice expr -> showString "%{" . showString expr . showString "}"
 
 instance
-  (Path'Constraints Show p t) =>
-  Show (Directive p t)
+  (Path'Constraints Show p) =>
+  Show (Directive p)
   where
   showsPrec _ = showsDirective
 
-type family DirectiveVal (p :: PathPhase) (t :: Type) :: Type where
-  DirectiveVal 'Partial t = Directive 'Partial t
-  DirectiveVal 'WithDirectives t = Directive 'WithDirectives t
-  DirectiveVal 'Prenormal _ = Void
+type family DirectiveVal (p :: PathPhase) :: Type where
+  DirectiveVal 'Partial = Directive 'Partial
+  DirectiveVal 'WithDirectives = Directive 'WithDirectives
+  DirectiveVal 'Prenormal = Void
 
 handleDirectivesWith ::
   (Applicative g) =>
-  (SourceRange -> Directive 'WithDirectives t -> g (Path' 'Prenormal t)) ->
-  Path' 'WithDirectives t ->
-  g (Path' 'Prenormal t)
+  (SourceRange -> Directive 'WithDirectives -> g (Path' 'Prenormal)) ->
+  Path' 'WithDirectives ->
+  g (Path' 'Prenormal)
 handleDirectivesWith interpretDirective = \case
   One -> pure One
   Zero -> pure Zero
@@ -187,10 +187,9 @@ handleDirectivesWith interpretDirective = \case
   Directive ann directive -> interpretDirective ann directive
 
 handleDirectivesQ ::
-  (Lift t) =>
-  -- | function returning a TH expression that has type @Path 'Prenormal t@
-  (SourceRange -> Directive 'WithDirectives t -> Q Exp) ->
-  Path' 'WithDirectives t ->
+  -- | function returning a TH expression that has type @Path 'Prenormal@
+  (SourceRange -> Directive 'WithDirectives -> Q Exp) ->
+  Path' 'WithDirectives ->
   Q Exp
 handleDirectivesQ interpretDirective = \case
   One -> [|One|]
@@ -222,8 +221,8 @@ handleDirectivesQ interpretDirective = \case
 -- | Convert a PartialPath to a ParsedPath, collecting all parse errors.
 -- Returns either a list of all errors found, or a successfully parsed path.
 parsedFromPartial ::
-  Path' 'Partial t ->
-  Either (NonNull [ParseError']) (Path' 'WithDirectives t)
+  Path' 'Partial ->
+  Either (NonNull [ParseError']) (Path' 'WithDirectives)
 parsedFromPartial = (.either) . go
   where
     go = \case
@@ -247,18 +246,18 @@ parsedFromPartial = (.either) . go
 
 -- | helper for producing the necessary constraints for a Path'
 type Path'Constraints ::
-  (Type -> Constraint) -> PathPhase -> Type -> Constraint
-type Path'Constraints c p t = (c t, c (DirectiveVal p t), c (HoleVal p))
+  (Type -> Constraint) -> PathPhase -> Constraint
+type Path'Constraints c p = (c (DirectiveVal p), c (HoleVal p))
 
 -- * Instances
 
-deriving instance (Path'Constraints Lift p t) => Lift (Path' p t)
+deriving instance (Path'Constraints Lift p) => Lift (Path' p)
 
 showsPath ::
-  forall p t.
-  (Path'Constraints Show p t) =>
+  forall p.
+  (Path'Constraints Show p) =>
   Int ->
-  Path' p t ->
+  Path' p ->
   ShowS
 showsPath _ One = showString "@"
 showsPath _ Zero = showString "%never"
@@ -283,9 +282,9 @@ showsPath d (l ::+ r) =
 showsPath _ (Directive _ d) = shows d
 showsPath _ (Hole err) = shows err
 
-instance (Path'Constraints Show p t) => Show (Path' p t) where
+instance (Path'Constraints Show p) => Show (Path' p) where
   showsPrec = showsPath @p
 
-deriving instance (Path'Constraints Eq p t) => Eq (Path' p t)
+deriving instance (Path'Constraints Eq p) => Eq (Path' p)
 
-deriving instance (Path'Constraints Ord p t) => Ord (Path' p t)
+deriving instance (Path'Constraints Ord p) => Ord (Path' p)

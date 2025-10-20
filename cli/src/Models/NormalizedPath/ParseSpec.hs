@@ -4,7 +4,7 @@ import Models.NID
 import Models.NormalizedPath
 import Models.NormalizedPath.Parse
 import MyPrelude hiding (union)
-import Utils.Parsing (eof, transition)
+import Utils.Parsing (eof, ttransition)
 import Utils.Testing
 
 test_pNormalizedPath :: TestTree
@@ -121,32 +121,32 @@ test_pNormalizedPath =
       parseFails "a"
     ]
   where
-    parsesTo :: (HasCallStack) => Text -> NormalizedPath Anchor String -> TestTree
+    parsesTo :: (HasCallStack) => Text -> NormalizedPath Anchor -> TestTree
     parsesTo input expected =
       testCase ("parse: " ++ show input) $
-        testParserParses (pNormalizedPath transition <* eof) input expected
+        testParserParses (pNormalizedPath ttransition <* eof) input expected
 
     parseFails :: (HasCallStack) => Text -> TestTree
     parseFails input =
       testCase ("parse fails: " ++ show input) $
-        testParserFails (pNormalizedPath transition <* eof) input
+        testParserFails (pNormalizedPath ttransition <* eof) input
 
-singletonBranch :: DPBranch Anchor String -> NormalizedPath Anchor String
+singletonBranch :: DPBranch Anchor -> NormalizedPath Anchor
 singletonBranch branch =
   NormalizedPath . singletonSet . Rooted $
     RootedDeterministicPath
       (singletonMap (Pointlike unanchored) (singletonSet branch))
       unanchored
 
-branches :: [DPBranch Anchor String] -> NormalizedPath Anchor String
+branches :: [DPBranch Anchor] -> NormalizedPath Anchor
 branches bs =
   NormalizedPath . setFromList $
     [ Rooted (RootedDeterministicPath (singletonMap (Pointlike unanchored) (singletonSet b)) unanchored)
       | b <- bs
     ]
 
-singletonPointlike :: PointlikeDeterministicPath Anchor String -> NormalizedPath Anchor String
+singletonPointlike :: PointlikeDeterministicPath Anchor -> NormalizedPath Anchor
 singletonPointlike = NormalizedPath . singletonSet . Pointlike
 
-singletonRooted :: RootedDeterministicPath Anchor String -> NormalizedPath Anchor String
+singletonRooted :: RootedDeterministicPath Anchor -> NormalizedPath Anchor
 singletonRooted = NormalizedPath . singletonSet . Rooted

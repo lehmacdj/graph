@@ -94,8 +94,8 @@ interpretDirective ::
       effs
   ) =>
   SourceRange ->
-  Directive 'WithDirectives Text ->
-  Sem effs (Path Text)
+  Directive 'WithDirectives ->
+  Sem effs Path
 interpretDirective sourceRange = \case
   LocationFromHistory i -> gets @History (Absolute . fst . backInTime i)
   Targets p -> do

@@ -23,14 +23,14 @@ getLegacyPartialPath i = case runParser pLastLegacyPartialPath "<completion>" i 
   Left _ -> Nothing
   Right r -> Just r
 
-pPathSegment :: Parser (Path Text)
+pPathSegment :: Parser Path
 pPathSegment = convertDirectivesToErrors (pathTerm ttransition)
 
 -- | a list of path segments that are interpreted as being separated by
 -- concatenation, followed by a string that represents a partial transition or something else
 data LegacyPartialPath
-  = LegacyPartialPath [Path Text] String
-  | MissingSlash [Path Text]
+  = LegacyPartialPath [Path] String
+  | MissingSlash [Path]
   deriving (Show, Eq, Ord)
 
 pLegacyPartialPath :: Parser LegacyPartialPath

@@ -9,7 +9,6 @@ module Models.MaterializedPath
 where
 
 import Models.Augmentation.IsThin as X
-import Models.Common
 import Models.Connect
 import Models.Edge
 import Models.Graph
@@ -19,14 +18,14 @@ import Models.NormalizedPath.TH
 import MyPrelude
 import Utils.Testing
 
-data MaterializedPath t = MaterializedPath
-  { path :: NormalizedPath NID t,
-    graph :: Graph t IsThin,
+data MaterializedPath = MaterializedPath
+  { path :: NormalizedPath NID,
+    graph :: Graph Text IsThin,
     nonexistentNodes :: Set NID
   }
   deriving (Eq, Show, Generic)
 
-dpTarget :: DeterministicPath NID t -> NID
+dpTarget :: DeterministicPath NID -> NID
 dpTarget = \case
   Pointlike PointlikeDeterministicPath {..} ->
     anchor
@@ -36,7 +35,7 @@ dpTarget = \case
 -- | Get the set of all nodes targeted by the NormalizedPath
 -- maybe this actually should belong in some Models.NormalizedPath submodule;
 -- it's here because typically this is used downstream of materializing a path
-getTargets :: (ValidTransition t) => NormalizedPath NID t -> Set NID
+getTargets :: NormalizedPath NID -> Set NID
 getTargets (NormalizedPath dps) = foldMap (singletonSet . dpTarget) dps
 
 -- | Get the final connects targeted by the NormalizedPath.
@@ -46,11 +45,11 @@ getTargets (NormalizedPath dps) = foldMap (singletonSet . dpTarget) dps
 -- maybe this actually should belong in some Models.NormalizedPath submodule;
 -- it's here because typically this is used downstream of materializing a path
 finalNonLoopEdges ::
-  forall t. (ValidTransition t) => NormalizedPath NID t -> Set (Set (Edge t))
+  NormalizedPath NID -> Set (Set (Edge Text))
 finalNonLoopEdges (NormalizedPath dps) =
   foldMap (singletonSet . dpFinalNonLoopEdges) dps
   where
-    dpFinalNonLoopEdges :: DeterministicPath NID t -> Set (Edge t)
+    dpFinalNonLoopEdges :: DeterministicPath NID -> Set (Edge Text)
     dpFinalNonLoopEdges = \case
       Pointlike _ -> mempty
       Rooted RootedDeterministicPath {rootBranches, target = PointlikeDeterministicPath {..}} ->
@@ -59,7 +58,7 @@ finalNonLoopEdges (NormalizedPath dps) =
           (\i b -> branchFinalNonLoopEdges (dpTarget i) anchor b)
           rootBranches
 
-    branchFinalNonLoopEdges :: NID -> NID -> DPBranch NID t -> Set (Edge t)
+    branchFinalNonLoopEdges :: NID -> NID -> DPBranch NID -> Set (Edge Text)
     branchFinalNonLoopEdges branchStart target = \case
       DPIncoming (DPLiteral l) -> singletonSet (Edge branchStart l target)
       DPOutgoing (DPLiteral l) -> singletonSet (Edge target l branchStart)
@@ -69,15 +68,13 @@ finalNonLoopEdges (NormalizedPath dps) =
       DPIncoming (DPRegex _) -> error "invalid in NormalizedPath NID"
       DPOutgoing (DPRegex _) -> error "invalid in NormalizedPath NID"
 
-leftmostConnects :: (Ord t) => NormalizedPath NID t -> Set (NID, [Connect t])
+leftmostConnects :: NormalizedPath NID -> Set (NID, [Connect Text])
 leftmostConnects (NormalizedPath dps) =
   setFromList $ map dpLeftmostConnects (toList dps)
 
 dpLeftmostConnects ::
-  forall t.
-  (Ord t) =>
-  DeterministicPath NID t ->
-  (NID, [Connect t])
+  DeterministicPath NID ->
+  (NID, [Connect Text])
 dpLeftmostConnects = \case
   Pointlike PointlikeDeterministicPath {..} ->
     (anchor, [])
@@ -92,7 +89,7 @@ dpLeftmostConnects = \case
             let (rootNID, rootConnects) = dpLeftmostConnects root
              in (rootNID, rootConnects ++ branchToConnects branch anchor)
   where
-    branchToConnects :: DPBranch NID t -> NID -> [Connect t]
+    branchToConnects :: DPBranch NID -> NID -> [Connect Text]
     branchToConnects branch finalTarget = case branch of
       DPIncoming (DPLiteral l) -> [Connect l finalTarget]
       DPOutgoing (DPLiteral l) -> [Connect l finalTarget]

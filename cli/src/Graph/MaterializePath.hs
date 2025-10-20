@@ -19,8 +19,8 @@ materializePath ::
     HasCallStack
   ) =>
   NID ->
-  Path Text ->
-  Sem r (MaterializedPath Text)
+  Path ->
+  Sem r MaterializedPath
 materializePath nid path =
   materializeNPath nid (leastConstrainedNormalizedPath (normalizePath path))
 
@@ -34,8 +34,8 @@ materializeNPath ::
   ) =>
   -- | The node to start from
   NID ->
-  NormalizedPath FullyAnchored Text ->
-  Sem r (MaterializedPath Text)
+  NormalizedPath FullyAnchored ->
+  Sem r MaterializedPath
 materializeNPath firstNid normalizedPath = do
   traverse (traverseDeterministicPath firstNid) (toList normalizedPath.union)
     & fmap (NormalizedPath . setFromList . concat)
@@ -49,8 +49,8 @@ materializeNPath firstNid normalizedPath = do
         HasCallStack
       ) =>
       NID ->
-      DeterministicPath FullyAnchored Text ->
-      Sem q [DeterministicPath NID Text]
+      DeterministicPath FullyAnchored ->
+      Sem q [DeterministicPath NID]
     traverseDeterministicPath nid = \case
       Pointlike p -> map Pointlike <$> traversePointlike True nid p
       Rooted r -> map Rooted <$> traverseRooted nid r
@@ -61,8 +61,8 @@ materializeNPath firstNid normalizedPath = do
       ) =>
       Bool ->
       NID ->
-      PointlikeDeterministicPath FullyAnchored Text ->
-      Sem q [PointlikeDeterministicPath NID Text]
+      PointlikeDeterministicPath FullyAnchored ->
+      Sem q [PointlikeDeterministicPath NID]
     traversePointlike isRoot nid PointlikeDeterministicPath {..} = withEarlyReturn do
       nid' <- case anchor of
         FSpecific fnid
@@ -91,12 +91,12 @@ materializeNPath firstNid normalizedPath = do
         HasCallStack
       ) =>
       NID ->
-      RootedDeterministicPath FullyAnchored Text ->
-      Sem q [RootedDeterministicPath NID Text]
+      RootedDeterministicPath FullyAnchored ->
+      Sem q [RootedDeterministicPath NID]
     traverseRooted nid RootedDeterministicPath {..} = do
       rootBranches' ::
-        [ [ ( DeterministicPath NID t,
-              OSet (DPBranch FullyAnchored Text)
+        [ [ ( DeterministicPath NID,
+              OSet (DPBranch FullyAnchored)
             )
           ]
         ] <-
@@ -106,7 +106,7 @@ materializeNPath firstNid normalizedPath = do
           <&> map (\(rs, bs) -> (,bs) <$> rs)
           <&> choices
       rootBranches'' ::
-        [(OMap (DeterministicPath NID t) (OSet (DPBranch NID Text)), NID)] <-
+        [(OMap (DeterministicPath NID) (OSet (DPBranch NID)), NID)] <-
         rootBranches'
           & (traverse . traverse)
             (\(dp, bs) -> (dp,) <$> traverseBranches dp.target.anchor bs)
@@ -125,8 +125,8 @@ materializeNPath firstNid normalizedPath = do
         HasCallStack
       ) =>
       NID ->
-      OSet (DPBranch FullyAnchored Text) ->
-      Sem q [(OSet (DPBranch NID Text), NID)]
+      OSet (DPBranch FullyAnchored) ->
+      Sem q [(OSet (DPBranch NID), NID)]
     traverseBranches nid branches = withEarlyReturn do
       -- in the case where the OSet is empty (only when loops),
       -- we return the same anchor as the input
@@ -144,9 +144,9 @@ materializeNPath firstNid normalizedPath = do
       ) =>
       NID ->
       (Node Text () -> Set (Connect Text)) ->
-      (DPTransition Text -> DPBranch NID Text) ->
-      DPTransition Text ->
-      Sem q [(DPBranch NID Text, NID)]
+      (DPTransition -> DPBranch NID) ->
+      DPTransition ->
+      Sem q [(DPBranch NID, NID)]
     traverseTransition nid getConnections mkBranch = \case
       DPLiteral t -> withEarlyReturn do
         n <- getNodeMetadata nid `onNothingM` returnEarly []
@@ -172,14 +172,14 @@ materializeNPath firstNid normalizedPath = do
         HasCallStack
       ) =>
       NID ->
-      DPBranch FullyAnchored Text ->
-      Sem q [(DPBranch NID Text, NID)]
+      DPBranch FullyAnchored ->
+      Sem q [(DPBranch NID, NID)]
     traverseBranch nid = \case
       DPOutgoing transition -> traverseTransition nid (.outgoing) DPOutgoing transition
       DPIncoming transition -> traverseTransition nid (.incoming) DPIncoming transition
       DPSequence bs1 midpoint bs2 -> do
         bs1's <- traverseBranches nid bs1
-        uptoMidpoints :: [(OSet (DPBranch NID Text), PointlikeDeterministicPath NID Text)] <-
+        uptoMidpoints :: [(OSet (DPBranch NID), PointlikeDeterministicPath NID)] <-
           bs1's
             & (traverse . _2) (\x -> traversePointlike False x midpoint)
             <&> concatMap (\(bs1', ms) -> (bs1',) <$> ms)

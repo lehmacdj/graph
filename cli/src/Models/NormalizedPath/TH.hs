@@ -26,7 +26,7 @@ npathNID =
               Specific nid -> Just nid
               _ -> Nothing
             p = unTypeCode $ npathExp' justSpecific s
-         in [|$p :: NormalizedPath NID Text|],
+         in [|$p :: NormalizedPath NID|],
       quotePat = const $ fail "npathNID quasi-quoter can only be used in expression contexts",
       quoteType = const $ fail "npathNID quasi-quoter can only be used in expression contexts",
       quoteDec = const $ fail "npathNID quasi-quoter can only be used in expression contexts"
@@ -37,7 +37,7 @@ npathExp' ::
   (Ord a, Lift a, Quote m, MonadFail m) =>
   (Anchor -> Maybe a) ->
   String ->
-  Code m (NormalizedPath a Text)
+  Code m (NormalizedPath a)
 npathExp' specializeAnchors s = do
   case runParser (whitespace *> pNormalizedPath ttransition <* eof) "" (pack s) of
     Left err ->

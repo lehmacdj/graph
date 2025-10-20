@@ -7,6 +7,6 @@ import MyPrelude
 
 -- | These system nodes can be fairly large and take a long-ish time to parse /
 -- traverse so we explicitly include them from the tag traversal
-excludedLargeSystemNodes :: Path Text
+excludedLargeSystemNodes :: Path
 excludedLargeSystemNodes =
   ExcludingNIDs $ setFromList [fileHashesNID, importUrlsNID, sequenceIDsNID]

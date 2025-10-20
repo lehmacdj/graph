@@ -16,13 +16,13 @@ import Text.Megaparsec (try)
 import Utils.Parsing
 import Utils.Testing
 
-path' :: Parser (ParsedPath Text)
+path' :: Parser ParsedPath
 path' = pPath ttransition
 
-path :: Parser (Path Text)
+path :: Parser Path
 path = convertDirectivesToErrors path'
 
-tpath :: Parser (ParsedPath Text)
+tpath :: Parser ParsedPath
 tpath = pPath ttransition
 
 pChangeNode :: Parser Command

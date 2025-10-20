@@ -9,7 +9,7 @@ import Models.Path.Simple
 import MyPrelude
 import Utils.Testing
 
-testGraph :: Graph String ()
+testGraph :: Graph Text ()
 testGraph =
   insertEdge (edge' 1 "c" 2)
     . insertEdge (edge' 1 "b" 2)
@@ -25,7 +25,7 @@ testGraph =
     . insertNode (emptyNode (smallNID 0))
     $ emptyGraph
 
-fromVia :: Int -> a -> DPathComponent a
+fromVia :: Int -> Text -> DPathComponent
 fromVia i = FromVia (smallNID i)
 
 test_path :: TestTree

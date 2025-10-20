@@ -114,8 +114,8 @@ via1 p sep = do
   pure (initial, impureNonNull remainder)
 
 convertDirectivesToErrors ::
-  Parser (Path' 'WithDirectives t) ->
-  Parser (Path' 'Prenormal t)
+  Parser (Path' 'WithDirectives) ->
+  Parser (Path' 'Prenormal)
 convertDirectivesToErrors p = handleDirectivesWith interpretDirective =<< p
   where
     interpretDirective SourceRange {..} _ = do

@@ -13,29 +13,29 @@ import Models.Path as X
 -- | PartialPath type (representing paths that may contain parse errors)
 type PartialPath = Path' 'Partial
 
-pattern Backwards :: PartialPath t -> PartialPath t
+pattern Backwards :: PartialPath -> PartialPath
 pattern Backwards p = Backwards' p
 
 pattern (:/) ::
-  PartialPath t ->
-  PartialPath t ->
-  PartialPath t
+  PartialPath ->
+  PartialPath ->
+  PartialPath
 pattern l :/ r = l ::/ r
 
 infixl 7 :/
 
 pattern (:+) ::
-  PartialPath t ->
-  PartialPath t ->
-  PartialPath t
+  PartialPath ->
+  PartialPath ->
+  PartialPath
 pattern l :+ r = l ::+ r
 
 infixl 5 :+
 
 pattern (:&) ::
-  PartialPath t ->
-  PartialPath t ->
-  PartialPath t
+  PartialPath ->
+  PartialPath ->
+  PartialPath
 pattern l :& r = l ::& r
 
 infixl 6 :&
