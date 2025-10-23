@@ -112,12 +112,12 @@ spec_showPath = describe "Show Path" $ do
     show (Backwards (Absolute (smallNID 1)) :& Literal "test" :: ParsedPath)
       `shouldBe` [rq|~@000000000001 & "test"|]
   it "LocationFromHistory" $
-    show (Directive testAnn (LocationFromHistory -23) :: ParsedPath)
+    show (Directive testRange (LocationFromHistory -23) :: ParsedPath)
       `shouldBe` [rq|%history(-23)|]
   it "complex" $
     show
       ( Backwards (RegexMatch [re|[0-9]{2}:[0-9]{2}:[0-9]{2}\.[0-9]{12}|])
-          :/ Directive testAnn (Splice "excludedLargeSystemNodes") ::
+          :/ Directive testRange (Splice "excludedLargeSystemNodes") ::
           ParsedPath
       )
       `shouldBe` [rq|~re"[0-9]{2}:[0-9]{2}:[0-9]{2}\.[0-9]{12}" / %{excludedLargeSystemNodes}|]

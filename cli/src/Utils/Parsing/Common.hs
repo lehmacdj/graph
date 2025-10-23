@@ -4,22 +4,34 @@ module Utils.Parsing.Common
   )
 where
 
+import Models.NID
 import MyPrelude
 import Text.Megaparsec hiding (runParser, runParser')
 import Text.Megaparsec as MP (runParser)
-import Text.Megaparsec as X hiding (runParser, runParser', try)
+import Text.Megaparsec as X hiding (getOffset, getSourcePos, runParser, runParser', try)
 import Text.Megaparsec.State as X (initialPosState)
 
 data CustomParseError
   = IllegalDirective
-  { startPos :: SourcePos,
-    endPos :: SourcePos
-  }
+      { startPos :: SourcePos,
+        endPos :: SourcePos
+      }
+  | IncompleteFullNID
+      { sourceRange :: SourceRange,
+        base62Chars :: Text
+      }
   deriving (Eq, Ord, Show)
 
 instance ShowErrorComponent CustomParseError where
   showErrorComponent (IllegalDirective start end) =
     "Illegal directive " ++ " at " ++ show start ++ "-" ++ show end
+  showErrorComponent (IncompleteFullNID pos nidStr) =
+    "Incomplete NID, was expecting full NID with "
+      <> show nidDigits
+      <> " base62 characters, but had only '@"
+      <> unpack nidStr
+      <> "' at "
+      <> show pos
 
 newtype ParserOptions = ParserOptions
   { useFakeSourceRanges :: Bool
@@ -41,8 +53,14 @@ data SourceRange = SourceRange
   }
   deriving (Eq, Ord, Show, Generic, Lift)
 
-testAnn :: SourceRange
-testAnn = SourceRange (initialPos "<test>") (initialPos "<test>")
+testOffset :: Int
+testOffset = 0
+
+testPos :: SourcePos
+testPos = initialPos "<test>"
+
+testRange :: SourceRange
+testRange = SourceRange testPos testPos
 
 runParser' ::
   ParserOptions ->

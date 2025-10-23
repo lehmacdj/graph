@@ -4,15 +4,13 @@ module Utils.Parsing
   )
 where
 
-import Control.Monad.Fail
 import Data.Char
-import Models.NID
 import Models.Path
 import MyPrelude hiding (many, some, try)
 import Text.Megaparsec (try)
+import Text.Megaparsec qualified as Megaparsec
 import Text.Megaparsec.Char
 import Text.Megaparsec.Char.Lexer qualified as L
-import Utils.Base62 (isBase62Char)
 import Utils.Parsing.Common as X
 import Utils.Testing
 
@@ -48,21 +46,6 @@ stringLiteral =
   label "<string literal>" $
     L.lexeme s $
       pack <$> (char '"' >> manyTill L.charLiteral (char '"'))
-
-pTransition :: Parser Text
-pTransition = ident <|> stringLiteral <?> "<transition>"
-
-pFullNID :: Parser NID
-pFullNID = L.lexeme s (char '@' *> p) <?> "@<nid>"
-  where
-    p = do
-      nidStr <- pack <$> replicateM nidDigits anySingle
-      unless (all isBase62Char nidStr) $ fail "invalid base62 character in NID"
-      pure $ unsafeNID nidStr
-
--- | Parse a small integer and convert to NID
-pSmallNID :: Parser NID
-pSmallNID = lexeme $ smallNID <$> (char '@' *> positiveNumber)
 
 positiveNumber :: Parser Int
 positiveNumber = L.lexeme s L.decimal
@@ -118,18 +101,25 @@ convertDirectivesToErrors p = handleDirectivesWith interpretDirective =<< p
     interpretDirective SourceRange {..} _ = do
       customFailure (IllegalDirective startPos endPos)
 
-getSourcePos' :: Parser SourcePos
-getSourcePos' = do
+getOffset :: Parser Int
+getOffset = do
+  opts <- ask
+  case opts of
+    ParserOptions {useFakeSourceRanges = True} -> pure 0
+    ParserOptions {useFakeSourceRanges = False} -> Megaparsec.getOffset
+
+getSourcePos :: Parser SourcePos
+getSourcePos = do
   opts <- ask
   case opts of
     ParserOptions {useFakeSourceRanges = True} -> pure $ initialPos "<test>"
-    ParserOptions {useFakeSourceRanges = False} -> getSourcePos
+    ParserOptions {useFakeSourceRanges = False} -> Megaparsec.getSourcePos
 
 withSourceRange :: Parser a -> Parser (SourceRange, a)
 withSourceRange p = do
-  start <- getSourcePos'
+  start <- getSourcePos
   a <- p
-  end <- getSourcePos'
+  end <- getSourcePos
   pure (SourceRange start end, a)
 
 debugParser :: (Eq a, Show a) => Parser a -> Text -> IO ()

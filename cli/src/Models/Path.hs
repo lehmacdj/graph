@@ -5,6 +5,11 @@ module Models.Path
     PathPhase (..),
     SourceRange (..),
     Directive (..),
+    NIDVal,
+    IncompleteNID (..),
+    HoleVal,
+    DirectiveVal,
+    Path'Constraints,
     handleDirectivesWith,
     handleDirectivesQ,
     parsedFromPartial,
@@ -55,10 +60,10 @@ data Path' (p :: PathPhase)
   | -- | marks a specific NID. Acts like an anchor if after a :/, and as a root
     -- if at the start of a path. Creates Pointlike paths when :&-ed with
     -- other paths
-    Absolute NID
+    Absolute (NIDVal p)
   | -- | negative assertion for some set of NIDs, written `!{@1, @2}`
     -- otherwise acts as an anchor, i.e. `@` when used as a node-location
-    ExcludingNIDs (Set NID)
+    ExcludingNIDs (Set (NIDVal p))
   | -- | backlink-ify. traversing Backwards (Literal t) traverses the backlink
     -- (Literal t) instead, likewise for Wild. It inverts the order of paths and
     -- has no effect on node-location specifying path components or
@@ -107,6 +112,18 @@ type family HoleVal (p :: PathPhase) :: Type where
   HoleVal 'Partial = ParseError'
   HoleVal 'WithDirectives = Void
   HoleVal 'Prenormal = Void
+
+data IncompleteNID = IncompleteNID
+  { offset :: Int
+  , sourceRange :: SourceRange
+  , base62Chars :: Text
+  }
+  deriving (Generic, Eq, Ord, Show, Lift)
+
+type family NIDVal (p :: PathPhase) :: Type where
+  NIDVal 'Partial = Either IncompleteNID NID
+  NIDVal 'WithDirectives = NID
+  NIDVal 'Prenormal = NID
 
 data Directive (p :: PathPhase)
   = -- | Reference a location in the location history of the graph CLI
@@ -225,20 +242,29 @@ parsedFromPartial ::
   Either (NonNull [ParseError']) (Path' 'WithDirectives)
 parsedFromPartial = (.either) . go
   where
+    go :: Path' 'Partial ->
+      Validation (NonNull [ParseError']) (Path' 'WithDirectives)
     go = \case
       One -> pure One
       Zero -> pure Zero
       Wild -> pure Wild
       RegexMatch r -> pure (RegexMatch r)
       Literal x -> pure (Literal x)
-      Absolute nid -> pure (Absolute nid)
-      ExcludingNIDs nids -> pure (ExcludingNIDs nids)
+      Absolute nid -> Absolute <$> goNID nid
+      ExcludingNIDs nids -> ExcludingNIDs <$> traverseSetInOrder goNID nids
       Backwards' p -> Backwards' <$> go p
       l ::/ r -> (::/) <$> go l <*> go r
       l ::+ r -> (::+) <$> go l <*> go r
       l ::& r -> (::&) <$> go l <*> go r
       Directive ann directive -> Directive ann <$> goDirective directive
       Hole err -> Validation (Left (singletonNN err))
+    goNID :: Either IncompleteNID NID ->
+      Validation (NonNull [ParseError']) NID
+    goNID = \case
+      (Left IncompleteNID{..}) ->
+        Validation . Left . singletonNN $
+          FancyError offset (singletonSet (ErrorCustom IncompleteFullNID {..}))
+      (Right nid) -> pure nid
     goDirective = \case
       LocationFromHistory i -> pure (LocationFromHistory i)
       Targets p -> Targets <$> go p
@@ -247,7 +273,7 @@ parsedFromPartial = (.either) . go
 -- | helper for producing the necessary constraints for a Path'
 type Path'Constraints ::
   (Type -> Constraint) -> PathPhase -> Constraint
-type Path'Constraints c p = (c (DirectiveVal p), c (HoleVal p))
+type Path'Constraints c p = (c (DirectiveVal p), c (HoleVal p), c (NIDVal p))
 
 -- * Instances
 

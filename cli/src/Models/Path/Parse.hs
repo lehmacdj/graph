@@ -11,13 +11,37 @@ import Models.Path.PartialPath
 import MyPrelude hiding (many, try)
 import Text.Megaparsec (try)
 import Text.Megaparsec.Char (char)
+import Utils.Base62 (isBase62Char)
 import Utils.Parsing
 import Utils.Testing
 
-partialPathTerm' :: Parser NID -> Parser PartialPath
+pTransition :: Parser Text
+pTransition = ident <|> stringLiteral <?> "<transition>"
+
+pFullNID :: Parser (NIDVal Partial)
+pFullNID = lexeme p <?> "@<nid>"
+  where
+    p = do
+      offset <- getOffset
+      (sourceRange, base62Chars) <- withSourceRange do
+        _ <- char '@'
+        takeWhile1P Nothing isBase62Char
+      let result
+            | length base62Chars < nidDigits =
+                pure . Left $ IncompleteNID {..}
+            | length base62Chars == nidDigits =
+                pure . Right $ unsafeNID base62Chars
+            | otherwise = fail "too many base62 characters in NID"
+      result
+
+-- | Parse a small integer and convert to NID
+pSmallNID :: Parser NID
+pSmallNID = lexeme $ smallNID <$> (char '@' *> positiveNumber)
+
+partialPathTerm' :: Parser (NIDVal Partial) -> Parser PartialPath
 partialPathTerm' pNID =
   try (Absolute <$> pNID)
-    <|> try ((Absolute tagsNID :/) . Literal <$> (char '#' *> pTransition))
+    <|> try pTag
     <|> (symbol "@" $> One)
     <|> (symbol "*" $> Wild)
     <|> (symbol "%never" $> Zero)
@@ -29,6 +53,9 @@ partialPathTerm' pNID =
     <|> (Literal <$> pTransition)
     <|> (uncurry Directive <$> withSourceRange pDirective)
     <|> parens (pPartialPath' pNID)
+  where
+    pTag :: Parser PartialPath
+    pTag = (Absolute (Right tagsNID) :/) . Literal <$> (char '#' *> pTransition)
 
 pDirective :: Parser (Directive 'Partial)
 pDirective =
@@ -64,7 +91,7 @@ table =
     [InfixL $ (:+) <$ symbol "+"]
   ]
 
-pPartialPath' :: Parser NID -> Parser PartialPath
+pPartialPath' :: Parser (NIDVal Partial) -> Parser PartialPath
 pPartialPath' pNID =
   makeExprParser (partialPathTerm' pNID) table
 
@@ -82,7 +109,7 @@ parsedParserFromPartialParser :: Parser PartialPath -> Parser ParsedPath
 parsedParserFromPartialParser p = p >>= registerErrors . parsedFromPartial
 
 pPath' :: Parser NID -> Parser ParsedPath
-pPath' pNID = parsedParserFromPartialParser (pPartialPath' pNID)
+pPath' pNID = parsedParserFromPartialParser (pPartialPath' (Right <$> pNID))
 
 pPath :: Parser ParsedPath
 pPath = parsedParserFromPartialParser pPartialPath
@@ -91,15 +118,23 @@ test_pPath :: TestTree
 test_pPath =
   testGroup
     "pPath"
-    [ "#foo" `parsesTo` (Absolute tagsNID :/ Literal "foo"),
+    [ "#foo" `parsesTo` (mkAbsolute tagsNID :/ Literal "foo"),
       "@" `parsesTo` One,
       "*" `parsesTo` Wild,
       "%never" `parsesTo` Zero,
       "foo" `parsesTo` Literal "foo",
-      "@000000000002" `parsesTo` Absolute (smallNID 2),
-      "!{ @000000000001, } " `parsesTo` ExcludingNIDs (setFromList [smallNID 1]),
-      "!{@000000000001, @000000000002}" `parsesTo` ExcludingNIDs (setFromList [smallNID 1, smallNID 2]),
-      "foo/@000000000002" `parsesTo` (Literal "foo" :/ Absolute (smallNID 2)),
+      "@000000000002" `parsesTo` mkAbsolute (smallNID 2),
+      "@asdf" `parsesTo` Absolute (Left (IncompleteNID testOffset testRange "asdf")),
+      "!{ @000000000001, } " `parsesTo` mkExcludingNIDs (setFromList [smallNID 1]),
+      "!{@000000000001, @000000000002}" `parsesTo` mkExcludingNIDs (setFromList [smallNID 1, smallNID 2]),
+      "!{@000000000001, @asdf,}"
+        `parsesTo` ExcludingNIDs
+          ( setFromList
+              [ Right $ smallNID 1,
+                Left $ IncompleteNID testOffset testRange "asdf"
+              ]
+          ),
+      "foo/@000000000002" `parsesTo` (Literal "foo" :/ mkAbsolute (smallNID 2)),
       "foo/bar" `parsesTo` (Literal "foo" :/ Literal "bar"),
       "re\"^foo.*bar$\"" `parsesTo` RegexMatch [re|^foo.*bar$|],
       "~foo/bar" `parsesTo` (Backwards (Literal "foo") :/ Literal "bar"),
@@ -107,7 +142,7 @@ test_pPath =
       "~(foo/~bar)" `parsesTo` Backwards (Literal "foo" :/ Backwards (Literal "bar")),
       "~@" `parsesTo` Backwards One,
       "foo + ~@" `parsesTo` (Literal "foo" :+ Backwards One),
-      "~@ & ~@000000000001" `parsesTo` (Backwards One :& Backwards (Absolute (smallNID 1))),
+      "~@ & ~@000000000001" `parsesTo` (Backwards One :& Backwards (mkAbsolute (smallNID 1))),
       "(foo/bar)/baz" `parsesTo` (Literal "foo" :/ Literal "bar" :/ Literal "baz"),
       "foo/(bar/baz)" `parsesTo` (Literal "foo" :/ (Literal "bar" :/ Literal "baz")),
       "foo / bar & baz" `parsesTo` (Literal "foo" :/ Literal "bar" :& Literal "baz"),
@@ -120,20 +155,20 @@ test_pPath =
       "foo/%targets(@000000000002 + re\"^foo$\")/%never"
         `parsesTo` ( Literal "foo"
                        :/ Directive
-                         testAnn
+                         testRange
                          ( Targets
-                             (Absolute (smallNID 2) :+ RegexMatch [re|^foo$|])
+                             (mkAbsolute (smallNID 2) :+ RegexMatch [re|^foo$|])
                          )
                        :/ Zero
                    ),
       "foo/%history(2)/bar"
         `parsesTo` ( Literal "foo"
-                       :/ Directive testAnn (LocationFromHistory 2)
+                       :/ Directive testRange (LocationFromHistory 2)
                        :/ Literal "bar"
                    ),
       -- approximation of the pattern we use to detect paths
-      "~*/%{Absolute nid}"
-        `parsesTo` (Backwards Wild :/ Directive testAnn (Splice "Absolute nid")),
+      "~*/%{mkAbsolute nid}"
+        `parsesTo` (Backwards Wild :/ Directive testRange (Splice "mkAbsolute nid")),
       "re\"asdf\"" `parsesTo` RegexMatch [re|asdf|],
       "re'asdf'" `parsesTo` RegexMatch [re|asdf|],
       "re'\\.'" `parsesTo` RegexMatch [re|\.|],
@@ -145,7 +180,7 @@ test_pPath =
         `parsesTo` Backwards
           (RegexMatch [re|[0-9]{2}:[0-9]{2}:[0-9]{2}\.[0-9]{12}|]),
       [rq|%{excludedLargeSystemNodes}|]
-        `parsesTo` Directive testAnn (Splice "excludedLargeSystemNodes"),
+        `parsesTo` Directive testRange (Splice "excludedLargeSystemNodes"),
       parseFails "foo/bar&",
       parseFails "foo/bar&+qux",
       parseFails "foo+",
@@ -167,6 +202,10 @@ test_pPath =
     parseFails input =
       testCase ("parse fails: " ++ show input) $
         testParserFails (pPartialPath <* eof) input
+    mkAbsolute :: NID -> PartialPath
+    mkAbsolute nid = Absolute (Right nid)
+    mkExcludingNIDs :: Set NID -> PartialPath
+    mkExcludingNIDs nids = ExcludingNIDs (mapSet Right nids)
 
 test_pDirective :: TestTree
 test_pDirective =
@@ -175,11 +214,11 @@ test_pDirective =
     [ "%history(23)" `parsesTo` LocationFromHistory 23,
       "%history(-5)" `parsesTo` LocationFromHistory -5,
       "%last" `parsesTo` LocationFromHistory 1,
-      "%targets(@000000000002)" `parsesTo` Targets (Absolute (smallNID 2)),
+      "%targets(@000000000002)" `parsesTo` Targets (mkAbsolute (smallNID 2)),
       "%targets(@/foo + #bar)"
         `parsesTo` Targets
           ( (One :/ Literal "foo")
-              :+ (Absolute tagsNID :/ Literal "bar")
+              :+ (mkAbsolute tagsNID :/ Literal "bar")
           ),
       -- this needs to be Haskell code to actually work, but we just want to
       -- parse anything here
@@ -200,3 +239,5 @@ test_pDirective =
     parseFails input =
       testCase ("parse fails: " ++ show input) $
         testParserFails (pDirective <* eof) input
+    mkAbsolute :: NID -> PartialPath
+    mkAbsolute nid = Absolute (Right nid)

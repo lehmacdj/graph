@@ -273,6 +273,10 @@ traverseSet ::
   (Applicative f, Ord b, Ord (f b)) => (a -> f b) -> Set a -> f (Set b)
 traverseSet f s = setFromList <$> sequenceA (toList (mapSet f s))
 
+traverseSetInOrder ::
+  (Applicative f, Ord a, Ord b) => (a -> f b) -> Set a -> f (Set b)
+traverseSetInOrder f s = setFromList <$> traverse f (toList s)
+
 ixsetmapped ::
   (IxSet.All Ord jxs, IxSet.Indexable jxs j) =>
   IndexPreservingSetter (IxSet.IxSet ixs i) (IxSet.IxSet jxs j) i j

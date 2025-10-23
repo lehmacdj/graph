@@ -7,6 +7,7 @@ where
 import Data.Functor
 import Models.NID
 import Models.NormalizedPath
+import Models.Path.Parse (pSmallNID, pTransition)
 import MyPrelude hiding (try)
 import Text.Megaparsec (try)
 import Text.Megaparsec.Char (char)
