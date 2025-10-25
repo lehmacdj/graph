@@ -102,25 +102,28 @@ def handle_unidentified_filetype(filepath):
 def get_mimetype(filepath):
     try:
         # Use file command with --mime-type option
-        result = subprocess.run(['file', '--mime-type', filepath], capture_output=True, text=True)
-        output = result.stdout.strip()
-
-        # Extract the mime type from the output
-        match = re.match(r'.*: (.+)', output)
-        if not match:
-            return None
-        return match.group(1)
+        result = subprocess.run(
+            ['file', '--brief', '--mime-type', filepath],
+            capture_output=True,
+            text=True
+        )
+        return result.stdout.strip()
     except subprocess.CalledProcessError:
         return None
 
 def get_file_extension(filepath):
     try:
         # Use file command with --extension option
-        result = subprocess.run(['file', '--extension', filepath], capture_output=True, text=True)
+        result = subprocess.run(
+            ['file', '--extension', filepath],
+            capture_output=True,
+            text=True
+        )
         output = result.stdout.strip()
 
         # Extract the extension from the output
-        match = re.match(r'.*: ((?:[a-zA-Z0-9]+/)*[a-zA-Z0-9]+)', output)
+        # multiple extensions can be separated by '/', e.g. jpeg/jpg/jpe/jfif
+        match = re.match(r'((?:[a-zA-Z0-9]+/)*[a-zA-Z0-9]+)', output)
         if not match:
             return None
         extensions = match.group(1).split('/')
