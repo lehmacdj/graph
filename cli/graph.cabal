@@ -69,6 +69,7 @@ library
       Graph.Time
       Graph.Utils
       Models.Augmentation.Bundled
+      Models.Augmentation.FileType
       Models.Augmentation.IsThin
       Models.Augmentation.NodeEdits
       Models.Augmentation.Tags
@@ -85,6 +86,7 @@ library
       Models.HistorySpec
       Models.LegacyPartialPath
       Models.MaterializedPath
+      Models.MimeType
       Models.MiscSpec
       Models.NID
       Models.NIDSpec

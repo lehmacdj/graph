@@ -260,8 +260,11 @@ cartesianProductSet ::
 cartesianProductSet xs ys =
   setFromList $ cartesianProduct (toList xs) (toList ys)
 
-assertSingleton :: (HasCallStack, Show a) => [a] -> a
-assertSingleton [x] = x
+assertSingleton ::
+  (HasCallStack, Show mono, MonoFoldable mono) =>
+  mono ->
+  Element mono
+assertSingleton (toList -> [x]) = x
 assertSingleton xs = error $ "assertSingleton: not a singleton: " <> show xs
 
 assertMaxOne :: (HasCallStack, Show a) => [a] -> Maybe a

@@ -28,7 +28,7 @@ fetchTags nid = do
     materializePath
       nid
       [path| ~*/%{excludedLargeSystemNodes}/~*/%{Absolute tagsNID} |]
-  let tags = mapSet (.transition) $ concat (finalNonLoopEdges mp.path)
+  let tags = mapSet ((.transition) . assertSingleton) $ finalNonLoopEdges mp.path
   pure $ Tags tags
 
 writeTags ::

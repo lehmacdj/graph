@@ -45,24 +45,36 @@ getTargets (NormalizedPath dps) = foldMap (singletonSet . dpTarget) dps
 -- maybe this actually should belong in some Models.NormalizedPath submodule;
 -- it's here because typically this is used downstream of materializing a path
 finalNonLoopEdges ::
-  NormalizedPath NID -> Set (Set (Edge Text))
+  NormalizedPath NID -> Set (NonNull (OSet (Edge Text)))
 finalNonLoopEdges (NormalizedPath dps) =
-  foldMap (singletonSet . dpFinalNonLoopEdges) dps
+  foldMap dpFinalNonLoopEdges dps
   where
-    dpFinalNonLoopEdges :: DeterministicPath NID -> Set (Edge Text)
+    dpFinalNonLoopEdges ::
+      (HasCallStack) =>
+      DeterministicPath NID ->
+      Set (NonNull (OSet (Edge Text)))
     dpFinalNonLoopEdges = \case
       Pointlike _ -> mempty
-      Rooted RootedDeterministicPath {rootBranches, target = PointlikeDeterministicPath {..}} ->
-        ifoldMapOf
-          (itraversed <. folded)
-          (\i b -> branchFinalNonLoopEdges (dpTarget i) anchor b)
-          rootBranches
+      Rooted
+        RootedDeterministicPath
+          { rootBranches,
+            target = PointlikeDeterministicPath {..}
+          } ->
+          singletonSet . impureNonNull $
+            ifoldMapOf
+              (itraversed <. folded)
+              (\i b -> branchFinalNonLoopEdges (dpTarget i) anchor b)
+              rootBranches
 
-    branchFinalNonLoopEdges :: NID -> NID -> DPBranch NID -> Set (Edge Text)
+    branchFinalNonLoopEdges ::
+      NID -> NID -> DPBranch NID -> OSet (Edge Text)
     branchFinalNonLoopEdges branchStart target = \case
       DPIncoming (DPLiteral l) -> singletonSet (Edge branchStart l target)
       DPOutgoing (DPLiteral l) -> singletonSet (Edge target l branchStart)
-      DPSequence _ midpoint b2 -> foldMap (branchFinalNonLoopEdges (dpTarget (Pointlike midpoint)) target) b2
+      DPSequence _ midpoint b2 ->
+        foldMap
+          (branchFinalNonLoopEdges (dpTarget (Pointlike midpoint)) target)
+          b2
       DPIncoming DPWild -> error "invalid in NormalizedPath NID"
       DPOutgoing DPWild -> error "invalid in NormalizedPath NID"
       DPIncoming (DPRegex _) -> error "invalid in NormalizedPath NID"
