@@ -22,7 +22,7 @@ import Graph.GraphMetadataEditing (GraphMetadataEditing, GraphMetadataReading)
 import Graph.Import.ByteString
 import Graph.Import.FileSystem
 import Graph.LegacyPathMaterialization
-import Graph.MaterializePath (materializeNPath)
+import Graph.MaterializePath
 import Graph.NodeLocated
 import Graph.Time (taggingFreshNodesWithTime)
 import Graph.Utils
@@ -294,16 +294,7 @@ interpretCommand = \case
     -- say $ "parsed path: " ++ tshow p
     scoped_ do
       p' <- handleDirectivesWith interpretDirective p
-      -- say $ "prenormal path: " ++ tshow p'
-      let np = normalizePath p'
-      -- say $ "normalized path: " ++ tshow np
-      mp <- materializeNPath nid (leastConstrainedNormalizedPath np)
-      -- say $ "materialized path: " <> tshow mp.path
-      -- if null mp.graph
-      --   then say "no nodes materialized"
-      --   else do
-      --     say "fetched graph:"
-      --     sayShow $ subtractiveFilterGraph (\n -> n.augmentation == Fetched) mp.graph
+      mp <- materializePath nid p'
       unless (null mp.nonexistentNodes) $
         say ("nonexistent nodes: " ++ tshow mp.nonexistentNodes)
       targets <-
