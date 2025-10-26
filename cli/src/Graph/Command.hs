@@ -16,7 +16,6 @@ import Error.Warn
 import Graph.Augmentation
 import Graph.Check
 import Graph.Effect
-import Graph.Export.FileSystem (exportToDirectory)
 import Graph.FreshNID
 import Graph.GraphMetadataEditing (GraphMetadataEditing, GraphMetadataReading)
 import Graph.Import.ByteString
@@ -153,19 +152,6 @@ interpretCommand = \case
     nid <- currentLocation
     nids <- subsumeUserError (resolvePathSuccesses nid p)
     forM_ nids $ deleteNode @Text
-  Clone p t -> do
-    nid <- currentLocation
-    let err = singleErr "clone"
-    nid' <- the' err =<< subsumeUserError (resolvePathSuccesses nid p)
-    nid'' <- (subsumeUserError . taggingFreshNodesWithTime) (cloneNode @Text nid')
-    cnid <- currentLocation
-    insertEdge $ Edge cnid t nid''
-  Query p t -> do
-    nid <- currentLocation
-    nids <- subsumeUserError (resolvePathSuccesses nid p)
-    nnid <- (subsumeUserError . taggingFreshNodesWithTime) (nid `transitionsFreshVia` t)
-    _ <- subsumeUserError (Graph.Utils.mergeNodes @Text (nnid `ncons` toList nids))
-    pure ()
   Tag p q -> do
     nid <- currentLocation
     let err = singleErr "the last argument of tag"
@@ -194,16 +180,6 @@ interpretCommand = \case
       (\a s -> insertEdge (Edge nid (t <> pack s) a))
       (toList ambiguities)
       suffixes
-  Flatten t -> do
-    nid <- currentLocation
-    let err =
-          const
-            . OtherError
-            $ "flatten only works if there is only a single node that the literal resolves to"
-    nodeToFlattenFrom <- the' err =<< subsumeUserError (resolvePathSuccesses nid (Literal t))
-    nodesToFlatten <- subsumeUserError $ resolvePathSuccesses nodeToFlattenFrom Wild
-    deleteEdge (Edge nid t nodeToFlattenFrom)
-    for_ [Edge nid t nid' | nid' <- toList nodesToFlatten] insertEdge
   ListOut -> do
     n <- subsumeUserError currentNode
     printTransitions n.outgoing
@@ -221,10 +197,6 @@ interpretCommand = \case
     guardDangerousDualizedOperation
     nid <- subsumeUserError (importUrl uri)
     changeLocation nid
-  AddText text -> do
-    guardDangerousDualizedOperation
-    nid <- subsumeUserError (importData (encodeUtf8 text))
-    changeLocation nid
   Debug -> do
     echo "current node:"
     currentLocation
@@ -232,8 +204,6 @@ interpretCommand = \case
       >>= echo . unpack . nshowWith (\x -> x {showAugmentation = Nothing})
     echo "history:"
     get @History >>= echo . show
-  -- echo "node-ids in the graph:"
-  -- nodeManifest @Text >>= echo . show
   Check -> reportToConsole @Text (fsck @Text)
   Fix -> fixErrors @Text (fsck @Text)
   Move p q -> do
@@ -254,7 +224,7 @@ interpretCommand = \case
     nid <- currentLocation
     let err xs =
           OtherError $
-            "the first argument to rn require the path to only resolve to "
+            "the first argument to cp require the path to only resolve to "
               ++ "one node but they resolved to \n"
               ++ (tshow . map endPoint . setToList $ xs)
     c <- the' err =<< subsumeUserError (resolvePathSuccessesDetail nid p)
@@ -273,19 +243,6 @@ interpretCommand = \case
     -- already modifies the location and if we set the location we would end up
     -- adding duplicates to the history
     put @History history'
-  Materialize fp -> do
-    nid <- subsumeUserError @Missing currentLocation
-    fp' <- subsumeUserError @IOError . untry $ canonicalizePath fp
-    exportToDirectory nid fp'
-  Collect t -> do
-    currentNid <- currentLocation
-    nids <- subsumeUserError (resolvePathSuccesses currentNid (Literal t))
-    newNid <-
-      the' (error "only creating one path")
-        =<< (subsumeUserError . taggingFreshNodesWithTime) (mkPath currentNid (Literal t))
-    for_ nids $ \nid -> do
-      deleteEdge (Edge currentNid t nid)
-      insertEdge (Edge newNid "" nid)
   Seq ps -> do
     toList ps & traverse_ interpretCommand
   V2Path p -> do

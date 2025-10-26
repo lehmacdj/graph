@@ -31,14 +31,8 @@ pMake = (command "mk" $> Make) <*> path
 pMerge :: Parser Command
 pMerge = (command "mg" $> Merge) <*> path
 
-pClone :: Parser Command
-pClone = (command "cl" $> Clone) <*> path <*> pTransition
-
 pList :: Parser Command
 pList = command "ls" $> ListOut
-
-pQuery :: Parser Command
-pQuery = (commandFrom ["q", "query"] $> Query) <*> path <*> pTransition
 
 pTag :: Parser Command
 pTag = (commandFrom ["tag", "t"] $> Tag) <*> path <*> path
@@ -66,9 +60,6 @@ pDebug = commandFrom [":debug", ":d"] $> Debug
 
 pDedup :: Parser Command
 pDedup = (commandFrom ["dedup", "dd"] $> Dedup) <*> pTransition
-
-pFlatten :: Parser Command
-pFlatten = (command "flatten" $> Flatten) <*> pTransition
 
 pShowImage :: Parser Command
 pShowImage = commandFrom ["show-image", "si"] $> ShowImage
@@ -100,15 +91,6 @@ pEdit = command "vi" $> Edit
 pBack :: Parser Command
 pBack = (command "back" $> Back) <*> number
 
-pMaterialize :: Parser Command
-pMaterialize = (command "materialize" $> Materialize) <*> some anySingle
-
-pCollect :: Parser Command
-pCollect = (command "collect" $> Collect) <*> pTransition
-
-pAddText :: Parser Command
-pAddText = (commandFrom ["add-text", "al"] $> AddText) <*> anyText
-
 pV2Path :: Parser Command
 pV2Path = (commandFrom ["debug-v2-path", "v2"] $> V2Path) <*> pPath
 
@@ -119,9 +101,7 @@ pCommandTerm =
     <|> try pDualize
     <|> try pMake
     <|> try pMerge
-    <|> try pClone
     <|> try pList
-    <|> try pQuery
     <|> try pTag
     <|> try pText
     <|> try pDescribe
@@ -129,7 +109,6 @@ pCommandTerm =
     <|> try pRemoveNode
     <|> try pAt
     <|> try pDedup
-    <|> try pFlatten
     <|> try pNodeId
     <|> try pDebug
     <|> try pShowImage
@@ -142,9 +121,6 @@ pCommandTerm =
     <|> try pAlias
     <|> try pEdit
     <|> try pBack
-    <|> try pMaterialize
-    <|> try pCollect
-    <|> try pAddText
     <|> try (braces pCommand)
 
 pCommand :: Parser Command

@@ -24,12 +24,8 @@ data Command
     Make Path
   | -- | mg
     Merge Path
-  | -- | cl
-    Clone Path Text
   | -- | ls
     ListOut
-  | -- | q
-    Query Path Text
   | -- | t
     Tag Path Path
   | Text Text Text
@@ -43,13 +39,6 @@ data Command
     At Path Command
   | -- | dd
     Dedup Text
-  | -- | flatten:
-    -- Takes every node transition/* and creates edges transition to them.
-    -- The purpose of this is to convert from a form where things have explicit
-    -- but unnecessary names to a form where the edge is the only identifiying
-    -- attribute.
-    -- This can be considered to be the inverse of dedup in a sense
-    Flatten Text
   | -- | nid
     NodeId
   | -- | :d
@@ -60,8 +49,6 @@ data Command
     Import FilePath
   | -- | wget
     ImportUrl String
-  | -- | al for add link though its really just generally adding text
-    AddText Text
   | -- | fsck
     Check
   | -- | fix
@@ -79,14 +66,6 @@ data Command
     -- than amount of history goes maximum amount backwards. Negative number
     -- attempts to go forward in history if there is any recorded.
     Back Int
-  | -- | Turn the largest non-cyclic graph from the current location into a
-    -- file system structure representing the tree. Uses cloning when possible
-    -- to minimize disk footprint; takes a filepath to write the tree to as an
-    -- argument.
-    Materialize FilePath
-  | -- | Collect same transitions into a transition to a single node that
-    -- transitions to the nodes the previous transition used to
-    Collect Text
   | -- | Execute a list of commands sequentially
     Seq (TwoElemList Command)
   | -- | debug-v2-path, v2
