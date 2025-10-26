@@ -107,7 +107,7 @@ mkGoldenTest path =
   let testName = takeBaseName path
    in goldenVsString testName path do
         (B.readFile path <&> parseGoldenTest) >>= \case
-          Right goldenTest -> runGraphEditor goldenTest <&> renderGoldenTest
+          Right golden -> runGraphEditor golden <&> renderGoldenTest
           Left err -> error $ "failed to parse golden input:\n" <> err
 
 inputFiles :: IO [FilePath]
