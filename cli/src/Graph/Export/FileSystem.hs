@@ -13,9 +13,9 @@ import Error.UserError
 import Error.Warn
 import Graph.Effect
 import Models.Connect
+import Models.FileTypeInfo
 import Models.Node
 import MyPrelude
-import System.Directory (doesFileExist)
 import System.Directory.Clone (cloneFile)
 import System.Directory.Tree qualified as DT
 import System.FilePath (makeValid, splitFileName)
@@ -32,10 +32,8 @@ graphHeterarchy (startName, start) = do
   let dataFileAndExtensionIfExists :: NID -> Sem r (Maybe (FilePath, String))
       dataFileAndExtensionIfExists nid = do
         let ndf = legacyNodeDataFile fp nid
-        fileExists <- embed $ doesFileExist ndf
-        if fileExists
-          then Just . (ndf,) . unpack <$> getExtension ndf
-          else pure Nothing
+        fileTypeInfo <- getFileTypeInfo (Right ndf)
+        pure $ fileTypeInfo <&> ((ndf,) . unpack . (.extension))
       go :: Set NID -> NID -> Sem r [Tree (Maybe (FilePath, String), String)]
       go visited nid
         | nid `member` visited = pure []

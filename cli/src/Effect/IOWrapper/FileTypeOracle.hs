@@ -19,7 +19,8 @@ import MyPrelude
 import System.Process.Typed
 
 data FileTypeOracle m r where
-  GetFileTypeInfo :: FilePath -> FileTypeOracle m (Maybe FileTypeInfo)
+  GetFileTypeInfo ::
+    Either ByteString FilePath -> FileTypeOracle m (Maybe FileTypeInfo)
 
 makeSem ''FileTypeOracle
 
@@ -32,10 +33,12 @@ extensionLookupTable =
     ]
 
 -- | Handle files where the file(1) command cannot identify the type
-getHeuristicFileTypeInfo :: FilePath -> IO (Maybe FileTypeInfo)
-getHeuristicFileTypeInfo fp = withEarlyReturnIO do
+getHeuristicFileTypeInfo :: Either ByteString FilePath -> IO (Maybe FileTypeInfo)
+getHeuristicFileTypeInfo source = withEarlyReturnIO do
   -- Read only first 20 bytes to check for HTML
-  contents <- readFile fp
+  contents <- case source of
+    Left bs -> pure bs
+    Right fp -> readFile fp
   text <-
     eitherDecodeUtf8 contents
       `onLeft_` (returnEarly . Just)
@@ -53,24 +56,33 @@ getHeuristicFileTypeInfo fp = withEarlyReturnIO do
     returnEarly (Just (FileTypeInfo (MimeType "text" "uri-list") "uri"))
   pure . Just $ FileTypeInfo (MimeType "text" "plain") "txt"
 
+fileCommand ::
+  [String] -> Either ByteString FilePath -> ProcessConfig () () ()
+fileCommand extraArgs source =
+  let fp = case source of
+        Left _ -> "-"
+        Right path -> path
+      args = fp : "--brief" : extraArgs
+      stdinSpec = case source of
+        Left bs -> byteStringInput (fromStrict bs)
+        Right _ -> nullStream
+   in proc "file" args & setStdin stdinSpec
+
 -- | Get mimetype using file(1) command
-getMimetypeIO :: (MonadIO m) => FilePath -> m (Maybe MimeType)
-getMimetypeIO fp = liftIO . withEarlyReturnIO $ do
+getMimetypeIO :: (MonadIO m) => Either ByteString FilePath -> m (Maybe MimeType)
+getMimetypeIO source = liftIO . withEarlyReturnIO $ do
+  let process = fileCommand ["--mime-type"] source
   output <-
-    ( liftIO . try @_ @SomeException . readProcessStdout_ $
-        proc "file" ["--brief", "--mime-type", fp]
-      )
+    liftIO (try @_ @SomeException (readProcessStdout_ process))
       `onLeftM_` returnEarly Nothing
   pure $ parseMimeType (T.strip (decodeUtf8 (toStrict output)))
 
--- | Get file extension using file(1) command
 -- Returns the first extension if multiple are available
-getFileExtensionIO :: (MonadIO m) => FilePath -> m (Maybe Text)
-getFileExtensionIO fp = liftIO . withEarlyReturnIO $ do
+getFileExtensionIO :: (MonadIO m) => Either ByteString FilePath -> m (Maybe Text)
+getFileExtensionIO source = liftIO . withEarlyReturnIO $ do
+  let process = fileCommand ["--extension"] source
   output <-
-    ( liftIO . try @_ @SomeException . readProcessStdout_ $
-        proc "file" ["--brief", "--extension", fp]
-      )
+    liftIO (try @_ @SomeException (readProcessStdout_ process))
       `onLeftM_` returnEarly Nothing
   -- file can return more than one extension (e.g., "jpeg/jpg/jpe/jfif")
   case T.split (== '/') (decodeUtf8 (toStrict output)) of
@@ -80,10 +92,10 @@ getFileExtensionIO fp = liftIO . withEarlyReturnIO $ do
 -- | Get both mimetype and extension with fallback logic
 -- Ported from Python's get_mimetype_and_extension function
 -- Returns Nothing if the file doesn't exist or we fail to determine the type
-getFileTypeInfoIO :: FilePath -> IO (Maybe FileTypeInfo)
-getFileTypeInfoIO fp = liftIO . withEarlyReturnIO $ do
-  m_mimeType <- getMimetypeIO fp
-  m_extension <- getFileExtensionIO fp
+getFileTypeInfoIO :: Either ByteString FilePath -> IO (Maybe FileTypeInfo)
+getFileTypeInfoIO source = liftIO . withEarlyReturnIO $ do
+  m_mimeType <- getMimetypeIO source
+  m_extension <- getFileExtensionIO source
   case (m_mimeType, m_extension) of
     (Just mimeType, Just extension) ->
       returnEarly . Just $ FileTypeInfo {..}
@@ -91,18 +103,16 @@ getFileTypeInfoIO fp = liftIO . withEarlyReturnIO $ do
       | Just extension <- extensionLookupTable ^. at mimeType ->
           returnEarly . Just $ FileTypeInfo {..}
       | otherwise -> do
-          liftIO (getHeuristicFileTypeInfo fp) <&> \case
+          liftIO (getHeuristicFileTypeInfo source) <&> \case
             Just heuristicInfo
               | heuristicInfo.mimeType == mimeType -> Just heuristicInfo
             _ -> Nothing
     (Nothing, Just extension) -> do
-      sayErr $
-        ("[WARNING] " <> T.pack fp <> ": ")
-          <> ("identified extension " <> extension <> " but no mimetype")
+      sayErr "warning: identified extension but no mimetype"
       let mimeType = MimeType "application" "octet-stream"
       returnEarly . Just $ FileTypeInfo {..}
     (Nothing, Nothing) ->
-      liftIO $ getHeuristicFileTypeInfo fp
+      liftIO $ getHeuristicFileTypeInfo source
 
 -- | Run FileTypeOracle effect
 runFileTypeOracle ::
@@ -110,4 +120,4 @@ runFileTypeOracle ::
   Sem (FileTypeOracle : r) a ->
   Sem r a
 runFileTypeOracle = interpret \case
-  GetFileTypeInfo fp -> embed $ getFileTypeInfoIO fp
+  GetFileTypeInfo source -> embed $ getFileTypeInfoIO source
