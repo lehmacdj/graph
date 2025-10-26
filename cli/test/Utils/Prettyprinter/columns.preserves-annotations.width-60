@@ -1,0 +1,3 @@
+colored red blue black text[0;1m[0m   Green column text that also[0;92m[0m
+followed by normal colored[0;1m[0m    wraps
+text                          

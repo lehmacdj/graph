@@ -36,7 +36,7 @@ import System.Directory.Tree qualified as DT
 import Test.Hspec as X (Spec, describe, it)
 import Test.Hspec.Expectations as X
 import Test.Tasty as X
-import Test.Tasty.Golden (goldenVsString)
+import Test.Tasty.Golden (goldenVsStringDiff)
 import Test.Tasty.HUnit as X
 import Test.Tasty.Hspec (testSpec)
 import Test.Tasty.QuickCheck as X hiding (Fixed (..), label)
@@ -141,7 +141,11 @@ testParserFails parser string =
 -- The test name will be the basename of the test file (the first argument).
 goldenTestBinary :: (HasCallStack) => String -> ByteString -> TestTree
 goldenTestBinary testName actualBytes =
-  goldenVsString testName (goldenPathFor callStack testName) (pure $ fromStrict actualBytes)
+  goldenVsStringDiff
+    testName
+    (\ref new -> ["diff", "-u", ref, new])
+    (goldenPathFor callStack testName)
+    (pure $ fromStrict actualBytes)
 
 -- | Creates a golden test for Text by comparing the Text with a
 -- file in a subtree of test/ relative to the module the function is called from.

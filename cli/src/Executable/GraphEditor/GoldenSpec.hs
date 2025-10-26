@@ -105,7 +105,7 @@ runGraphEditor test@GoldenTest {..} =
 mkGoldenTest :: FilePath -> TestTree
 mkGoldenTest path =
   let testName = takeBaseName path
-   in goldenVsString testName path do
+   in goldenVsStringDiff testName (\ref new -> ["diff", "-u", ref, new]) path do
         (B.readFile path <&> parseGoldenTest) >>= \case
           Right golden -> runGraphEditor golden <&> renderGoldenTest
           Left err -> error $ "failed to parse golden input:\n" <> err

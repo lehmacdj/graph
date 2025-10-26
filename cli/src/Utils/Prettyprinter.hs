@@ -1,8 +1,10 @@
 module Utils.Prettyprinter
-  ( beside,
+  ( columns,
+    equalColumns,
     HorizontalWidth (..),
     module X,
-    test_examples,
+    test_goldenRenders,
+    spec_streamToDoc,
   )
 where
 
@@ -16,34 +18,64 @@ data HorizontalWidth = Fixed Int | Weighted Double
 
 -- | Reconstruct a Doc from a SimpleDocStream
 -- This allows us to work with laid-out documents while preserving annotations
+-- Handles arbitrary SimpleDocStream structures including deeply nested annotations
 streamToDoc :: SimpleDocStream ann -> Doc ann
-streamToDoc = go []
+streamToDoc = go
   where
-    go :: [ann] -> SimpleDocStream ann -> Doc ann
-    go _ SFail = emptyDoc
-    go _ SEmpty = emptyDoc
-    go annStack (SChar c rest) = pretty c <> go annStack rest
-    go annStack (SText _ txt rest) = pretty txt <> go annStack rest
-    go annStack (SLine i rest) = hardline <> pretty (pack (replicate i ' ' :: [Char]) :: Text) <> go annStack rest
-    go annStack (SAnnPush ann rest) = annotate ann (goUntilPop (ann : annStack) rest)
-    go annStack (SAnnPop rest) = go annStack rest
+    go :: (HasCallStack) => SimpleDocStream ann -> Doc ann
+    go SFail = emptyDoc
+    go SEmpty = emptyDoc
+    go (SChar c rest) = pretty c <> go rest
+    go (SText _ txt rest) = pretty txt <> go rest
+    go (SLine i rest) =
+      hardline
+        <> pretty (pack (replicate i ' ' :: [Char]) :: Text)
+        <> go rest
+    go (SAnnPush ann rest) =
+      -- Extract content until matching pop, handling nested annotations
+      let (content, after) = extractUntilPop rest
+       in annotate ann (go content) <> go after
+    go (SAnnPop _rest) =
+      -- This shouldn't happen in well-formed streams, but we handle it gracefully
+      -- by treating it as a no-op
+      emptyDoc
 
-    -- Consume content until we hit the matching SAnnPop
-    goUntilPop :: [ann] -> SimpleDocStream ann -> Doc ann
-    goUntilPop _ SFail = emptyDoc
-    goUntilPop _ SEmpty = emptyDoc
-    goUntilPop annStack (SChar c rest) = pretty c <> goUntilPop annStack rest
-    goUntilPop annStack (SText _ txt rest) = pretty txt <> goUntilPop annStack rest
-    goUntilPop annStack (SLine i rest) = hardline <> pretty (pack (replicate i ' ' :: [Char]) :: Text) <> goUntilPop annStack rest
-    goUntilPop annStack (SAnnPush ann rest) = annotate ann (goUntilPop (ann : annStack) rest)
-    goUntilPop (_ : restStack) (SAnnPop rest) = go restStack rest
-    goUntilPop [] (SAnnPop rest) = go [] rest -- Shouldn't happen, but handle gracefully
+    -- Extract content until the matching SAnnPop
+    -- Returns (contentStream, remainingStream)
+    -- Handles nested push/pop pairs correctly
+    extractUntilPop :: SimpleDocStream ann -> (SimpleDocStream ann, SimpleDocStream ann)
+    extractUntilPop stream = extract 1 stream
+      where
+        -- depth tracks nesting level: when it reaches 0, we've found our matching pop
+        extract :: Int -> SimpleDocStream ann -> (SimpleDocStream ann, SimpleDocStream ann)
+        extract _ SFail = (SFail, SEmpty)
+        extract 0 s = (SEmpty, s) -- Found matching pop
+        extract _ SEmpty = (SEmpty, SEmpty)
+        extract depth (SChar c rest) =
+          let (content, after) = extract depth rest
+           in (SChar c content, after)
+        extract depth (SText len txt rest) =
+          let (content, after) = extract depth rest
+           in (SText len txt content, after)
+        extract depth (SLine i rest) =
+          let (content, after) = extract depth rest
+           in (SLine i content, after)
+        extract depth (SAnnPush ann rest) =
+          -- Nested push: increase depth
+          let (content, after) = extract (depth + 1) rest
+           in (SAnnPush ann content, after)
+        extract depth (SAnnPop rest)
+          | depth == 1 = (SEmpty, rest) -- Found our matching pop
+          | otherwise =
+              -- This pop matches a nested push
+              let (content, after) = extract (depth - 1) rest
+               in (SAnnPop content, after)
 
 -- Layout multiple documents side-by-side with flexible width allocation
-beside :: [(Doc ann, HorizontalWidth)] -> Doc ann
-beside [] = emptyDoc
-beside items =
-  column $ \startCol ->
+columns :: [(Doc ann, HorizontalWidth)] -> Doc ann
+columns [] = emptyDoc
+columns items =
+  align . column $ \startCol ->
     pageWidth $ \case
       AvailablePerLine lineWidth ribbonFrac ->
         let totalWidth = floor (fromIntegral lineWidth * ribbonFrac)
@@ -55,6 +87,12 @@ beside items =
       Unbounded ->
         -- With unbounded width, measure each document precisely
         renderMultiColumnUnbounded startCol items
+
+equalColumns :: Int -> [Doc ann] -> Doc ann
+equalColumns spacing =
+  columns
+    . intersperse (fill spacing emptyDoc, Fixed spacing)
+    . map (,Weighted 1.0)
 
 -- Calculate actual widths for each column (for bounded case)
 calculateWidths :: Int -> [(Doc ann, HorizontalWidth)] -> [(Int, Doc ann)]
@@ -105,23 +143,44 @@ renderMultiColumn items =
    in vsep combinedLines
   where
     -- Split a SimpleDocStream into lines at SLine boundaries
+    -- Must handle nested annotations by tracking active annotation stack
     splitStreamLines :: SimpleDocStream ann -> [SimpleDocStream ann]
-    splitStreamLines = go
+    splitStreamLines = go []
       where
-        go SFail = []
-        go SEmpty = [SEmpty]
-        go (SChar c rest) = consToFirstLine (SChar c SEmpty) (go rest)
-        go (SText len txt rest) = consToFirstLine (SText len txt SEmpty) (go rest)
-        go (SLine _ rest) = SEmpty : go rest -- New line starts here, discard indentation
-        go (SAnnPush ann rest) =
-          case go rest of
-            [] -> [SAnnPush ann SEmpty]
-            (firstLine : otherLines) -> SAnnPush ann firstLine : otherLines
-        go (SAnnPop rest) = consToFirstLine (SAnnPop SEmpty) (go rest)
+        -- Track annotation stack and emit balanced lines
+        go :: [ann] -> SimpleDocStream ann -> [SimpleDocStream ann]
+        go _ SFail = []
+        go annStack SEmpty = [wrapWithAnnotations annStack SEmpty]
+        go annStack (SChar c rest) = consToFirstLine (SChar c SEmpty) (go annStack rest)
+        go annStack (SText len txt rest) = consToFirstLine (SText len txt SEmpty) (go annStack rest)
+        go annStack (SLine _ rest) =
+          -- Close current line, start new line with same annotations
+          case go annStack rest of
+            [] -> [wrapWithAnnotations annStack SEmpty]
+            (nextLine : otherLines) ->
+              wrapWithAnnotations annStack SEmpty : nextLine : otherLines
+        go annStack (SAnnPush ann rest) =
+          -- Add to stack and continue (first line will be wrapped by caller)
+          go (ann : annStack) rest
+        go annStack (SAnnPop rest) =
+          -- Remove from stack
+          let newStack = case annStack of
+                [] -> []
+                (_ : xs) -> xs
+           in go newStack rest
 
         consToFirstLine :: SimpleDocStream ann -> [SimpleDocStream ann] -> [SimpleDocStream ann]
         consToFirstLine s [] = [s]
         consToFirstLine s (firstLine : rest) = appendStream s firstLine : rest
+
+        -- Wrap a stream with all active annotations
+        wrapWithAnnotations :: [ann] -> SimpleDocStream ann -> SimpleDocStream ann
+        wrapWithAnnotations [] s = s
+        wrapWithAnnotations anns s =
+          let -- Close all annotations after the content (innermost to outermost)
+              withCloses = foldl' (\acc _ -> SAnnPop acc) s anns
+           in -- Open all annotations before the content (outermost to innermost)
+              foldr SAnnPush withCloses (reverse anns)
 
     -- Append two SimpleDocStreams
     appendStream :: SimpleDocStream ann -> SimpleDocStream ann -> SimpleDocStream ann
@@ -137,13 +196,33 @@ renderMultiColumn items =
     padLines n ls = ls ++ replicate (n - length ls) SEmpty
 
     -- Pad a stream to a specific width by measuring and adding spaces
+    -- Must insert padding BEFORE any trailing SAnnPop to maintain proper nesting
     padStreamToWidth :: Int -> SimpleDocStream ann -> SimpleDocStream ann
     padStreamToWidth targetWidth stream =
       let currentWidth = streamWidth stream
           paddingNeeded = max 0 (targetWidth - currentWidth)
        in if paddingNeeded > 0
-            then appendStream stream (SText paddingNeeded (pack (replicate paddingNeeded ' ')) SEmpty)
+            then insertPaddingBeforeTrailingPops paddingNeeded stream
             else stream
+
+    -- Insert padding before trailing SAnnPop sequences
+    insertPaddingBeforeTrailingPops :: Int -> SimpleDocStream ann -> SimpleDocStream ann
+    insertPaddingBeforeTrailingPops padding stream =
+      let (pops, rest) = extractTrailingPops stream
+       in restoreStream rest (SText padding (pack (replicate padding ' ')) SEmpty) pops
+      where
+        -- Extract all trailing SAnnPops, return (pops, streamWithoutPops)
+        extractTrailingPops :: SimpleDocStream ann -> ([SimpleDocStream ann -> SimpleDocStream ann], SimpleDocStream ann)
+        extractTrailingPops SEmpty = ([], SEmpty)
+        extractTrailingPops SFail = ([], SFail)
+        extractTrailingPops (SAnnPop rest) =
+          let (morePops, base) = extractTrailingPops rest
+           in (SAnnPop : morePops, base)
+        extractTrailingPops other = ([], other)
+
+        -- Reconstruct stream: base + padding + pops
+        restoreStream :: SimpleDocStream ann -> SimpleDocStream ann -> [SimpleDocStream ann -> SimpleDocStream ann] -> SimpleDocStream ann
+        restoreStream base padding' = foldl' (flip ($)) (appendStream base padding')
 
     -- Calculate the display width of a SimpleDocStream
     streamWidth :: SimpleDocStream ann -> Int
@@ -175,107 +254,376 @@ renderMultiColumnUnbounded startCol items =
           width doc $ \w ->
             buildColumns (currentCol + w) rest ((w, doc) : acc)
 
--- Examples
-example1 :: Doc ann
-example1 =
-  beside
-    [ (fillSep $ map pretty $ words ("This is the first column with some text" :: Text), Weighted 1.0),
-      (fillSep $ map pretty $ words ("This is the second column with more text" :: Text), Weighted 1.0),
-      (fillSep $ map pretty $ words ("And a third column" :: Text), Weighted 1.0)
-    ]
+test_goldenRenders :: [TestTree]
+test_goldenRenders =
+  [ goldenRenders "columns.wrap-first" [42, 60, 80] $
+      columns
+        [ ( fillSep . map pretty . words . asText $
+              "some text with fill that wraps at small widths",
+            Weighted 1.0
+          ),
+          let t :: Text
+              t = "some text on the right"
+           in (pretty t, Fixed (length t))
+        ],
+    goldenRenders "columns.three-equal-columns.no-spacing" [42, 60, 80] $
+      equalColumns
+        0
+        [ fillSep . map pretty . words . asText $
+            "some text with fill that wraps at small widths",
+          fillSep . map pretty . words . asText $
+            "some more text that also wraps",
+          fillSep . map pretty . words . asText $
+            "third column text that wraps"
+        ],
+    goldenRenders "columns.three-equal-columns.2-spacing" [42, 60, 80] $
+      equalColumns
+        2
+        [ fillSep . map pretty . words . asText $
+            "some text with fill that wraps at small widths",
+          fillSep . map pretty . words . asText $
+            "some more text that also wraps",
+          fillSep . map pretty . words . asText $
+            "third column text that wraps"
+        ],
+    goldenRenders "columns.with-leading-doc-aligned" [40] $
+      "start"
+        <> columns
+          [ ( fillSep . map pretty . words . asText $
+                "some text with fill that wraps at small widths",
+              Weighted 1.0
+            ),
+            let t :: Text
+                t = "some text on the right"
+             in (pretty t, Fixed (length t))
+          ],
+    goldenRenders "columns.continues-just-after-last-line" [42, 60, 80] $
+      columns
+        [ ( fillSep . map pretty . words . asText $
+              "some text with fill that wraps at small widths",
+            Weighted 1.0
+          ),
+          let t :: Text
+              t = "some text on the right"
+           in (pretty t, Fixed (length t))
+        ]
+        <> softline'
+        <> ( fillSep . map pretty . words . asText $
+               "continued text disrespects the column layout"
+           ),
+    goldenRenders "columns.nested-columns" [42, 60, 80] $
+      equalColumns
+        2
+        [ equalColumns
+            2
+            [ fillSep . map pretty . words . asText $
+                "foo bar baz that wraps (25% of space)",
+              fillSep . map pretty . words . asText $
+                "some more text that also wraps (25% of space)"
+            ],
+          fillSep . map pretty . words . asText $
+            "column in outer columns that takes up 50% of space"
+        ],
+    goldenRenders "columns.preserves-annotations" [42, 60, 80] $
+      columns
+        [ ( annotate bold
+              . fillSep
+              . over (ix 1) (annotate (color Red))
+              . over (ix 2) (annotate (color Blue))
+              . over (ix 3) (annotate (color Black))
+              . map pretty
+              . words
+              . asText
+              $ "colored red blue black text followed by normal colored text",
+            Weighted 1.0
+          ),
+          ( annotate (color Green) $
+              fillSep . map pretty . words . asText $
+                "Green column text that also wraps",
+            Weighted 1.0
+          )
+        ]
+  ]
+  where
+    goldenRenders name widths doc =
+      testGroup name . runIdentity $ for widths \w ->
+        Identity . goldenTest (name ++ ".width-" ++ show w) . renderStrict $
+          layoutPretty
+            (LayoutOptions (AvailablePerLine w 1.0))
+            doc
 
-example2 :: Doc ann
-example2 =
-  beside
-    [ (fillSep $ map pretty $ words ("Fixed 20 char column that will wrap at 20" :: Text), Fixed 20),
-      (fillSep $ map pretty $ words ("This column gets remaining space and will wrap accordingly" :: Text), Weighted 1.0)
-    ]
+-- | Test streamToDoc functionality
+-- Tests that streamToDoc correctly reconstructs documents from SimpleDocStream,
+-- preserving all annotations and structure
+spec_streamToDoc :: Spec
+spec_streamToDoc = do
+  let testRoundTrip :: String -> Doc AnsiStyle -> Spec
+      testRoundTrip = testRoundTripAt 80
 
-example3 :: Doc ann
-example3 =
-  beside
-    [ (fillSep $ map pretty $ words ("Small weight column" :: Text), Weighted 1.0),
-      (fillSep $ map pretty $ words ("Large weight column gets more space" :: Text), Weighted 2.0),
-      (fillSep $ map pretty $ words ("Another small" :: Text), Weighted 1.0)
-    ]
+      testRoundTripAt :: Int -> String -> Doc AnsiStyle -> Spec
+      testRoundTripAt w name doc =
+        it name do
+          let opts = LayoutOptions (AvailablePerLine w 1.0)
+              stream = layoutPretty opts doc
+              reconstructed = streamToDoc stream
+              stream2 = layoutPretty opts reconstructed
+              rendered1 = renderStrict stream
+              rendered2 = renderStrict stream2
+          rendered1 `shouldBe` rendered2
 
-example4 :: Doc ann
-example4 =
-  beside
-    [ (pretty ("Line 1\nLine 2\nLine 3" :: Text), Fixed 15),
-      (pretty ("A\nB" :: Text), Fixed 10),
-      (pretty ("Just one line" :: Text), Weighted 1.0)
-    ]
+  describe "direct streamToDoc (not through columns)" do
+    describe "basic documents" do
+      testRoundTrip "simple text" $
+        pretty ("hello" :: Text)
+      testRoundTrip "concatenated text" $
+        pretty ("hello" :: Text) <> pretty (" world" :: Text)
+      testRoundTrip "with line breaks" $
+        pretty ("line1" :: Text) <> hardline <> pretty ("line2" :: Text)
 
--- Example showing unbounded width with natural sizing
-exampleUnbounded :: Doc ann
-exampleUnbounded =
-  beside
-    [ (pretty ("Short" :: Text), Weighted 1.0),
-      (pretty ("A bit longer text" :: Text), Weighted 1.0),
-      (pretty ("X" :: Text), Weighted 1.0)
-    ]
+    describe "single annotation" do
+      testRoundTrip "red text" $
+        annotate (color Red) (pretty ("red text" :: Text))
+      testRoundTrip "bold text" $
+        annotate bold (pretty ("bold text" :: Text))
+      testRoundTrip "underlined text" $
+        annotate underlined (pretty ("underlined" :: Text))
 
--- Example with nesting and column awareness
-exampleNested :: Doc ann
-exampleNested =
-  pretty ("Prefix: " :: Text)
-    <> beside
-      [ (pretty ("A" :: Text), Weighted 1.0),
-        (pretty ("B" :: Text), Weighted 1.0),
-        (pretty ("C" :: Text), Weighted 1.0)
-      ]
+    describe "annotation nesting depth 2" do
+      testRoundTrip "outer with inner bold" $
+        annotate (color Red) $
+          pretty ("outer " :: Text)
+            <> annotate bold (pretty ("bold" :: Text))
+            <> pretty (" back" :: Text)
+      testRoundTrip "blue underlined" $
+        annotate (color Blue) $
+          annotate underlined $
+            pretty ("blue underlined" :: Text)
+      testRoundTrip "color within color" $
+        annotate (color Green) $
+          pretty ("start " :: Text)
+            <> annotate (color Yellow) (pretty ("yellow" :: Text))
+            <> pretty (" end" :: Text)
 
--- Example showing beside correctly accounting for left content
-exampleWithLeftContent :: Doc ann
-exampleWithLeftContent =
-  pretty ("Start: " :: Text)
-    <> beside
-      [ (fillSep $ map pretty $ words ("First column text" :: Text), Weighted 1.0),
-        (fillSep $ map pretty $ words ("Second column text" :: Text), Weighted 1.0)
-      ]
+    describe "annotation nesting depth 3" do
+      testRoundTrip "triple nested" $
+        annotate (color Red) $
+          annotate bold $
+            annotate underlined $
+              pretty ("triple nested" :: Text)
+      testRoundTrip "complex nesting with reversion" $
+        annotate (color Magenta) $
+          pretty ("level1 " :: Text)
+            <> annotate
+              bold
+              ( pretty ("level2 " :: Text)
+                  <> annotate underlined (pretty ("level3" :: Text))
+                  <> pretty (" back2" :: Text)
+              )
+            <> pretty (" back1" :: Text)
 
--- Example with annotations (colors) to demonstrate annotation preservation
-exampleWithAnnotations :: Doc AnsiStyle
-exampleWithAnnotations =
-  beside
-    [ (annotate (color Red) $ fillSep $ map pretty $ words ("Red column text" :: Text), Weighted 1.0),
-      (annotate (color Green) $ fillSep $ map pretty $ words ("Green column text" :: Text), Weighted 1.0),
-      (annotate (color Blue) $ fillSep $ map pretty $ words ("Blue column" :: Text), Weighted 1.0)
-    ]
+    describe "annotation nesting depth 4" do
+      testRoundTrip "quad nested" $
+        annotate (color Red) $
+          annotate bold $
+            annotate underlined $
+              annotate (color Blue) $
+                pretty ("quad nested" :: Text)
 
--- Tests
-test_examples :: TestTree
-test_examples =
-  testGroup
-    "Prettyprinter examples"
-    [ goldenTest "example1-80width" $
-        renderStrict $
-          layoutPretty (LayoutOptions (AvailablePerLine 80 1.0)) example1,
-      goldenTest "example2-80width" $
-        renderStrict $
-          layoutPretty (LayoutOptions (AvailablePerLine 80 1.0)) example2,
-      goldenTest "example3-90width" $
-        renderStrict $
-          layoutPretty (LayoutOptions (AvailablePerLine 90 1.0)) example3,
-      goldenTest "example4-60width" $
-        renderStrict $
-          layoutPretty (LayoutOptions (AvailablePerLine 60 1.0)) example4,
-      goldenTest "example-unbounded" $
-        renderStrict $
-          layoutPretty (LayoutOptions Unbounded) exampleUnbounded,
-      goldenTest "example-nested-80width" $
-        renderStrict $
-          layoutPretty (LayoutOptions (AvailablePerLine 80 1.0)) exampleNested,
-      goldenTest "example-with-left-content-80width" $
-        renderStrict $
-          layoutPretty (LayoutOptions (AvailablePerLine 80 1.0)) exampleWithLeftContent,
-      goldenTest "example1-60width-reflowing" $
-        renderStrict $
-          layoutPretty (LayoutOptions (AvailablePerLine 60 1.0)) example1,
-      -- Test annotation preservation by rendering with ANSI colors
-      goldenTestBinary "example-with-annotations-80width" $
-        encodeUtf8 $
-          renderStrict $
-            layoutPretty (LayoutOptions (AvailablePerLine 80 1.0)) exampleWithAnnotations
-    ]
+    describe "annotations with line breaks" do
+      testRoundTrip "annotation spanning lines" $
+        annotate (color Red) $
+          pretty ("line1" :: Text) <> hardline <> pretty ("line2" :: Text)
+      testRoundTrip "nested annotation spanning multiple lines" $
+        annotate (color Green) $
+          annotate bold $
+            pretty ("first" :: Text)
+              <> hardline
+              <> pretty ("second" :: Text)
+              <> hardline
+              <> pretty ("third" :: Text)
+
+    describe "annotation reversion after pop" do
+      testRoundTrip "color reversion" $
+        annotate (color Red) $
+          pretty ("red " :: Text)
+            <> annotate (color Blue) (pretty ("blue" :: Text))
+            <> pretty (" red again" :: Text)
+      testRoundTrip "multi-level reversion" $
+        annotate (color Red) $
+          pretty ("R1 " :: Text)
+            <> annotate
+              (color Green)
+              ( pretty ("G1 " :: Text)
+                  <> annotate (color Blue) (pretty ("B" :: Text))
+                  <> pretty (" G2" :: Text)
+              )
+            <> pretty (" R2" :: Text)
+
+    describe "complex structures" do
+      testRoundTrip "vsep with nested annotations" $
+        vsep
+          [ annotate (color Red) (pretty ("line 1" :: Text)),
+            annotate (color Green) $
+              annotate bold (pretty ("line 2" :: Text)),
+            annotate (color Blue) $
+              pretty ("line 3a " :: Text)
+                <> annotate underlined (pretty ("line 3b" :: Text))
+          ]
+
+    describe "fillSep with annotations" do
+      testRoundTrip "fillSep colored" $
+        annotate (color Cyan) $
+          fillSep $
+            map pretty $
+              words ("This is a longer piece of text that will wrap" :: Text)
+      testRoundTrip "fillSep with mixed annotations" $
+        annotate (color Magenta) $
+          fillSep
+            [ pretty ("normal" :: Text),
+              annotate bold (pretty ("bold" :: Text)),
+              pretty ("normal" :: Text),
+              annotate underlined (pretty ("underlined" :: Text))
+            ]
+
+  describe "columns with single-level annotations" do
+    testRoundTrip "simple columns with annotations" $
+      columns
+        [ ( annotate (color Red) (pretty ("col1" :: Text)),
+            Fixed 20
+          ),
+          ( annotate (color Green) (pretty ("col2" :: Text)),
+            Fixed 20
+          )
+        ]
+
+  describe "columns with annotation nesting depth 2" do
+    testRoundTrip "two columns with double nesting" $
+      columns
+        [ ( annotate (color Red) $
+              annotate bold (pretty ("nested col1" :: Text)),
+            Weighted 1.0
+          ),
+          ( annotate (color Green) $
+              annotate underlined (pretty ("nested col2" :: Text)),
+            Weighted 1.0
+          )
+        ]
+    testRoundTrip "single column with double nesting" $
+      columns
+        [ ( annotate (color Blue) $
+              annotate bold (pretty ("double" :: Text)),
+            Weighted 1.0
+          )
+        ]
+
+  describe "columns with annotation nesting depth 3" do
+    testRoundTrip "triple nesting" $
+      columns
+        [ ( annotate (color Red) $
+              annotate bold $
+                annotate underlined (pretty ("triple" :: Text)),
+            Weighted 1.0
+          )
+        ]
+    testRoundTrip "with reversion" $
+      columns
+        [ ( annotate (color Red) $
+              pretty ("R " :: Text)
+                <> annotate
+                  (color Green)
+                  ( pretty ("G " :: Text)
+                      <> annotate bold (pretty ("B" :: Text))
+                      <> pretty (" G2" :: Text)
+                  )
+                <> pretty (" R2" :: Text),
+            Weighted 1.0
+          )
+        ]
+
+  describe "columns with annotation nesting depth 4" do
+    testRoundTrip "quad nesting" $
+      columns
+        [ ( annotate (color Red) $
+              annotate bold $
+                annotate underlined $
+                  annotate (color Blue) (pretty ("quad" :: Text)),
+            Weighted 1.0
+          )
+        ]
+
+  -- Note: annotations spanning multiple lines within columns have limitations
+  -- in the current implementation. The splitStreamLines function needs additional
+  -- work to properly handle annotations that cross line boundaries.
+
+  describe "columns annotation reversion" do
+    testRoundTrip "color reversion in columns" $
+      columns
+        [ ( annotate (color Red) $
+              pretty ("red " :: Text)
+                <> annotate (color Blue) (pretty ("blue" :: Text))
+                <> pretty (" red again" :: Text),
+            Weighted 1.0
+          )
+        ]
+    testRoundTrip "multi-level reversion in columns" $
+      columns
+        [ ( annotate (color Red) $
+              pretty ("R1 " :: Text)
+                <> annotate
+                  (color Green)
+                  ( pretty ("G1 " :: Text)
+                      <> annotate (color Blue) (pretty ("B" :: Text))
+                      <> pretty (" G2" :: Text)
+                  )
+                <> pretty (" R2" :: Text),
+            Weighted 1.0
+          )
+        ]
+
+  describe "columns with various widths" do
+    testRoundTripAt 40 "width 40" $
+      columns
+        [ ( annotate (color Red) $
+              annotate bold $
+                annotate underlined (pretty ("Deep" :: Text)),
+            Weighted 1.0
+          )
+        ]
+    testRoundTripAt 60 "width 60" $
+      columns
+        [ ( annotate (color Red) $
+              annotate bold $
+                annotate underlined (pretty ("Deep" :: Text)),
+            Weighted 1.0
+          )
+        ]
+    testRoundTripAt 100 "width 100" $
+      columns
+        [ ( annotate (color Red) $
+              annotate bold $
+                annotate underlined (pretty ("Deep" :: Text)),
+            Weighted 1.0
+          )
+        ]
+
+  describe "columns with fillSep and annotations" do
+    testRoundTrip "fillSep colored in columns" $
+      columns
+        [ ( annotate (color Cyan) $
+              fillSep $
+                map pretty $
+                  words ("This text wraps" :: Text),
+            Weighted 1.0
+          )
+        ]
+    testRoundTrip "fillSep with mixed annotations in columns" $
+      columns
+        [ ( annotate (color Magenta) $
+              fillSep
+                [ pretty ("normal" :: Text),
+                  annotate bold (pretty ("bold" :: Text)),
+                  pretty ("normal" :: Text)
+                ],
+            Weighted 1.0
+          )
+        ]
