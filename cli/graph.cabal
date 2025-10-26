@@ -134,6 +134,7 @@ library
       Utils.Parsing
       Utils.Parsing.Common
       Utils.Polysemy
+      Utils.Prettyprinter
       Utils.Singleton
       Utils.Testing
       Utils.Testing.GoldenSpec

@@ -39,7 +39,7 @@ import Test.Tasty as X
 import Test.Tasty.Golden (goldenVsString)
 import Test.Tasty.HUnit as X
 import Test.Tasty.Hspec (testSpec)
-import Test.Tasty.QuickCheck as X hiding (label)
+import Test.Tasty.QuickCheck as X hiding (Fixed (..), label)
 import Utils.Parsing.Common
 
 -- | initializes a graph that is either empty, or based on a template graph
