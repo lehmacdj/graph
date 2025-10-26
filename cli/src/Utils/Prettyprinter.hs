@@ -6,9 +6,8 @@ module Utils.Prettyprinter
   )
 where
 
-import MyPrelude
+import MyPrelude hiding (SChar)
 import Prettyprinter as X
-import Prettyprinter.Internal qualified as PP
 import Prettyprinter.Render.Terminal as X
 import Utils.Testing
 
@@ -17,28 +16,28 @@ data HorizontalWidth = Fixed Int | Weighted Double
 
 -- | Reconstruct a Doc from a SimpleDocStream
 -- This allows us to work with laid-out documents while preserving annotations
-streamToDoc :: PP.SimpleDocStream ann -> Doc ann
+streamToDoc :: SimpleDocStream ann -> Doc ann
 streamToDoc = go []
   where
-    go :: [ann] -> PP.SimpleDocStream ann -> Doc ann
-    go _ PP.SFail = emptyDoc
-    go _ PP.SEmpty = emptyDoc
-    go annStack (PP.SChar c rest) = pretty c <> go annStack rest
-    go annStack (PP.SText _ txt rest) = pretty txt <> go annStack rest
-    go annStack (PP.SLine i rest) = hardline <> pretty (pack (replicate i ' ' :: [Char]) :: Text) <> go annStack rest
-    go annStack (PP.SAnnPush ann rest) = annotate ann (goUntilPop (ann : annStack) rest)
-    go annStack (PP.SAnnPop rest) = go annStack rest
+    go :: [ann] -> SimpleDocStream ann -> Doc ann
+    go _ SFail = emptyDoc
+    go _ SEmpty = emptyDoc
+    go annStack (SChar c rest) = pretty c <> go annStack rest
+    go annStack (SText _ txt rest) = pretty txt <> go annStack rest
+    go annStack (SLine i rest) = hardline <> pretty (pack (replicate i ' ' :: [Char]) :: Text) <> go annStack rest
+    go annStack (SAnnPush ann rest) = annotate ann (goUntilPop (ann : annStack) rest)
+    go annStack (SAnnPop rest) = go annStack rest
 
     -- Consume content until we hit the matching SAnnPop
-    goUntilPop :: [ann] -> PP.SimpleDocStream ann -> Doc ann
-    goUntilPop _ PP.SFail = emptyDoc
-    goUntilPop _ PP.SEmpty = emptyDoc
-    goUntilPop annStack (PP.SChar c rest) = pretty c <> goUntilPop annStack rest
-    goUntilPop annStack (PP.SText _ txt rest) = pretty txt <> goUntilPop annStack rest
-    goUntilPop annStack (PP.SLine i rest) = hardline <> pretty (pack (replicate i ' ' :: [Char]) :: Text) <> goUntilPop annStack rest
-    goUntilPop annStack (PP.SAnnPush ann rest) = annotate ann (goUntilPop (ann : annStack) rest)
-    goUntilPop (_:restStack) (PP.SAnnPop rest) = go restStack rest
-    goUntilPop [] (PP.SAnnPop rest) = go [] rest  -- Shouldn't happen, but handle gracefully
+    goUntilPop :: [ann] -> SimpleDocStream ann -> Doc ann
+    goUntilPop _ SFail = emptyDoc
+    goUntilPop _ SEmpty = emptyDoc
+    goUntilPop annStack (SChar c rest) = pretty c <> goUntilPop annStack rest
+    goUntilPop annStack (SText _ txt rest) = pretty txt <> goUntilPop annStack rest
+    goUntilPop annStack (SLine i rest) = hardline <> pretty (pack (replicate i ' ' :: [Char]) :: Text) <> goUntilPop annStack rest
+    goUntilPop annStack (SAnnPush ann rest) = annotate ann (goUntilPop (ann : annStack) rest)
+    goUntilPop (_ : restStack) (SAnnPop rest) = go restStack rest
+    goUntilPop [] (SAnnPop rest) = go [] rest -- Shouldn't happen, but handle gracefully
 
 -- Layout multiple documents side-by-side with flexible width allocation
 beside :: [(Doc ann, HorizontalWidth)] -> Doc ann
@@ -96,66 +95,67 @@ renderMultiColumn items =
       -- Combine lines horizontally (preserving annotations)
       -- Don't pad the last column
       combinedLines =
-        [ mconcat $ zipWith
-            (\isLast (w, ls) -> streamToDoc $ (if isLast then id else padStreamToWidth w) (fromMaybe PP.SEmpty $ index ls i))
-            (if null paddedGroups then [] else replicate (length paddedGroups - 1) False ++ [True])
-            paddedGroups
+        [ mconcat $
+            zipWith
+              (\isLast (w, ls) -> streamToDoc $ (if isLast then id else padStreamToWidth w) (fromMaybe SEmpty $ index ls i))
+              (if null paddedGroups then [] else replicate (length paddedGroups - 1) False ++ [True])
+              paddedGroups
           | i <- [0 .. maxLines - 1]
         ]
    in vsep combinedLines
   where
     -- Split a SimpleDocStream into lines at SLine boundaries
-    splitStreamLines :: PP.SimpleDocStream ann -> [PP.SimpleDocStream ann]
+    splitStreamLines :: SimpleDocStream ann -> [SimpleDocStream ann]
     splitStreamLines = go
       where
-        go PP.SFail = []
-        go PP.SEmpty = [PP.SEmpty]
-        go (PP.SChar c rest) = consToFirstLine (PP.SChar c PP.SEmpty) (go rest)
-        go (PP.SText len txt rest) = consToFirstLine (PP.SText len txt PP.SEmpty) (go rest)
-        go (PP.SLine _ rest) = PP.SEmpty : go rest  -- New line starts here, discard indentation
-        go (PP.SAnnPush ann rest) =
+        go SFail = []
+        go SEmpty = [SEmpty]
+        go (SChar c rest) = consToFirstLine (SChar c SEmpty) (go rest)
+        go (SText len txt rest) = consToFirstLine (SText len txt SEmpty) (go rest)
+        go (SLine _ rest) = SEmpty : go rest -- New line starts here, discard indentation
+        go (SAnnPush ann rest) =
           case go rest of
-            [] -> [PP.SAnnPush ann PP.SEmpty]
-            (firstLine : otherLines) -> PP.SAnnPush ann firstLine : otherLines
-        go (PP.SAnnPop rest) = consToFirstLine (PP.SAnnPop PP.SEmpty) (go rest)
+            [] -> [SAnnPush ann SEmpty]
+            (firstLine : otherLines) -> SAnnPush ann firstLine : otherLines
+        go (SAnnPop rest) = consToFirstLine (SAnnPop SEmpty) (go rest)
 
-        consToFirstLine :: PP.SimpleDocStream ann -> [PP.SimpleDocStream ann] -> [PP.SimpleDocStream ann]
+        consToFirstLine :: SimpleDocStream ann -> [SimpleDocStream ann] -> [SimpleDocStream ann]
         consToFirstLine s [] = [s]
         consToFirstLine s (firstLine : rest) = appendStream s firstLine : rest
 
     -- Append two SimpleDocStreams
-    appendStream :: PP.SimpleDocStream ann -> PP.SimpleDocStream ann -> PP.SimpleDocStream ann
-    appendStream PP.SFail r = r
-    appendStream PP.SEmpty r = r
-    appendStream (PP.SChar c rest) r = PP.SChar c (appendStream rest r)
-    appendStream (PP.SText len txt rest) r = PP.SText len txt (appendStream rest r)
-    appendStream (PP.SLine i rest) r = PP.SLine i (appendStream rest r)
-    appendStream (PP.SAnnPush ann rest) r = PP.SAnnPush ann (appendStream rest r)
-    appendStream (PP.SAnnPop rest) r = PP.SAnnPop (appendStream rest r)
+    appendStream :: SimpleDocStream ann -> SimpleDocStream ann -> SimpleDocStream ann
+    appendStream SFail r = r
+    appendStream SEmpty r = r
+    appendStream (SChar c rest) r = SChar c (appendStream rest r)
+    appendStream (SText len txt rest) r = SText len txt (appendStream rest r)
+    appendStream (SLine i rest) r = SLine i (appendStream rest r)
+    appendStream (SAnnPush ann rest) r = SAnnPush ann (appendStream rest r)
+    appendStream (SAnnPop rest) r = SAnnPop (appendStream rest r)
 
-    padLines :: Int -> [PP.SimpleDocStream ann] -> [PP.SimpleDocStream ann]
-    padLines n ls = ls ++ replicate (n - length ls) PP.SEmpty
+    padLines :: Int -> [SimpleDocStream ann] -> [SimpleDocStream ann]
+    padLines n ls = ls ++ replicate (n - length ls) SEmpty
 
     -- Pad a stream to a specific width by measuring and adding spaces
-    padStreamToWidth :: Int -> PP.SimpleDocStream ann -> PP.SimpleDocStream ann
+    padStreamToWidth :: Int -> SimpleDocStream ann -> SimpleDocStream ann
     padStreamToWidth targetWidth stream =
       let currentWidth = streamWidth stream
           paddingNeeded = max 0 (targetWidth - currentWidth)
        in if paddingNeeded > 0
-            then appendStream stream (PP.SText paddingNeeded (pack (replicate paddingNeeded ' ')) PP.SEmpty)
+            then appendStream stream (SText paddingNeeded (pack (replicate paddingNeeded ' ')) SEmpty)
             else stream
 
     -- Calculate the display width of a SimpleDocStream
-    streamWidth :: PP.SimpleDocStream ann -> Int
+    streamWidth :: SimpleDocStream ann -> Int
     streamWidth = go
       where
-        go PP.SFail = 0
-        go PP.SEmpty = 0
-        go (PP.SChar _ rest) = 1 + go rest
-        go (PP.SText len _ rest) = len + go rest
-        go (PP.SLine _ rest) = 0 + go rest  -- Lines don't contribute to width
-        go (PP.SAnnPush _ rest) = go rest   -- Annotations don't contribute to width
-        go (PP.SAnnPop rest) = go rest
+        go SFail = 0
+        go SEmpty = 0
+        go (SChar _ rest) = 1 + go rest
+        go (SText len _ rest) = len + go rest
+        go (SLine _ rest) = 0 + go rest -- Lines don't contribute to width
+        go (SAnnPush _ rest) = go rest -- Annotations don't contribute to width
+        go (SAnnPop rest) = go rest
 
 -- Render unbounded case: measure each document and lay out precisely
 renderMultiColumnUnbounded :: Int -> [(Doc ann, HorizontalWidth)] -> Doc ann

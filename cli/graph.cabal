@@ -72,6 +72,7 @@ library
       Models.Augmentation.FileType
       Models.Augmentation.IsThin
       Models.Augmentation.NodeEdits
+      Models.Augmentation.Preview
       Models.Augmentation.Tags
       Models.Augmentation.Timestamps
       Models.Command
