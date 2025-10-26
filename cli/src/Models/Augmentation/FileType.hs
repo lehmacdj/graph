@@ -8,6 +8,7 @@ import Graph.SystemNodes
 import Models.Common
 import Models.Connect
 import Models.Edge
+import Models.FileTypeInfo
 import Models.MaterializedPath
 import Models.MimeType
 import Models.NID
@@ -22,12 +23,6 @@ newtype FileExtension = FileExtension
 
 newtype FileType = FileType
   { fileType :: Maybe FileTypeInfo
-  }
-  deriving (Eq, Show, Ord, Generic)
-
-data FileTypeInfo = FileTypeInfo
-  { mimeType :: MimeType,
-    extension :: Text
   }
   deriving (Eq, Show, Ord, Generic)
 

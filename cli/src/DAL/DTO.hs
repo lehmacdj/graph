@@ -5,7 +5,6 @@
 -- change to the way we serialize graphs!
 module DAL.DTO where
 
-import Data.Aeson
 import Error.UserError
 import Models.Connect
 import Models.NID

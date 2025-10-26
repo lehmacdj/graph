@@ -64,11 +64,23 @@ onLeft = flip (`either` pure)
 onLeft_ :: (Applicative m) => Either e a -> m a -> m a
 onLeft_ e = onLeft e . const
 
+onLeftM :: (Monad m) => m (Either e a) -> (e -> m a) -> m a
+onLeftM v f = v >>= (`onLeft` f)
+
+onLeftM_ :: (Monad m) => m (Either e a) -> m a -> m a
+onLeftM_ v = onLeftM v . const
+
 onRight :: (Applicative m) => Either a e -> (e -> m a) -> m a
 onRight = flip (either pure)
 
 onRight_ :: (Applicative m) => Either a e -> m a -> m a
 onRight_ e = onRight e . const
+
+onRightM :: (Monad m) => m (Either a e) -> (e -> m a) -> m a
+onRightM v f = v >>= (`onRight` f)
+
+onRightM_ :: (Monad m) => m (Either a e) -> m a -> m a
+onRightM_ v = onRightM v . const
 
 justIfTrue :: Bool -> a -> Maybe a
 justIfTrue True x = Just x

@@ -80,6 +80,7 @@ library
       Models.Connect
       Models.DPath
       Models.Edge
+      Models.FileTypeInfo
       Models.Graph
       Models.GraphSpec
       Models.History

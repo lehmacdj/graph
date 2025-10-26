@@ -149,8 +149,6 @@ def get_mimetype_and_extension(filepath):
         mimetype_, extension_ = handle_unidentified_filetype(filepath)
         if mimetype != None and mimetype != mimetype_:
             print(f"[WARNING] {filepath}: identified different mimetype {mimetype_} than file did {mimetype}")
-        if extension != None and extension_ != extension_:
-            print(f"[WARNING] {filepath}: identified different extension {extension_} than file did {extension}")
         return mimetype_, extension_
 
 def rename_file(filepath, new_filepath, dry_run=True):

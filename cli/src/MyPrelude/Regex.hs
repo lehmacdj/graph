@@ -1,22 +1,29 @@
+-- | For general work with regexes import either Control.Lens.Regex.Text or
+-- Control.Lens.Regex.ByteString, then use the `[regex|...|]` quasiquoter
+-- which produces a Traversal directly.
+-- This module provides a CheckedRegex type that has a Lift instance and can
+-- be compiled into a Traversal via byteStringRegexing or textRegexing, or
+-- compiled into a Text.Regex.PCRE.Light.Regex via getRegex.
 module MyPrelude.Regex
-  ( module X,
-    CheckedRegex,
+  ( CheckedRegex,
     compileRegex,
     compileRegex',
     getRegex,
-    regexing',
+    textRegexing,
+    byteStringRegexing,
     re,
   )
 where
 
 import ClassyPrelude hiding (lift)
 import Control.Lens (IndexedTraversal')
-import Control.Lens.Regex.Text as X hiding (group)
+import Control.Lens.Regex.ByteString qualified as ByteString
+import Control.Lens.Regex.Text qualified as Text
 import Data.Function ((&))
 import Foreign.C.Types (CInt)
 import Language.Haskell.TH.Quote (QuasiQuoter (..))
 import Language.Haskell.TH.Syntax (Lift (..))
-import Text.Regex.PCRE.Light as X (PCREOption)
+import Text.Regex.PCRE.Light as X (PCREOption, Regex)
 import Text.Regex.PCRE.Light qualified as PCRE
 import Unsafe.Coerce (unsafeCoerce)
 import Prelude (fail)
@@ -74,11 +81,15 @@ re =
     }
 
 -- | Compile a CheckedRegex to a Regex at runtime
-getRegex :: CheckedRegex -> Regex
+getRegex :: CheckedRegex -> PCRE.Regex
 getRegex UnsafeCheckedRegex {..} = compiled
 
-regexing' :: CheckedRegex -> IndexedTraversal' Int Text Match
-regexing' (UnsafeCheckedRegex _ _ r) = regexing r
+textRegexing :: CheckedRegex -> IndexedTraversal' Int Text Text.Match
+textRegexing (UnsafeCheckedRegex _ _ r) = Text.regexing r
+
+byteStringRegexing ::
+  CheckedRegex -> IndexedTraversal' Int ByteString ByteString.Match
+byteStringRegexing (UnsafeCheckedRegex _ _ r) = ByteString.regexing r
 
 instance Lift CheckedRegex where
   lift UnsafeCheckedRegex {..} =

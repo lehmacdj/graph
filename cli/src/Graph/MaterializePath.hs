@@ -164,7 +164,7 @@ materializeNPath firstNid normalizedPath = do
         n <- getNodeMetadata nid `onNothingM` returnEarly []
         pure $
           getConnections n
-            & toListOf (folded . filteredBy (#transition . regexing' r))
+            & toListOf (folded . filteredBy (#transition . textRegexing r))
             & map (\Connect {..} -> (mkBranch (DPLiteral transition), node))
 
     traverseBranch ::

@@ -10,6 +10,7 @@ module MyPrelude
     nonNull,
     minOn,
     maxOn,
+    eitherDecodeUtf8,
 
     -- * Extra exports (see the import list below)
     module X,
@@ -27,6 +28,8 @@ import Data.Constraint as X (Constraint)
 import Data.Functor.Contravariant as X
 import Data.Orphans ()
 import Data.Proxy as X (Proxy (..))
+import Data.Text.Encoding qualified as Text
+import Data.Text.Encoding.Error qualified as Text
 import Data.Void as X
 import Debug.Trace qualified
 import GHC.Generics as X (Generic, Rep)
@@ -52,6 +55,9 @@ import MyPrelude.Vary as X
 import Prelude as X (MonadFail (..), Show (showsPrec), ShowS, fail, showParen, showString, shows)
 
 -- import MyPrelude.OsPath as X
+
+eitherDecodeUtf8 :: ByteString -> Either Text.UnicodeException Text
+eitherDecodeUtf8 = Text.decodeUtf8'
 
 unconsumed :: (Contravariant f) => f a -> f Void
 unconsumed = contramap absurd

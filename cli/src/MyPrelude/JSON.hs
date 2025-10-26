@@ -1,10 +1,20 @@
 {-# LANGUAGE UndecidableInstances #-}
 
-module MyPrelude.JSON where
+module MyPrelude.JSON
+  ( module X,
+    FastGenericEncoding (..),
+    AesonValue,
+    encodeJSON,
+    eitherDecodeLazy,
+  )
+where
 
 import ClassyPrelude
 import Data.Aeson
+import Data.Aeson as X (FromJSON (..), ToJSON (..), eitherDecodeStrict)
 import GHC.Generics
+
+type AesonValue = Value
 
 newtype FastGenericEncoding a = GenericEncodingAeson
   {underlying :: a}
@@ -25,3 +35,6 @@ instance
 
 encodeJSON :: (ToJSON a) => a -> LByteString
 encodeJSON = encode
+
+eitherDecodeLazy :: (FromJSON a) => LByteString -> Either String a
+eitherDecodeLazy = eitherDecode
