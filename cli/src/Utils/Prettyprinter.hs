@@ -130,12 +130,28 @@ renderMultiColumn items =
       -- Pad each column to maxLines with empty streams
       paddedGroups = [(w, padLines maxLines ls) | (w, ls) <- lineGroups]
 
+      isEmptyStream :: SimpleDocStream ann -> Bool
+      isEmptyStream SEmpty = True
+      isEmptyStream SFail = True
+      isEmptyStream _ = False
+
+      -- Check if all columns after index colIdx are empty on line i
+      allColumnsAfterAreEmpty :: Int -> Int -> Bool
+      allColumnsAfterAreEmpty colIdx i =
+        let columnsAfter = drop (colIdx + 1) paddedGroups
+         in all (\(_, ls) -> isEmptyStream $ fromMaybe SEmpty $ index ls i) columnsAfter
+
       -- Combine lines horizontally (preserving annotations)
-      -- Don't pad the last column
+      -- Don't pad a column if it's the last column OR if all columns after it are empty
       combinedLines =
         [ mconcat $
-            zipWith
-              (\isLast (w, ls) -> streamToDoc $ (if isLast then id else padStreamToWidth w) (fromMaybe SEmpty $ index ls i))
+            zipWith3
+              ( \colIdx isLastCol (w, ls) ->
+                  let stream = fromMaybe SEmpty $ index ls i
+                      shouldPad = not isLastCol && not (allColumnsAfterAreEmpty colIdx i)
+                   in streamToDoc $ (if shouldPad then padStreamToWidth w else id) stream
+              )
+              [0 ..]
               (if null paddedGroups then [] else replicate (length paddedGroups - 1) False ++ [True])
               paddedGroups
           | i <- [0 .. maxLines - 1]
