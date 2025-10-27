@@ -358,7 +358,46 @@ test_goldenRenders =
                 "Green column text that also wraps",
             Weighted 1.0
           )
-        ]
+        ],
+    goldenRenders "quchen-prettyprinter-pull-261" [80] $
+      -- see https://github.com/quchen/prettyprinter/pull/261 for details
+      -- I want to make sure this bug actually gets fixed in case I ever
+      -- decide to leave my fork
+      annotate
+        (color Red)
+        ( pretty '1'
+            <> annotate
+              bold
+              ( pretty '2'
+                  <> annotate
+                    (bgColor Magenta)
+                    (pretty '3')
+              )
+        ),
+    goldenRenders "streamToDoc.preserves-annotation" [80] $
+      streamToDoc $
+        SChar 'a' (SAnnPush (color Red) (SChar 'b' (SAnnPop (SChar 'c' SEmpty)))),
+    goldenRenders "streamToDoc.preserves-nested-annotations" [80] $
+      streamToDoc
+        ( SChar '0'
+            . SAnnPush (color Magenta)
+            . SChar '1'
+            . SAnnPush bold
+            . SChar '2'
+            . SAnnPush (bgColorDull Blue)
+            . SChar '3'
+            . SAnnPush (colorDull Red)
+            . SChar '4'
+            . SAnnPop
+            . SChar '3'
+            . SAnnPop
+            . SChar '2'
+            . SAnnPop
+            . SChar '1'
+            . SAnnPop
+            . SChar '0'
+            $ SEmpty
+        )
   ]
   where
     goldenRenders name widths doc =
@@ -366,6 +405,7 @@ test_goldenRenders =
         Identity . goldenTest (name ++ ".width-" ++ show w) . renderStrict $
           layoutPretty
             (LayoutOptions (AvailablePerLine w 1.0))
+            -- (doc <> hardline)
             doc
 
 -- | Test streamToDoc functionality

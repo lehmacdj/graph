@@ -46,6 +46,19 @@ packages:
       size: 1612
   original:
     hackage: megaparsec-9.7.0
+- completed:
+    commit: cca29e6c1de39666345cd5c72f7b0b20d464b6e6
+    git: https://github.com/lehmacdj/prettyprinter.git
+    name: prettyprinter-ansi-terminal
+    pantry-tree:
+      sha256: 0f82b558f7ef9809a7b646eff2cf827a6aa14e1936b5e16f3e790bb1f7550a32
+      size: 820
+    subdir: prettyprinter-ansi-terminal
+    version: 1.1.3
+  original:
+    commit: cca29e6c1de39666345cd5c72f7b0b20d464b6e6
+    git: https://github.com/lehmacdj/prettyprinter.git
+    subdir: prettyprinter-ansi-terminal
 snapshots:
 - completed:
     sha256: 238fa745b64f91184f9aa518fe04bdde6552533d169b0da5256670df83a0f1a9
