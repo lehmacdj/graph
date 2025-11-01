@@ -343,16 +343,16 @@ test_goldenRenders =
       columns
         [ ( annotate bold
               . fillSep
-              . over (ix 1) (annotate (color Red))
-              . over (ix 2) (annotate (color Blue))
-              . over (ix 3) (annotate (color Black))
+              . over (ix 1) (annotate (colorDull Red))
+              . over (ix 2) (annotate (colorDull Blue))
+              . over (ix 3) (annotate (colorDull Black))
               . map pretty
               . words
               . asText
               $ "colored red blue black text followed by normal colored text",
             Weighted 1.0
           ),
-          ( annotate (color Green) $
+          ( annotate (colorDull Green) $
               fillSep . map pretty . words . asText $
                 "Green column text that also wraps",
             Weighted 1.0
@@ -396,7 +396,21 @@ test_goldenRenders =
             . SAnnPop
             . SChar '0'
             $ SEmpty
-        )
+        ),
+    goldenRenders "columns.preserves-annotations.newline-in-column" [40] $
+      columns
+        [ ( annotate (colorDull Blue)
+              . fillSep
+              . map pretty
+              . words
+              . asText
+              $ "some blue text with\nnewlines that wraps at small widths",
+            Weighted 1.0
+          ),
+          let t :: Text
+              t = "some text\non the right"
+           in (pretty t, Fixed (length t))
+        ]
   ]
   where
     goldenRenders name widths doc =

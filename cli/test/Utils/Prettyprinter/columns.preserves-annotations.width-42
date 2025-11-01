@@ -1,4 +1,3 @@
-colored red blue[0;1m[0m     Green column text[0;92m[0m
-black text followed[0;1m[0m  that also wraps
-by normal colored[0;1m[0m
-text
+colored [0;31mred[0m [0;34mblue[0m     [0;32mGreen column text[0m
+[0;30mblack[0m text followed  [0;32mthat also wraps[0m
+by normal colored text

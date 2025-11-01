@@ -1,2 +1,2 @@
-colored red blue black text followed by[0;1m[0m Green column text that also wraps
+colored [0;31mred[0m [0;34mblue[0m [0;30mblack[0m text followed by [0;32mGreen column text that also wraps[0m
 normal colored text
