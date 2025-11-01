@@ -150,6 +150,13 @@ final class GraphRepositoryTransitionVM: TransitionVM {
 
     var tags: Loading<[String]> = .idle
 
+    var dataURL: Loading<URL?> {
+        if case .loaded(let state) = destination.state {
+            return .loaded(state.dataURL)
+        }
+        return .idle
+    }
+
     private var isSubscribedToTags = false
 
     private func subscribeTags() async {

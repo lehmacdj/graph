@@ -84,19 +84,7 @@ struct NodeScreen: View {
     func toolbarContent(for state: NodeState) -> some ToolbarContent {
         ToolbarItem(placement: .navigationBarTrailing) {
             Menu {
-                Button {
-                    UIPasteboard.general.string = String(describing: vm.nid)
-                } label: {
-                    Label(String(describing: vm.nid), systemImage: "link")
-                }
-                Button {
-                    if let dataURL = state.dataURL {
-                        UIPasteboard.general.url = dataURL
-                        UIPasteboard.general.string = dataURL.absoluteString
-                    }
-                } label: {
-                    Label("Copy data file path", systemImage: "file")
-                }
+                nodeMenuItems(nid: vm.nid, dataURL: state.dataURL)
             } label: {
                 Image(systemName: "link")
             } primaryAction: {

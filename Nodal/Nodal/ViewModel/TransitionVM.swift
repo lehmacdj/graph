@@ -57,6 +57,8 @@ protocol TransitionVM: Observable, Identifiable {
 
     var destination: AnyNodeVM { get }
 
+    var dataURL: Loading<URL?> { get }
+
     func subscribe() async
 
     func toggleFavorite()

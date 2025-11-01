@@ -130,6 +130,12 @@ struct TransitionCell: View {
 
     var body: some View {
         cellButton
+            .contextMenu {
+                nodeMenuItems(
+                    nid: vm.destination.nid,
+                    dataURL: vm.dataURL.loaded ?? nil
+                )
+            }
             .swipeActions(edge: .leading) {
                 if vm.direction == .forward && vm.isFavorite {
                     Button {

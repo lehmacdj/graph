@@ -18,6 +18,7 @@ class MockTransitionVM: TransitionVM {
     var isFavorite: Bool
     var isWorse: Bool
     let destination: AnyNodeVM
+    let dataURL: Loading<URL?>
 
     init(
         transition: String = "",
@@ -25,6 +26,7 @@ class MockTransitionVM: TransitionVM {
         thumbnail: Loading<ThumbnailValue> = .loaded(.noThumbnail),
         timestamp: Loading<Date?> = .loaded(nil),
         tags: Loading<[String]> = .loaded([]),
+        dataURL: Loading<URL?> = .loaded(nil),
         destination: AnyNodeVM? = nil
     ) {
         self.destinationNid = Self.nextNid()
@@ -32,6 +34,7 @@ class MockTransitionVM: TransitionVM {
         self.thumbnail = thumbnail
         self.timestamp = timestamp
         self.tags = tags
+        self.dataURL = dataURL
         self.direction = section.direction
         self.isFavorite = section == .favorites
         self.isWorse = section == .worse

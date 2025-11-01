@@ -50,6 +50,10 @@ import Foundation
         set { underlying.isWorse = newValue }
     }
 
+    var dataURL: Loading<URL?> {
+        get { underlying.dataURL }
+    }
+
     func subscribe() async {
         await underlying.subscribe()
     }
