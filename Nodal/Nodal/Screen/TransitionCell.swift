@@ -33,7 +33,6 @@ struct LabelEditor: View {
 @MainActor
 struct TransitionCell: View {
     @State var vm: AnyTransitionVM
-    @State private var confirmingDelete: Bool = false
 
     init(_ transitionVM: AnyTransitionVM) {
         _vm = State(wrappedValue: transitionVM)
@@ -131,52 +130,40 @@ struct TransitionCell: View {
 
     var body: some View {
         cellButton
-            .alert("Really delete transition?", isPresented: $confirmingDelete) {
-                Button("Delete", role: .destructive) {
-                    vm.removeTransition()
-                }
-            } message: {
-                Text("Deleting a transition is not reversible.")
-            }
-            .swipeActions(edge: .trailing) {
-                // this button can't be role: .destructive because if it
-                // is SwiftUI tries to be smart by removing the list item
-                // but that cancels the confirmation dialogue that is attached
-                // to the list item
-                Button(role: .destructive) {
-                    confirmingDelete = true
-                } label: {
-                    Label("Delete", systemImage: "trash")
-                }
-
-                Button() {} label: {
-                    Label("More", systemImage: "pencil")
-                }
-                .tint(.orange)
-            }
             .swipeActions(edge: .leading) {
-                if vm.direction == .forward {
-                    Button() {
+                if vm.direction == .forward && vm.isFavorite {
+                    Button {
                         vm.toggleFavorite()
                     } label: {
-                        if vm.isFavorite {
-                            Label("Unfavorite", systemImage: "star.fill")
-                        } else {
-                            Label("Favorite", systemImage: "star")
-                        }
+                        Label("Unfavorite", systemImage: "star.slash")
                     }
                     .tint(.yellow)
-
+                }
+                if vm.direction == .forward && !vm.isWorse {
                     Button {
                         vm.toggleWorse()
                     } label: {
-                        if vm.isWorse {
-                            Label("Unworsen", systemImage: "xmark.bin.fill")
-                        } else {
-                            Label("Worsen", systemImage: "xmark.bin")
-                        }
+                        Label("Worsen", systemImage: "xmark.bin.fill")
                     }
                     .tint(.purple)
+                }
+            }
+            .swipeActions(edge: .trailing) {
+                if vm.direction == .forward && vm.isWorse {
+                    Button {
+                        vm.toggleWorse()
+                    } label: {
+                        Label("Unworsen", systemImage: "xmark.bin.fill")
+                    }
+                    .tint(.purple)
+                }
+                if vm.direction == .forward && !vm.isFavorite {
+                    Button {
+                        vm.toggleFavorite()
+                    } label: {
+                        Label("Favorite", systemImage: "star")
+                    }
+                    .tint(.yellow)
                 }
             }
             .task { await vm.subscribe() }
@@ -203,6 +190,7 @@ private extension View {
             TransitionCell(
                 MockTransitionVM(
                     transition: "Million Live",
+                    section: .favorites,
                     thumbnail: .loaded(.thumbnail(.loaded(.millionLive11))),
                     tags: .loaded(["millions", "of", "tags", "that", "cause", "horizontal", "space", "to", "overflow"])
                 ).eraseToAnyTransitionVM()
@@ -214,10 +202,17 @@ private extension View {
                     timestamp: .loaded(Date(timeIntervalSince1970: 0))
                 ).eraseToAnyTransitionVM()
             )
-            TransitionCell(MockTransitionVM(transition: "foo").eraseToAnyTransitionVM())
             TransitionCell(
                 MockTransitionVM(
-                    transition: "bar",
+                    transition: "worse",
+                    section: .worse
+                ).eraseToAnyTransitionVM()
+            )
+            TransitionCell(
+                MockTransitionVM(
+                    transition: "backlink",
+                    // backlinks shouldn't have favorite/etc. swipe actions
+                    section: .backlink,
                     tags: .loaded(["millions", "of", "tags", "that", "cause", "horizontal", "space", "to", "overflow"])
                 ).eraseToAnyTransitionVM()
             )
