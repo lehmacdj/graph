@@ -14,6 +14,13 @@ enum Loading<T> {
     case loaded(T)
     case failed(Error)
 
+    var isLoading: Bool {
+        switch self {
+        case .loading, .idle: true
+        default: false
+        }
+    }
+
     var isLoaded: Bool {
         switch self {
         case .loaded: true

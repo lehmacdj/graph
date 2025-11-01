@@ -78,9 +78,9 @@ struct TransitionCell: View {
         Suspense(vm.tags) { tags in
             ForEach(tags) { tag in
                 Text("#\(tag)")
+                    .pillStyled()
             }
         }
-        .pillStyled()
     }
 
     @ViewBuilder
@@ -88,11 +88,14 @@ struct TransitionCell: View {
         Suspense(vm.timestamp) { timestamp in
             if let timestamp {
                 TimestampView(timestamp: timestamp)
-                    .foregroundStyle(.secondary)
-                    .font(.caption)
+                    .pillStyled()
+            }
+        } placeholder: {
+            // slightly hacky: avoid showing two spinners if both are showing
+            if vm.tags.isLoaded {
+                ProgressView()
             }
         }
-        .pillStyled()
     }
 
     @ViewBuilder
@@ -100,22 +103,29 @@ struct TransitionCell: View {
         HStack {
             thumbnail
             ViewThatFits {
-                HStack(spacing: 0) {
+                HStack(spacing: 4) {
                     Text(vm.transition)
                     Spacer()
+                    // it's useful for tags to still be in a flow layout
+                    // because their might be a thumbnail that gives more than
+                    // 1 line of vertical space
                     FlowLayout(spacing: 4) {
                         tags
-                        timestamp
                     }
+                    // if rendering tags/timestamp right aligned we want the
+                    // timestamp to come last
+                    timestamp
                 }
                 VStack(alignment: .leading, spacing: 4) {
                     Text(vm.transition)
                     FlowLayout(spacing: 4) {
+                        // timestamp comes first to be more scannable
                         timestamp
                         tags
                     }
                 }
             }
+            
         }
     }
 
@@ -215,6 +225,27 @@ private extension View {
                 MockTransitionVM(
                     transition: "Hello world!",
                     timestamp: .loaded(Date(timeIntervalSince1970: 0)),
+                    tags: .loaded(["hello", "world"])
+                ).eraseToAnyTransitionVM()
+            )
+            TransitionCell(
+                MockTransitionVM(
+                    transition: "Only loading tags",
+                    timestamp: .loaded(Date(timeIntervalSince1970: 0)),
+                    tags: .loading
+                ).eraseToAnyTransitionVM()
+            )
+            TransitionCell(
+                MockTransitionVM(
+                    transition: "Loading tags and timestamp",
+                    timestamp: .loading,
+                    tags: .loading
+                ).eraseToAnyTransitionVM()
+            )
+            TransitionCell(
+                MockTransitionVM(
+                    transition: "Only loading timestamp",
+                    timestamp: .loading,
                     tags: .loaded(["hello", "world"])
                 ).eraseToAnyTransitionVM()
             )
