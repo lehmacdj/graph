@@ -9,6 +9,7 @@
 // periphery:ignore:all
 
 import Foundation
+import SwiftUI
 
 extension String: @retroactive Identifiable {
     public var id: String { self }
@@ -21,6 +22,12 @@ extension Set {
 
     func removing(_ member: Self.Element) -> Set {
         return mutate(self) { $0.remove(member) }
+    }
+}
+
+extension View {
+    func frame(size: CGSize) -> some View {
+        self.frame(width: size.width, height: size.height)
     }
 }
 

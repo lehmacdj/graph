@@ -28,6 +28,10 @@ extension CGSize {
         CGSize(width: lhs.width / rhs, height: lhs.height / rhs)
     }
 
+    static func *(lhs: CGSize, rhs: CGFloat) -> CGSize {
+        CGSize(width: lhs.width * rhs, height: lhs.height * rhs)
+    }
+
     var vector: CGPoint {
         CGPoint(x: width, y: height)
     }

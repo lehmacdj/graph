@@ -52,6 +52,7 @@
 		0375E9482D34C475006175F0 /* GraphTimestampModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0375E9472D34C475006175F0 /* GraphTimestampModels.swift */; };
 		0375E94A2D34C50B006175F0 /* Node+Codable.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0375E9492D34C507006175F0 /* Node+Codable.swift */; };
 		0375E94C2D34C65D006175F0 /* Node+NoAugmentation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0375E94B2D34C658006175F0 /* Node+NoAugmentation.swift */; };
+		037603DE2EB7E4F900669834 /* ZoomedRotatedView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 037603DD2EB7E4F500669834 /* ZoomedRotatedView.swift */; };
 		038C93032A397ECF0059C8D6 /* Optional+Unwrapped.swift in Sources */ = {isa = PBXBuildFile; fileRef = 038C93022A397ECF0059C8D6 /* Optional+Unwrapped.swift */; };
 		039438FB2D0FB3570078EE32 /* GraphRepositoryTransitionVM.swift in Sources */ = {isa = PBXBuildFile; fileRef = 039438FA2D0FB34C0078EE32 /* GraphRepositoryTransitionVM.swift */; };
 		039438FD2D0FB3670078EE32 /* GraphRepositoryNodeVM.swift in Sources */ = {isa = PBXBuildFile; fileRef = 039438FC2D0FB3620078EE32 /* GraphRepositoryNodeVM.swift */; };
@@ -151,6 +152,7 @@
 		0375E9472D34C475006175F0 /* GraphTimestampModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GraphTimestampModels.swift; sourceTree = "<group>"; };
 		0375E9492D34C507006175F0 /* Node+Codable.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Node+Codable.swift"; sourceTree = "<group>"; };
 		0375E94B2D34C658006175F0 /* Node+NoAugmentation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Node+NoAugmentation.swift"; sourceTree = "<group>"; };
+		037603DD2EB7E4F500669834 /* ZoomedRotatedView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ZoomedRotatedView.swift; sourceTree = "<group>"; };
 		038C93022A397ECF0059C8D6 /* Optional+Unwrapped.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Optional+Unwrapped.swift"; sourceTree = "<group>"; };
 		039438FA2D0FB34C0078EE32 /* GraphRepositoryTransitionVM.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GraphRepositoryTransitionVM.swift; sourceTree = "<group>"; };
 		039438FC2D0FB3620078EE32 /* GraphRepositoryNodeVM.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GraphRepositoryNodeVM.swift; sourceTree = "<group>"; };
@@ -231,6 +233,7 @@
 		0310B0982D470E31003D9F28 /* Layout */ = {
 			isa = PBXGroup;
 			children = (
+				037603DD2EB7E4F500669834 /* ZoomedRotatedView.swift */,
 				03E36F3A2D46F32600496D7F /* FlowLayout.swift */,
 				03EB93032A62158E0014BBF8 /* ZoomableView.swift */,
 			);
@@ -678,6 +681,7 @@
 				0300B6CD2D2777C000316337 /* NID+ComputeNodeWithTimestamp.swift in Sources */,
 				0321DB3C2EB6D460004429FA /* NodeMenuItems.swift in Sources */,
 				0375E94C2D34C65D006175F0 /* Node+NoAugmentation.swift in Sources */,
+				037603DE2EB7E4F900669834 /* ZoomedRotatedView.swift in Sources */,
 				034856AD2D40C19B00223C1A /* PreventSleeping.swift in Sources */,
 				03D1D8DE28FB559B00E76F27 /* NodeScreen.swift in Sources */,
 				031367E32713FCF200E69F83 /* NodalApp.swift in Sources */,
@@ -781,7 +785,7 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
 				ONLY_ACTIVE_ARCH = YES;
@@ -841,7 +845,7 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
 				OTHER_SWIFT_FLAGS = "-enable-upcoming-feature ConciseMagicFile";
