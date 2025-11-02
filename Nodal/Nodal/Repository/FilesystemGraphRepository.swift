@@ -378,31 +378,35 @@ private extension FilesystemGraphRepository {
                 switch (dataNeed, mostRecentDataAvailability, mostRecentData) {
                 case (.dataNotNeeded, _, _):
                     return mostRecentValue.withAugmentation(.dataNotChecked)
+                case (.needsAvailabilityOnly, .none, _):
+                    throw IncompleteValueReason.needDataAvailability
+                case (.needsAvailabilityOnly, let .some(availability), _):
+                    return mostRecentValue.withAugmentation(.availabilityOnly(availability))
                 case (.wantDataIfLocal, .none, _):
                     throw IncompleteValueReason.needDataAvailability
                 case (.wantDataIfLocal, .noData, .none):
                     return mostRecentValue.withAugmentation(.dataIfLocal(.noData))
-                case (.wantDataIfLocal, .availableLocally, .none):
+                case (.wantDataIfLocal, .availableLocally(_), .none):
                     throw IncompleteValueReason.needData
-                case (.wantDataIfLocal, .availableLocally, .some(.some(let data))):
-                    return mostRecentValue.withAugmentation(.dataIfLocal(.localData(data)))
-                case (.wantDataIfLocal, .availableRemotely, .none):
-                    return mostRecentValue.withAugmentation(.dataIfLocal(.remoteDataExists))
+                case (.wantDataIfLocal, .availableLocally(let url), .some(.some(let data))):
+                    return mostRecentValue.withAugmentation(.dataIfLocal(.localData(DataWithURL(data: data, url: url))))
+                case (.wantDataIfLocal, .availableRemotely(let url), .none):
+                    return mostRecentValue.withAugmentation(.dataIfLocal(.remoteDataExists(url)))
                 case (.needDataEvenIfRemote, .none, _):
                     throw IncompleteValueReason.needDataAvailability
                 case (.needDataEvenIfRemote, .noData, .none):
                     return mostRecentValue.withAugmentation(.data(nil))
-                case (.needDataEvenIfRemote, .availableLocally, .none):
+                case (.needDataEvenIfRemote, .availableLocally(_), .none):
                     throw IncompleteValueReason.needData
-                case (.needDataEvenIfRemote, .availableLocally, .some(.some(let data))):
-                    return mostRecentValue.withAugmentation(.data(data))
-                case (.needDataEvenIfRemote, .availableRemotely, nil):
+                case (.needDataEvenIfRemote, .availableLocally(let url), .some(.some(let data))):
+                    return mostRecentValue.withAugmentation(.data(DataWithURL(data: data, url: url)))
+                case (.needDataEvenIfRemote, .availableRemotely(_), nil):
                     throw IncompleteValueReason.needData
-                case (.needDataEvenIfRemote, .availableRemotely, .some(.some(let data))):
+                case (.needDataEvenIfRemote, .availableRemotely(let url), .some(.some(let data))):
                     // because of the refresh interval for FileAvailabilityObserver this state is
                     // fairly common just after requesting data from the server
                     // it is better to treat this as the data existing
-                    return mostRecentValue.withAugmentation(.data(data))
+                    return mostRecentValue.withAugmentation(.data(DataWithURL(data: data, url: url)))
                 default:
                     logWarn("inconsistent combination of dataNeed=\(dataNeed), mostRecentDataAvailability=\(mostRecentDataAvailability.compactDescription), mostRecentData=\(mostRecentData.compactDescription))")
                     // we may recover in the future

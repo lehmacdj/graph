@@ -53,8 +53,8 @@ final class GraphRepositoryNodeVM: NodeVM {
             logInfo("starting to listen to updates")
             for try await value in updatesSequence {
                 state = .loaded(NodeState(
-                    data: value.data,
-                    dataURL: value.data.map { _ in graphRepository.getHypotheticalDataPath(for: nid) },
+                    data: value.data?.data,
+                    dataURL: value.data?.url,
                     favoriteLinks: value.favoriteLinks
                         .sorted(by: sortOrder.weirdDataComparisonFunction)
                         .map { getTransitionVM(transition: $0.0, timestamp: $0.1, configuredForSection: .favorites) },
@@ -86,7 +86,7 @@ final class GraphRepositoryNodeVM: NodeVM {
             guard let currentState = state.loaded else { return }
             state = .loaded(NodeState(
                 data: currentState.data,
-                dataURL: currentState.data.map { _ in graphRepository.getHypotheticalDataPath(for: nid) },
+                dataURL: currentState.dataURL,
                 favoriteLinks: currentState.favoriteLinks?
                     .sorted(by: sortOrder.transitionVMComparisonFunction),
                 links: currentState.links
@@ -147,7 +147,7 @@ final class GraphRepositoryNodeVM: NodeVM {
 }
 
 fileprivate struct NodeStateAugmentation: Sendable {
-    let data: Data?
+    let data: DataWithURL?
     let favoriteLinks: [(NodeTransition, Loading<Date?>)]
     let worseLinks: [(NodeTransition, Loading<Date?>)]
     let backlinks: [(NodeTransition, Loading<Date?>)]

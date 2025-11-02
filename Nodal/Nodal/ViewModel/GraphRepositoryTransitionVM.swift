@@ -124,19 +124,22 @@ final class GraphRepositoryTransitionVM: TransitionVM {
             }
             for try await update in updatesSequence {
                 switch update {
-                case .dataNotChecked:
+                case .dataNotChecked, .availabilityOnly(_):
                     fatalError("we always request at least .wantDataIfLocal")
-                case .data(let .some(data)), .dataIfLocal(.localData(let data)):
+                case .data(let .some(dataWithURL)), .dataIfLocal(.localData(let dataWithURL)):
                     // computing this UIImage might be too heavy to do on the main thread
-                    if let image = UIImage(data: data) {
+                    if let image = UIImage(data: dataWithURL.data) {
                         thumbnail = .loaded(.thumbnail(.loaded(image)))
                     } else {
                         thumbnail = .loaded(.noThumbnail)
                     }
+                    dataURL = .loaded(dataWithURL.url)
                 case .data(nil), .dataIfLocal(.noData):
                     thumbnail = .loaded(.noThumbnail)
-                case .dataIfLocal(.remoteDataExists):
+                    dataURL = .loaded(nil)
+                case .dataIfLocal(.remoteDataExists(let url)):
                     thumbnail = .loaded(.cloudFile)
+                    dataURL = .loaded(url)
                 }
             }
             logDebug("exited update loop (Task.isCancelled=\(Task.isCancelled))")
@@ -150,12 +153,7 @@ final class GraphRepositoryTransitionVM: TransitionVM {
 
     var tags: Loading<[String]> = .idle
 
-    var dataURL: Loading<URL?> {
-        if case .loaded(let state) = destination.state {
-            return .loaded(state.dataURL)
-        }
-        return .idle
-    }
+    var dataURL: Loading<URL?> = .idle
 
     private var isSubscribedToTags = false
 

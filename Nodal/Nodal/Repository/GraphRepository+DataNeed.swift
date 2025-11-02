@@ -9,16 +9,22 @@ import Foundation
 
 typealias DataAvailability = FileAvailability
 
+struct DataWithURL {
+    let data: Data
+    let url: URL
+}
+
 enum DataNeed: Comparable {
     case dataNotNeeded
+    case needsAvailabilityOnly
     case wantDataIfLocal
     case needDataEvenIfRemote
 }
 
 enum LocalDataValue {
     case noData
-    case localData(Data)
-    case remoteDataExists
+    case localData(DataWithURL)
+    case remoteDataExists(URL)
 
     /// For @dynamicMemberLookup syntactic sugar
     var data: Self { self }
@@ -26,15 +32,16 @@ enum LocalDataValue {
 
 enum UntypedDataValue {
     case dataNotChecked
+    case availabilityOnly(DataAvailability)
     case dataIfLocal(LocalDataValue)
-    case data(Data?)
+    case data(DataWithURL?)
 
     /// For @dynamicMemberLookup syntactic sugar
     var data: Self { self }
 }
 
 struct DataValue {
-    let data: Data?
+    let data: DataWithURL?
 }
 
 protocol TypedDataNeed {
@@ -48,6 +55,17 @@ struct DataNotNeeded: TypedDataNeed {
     func coerceValue(_ value: UntypedDataValue) -> NoAugmentation? {
         if case .dataNotChecked = value {
             NoAugmentation()
+        } else {
+            nil
+        }
+    }
+}
+
+struct NeedsAvailabilityOnly: TypedDataNeed {
+    let untyped = DataNeed.needsAvailabilityOnly
+    func coerceValue(_ value: UntypedDataValue) -> DataAvailability? {
+        if case .availabilityOnly(let availability) = value {
+            availability
         } else {
             nil
         }
@@ -78,6 +96,10 @@ struct NeedDataEvenIfRemote: TypedDataNeed {
 
 extension TypedDataNeed where Self == DataNotNeeded {
     static var dataNotNeeded: DataNotNeeded { .init() }
+}
+
+extension TypedDataNeed where Self == NeedsAvailabilityOnly {
+    static var needsAvailabilityOnly: NeedsAvailabilityOnly { .init() }
 }
 
 extension TypedDataNeed where Self == WantDataIfLocal {

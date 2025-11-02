@@ -120,11 +120,11 @@ final class DataFilePresenter: NSObject, NSFilePresenter, @unchecked Sendable {
             case nil:
                 newDataAvailability = .noData
             case .notDownloaded:
-                newDataAvailability = .availableRemotely
+                newDataAvailability = .availableRemotely(queue_url)
             case .downloaded:
-                newDataAvailability = .availableLocally
+                newDataAvailability = .availableLocally(queue_url)
             case .current:
-                newDataAvailability = .availableLocally
+                newDataAvailability = .availableLocally(queue_url)
             case .some(let status):
                 logError("unexpected download status \(status)")
                 struct UnexpectedDownloadStatusKey: Error {}

@@ -8,10 +8,10 @@
 import Foundation
 import Combine
 
-enum FileAvailability {
+enum FileAvailability: Equatable {
     case noData
-    case availableRemotely
-    case availableLocally
+    case availableRemotely(URL)
+    case availableLocally(URL)
 }
 
 /// It might be possible to replace this with just ``DataDocument`` if we open it only when needed and use `observedPresentedItemUbiquityAttributes`
@@ -38,11 +38,11 @@ actor FileAvailabilityObserver {
             case nil:
                 availability = .noData
             case .notDownloaded:
-                availability = .availableRemotely
+                availability = .availableRemotely(url)
             case .downloaded:
-                availability = .availableLocally
+                availability = .availableLocally(url)
             case .current:
-                availability = .availableLocally
+                availability = .availableLocally(url)
             case .some(let status):
                 logError("unexpected download status \(status)")
             }
