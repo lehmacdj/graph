@@ -116,7 +116,10 @@ final class DataFilePresenter: NSObject, NSFilePresenter, @unchecked Sendable {
         }
         let newDataAvailability: DataAvailability
         do {
-            switch try result.get().ubiquitousItemDownloadingStatus {
+            let res = try result.get()
+            switch res.ubiquitousItemDownloadingStatus {
+            case nil where FileManager.default.fileExists(atPath: queue_url.path()):
+                newDataAvailability = .availableLocally(queue_url)
             case nil:
                 newDataAvailability = .noData
             case .notDownloaded:
