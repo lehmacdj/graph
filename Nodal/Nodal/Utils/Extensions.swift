@@ -25,6 +25,13 @@ extension Set {
     }
 }
 
+infix operator ?= : AssignmentPrecedence
+func ?=<T>(lhs: inout T, rhs: T?) {
+    if let rhs {
+        lhs = rhs
+    }
+}
+
 extension View {
     func frame(size: CGSize) -> some View {
         self.frame(width: size.width, height: size.height)
