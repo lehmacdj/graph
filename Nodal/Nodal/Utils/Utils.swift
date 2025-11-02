@@ -20,9 +20,18 @@ func mutate<T>(_ value: T, mutator: (inout T) -> ()) -> T {
 
 extension View {
     @ViewBuilder
-    func modifyIfLet<T>(_ value: T?, modifier: (T) -> some ViewModifier) -> some View {
+    func modifierIfLet<T>(_ value: T?, modifier: (T) -> some ViewModifier) -> some View {
         if let value {
             self.modifier(modifier(value))
+        } else {
+            self
+        }
+    }
+
+    @ViewBuilder
+    func modifyIfLet<T>(_ value: T?, modify: (T, Self) -> some View) -> some View {
+        if let value {
+            modify(value, self)
         } else {
             self
         }

@@ -114,12 +114,12 @@ struct ZoomableView<Content: View>: View {
                             didInitialZoom = true
                         }
                     }
-                    .modifyIfLet(currentRotationInfo) { rotationInfo in
+                    .modifierIfLet(currentRotationInfo) { rotationInfo in
                         _RotationEffect(angle: rotationInfo.angle, anchor: rotationInfo.anchor).ignoredByLayout()
                     }
                     .rotationEffect(angle)
                     .modifier(_ScaleEffect(scale: CGSize(square: scale)).ignoredByLayout())
-                    .modifyIfLet(currentScaleInfo) { scaleInfo in
+                    .modifierIfLet(currentScaleInfo) { scaleInfo in
                         _ScaleEffect(
                             scale: CGSize(square: scaleInfo.scale),
                             anchor: scaleInfo.anchor
