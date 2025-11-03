@@ -282,9 +282,11 @@ private struct ResizeRotateGestureValue {
     }
 }
 
+#if DEBUG
 #Preview {
     ZoomableView {
         Image(uiImage: .millionLive11)
     }
     .ignoresSafeArea()
 }
+#endif
