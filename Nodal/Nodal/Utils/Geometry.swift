@@ -100,6 +100,10 @@ extension CGVector {
     var size: CGSize {
         CGSize(width: dx, height: dy)
     }
+
+    static prefix func -(arg: CGVector) -> CGVector {
+        CGVector(dx: -arg.dx, dy: -arg.dy)
+    }
 }
 
 extension CGRect {

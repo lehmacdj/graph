@@ -55,6 +55,7 @@ struct ZoomableView<Content: View>: View {
         }
         .onEnded { svalue in
             let value = ResizeRotateGestureValue(svalue)
+
             let oldAngle = angle
             let oldScale = scale
             if let rotation = value.rotation {
@@ -63,34 +64,89 @@ struct ZoomableView<Content: View>: View {
             if let magnification = value.magnification {
                 scale *= magnification
             }
-            guard let contentFrame, let viewportFrame else { return }
-            let newContentFrame = contentFrame
-//                    .applying(
-//                        CGAffineTransform(
-//                            scale: oldScale,
-//                            rotation: oldAngle,
-//                            anchor: ???
-//                        ).inverted()
-//                    )
-                    .applying(
-                        CGAffineTransform(
-                            scale: value.magnification ?? 1.0,
-                            rotation: value.rotation ?? .zero,
-                            anchor: value.location
-                        )
-                    )
-            var newScrollPosition = newContentFrame.origin
-            newScrollPosition.x = abs(newScrollPosition.x)
-            newScrollPosition.y = abs(newScrollPosition.y)
-            if newContentFrame.size.width <= viewportFrame.size.width {
-                newScrollPosition.x = 0
+
+            if let newScrollPosition = calculateScrollPosition(
+                anchor: value.location,
+                oldScale: oldScale,
+                oldAngle: oldAngle,
+                newScale: scale,
+                newAngle: angle
+            ) {
+                scrollPosition.scrollTo(point: newScrollPosition)
             }
-            if newContentFrame.size.height <= viewportFrame.size.height {
-                newScrollPosition.y = 0
-            }
-            logInfo("contentFrame: \(contentFrame), newContentFrame: \(newContentFrame), newScrollPosition: \(newScrollPosition)")
-            scrollPosition.scrollTo(point: newScrollPosition)
         }
+    }
+
+    /// Calculates the scroll position needed to keep an anchor point at the same viewport location
+    /// after applying scale and rotation transforms.
+    ///
+    /// This method maps the anchor point through coordinate transformations:
+    /// bounding box → transformed content → original content → new transformed content → new bounding box
+    ///
+    /// - Parameters:
+    ///   - anchor: The anchor point in viewport coordinates that should remain fixed
+    ///   - oldScale: The scale factor before the transform
+    ///   - oldAngle: The rotation angle before the transform
+    ///   - newScale: The scale factor after the transform
+    ///   - newAngle: The rotation angle after the transform
+    /// - Returns: The new scroll position, or nil if required geometry is unavailable
+    private func calculateScrollPosition(
+        anchor: CGPoint,
+        oldScale: CGFloat,
+        oldAngle: Angle,
+        newScale: CGFloat,
+        newAngle: Angle,
+    ) -> CGPoint? {
+        guard let defaultContentSize, let contentFrame, let viewportFrame else {
+            return nil
+        }
+
+        // Step 1: Find anchor position within the current content frame (bounding box)
+        let anchorInContentFrame = (anchor - contentFrame.origin).point
+
+        // Step 2: Calculate the old bounding box offset
+        // When we transform and take bounding box, the origin shifts
+        let oldTransform = CGAffineTransform(scale: oldScale, rotation: oldAngle, anchor: .zero)
+        let oldBoundingBox = CGRect(origin: .zero, size: defaultContentSize).applying(oldTransform)
+        let oldBoundingBoxOffset = (-oldBoundingBox.origin.vector).point
+
+        // Step 3: Map anchor from bounding box to actual transformed content coordinates
+        let anchorInOldTransformed = anchorInContentFrame - oldBoundingBoxOffset.vector
+
+        // Step 4: Map back to original content coordinates
+        let anchorInOriginal = anchorInOldTransformed.applying(oldTransform.inverted())
+
+        // Step 5: Apply new transform to get new transformed content coordinates
+        let newTransform = CGAffineTransform(scale: newScale, rotation: newAngle, anchor: .zero)
+        let anchorInNewTransformed = anchorInOriginal.applying(newTransform)
+
+        // Step 6: Calculate new bounding box offset
+        let newBoundingBox = CGRect(origin: .zero, size: defaultContentSize).applying(newTransform)
+        let newBoundingBoxOffset = (-newBoundingBox.origin.vector).point
+
+        // Step 7: Map from transformed content to new bounding box coordinates
+        let anchorInNewContentFrame = anchorInNewTransformed + newBoundingBoxOffset.vector
+
+        // Step 8: Calculate where content origin should be to keep anchor at same viewport position
+        let newContentOrigin = (anchor - anchorInNewContentFrame).point
+
+        // Scroll position is the negative of content origin (when content is scrolled)
+        var newScrollPosition = CGPoint(
+            x: max(0, -newContentOrigin.x),
+            y: max(0, -newContentOrigin.y)
+        )
+
+        // Check if content is smaller than viewport
+        let newContentSize = newBoundingBox.size.absoluteValue
+
+        if newContentSize.width <= viewportFrame.size.width {
+            newScrollPosition.x = 0
+        }
+        if newContentSize.height <= viewportFrame.size.height {
+            newScrollPosition.y = 0
+        }
+
+        return newScrollPosition
     }
 
     private func applyZoomState(zoomState: ZoomState) {
