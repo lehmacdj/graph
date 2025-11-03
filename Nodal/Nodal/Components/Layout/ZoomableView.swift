@@ -57,13 +57,39 @@ struct ZoomableView<Content: View>: View {
             let value = ResizeRotateGestureValue(svalue)
             let oldAngle = angle
             let oldScale = scale
-            // Apply the transformations
             if let rotation = value.rotation {
                 angle += rotation
             }
             if let magnification = value.magnification {
                 scale *= magnification
             }
+            guard let contentFrame, let viewportFrame else { return }
+            let newContentFrame = contentFrame
+//                    .applying(
+//                        CGAffineTransform(
+//                            scale: oldScale,
+//                            rotation: oldAngle,
+//                            anchor: ???
+//                        ).inverted()
+//                    )
+                    .applying(
+                        CGAffineTransform(
+                            scale: value.magnification ?? 1.0,
+                            rotation: value.rotation ?? .zero,
+                            anchor: value.location
+                        )
+                    )
+            var newScrollPosition = newContentFrame.origin
+            newScrollPosition.x = abs(newScrollPosition.x)
+            newScrollPosition.y = abs(newScrollPosition.y)
+            if newContentFrame.size.width <= viewportFrame.size.width {
+                newScrollPosition.x = 0
+            }
+            if newContentFrame.size.height <= viewportFrame.size.height {
+                newScrollPosition.y = 0
+            }
+            logInfo("contentFrame: \(contentFrame), newContentFrame: \(newContentFrame), newScrollPosition: \(newScrollPosition)")
+            scrollPosition.scrollTo(point: newScrollPosition)
         }
     }
 
@@ -100,6 +126,7 @@ struct ZoomableView<Content: View>: View {
     @State var scrollPosition = ScrollPosition()
     /// The frame of the content after permanent transformations in the scroll view's coordinate space
     @State var contentFrame: CGRect?
+    @State var contentOffset: CGPoint?
 
     var body: some View {
         ScrollView([.horizontal, .vertical]) {
@@ -118,7 +145,10 @@ struct ZoomableView<Content: View>: View {
                 of: { proxy in
                     proxy.frame(in: .named("ZoomableView-viewport"))
                 },
-                action: { contentFrame = $0 }
+                action: {
+//                    logDebug("contentFrame: \($0)")
+                    contentFrame = $0
+                }
             )
             .modifierIfLet(resizeRotateGestureState) { state in
                 _ScaleEffect(
@@ -139,6 +169,17 @@ struct ZoomableView<Content: View>: View {
             for: CGRect.self,
             of: { proxy in proxy.frame(in: .named("Zoomable-viewport"))},
             action: { viewportFrame = $0 }
+        )
+        .onScrollGeometryChange(
+            for: CGPoint.self,
+            of: { proxy in
+//                logDebug("\(proxy)")
+                return proxy.contentOffset
+            },
+            action: {
+//                logDebug("contentOffset: \($1)")
+                contentOffset = $1
+            }
         )
         .scrollPosition($scrollPosition)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
