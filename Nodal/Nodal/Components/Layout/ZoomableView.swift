@@ -232,7 +232,7 @@ struct ZoomableView<Content: View>: View {
         )
         .scrollPosition($scrollPosition)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .gesture(resizeRotateGesture)
+        .simultaneousGesture(resizeRotateGesture)
         .gesture(doubleTapGesture)
         .id("ZoomableView-viewport")
         .onAppear {
