@@ -198,13 +198,8 @@ struct ZoomableView<Content: View>: View {
             )
             .onGeometryChange(
                 for: CGRect.self,
-                of: { proxy in
-                    proxy.frame(in: .named("ZoomableView-viewport"))
-                },
-                action: {
-//                    logDebug("contentFrame: \($0)")
-                    contentFrame = $0
-                }
+                of: { proxy in proxy.frame(in: .named("ZoomableView-viewport")) },
+                action: { contentFrame = $0 }
             )
             .modifierIfLet(resizeRotateGestureState) { state in
                 _ScaleEffect(
@@ -229,11 +224,9 @@ struct ZoomableView<Content: View>: View {
         .onScrollGeometryChange(
             for: CGPoint.self,
             of: { proxy in
-//                logDebug("\(proxy)")
                 return proxy.contentOffset
             },
             action: {
-//                logDebug("contentOffset: \($1)")
                 contentOffset = $1
             }
         )
