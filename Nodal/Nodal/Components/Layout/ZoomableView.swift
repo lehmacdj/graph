@@ -37,6 +37,7 @@ struct ZoomableView<Content: View>: View {
     let minimumRotation = Angle.radians(2 * .pi * 0.02)
     struct ResizeRotateGestureState {
         var anchor: UnitPoint
+        var location: CGPoint
         var angle: Angle = .zero
         var scale: CGFloat = 1.0
     }
@@ -48,7 +49,7 @@ struct ZoomableView<Content: View>: View {
         )
         .updating($resizeRotateGestureState) { svalue, state, _ in
             let value = ResizeRotateGestureValue(svalue)
-            state = state ?? .init(anchor: value.anchor)
+            state = state ?? .init(anchor: value.anchor, location: value.location)
             state?.angle ?= value.rotation
             state?.scale ?= value.magnification
         }
@@ -67,9 +68,8 @@ struct ZoomableView<Content: View>: View {
     }
 
     private func applyZoomState(zoomState: ZoomState) {
-        guard let viewportSize else { return }
+        guard let viewportSize = viewportFrame?.size else { return }
         guard let defaultContentSize else { return }
-        logDebug("viewportSize: \(viewportSize), contentSize: \(defaultContentSize)")
         switch zoomState {
         case .fit:
             scale = min(viewportSize.width / defaultContentSize.width,  viewportSize.height / defaultContentSize.height)
@@ -96,54 +96,10 @@ struct ZoomableView<Content: View>: View {
 
     @State var didInitialZoom: Bool = false
     @State var defaultContentSize: CGSize?
-    @State var viewportSize: CGSize?
+    @State var viewportFrame: CGRect?
     @State var scrollPosition = ScrollPosition()
     /// The frame of the content after permanent transformations in the scroll view's coordinate space
     @State var contentFrame: CGRect?
-
-    func getContentActualPoint(scrollViewPoint: UnitPoint) -> CGPoint? {
-        guard let viewportSize = viewportSize,
-              let contentFrame = contentFrame else {
-            return nil
-        }
-        
-        // Convert scroll view unit point to actual point in viewport coordinates
-        let scrollViewActualPoint = CGPoint(
-            x: scrollViewPoint.x * viewportSize.width,
-            y: scrollViewPoint.y * viewportSize.height
-        )
-        
-        // Convert viewport point to content frame coordinates
-        let contentActualPoint = CGPoint(
-            x: scrollViewActualPoint.x - contentFrame.minX,
-            y: scrollViewActualPoint.y - contentFrame.minY
-        )
-        
-        return contentActualPoint
-    }
-    
-    func contentActualPointToUnitPoint(contentActualPoint: CGPoint) -> UnitPoint? {
-        guard let contentFrame = contentFrame else {
-            return nil
-        }
-        
-        // Convert to unit point within the content frame
-        let contentUnitPoint = UnitPoint(
-            x: contentFrame.width > 0 ? contentActualPoint.x / contentFrame.width : 0,
-            y: contentFrame.height > 0 ? contentActualPoint.y / contentFrame.height : 0
-        )
-
-        return contentUnitPoint
-    }
-    
-    func getContentUnitPoint(scrollViewPoint: UnitPoint) -> UnitPoint {
-        guard let contentActualPoint = getContentActualPoint(scrollViewPoint: scrollViewPoint),
-              let contentUnitPoint = contentActualPointToUnitPoint(contentActualPoint: contentActualPoint) else {
-            return scrollViewPoint // fallback if sizes aren't available yet
-        }
-        
-        return contentUnitPoint
-    }
 
     var body: some View {
         ScrollView([.horizontal, .vertical]) {
@@ -162,31 +118,27 @@ struct ZoomableView<Content: View>: View {
                 of: { proxy in
                     proxy.frame(in: .named("ZoomableView-viewport"))
                 },
-                action: {
-                    logDebug("contentFrame: \($0)")
-                    contentFrame = $0
-                }
+                action: { contentFrame = $0 }
             )
-            .border(Color.pink)
             .modifierIfLet(resizeRotateGestureState) { state in
                 _ScaleEffect(
                     scale: CGSize(square: state.scale),
-                    anchor: getContentUnitPoint(scrollViewPoint: state.anchor)
+                    anchor: UnitPoint(state.location, relativeTo: contentFrame ?? .zero)
                 )
                 .ignoredByLayout()
             }
             .modifierIfLet(resizeRotateGestureState) { state in
                 _RotationEffect(
                     angle: state.angle,
-                    anchor: getContentUnitPoint(scrollViewPoint: state.anchor)
+                    anchor: UnitPoint(state.location, relativeTo: contentFrame ?? .zero)
                 )
                 .ignoredByLayout()
             }
         }
         .onGeometryChange(
-            for: CGSize.self,
-            of: \.size,
-            action: { viewportSize = $0 }
+            for: CGRect.self,
+            of: { proxy in proxy.frame(in: .named("Zoomable-viewport"))},
+            action: { viewportFrame = $0 }
         )
         .scrollPosition($scrollPosition)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -205,6 +157,7 @@ struct ZoomableView<Content: View>: View {
 
 private struct ResizeRotateGestureValue {
     let anchor: UnitPoint
+    let location: CGPoint
     let magnification: CGFloat?
     let rotation: Angle?
 
@@ -217,7 +170,16 @@ private struct ResizeRotateGestureValue {
         guard let anchor = value.first?.startAnchor ?? value.second?.startAnchor else {
             fatalError("at least one of the gestures must be started")
         }
+        assert(value.first?.startLocation == nil
+               || value.second?.startLocation == nil
+               || value.first?.startLocation == value.second?.startLocation,
+               "in a simultaneous gesture the locations produced by these gestures should agree"
+        )
+        guard let location = value.first?.startLocation ?? value.second?.startLocation else {
+            fatalError("at least one of the gestures must be started")
+        }
         self.anchor = anchor
+        self.location = location
         self.magnification = value.first?.magnification
         self.rotation = value.second?.rotation
     }

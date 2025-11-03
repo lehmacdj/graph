@@ -19,18 +19,15 @@ struct ZoomedRotatedView<Content: View>: View {
 
     /// Size accounting for scale/rotation
     var transformedSize: CGSize {
-        // First apply scaling
-        let scaledSize = contentSize * scale
-
-        // Then calculate the bounding box after rotation
-        let radians = rotation.radians
-        let cosAngle = abs(cos(radians))
-        let sinAngle = abs(sin(radians))
-        
-        let rotatedWidth = scaledSize.width * cosAngle + scaledSize.height * sinAngle
-        let rotatedHeight = scaledSize.width * sinAngle + scaledSize.height * cosAngle
-        
-        return CGSize(width: rotatedWidth, height: rotatedHeight)
+        contentSize
+            .applying(
+                aboutCenter: CGAffineTransform(
+                    scale: scale,
+                    rotation: rotation,
+                    anchor: .zero
+                )
+            )
+            .absoluteValue
     }
 
     var body: some View {

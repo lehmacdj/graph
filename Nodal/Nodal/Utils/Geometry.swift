@@ -44,6 +44,14 @@ extension CGSize {
     init(square side: CGFloat) {
         self.init(width: side, height: side)
     }
+
+    var absoluteValue: CGSize {
+        CGSize(width: abs(width), height: abs(height))
+    }
+
+    func applying(aboutCenter t: CGAffineTransform) -> CGSize {
+        CGRect(center: .zero, size: self).applying(t).size
+    }
 }
 
 extension CGPoint {
@@ -106,6 +114,10 @@ extension CGRect {
     static func -(lhs: CGRect, rhs: CGVector) -> CGRect {
         CGRect(origin: lhs.center - rhs, size: lhs.size)
     }
+
+    init(center: CGPoint, size: CGSize) {
+        self.init(origin: (size.vector / 2).point, size: size)
+    }
 }
 
 extension UnitPoint {
@@ -116,5 +128,17 @@ extension UnitPoint {
     init(_ point: CGPoint, relativeTo rect: CGRect) {
         let opoint = point - rect.origin.vector
         self.init(x: opoint.x / rect.size.width, y: opoint.y / rect.height)
+    }
+}
+
+extension CGAffineTransform {
+    init(scale: CGFloat, rotation: Angle, anchor: CGPoint) {
+        let translateToOrigin = CGAffineTransform(translationX: -anchor.x, y: -anchor.y)
+        let scaleTransform = CGAffineTransform(scaleX: scale, y: scale)
+        let rotationTransform = CGAffineTransform(rotationAngle: rotation.radians)
+        self = translateToOrigin
+            .concatenating(scaleTransform)
+            .concatenating(rotationTransform)
+            .concatenating(translateToOrigin.inverted())
     }
 }
