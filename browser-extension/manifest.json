@@ -6,8 +6,23 @@
   
   "permissions": [
     "activeTab",
-    "clipboardWrite"
+    "clipboardWrite",
+    "storage"
   ],
+
+  "browser_action": {
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "32": "icons/icon32.png",
+      "48": "icons/icon48.png"
+    },
+    "default_title": "Toggle Image Preview"
+  },
+
+  "background": {
+    "scripts": ["background.js"],
+    "persistent": false
+  },
   
   "content_scripts": [
     {

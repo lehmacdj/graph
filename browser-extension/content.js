@@ -8,6 +8,7 @@
     currentImages: [],
     currentHoverElement: null,
     currentAncestor: null,
+    previewsEnabled: true, // Default to enabled
   };
 
   // Wait for all modules to be loaded
@@ -24,9 +25,29 @@
     return;
   }
 
+  // Initialize preview state from storage
+  chrome.storage.local.get(['previewsEnabled'], (result) => {
+    state.previewsEnabled = result.previewsEnabled !== false; // Default to true
+  });
+
+  // Listen for toggle messages from background script
+  chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+    if (message.type === 'togglePreviews') {
+      state.previewsEnabled = message.enabled;
+
+      // If disabled, remove any existing menu
+      if (!state.previewsEnabled) {
+        window.ImageExtension.eventHandlers.removeMenu(state);
+      }
+    }
+  });
+
   // Event handlers with state binding
   function handleMouseMove(e) {
-    window.ImageExtension.eventHandlers.handleMouseMove(e, state);
+    // Only process mouse movement if previews are enabled
+    if (state.previewsEnabled) {
+      window.ImageExtension.eventHandlers.handleMouseMove(e, state);
+    }
   }
 
   function handleMouseLeave(e) {
