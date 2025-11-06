@@ -339,7 +339,7 @@ test_goldenRenders =
           fillSep . map pretty . words . asText $
             "column in outer columns that takes up 50% of space"
         ],
-    goldenRenders "columns.preserves-annotations" [42, 60, 80] $
+    goldenRenders "columns.preserves-annotations" [39, 60, 80] $
       columns
         [ ( annotate bold
               . fillSep
@@ -349,7 +349,7 @@ test_goldenRenders =
               . map pretty
               . words
               . asText
-              $ "colored red blue black text followed by normal colored text",
+              $ "bolded red blue black text followed by normal colored text",
             Weighted 1.0
           ),
           ( annotate (colorDull Green) $

@@ -1,2 +1,2 @@
-colored [0;31mred[0m [0;34mblue[0m [0;30mblack[0m text followed by [0;32mGreen column text that also wraps[0m
-normal colored text
+[0;1mbolded [0;31;1mred[0;1m [0;34;1mblue[0;1m [0;30;1mblack[0;1m text followed by[0m  [0;32mGreen column text that also wraps[0m
+[0;1mnormal colored text[0m

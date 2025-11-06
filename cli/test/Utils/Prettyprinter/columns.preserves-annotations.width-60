@@ -1,3 +1,3 @@
-colored [0;31mred[0m [0;34mblue[0m [0;30mblack[0m text   [0;32mGreen column text that also[0m
-followed by normal colored    [0;32mwraps[0m
-text
+[0;1mbolded [0;31;1mred[0;1m [0;34;1mblue[0;1m [0;30;1mblack[0;1m text[0m    [0;32mGreen column text that also[0m
+[0;1mfollowed by normal colored[0m    [0;32mwraps[0m
+[0;1mtext[0m
