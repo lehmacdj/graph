@@ -11,6 +11,7 @@ import MyPrelude hiding (SChar)
 import Prettyprinter as X
 import Prettyprinter.Render.Terminal as X
 import Utils.Testing
+import qualified Data.List
 
 data HorizontalWidth = Fixed Int | Weighted Double
   deriving (Show, Eq)
@@ -159,43 +160,39 @@ renderMultiColumn items =
   where
     -- Split a SimpleDocStream into lines at SLine boundaries
     -- Must handle nested annotations by tracking active annotation stack
+    -- When we hit an SLine, close all open annotations, then reopen them on the next line
     splitStreamLines :: SimpleDocStream ann -> [SimpleDocStream ann]
-    splitStreamLines = go []
+    splitStreamLines stream = go [] stream
       where
-        -- Track annotation stack and emit balanced lines
+        -- Track annotation stack and accumulate lines
+        -- Returns list of line streams
         go :: [ann] -> SimpleDocStream ann -> [SimpleDocStream ann]
         go _ SFail = []
-        go annStack SEmpty = [wrapWithAnnotations annStack SEmpty]
-        go annStack (SChar c rest) = consToFirstLine (SChar c SEmpty) (go annStack rest)
-        go annStack (SText len txt rest) = consToFirstLine (SText len txt SEmpty) (go annStack rest)
+        go _ SEmpty = []
+        go annStack (SChar c rest) =
+          consToFirstLine (SChar c SEmpty) (go annStack rest)
+        go annStack (SText len txt rest) =
+          consToFirstLine (SText len txt SEmpty) (go annStack rest)
         go annStack (SLine _ rest) =
-          -- Close current line, start new line with same annotations
-          case go annStack rest of
-            [] -> [wrapWithAnnotations annStack SEmpty]
-            (nextLine : otherLines) ->
-              wrapWithAnnotations annStack SEmpty : nextLine : otherLines
+          -- Close all open annotations, start new line, reopen annotations
+          let closeAnns = foldl' (\acc _ -> SAnnPop acc) SEmpty annStack
+              lines' = go annStack rest
+           in case lines' of
+                [] -> [closeAnns]
+                (firstLine : restLines) ->
+                  let reopenAnns = foldr SAnnPush firstLine (reverse annStack)
+                   in closeAnns : reopenAnns : restLines
         go annStack (SAnnPush ann rest) =
-          -- Add to stack and continue (first line will be wrapped by caller)
-          go (ann : annStack) rest
+          consToFirstLine (SAnnPush ann SEmpty) (go (ann : annStack) rest)
         go annStack (SAnnPop rest) =
-          -- Remove from stack
           let newStack = case annStack of
                 [] -> []
                 (_ : xs) -> xs
-           in go newStack rest
+           in consToFirstLine (SAnnPop SEmpty) (go newStack rest)
 
         consToFirstLine :: SimpleDocStream ann -> [SimpleDocStream ann] -> [SimpleDocStream ann]
         consToFirstLine s [] = [s]
         consToFirstLine s (firstLine : rest) = appendStream s firstLine : rest
-
-        -- Wrap a stream with all active annotations
-        wrapWithAnnotations :: [ann] -> SimpleDocStream ann -> SimpleDocStream ann
-        wrapWithAnnotations [] s = s
-        wrapWithAnnotations anns s =
-          let -- Close all annotations after the content (innermost to outermost)
-              withCloses = foldl' (\acc _ -> SAnnPop acc) s anns
-           in -- Open all annotations before the content (outermost to innermost)
-              foldr SAnnPush withCloses (reverse anns)
 
     -- Append two SimpleDocStreams
     appendStream :: SimpleDocStream ann -> SimpleDocStream ann -> SimpleDocStream ann
