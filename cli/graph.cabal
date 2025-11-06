@@ -121,6 +121,7 @@ library
       MyPrelude.OsPath
       MyPrelude.RawStrings
       MyPrelude.Regex
+      MyPrelude.Time
       MyPrelude.Type
       MyPrelude.Vary
       Spec
@@ -138,6 +139,7 @@ library
       Utils.Prettyprinter
       Utils.Singleton
       Utils.Testing
+      Utils.Testing.External
       Utils.Testing.GoldenSpec
   other-modules:
       Paths_graph

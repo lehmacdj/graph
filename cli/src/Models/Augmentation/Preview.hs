@@ -26,11 +26,11 @@ renderNodeListing ::
   Doc Style
 renderNodeListing = undefined
 
-renderTimestamp :: Set UTCTime -> Doc Style
-renderTimestamp ts = case fromNullable ts of
-  Nothing -> mempty
-  Just ts' ->
-    pretty $ formatTime defaultTimeLocale "%Y-%m-%d %H:%M" (maximum ts')
+renderTimestamp :: TimeZone -> UTCTime -> Set UTCTime -> Doc Style
+renderTimestamp timeZone currentTime timestamps =
+  case maximum <$> fromNullable timestamps of
+    Nothing -> mempty
+    Just t -> pretty $ formatMaybeRelativeTimestamp timeZone currentTime t
 
 renderTag :: Text -> Doc Style
 renderTag t = annotate Hashtag "#" <> annotate TagText (pretty t)

@@ -33,14 +33,10 @@ import MyPrelude hiding (assert)
 import System.Directory (copyFile)
 import System.Directory.Tree (AnchoredDirTree ((:/)))
 import System.Directory.Tree qualified as DT
-import Test.Hspec as X (Spec, describe, it)
-import Test.Hspec.Expectations as X
-import Test.Tasty as X
 import Test.Tasty.Golden (goldenVsStringDiff)
-import Test.Tasty.HUnit as X
 import Test.Tasty.Hspec (testSpec)
-import Test.Tasty.QuickCheck as X hiding (Fixed (..), label)
 import Utils.Parsing.Common
+import Utils.Testing.External as X
 
 -- | initializes a graph that is either empty, or based on a template graph
 -- at the specified location

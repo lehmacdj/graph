@@ -10,24 +10,6 @@ import Graph.Utils
 import MyPrelude
 import Polysemy.State
 
--- | Parse a time from its components.
-timeFromDateStrings ::
-  (MonadFail m) => String -> String -> String -> String -> m UTCTime
-timeFromDateStrings year month day time =
-  parseTimeM True defaultTimeLocale "%Y%m%d%H:%M:%S.%q" $
-    concat [year, month, day, time]
-
-timeToDateStrings :: UTCTime -> NonNull [Text]
-timeToDateStrings time =
-  impureNonNull
-    [ pack (formatTime' "%Y" time),
-      pack (formatTime' "%m" time),
-      pack (formatTime' "%d" time),
-      pack (formatTime' "%H:%M:%S.%q" time)
-    ]
-  where
-    formatTime' = formatTime defaultTimeLocale
-
 -- | Tag the current node with a path to it that represents the current time
 tagWithTime ::
   (Members [FreshNID, Error Missing, GetTime] effs, HasGraph Text effs) =>

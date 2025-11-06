@@ -50,6 +50,7 @@ import MyPrelude.MonadApplicative as X
 import MyPrelude.Orphans as X ()
 import MyPrelude.RawStrings as X
 import MyPrelude.Regex as X
+import MyPrelude.Time as X
 import MyPrelude.Type as X
 import MyPrelude.Vary as X
 import Prelude as X (MonadFail (..), Show (showsPrec), ShowS, fail, showParen, showString, shows)
