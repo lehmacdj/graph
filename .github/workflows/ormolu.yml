@@ -1,0 +1,29 @@
+name: Ormolu
+
+on:
+  pull_request:
+  push:
+    branches: [master]
+
+jobs:
+  ormolu:
+    name: Check Haskell formatting
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: cli
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Install ormolu
+        run: |
+          curl -L https://github.com/tweag/ormolu/releases/download/0.7.4.0/ormolu-x86_64-linux.zip -o ormolu.zip
+          unzip ormolu.zip
+          chmod +x ormolu
+          sudo mv ormolu /usr/local/bin/
+
+      - name: Check formatting
+        run: |
+          # Find all Haskell files and check formatting
+          # ormolu --mode check will exit with non-zero if files are not formatted
+          find . -name '*.hs' -type f -print0 | xargs -0 ormolu --mode check
