@@ -2,6 +2,8 @@
 
 This directory contains the Haskell CLI implementation for the graph project.
 
+For setup instructions (installing Stack, running tests), see [docs/claude-code-web.md](docs/claude-code-web.md).
+
 ## Key Documentation
 
 - **[MyPrelude Usage](docs/MyPrelude.md)** - Custom prelude built on ClassyPrelude with additional utilities. Read this first to understand import rules, collections, effects, and common patterns.
