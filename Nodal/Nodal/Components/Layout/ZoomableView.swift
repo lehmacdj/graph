@@ -216,6 +216,7 @@ struct ZoomableView<Content: View>: View {
                 .ignoredByLayout()
             }
         }
+        .scrollClipDisabled()
         .onGeometryChange(
             for: CGRect.self,
             of: { proxy in proxy.frame(in: .named("Zoomable-viewport"))},

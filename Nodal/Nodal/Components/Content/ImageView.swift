@@ -16,7 +16,7 @@ struct ImageView: View {
             Image(uiImage: uiImage)
         }
         .overlay(extraContentVisible ? ImageStats(uiImage: uiImage) : nil, alignment: .bottomTrailing)
-        .ignoresSafeArea(.all)
+        .ignoresSafeArea(.all, edges: .all)
         .preventSleeping(!extraContentVisible)
     }
 }

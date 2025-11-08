@@ -64,7 +64,8 @@ struct NodeScreen: View {
             if let uiImage = UIImage(data: data) {
                 ImageView(uiImage: uiImage, extraContentVisible: navigationVisible)
                     .onTapGesture { navigationVisible = !navigationVisible }
-                    .navigationBarHidden(!navigationVisible)
+                    .toolbar(navigationVisible ? .visible : .hidden, for: .navigationBar)
+                    .toolbar(navigationVisible ? .visible : .hidden, for: .bottomBar)
                     .statusBar(hidden: !navigationVisible)
             } else if let string = String(data: data, encoding: .utf8),
                       let url = URL(string: string.trimmingCharacters(in: .whitespacesAndNewlines)),
