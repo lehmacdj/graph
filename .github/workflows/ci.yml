@@ -3,8 +3,14 @@ name: CI
 # Trigger the workflow on push or pull request, but only for the master branch
 on:
   pull_request:
+    paths:
+      - 'cli/**'
+      - '.github/workflows/ci.yml'
   push:
     branches: [master]
+    paths:
+      - 'cli/**'
+      - '.github/workflows/ci.yml'
 
 jobs:
   stack:
@@ -34,6 +40,11 @@ jobs:
       with:
         path: ~/.stack
         key: ${{ runner.os }}-${{ matrix.stack }}-stack
+
+    - name: Install system dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y libpcre3-dev
 
     - name: Install dependencies
       run: |
