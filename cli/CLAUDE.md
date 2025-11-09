@@ -31,15 +31,12 @@ MyPrelude re-exports Polysemy with utilities for early returns, error handling, 
 
 ### HLint
 
-HLint is a linting tool that suggests improvements to Haskell code. The project is configured with a `.hlint.yaml` file at the repository root, and a GitHub Actions workflow enforces that all code passes HLint without warnings.
+HLint is a linting tool that suggests improvements to Haskell code. The project is configured with a `.hlint.yaml` file at the repository root, and a GitHub Actions workflow enforces that shows HLint warnings on PRs.
 
 **Installing HLint:**
 ```bash
 # Using Stack (recommended for this project)
-stack install hlint
-
-# Or using cabal
-cabal install hlint
+stack install hlint apply-refact
 ```
 
 **Running HLint locally:**
@@ -50,13 +47,10 @@ hlint cli/
 # Check a specific file
 hlint cli/src/Graph/Command.hs
 
-# Apply suggestions automatically (use with caution)
-hlint cli/ --refactor --refactor-options="-i"
+# Apply suggestions automatically (use with caution, only applicable to individual files)
+hlint cli/src/Graph/Command.hs --refactor --refactor-options="--inplace"
 ```
 
 **Common workflow:**
 1. Run `hlint cli/` before committing your changes
 2. Review the suggestions and apply fixes manually or using `--refactor`
-3. The CI will fail if any HLint warnings remain
-
-**Note:** The project uses custom HLint configuration in `.hlint.yaml` which includes special handling for TypeApplications and RankNTypes extensions.

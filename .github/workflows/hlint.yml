@@ -23,4 +23,5 @@ jobs:
       uses: haskell-actions/hlint-run@v2
       with:
         path: cli/
-        fail-on: warning
+        # mostly interested in seeing these when reviewing PRs
+        fail-on: never

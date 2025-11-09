@@ -1,4 +1,4 @@
-{-# LANGUAGE PackageImports #-}
+
 
 module MyPrelude.OsPath
   ( module X,
