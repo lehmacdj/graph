@@ -1,0 +1,27 @@
+name: HLint
+
+# Trigger the workflow on push or pull request, but only for the master branch
+on:
+  pull_request:
+  push:
+    branches: [master]
+
+jobs:
+  hlint:
+    name: HLint
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v2
+
+    - name: Set up HLint
+      uses: haskell-actions/hlint-setup@v2
+      with:
+        version: '3.6.1'
+
+    - name: Run HLint
+      uses: haskell-actions/hlint-run@v2
+      with:
+        path: cli/
+        # mostly interested in seeing these when reviewing PRs
+        fail-on: never

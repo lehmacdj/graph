@@ -54,7 +54,7 @@ fetchFileExtension nid = do
       |]
   case toList (finalNonLoopEdges mp.path) of
     [] -> pure $ FileExtension Nothing
-    [extension] -> pure . FileExtension . Just $ (head extension).transition
+    [extension] -> pure . FileExtension . Just $ head extension.transition
     xs ->
       throwText $
         "found multiple file extensions: "

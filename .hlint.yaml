@@ -9,7 +9,11 @@
 # Specify additional command line arguments
 #
 # - arguments: [--color, --cpp-simple, -XQuasiQuotes]
-- arguments: [-XTypeApplications,-XRankNTypes]
+- arguments:
+  - -XTypeApplications
+  - -XRankNTypes
+  - -XQuasiQuotes
+  - -XLexicalNegation
 
 # Control which extensions/flags/modules/functions can be used
 #
