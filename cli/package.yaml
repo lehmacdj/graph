@@ -11,13 +11,13 @@ extra-source-files:
 - ChangeLog.md
 
 # Metadata used when publishing your package
-# synopsis:            Short description of your package
-# category:            Miscellaneous
+synopsis: Graph query/manipulation language for filesystem like graphs
+category: Miscellaneous
 
 # To avoid duplicated efforts in documentation and dealing with the
 # complications of embedding Haddock markup inside cabal files, it is
 # common to point users to the README.md file.
-description:         Please see the README on GitHub at <https://github.com/lehmacdj/graph#readme>
+description: Please see the README on GitHub at <https://github.com/lehmacdj/graph#readme>
 
 dependencies:
 - base >= 4.7 && < 5
@@ -53,8 +53,6 @@ dependencies:
 - http-conduit
 - http-types
 - indexed-traversable
-- inline-c
-- inline-c-objc
 - ixset-typed
 - lens
 - lens-regex-pcre
@@ -156,25 +154,37 @@ ghc-options:
 - -fplugin=Polysemy.Plugin
 - -flate-specialise
 - -fspecialise-aggressively
-# https://well-typed.com/blog/2023/02/interface-files-with-core/
-# - -fprefer-byte-code -fbyte-code-and-object-code
-# -fobject-code is necessary to make inline-c work in GHCi
-# when attempting to run with -fbyte-code, it crashes with missing symbols
-- -fobject-code
 
 cpp-options:
 - -DDEBUG
+
+when:
+  - condition: os(darwin)
+    then:
+      dependencies:
+      - inline-c
+      - inline-c-objc
+      extra-libraries: [ objc ]
+      frameworks: [ Foundation ]
+      ghc-options:
+      # -fobject-code is necessary to make inline-c work in GHCi
+      # when attempting to run with -fbyte-code, it crashes with missing symbols
+      - -fobject-code
+    else:
+      ghc-options:
+      # https://well-typed.com/blog/2023/02/interface-files-with-core/
+      - -fprefer-byte-code -fbyte-code-and-object-code
 
 library:
   source-dirs: src
   when:
     - condition: os(darwin)
       then:
-        extra-libraries: [ objc ]
-        frameworks: [ Foundation ]
+        exposed-modules:
+        - System.MacOS.NSFileCoordinator.RawBindings
+        - System.MacOS.NSFileCoordinator.Types
       else:
-        extra-libraries: []
-        frameworks: []
+        exposed-modules: []
 
 executables:
   ge:
@@ -195,6 +205,5 @@ tests:
     - -threaded
     - -rtsopts
     - -with-rtsopts=-N
-    - -Wall
     dependencies:
     - graph

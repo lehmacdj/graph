@@ -12,7 +12,7 @@ import Models.Augmentation.NodeEdits
 import Models.NID
 import Models.Node
 import MyPrelude
-import System.MacOS.NSFileCoordinator
+import System.FileCoordination
 
 data GraphMetadataFilesystemOperationsWriteDiff m a where
   WriteGraphDiff ::

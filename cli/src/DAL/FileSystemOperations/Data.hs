@@ -9,7 +9,7 @@ import Error.UserError
 import Models.NID
 import MyPrelude
 import System.Directory (removeFile)
-import System.MacOS.NSFileCoordinator
+import System.FileCoordination
 
 data GraphDataFilesystemOperations m a where
   ReadNodeData :: NID -> String -> GraphDataFilesystemOperations m (Maybe ByteString)

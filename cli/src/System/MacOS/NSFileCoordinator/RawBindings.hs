@@ -1,7 +1,4 @@
-{-# LANGUAGE CPP #-}
-#ifdef darwin_HOST_OS
 {-# LANGUAGE TemplateHaskell #-}
-#endif
 
 module System.MacOS.NSFileCoordinator.RawBindings
   ( module X,
@@ -18,8 +15,6 @@ import Language.C.Inline.ObjC qualified as C
 import MyPrelude
 import System.MacOS.NSFileCoordinator.Types
 import System.MacOS.NSFileCoordinator.Types as X hiding (foundationCtx)
-
-#ifdef darwin_HOST_OS
 
 C.context (C.objcCtx <> C.funCtx <> foundationCtx)
 C.include "<Foundation/Foundation.h>"
@@ -178,5 +173,3 @@ m_NSFileCoordinator_prepareForReadingAndWritingItems fileCoordinator readingURLs
     ];
   }
   |]
-
-#endif
