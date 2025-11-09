@@ -4,10 +4,13 @@ module Utils.Prettyprinter
     HorizontalWidth (..),
     module X,
     test_goldenRenders,
+    vsepNonEmpty,
+    hsepNonEmpty,
+    sepNonEmpty,
   )
 where
 
-import MyPrelude hiding (SChar)
+import MyPrelude hiding (SChar, group)
 import Prettyprinter as X
 import Prettyprinter.Render.Terminal as X
 import Utils.Testing hiding (after)
@@ -153,7 +156,7 @@ renderMultiColumn items =
               [0 ..]
               (if null paddedGroups then [] else replicate (length paddedGroups - 1) False ++ [True])
               paddedGroups
-        | i <- [0 .. maxLines - 1]
+          | i <- [0 .. maxLines - 1]
         ]
    in vsep combinedLines
   where
@@ -264,6 +267,29 @@ renderMultiColumnUnbounded startCol items =
           -- Measure the document's natural width
           width doc $ \w ->
             buildColumns (currentCol + w) rest ((w, doc) : acc)
+
+-- | Concatenates documents with spaces in between like 'hsep', but doesn't
+-- insert spaces if a doc is empty.
+hsepNonEmpty :: [Doc ann] -> Doc ann
+hsepNonEmpty =
+  concatWith
+    ( \d1 d2 -> width d1 \w1 ->
+        if w1 == 0 then d2 else space <> d2
+    )
+
+-- | Concatenates documents with newlines in between like 'vsep', but doesn't
+-- insert newlines/spaces if a doc is empty.
+vsepNonEmpty :: [Doc ann] -> Doc ann
+vsepNonEmpty =
+  concatWith
+    ( \d1 d2 -> width d1 \w1 ->
+        if w1 == 0 then d2 else line <> d2
+    )
+
+-- | Concatenates documents with newlines in between like 'vsep', but doesn't
+-- insert newlines/spaces if a doc is empty.
+sepNonEmpty :: [Doc ann] -> Doc ann
+sepNonEmpty = group . vsepNonEmpty
 
 test_goldenRenders :: [TestTree]
 test_goldenRenders =

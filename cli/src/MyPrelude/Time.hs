@@ -69,7 +69,12 @@ formatMaybeRelativeTimestamp tz currentTime t = case diff of
     localTime = utcToLocalTime tz t
 
 referenceDate :: UTCTime
-referenceDate = parseTimeOrError True defaultTimeLocale "%Y-%m-%d %H:%M:%S" "2024-01-26 20:00:00"
+referenceDate =
+  parseTimeOrError
+    True
+    defaultTimeLocale
+    "%Y-%m-%d %H:%M:%S"
+    "2024-01-26 20:00:00"
 
 test_formatMaybeRelativeTimestamp :: TestTree
 test_formatMaybeRelativeTimestamp =

@@ -262,6 +262,7 @@ library
     , tasty-quickcheck
     , template-haskell
     , temporary
+    , terminal-size
     , text
     , time
     , transformers
@@ -417,6 +418,7 @@ executable ge
     , tasty-quickcheck
     , template-haskell
     , temporary
+    , terminal-size
     , text
     , time
     , transformers
@@ -568,6 +570,7 @@ test-suite graph-test
     , tasty-quickcheck
     , template-haskell
     , temporary
+    , terminal-size
     , text
     , time
     , transformers

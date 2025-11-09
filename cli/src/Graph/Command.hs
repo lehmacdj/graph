@@ -26,6 +26,7 @@ import Graph.NodeLocated
 import Graph.Time (taggingFreshNodesWithTime)
 import Graph.Utils
 import Models.Augmentation.Bundled
+import Models.Augmentation.Preview
 import Models.Augmentation.Tags
 import Models.Augmentation.Timestamps
 import Models.Command
@@ -43,6 +44,7 @@ import MyPrelude
 import Polysemy.Internal.Scoped (Scoped, scoped_)
 import Polysemy.Readline
 import Polysemy.State
+import System.Console.Terminal.Size qualified as Terminal
 import Utils.Singleton
 
 singleErr :: Text -> Set NID -> UserError
@@ -255,8 +257,20 @@ interpretCommand = \case
       unless (null mp.nonexistentNodes) $
         say ("nonexistent nodes: " ++ tshow mp.nonexistentNodes)
       targets <-
-        for (toList (getTargets mp.path)) $
-          getNodeWith (fetchTags #| fetchTimestamps)
+        for (toList (leftmostConnects mp.path)) \(source, connects) -> do
+          let listedNid = last (source `ncons` map (.node) connects)
+              lastTransition = lastMay $ map (.transition) connects
+          node <- getNodeWith (fetchTags #| fetchTimestamps) listedNid
+          pure (lastTransition, node)
       when (null targets) do
         say "no targets"
-      for_ targets $ \n -> maybe (say $ tshow n ++ "did not exist") sayShow n
+      tz <- liftIO getCurrentTimeZone
+      now <- liftIO getCurrentTime
+      w <-
+        liftIO Terminal.size >>= \case
+          Just (Terminal.Window _ width) -> pure width
+          Nothing -> pure 80
+      for_ targets $ \case
+        (Nothing, Nothing) -> say "current node did not exist"
+        (Just mt, Nothing) -> say $ tshow mt ++ " led to nonexistent node"
+        (mt, Just n) -> say $ renderNodeListing w $ docNodeListing tz now mt n

@@ -21,8 +21,8 @@ description: Please see the README on GitHub at <https://github.com/lehmacdj/gra
 
 dependencies:
 - base >= 4.7 && < 5
-- ansi-terminal
 - aeson
+- ansi-terminal
 - attoparsec
 - base-orphans
 - base64
@@ -83,6 +83,7 @@ dependencies:
 - tasty-quickcheck
 - template-haskell
 - temporary
+- terminal-size
 - text
 - time
 - transformers
