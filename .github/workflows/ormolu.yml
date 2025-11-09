@@ -35,6 +35,13 @@ jobs:
               sha: pr.data.head.sha
             };
 
+      - name: Generate token
+        id: generate-token
+        uses: actions/create-github-app-token@v1
+        with:
+          app-id: ${{ secrets.ORMOLU_APP_ID }}
+          private-key: ${{ secrets.ORMOLU_APP_PRIVATE_KEY }}
+
       - name: Add reaction to comment
         if: github.event_name == 'issue_comment'
         uses: actions/github-script@v7
@@ -46,13 +53,6 @@ jobs:
               comment_id: context.payload.comment.id,
               content: 'eyes'
             });
-
-      - name: Generate token
-        id: generate-token
-        uses: actions/create-github-app-token@v1
-        with:
-          app-id: ${{ secrets.ORMOLU_APP_ID }}
-          private-key: ${{ secrets.ORMOLU_APP_PRIVATE_KEY }}
 
       - uses: actions/checkout@v3
         with:
@@ -67,15 +67,15 @@ jobs:
 
       - name: Commit and push changes (for comment trigger)
         if: github.event_name == 'issue_comment'
+        env:
+          GH_TOKEN: ${{ steps.generate-token.outputs.token }}
         run: |
-          git config --global user.name 'github-actions[bot]'
-          git config --global user.email 'github-actions[bot]@users.noreply.github.com'
           git add -A
           if git diff --staged --quiet; then
             echo "No formatting changes needed"
           else
             git commit -m "Apply ormolu formatting
 
-            Triggered by PR comment from `@${{ github.event.comment.user.login }}`"
+            Triggered by PR comment from \`@${{ github.event.comment.user.login }}\`"
             git push
           fi
