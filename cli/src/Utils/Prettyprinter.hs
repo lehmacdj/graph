@@ -7,11 +7,11 @@ module Utils.Prettyprinter
   )
 where
 
+import Data.List qualified
 import MyPrelude hiding (SChar)
 import Prettyprinter as X
 import Prettyprinter.Render.Terminal as X
 import Utils.Testing
-import qualified Data.List
 
 data HorizontalWidth = Fixed Int | Weighted Double
   deriving (Show, Eq)
@@ -44,7 +44,7 @@ streamToDoc = go
     -- Returns (contentStream, remainingStream)
     -- Handles nested push/pop pairs correctly
     extractUntilPop :: SimpleDocStream ann -> (SimpleDocStream ann, SimpleDocStream ann)
-    extractUntilPop stream = extract 1 stream
+    extractUntilPop = extract 1
       where
         -- depth tracks nesting level: when it reaches 0, we've found our matching pop
         extract :: Int -> SimpleDocStream ann -> (SimpleDocStream ann, SimpleDocStream ann)
@@ -162,7 +162,7 @@ renderMultiColumn items =
     -- Must handle nested annotations by tracking active annotation stack
     -- When we hit an SLine, close all open annotations, then reopen them on the next line
     splitStreamLines :: SimpleDocStream ann -> [SimpleDocStream ann]
-    splitStreamLines stream = go [] stream
+    splitStreamLines = go []
       where
         -- Track annotation stack and accumulate lines
         -- Returns list of line streams
