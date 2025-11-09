@@ -7,11 +7,10 @@ module Utils.Prettyprinter
   )
 where
 
-import Data.List qualified
 import MyPrelude hiding (SChar)
 import Prettyprinter as X
 import Prettyprinter.Render.Terminal as X
-import Utils.Testing
+import Utils.Testing hiding (after)
 
 data HorizontalWidth = Fixed Int | Weighted Double
   deriving (Show, Eq)
@@ -44,31 +43,31 @@ streamToDoc = go
     -- Returns (contentStream, remainingStream)
     -- Handles nested push/pop pairs correctly
     extractUntilPop :: SimpleDocStream ann -> (SimpleDocStream ann, SimpleDocStream ann)
-    extractUntilPop = extract 1
+    extractUntilPop = extractAnn 1
       where
         -- depth tracks nesting level: when it reaches 0, we've found our matching pop
-        extract :: Int -> SimpleDocStream ann -> (SimpleDocStream ann, SimpleDocStream ann)
-        extract _ SFail = (SFail, SEmpty)
-        extract 0 s = (SEmpty, s) -- Found matching pop
-        extract _ SEmpty = (SEmpty, SEmpty)
-        extract depth (SChar c rest) =
-          let (content, after) = extract depth rest
+        extractAnn :: Int -> SimpleDocStream ann -> (SimpleDocStream ann, SimpleDocStream ann)
+        extractAnn _ SFail = (SFail, SEmpty)
+        extractAnn 0 s = (SEmpty, s) -- Found matching pop
+        extractAnn _ SEmpty = (SEmpty, SEmpty)
+        extractAnn depth (SChar c rest) =
+          let (content, after) = extractAnn depth rest
            in (SChar c content, after)
-        extract depth (SText len txt rest) =
-          let (content, after) = extract depth rest
+        extractAnn depth (SText len txt rest) =
+          let (content, after) = extractAnn depth rest
            in (SText len txt content, after)
-        extract depth (SLine i rest) =
-          let (content, after) = extract depth rest
+        extractAnn depth (SLine i rest) =
+          let (content, after) = extractAnn depth rest
            in (SLine i content, after)
-        extract depth (SAnnPush ann rest) =
+        extractAnn depth (SAnnPush ann rest) =
           -- Nested push: increase depth
-          let (content, after) = extract (depth + 1) rest
+          let (content, after) = extractAnn (depth + 1) rest
            in (SAnnPush ann content, after)
-        extract depth (SAnnPop rest)
+        extractAnn depth (SAnnPop rest)
           | depth == 1 = (SEmpty, rest) -- Found our matching pop
           | otherwise =
               -- This pop matches a nested push
-              let (content, after) = extract (depth - 1) rest
+              let (content, after) = extractAnn (depth - 1) rest
                in (SAnnPop content, after)
 
 -- Layout multiple documents side-by-side with flexible width allocation

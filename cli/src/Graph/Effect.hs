@@ -10,7 +10,6 @@ where
 
 import Control.Lens hiding (transform)
 import DAL.Serialization qualified as S2
-import Data.Aeson (FromJSON (..), ToJSON (..))
 import Data.Set qualified as Set
 import Error.UserError
 import Error.Warn

@@ -27,7 +27,6 @@ where
 import Control.Lens
 import DAL.DTO
 import DAL.DirectoryFormat
-import Data.Aeson (FromJSON, ToJSON)
 import Data.Aeson qualified as Aeson
 import Data.ByteString qualified as B
 import Data.ByteString.Lazy qualified as BL
