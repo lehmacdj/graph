@@ -19,14 +19,16 @@ import System.MacOS.NSFileCoordinator.Types as X hiding (foundationCtx)
 C.context (C.objcCtx <> C.funCtx <> foundationCtx)
 C.include "<Foundation/Foundation.h>"
 
-m_release :: Objc a => Ptr a -> IO ()
+m_release :: (Objc a) => Ptr a -> IO ()
 m_release (castToId -> obj) = [C.exp| void { [$(id obj) release] } |]
 
 type SingleURLAccessor = Ptr NSURL -> IO ()
+
 type DualURLAccessor = Ptr NSURL -> Ptr NSURL -> IO ()
 
 nsURL_initFileURL :: CString -> CBool -> IO (Ptr NSURL)
-nsURL_initFileURL cannonicalPath isDirectory = [C.exp| NSURL *{
+nsURL_initFileURL cannonicalPath isDirectory =
+  [C.exp| NSURL *{
     [[NSURL alloc]
       initFileURLWithFileSystemRepresentation: $(char *cannonicalPath)
       isDirectory: $(bool isDirectory)
@@ -50,7 +52,8 @@ packNSString nsString = do
   decodeUtf8 <$> ByteString.unsafePackCString cString
 
 nsArray_arrayWithObjects :: Ptr C.Id -> CUInt -> IO (Ptr NSArray)
-nsArray_arrayWithObjects objects count = [C.exp| NSArray *{
+nsArray_arrayWithObjects objects count =
+  [C.exp| NSArray *{
     [NSArray arrayWithObjects: $(id *objects) count: $(unsigned int count)]
   }
   |]
@@ -65,8 +68,13 @@ nsFileCoordinator_init = [C.exp| NSFileCoordinator *{ [[NSFileCoordinator alloc]
 --        byAccessor:(void (NS_NOESCAPE ^)(NSURL *newURL))reader;
 m_NSFileCoordinator_coordinateReadingItem ::
   Ptr NSFileCoordinator ->
-  Ptr NSURL -> NSFileCoordinatorReadingOptions -> Ptr (Ptr NSError) -> SingleURLAccessor -> IO ()
-m_NSFileCoordinator_coordinateReadingItem fileCoordinator url options errorPtr accessor = [C.exp| void {
+  Ptr NSURL ->
+  NSFileCoordinatorReadingOptions ->
+  Ptr (Ptr NSError) ->
+  SingleURLAccessor ->
+  IO ()
+m_NSFileCoordinator_coordinateReadingItem fileCoordinator url options errorPtr accessor =
+  [C.exp| void {
     [$(NSFileCoordinator *fileCoordinator)
       coordinateReadingItemAtURL: $(NSURL *url)
       options: $(NSFileCoordinatorReadingOptions options)
@@ -82,8 +90,13 @@ m_NSFileCoordinator_coordinateReadingItem fileCoordinator url options errorPtr a
 --        byAccessor:(void (NS_NOESCAPE ^)(NSURL *newURL))writer;
 m_NSFileCoordinator_coordinateWritingItem ::
   Ptr NSFileCoordinator ->
-  Ptr NSURL -> NSFileCoordinatorWritingOptions -> Ptr (Ptr NSError) -> SingleURLAccessor -> IO ()
-m_NSFileCoordinator_coordinateWritingItem fileCoordinator url options errorPtr accessor = [C.exp| void {
+  Ptr NSURL ->
+  NSFileCoordinatorWritingOptions ->
+  Ptr (Ptr NSError) ->
+  SingleURLAccessor ->
+  IO ()
+m_NSFileCoordinator_coordinateWritingItem fileCoordinator url options errorPtr accessor =
+  [C.exp| void {
     [$(NSFileCoordinator *fileCoordinator)
       coordinateWritingItemAtURL: $(NSURL *url)
       options: $(NSFileCoordinatorWritingOptions options)
@@ -101,10 +114,15 @@ m_NSFileCoordinator_coordinateWritingItem fileCoordinator url options errorPtr a
 --        byAccessor:(void (NS_NOESCAPE ^)(NSURL *newReadingURL, NSURL *newWritingURL))readerWriter;
 m_NSFileCoordinator_coordinateReadingAndWritingItem ::
   Ptr NSFileCoordinator ->
-  Ptr NSURL -> NSFileCoordinatorReadingOptions ->
-  Ptr NSURL -> NSFileCoordinatorWritingOptions ->
-  Ptr (Ptr NSError) -> DualURLAccessor -> IO ()
-m_NSFileCoordinator_coordinateReadingAndWritingItem fileCoordinator readingURL readingOptions writingURL writingOptions errorPtr accessor = [C.exp| void {
+  Ptr NSURL ->
+  NSFileCoordinatorReadingOptions ->
+  Ptr NSURL ->
+  NSFileCoordinatorWritingOptions ->
+  Ptr (Ptr NSError) ->
+  DualURLAccessor ->
+  IO ()
+m_NSFileCoordinator_coordinateReadingAndWritingItem fileCoordinator readingURL readingOptions writingURL writingOptions errorPtr accessor =
+  [C.exp| void {
     [$(NSFileCoordinator *fileCoordinator)
       coordinateReadingItemAtURL: $(NSURL *readingURL)
       options: $(NSFileCoordinatorReadingOptions readingOptions)
@@ -126,10 +144,15 @@ m_NSFileCoordinator_coordinateReadingAndWritingItem fileCoordinator readingURL r
 --        byAccessor:(void (NS_NOESCAPE ^)(NSURL *newURL1, NSURL *newURL2))writer;
 m_NSFileCoordinator_coordinateWritingItems ::
   Ptr NSFileCoordinator ->
-  Ptr NSURL -> NSFileCoordinatorWritingOptions ->
-  Ptr NSURL -> NSFileCoordinatorWritingOptions ->
-  Ptr (Ptr NSError) -> DualURLAccessor -> IO ()
-m_NSFileCoordinator_coordinateWritingItems fileCoordinator url1 options1 url2 options2 errorPtr accessor = [C.exp| void {
+  Ptr NSURL ->
+  NSFileCoordinatorWritingOptions ->
+  Ptr NSURL ->
+  NSFileCoordinatorWritingOptions ->
+  Ptr (Ptr NSError) ->
+  DualURLAccessor ->
+  IO ()
+m_NSFileCoordinator_coordinateWritingItems fileCoordinator url1 options1 url2 options2 errorPtr accessor =
+  [C.exp| void {
     [$(NSFileCoordinator *fileCoordinator)
       coordinateWritingItemAtURL: $(NSURL *url1)
       options: $(NSFileCoordinatorWritingOptions options1)
@@ -151,9 +174,9 @@ m_NSFileCoordinator_coordinateWritingItems fileCoordinator url1 options1 url2 op
 --        byAccessor:(void (^)(void (^completionHandler)(void)))batchAccessor;
 m_NSFileCoordinator_prepareForReadingAndWritingItems ::
   Ptr NSFileCoordinator ->
-  Ptr NSArray ->  -- readingURLs
+  Ptr NSArray -> -- readingURLs
   NSFileCoordinatorReadingOptions ->
-  Ptr NSArray ->  -- writingURLs
+  Ptr NSArray -> -- writingURLs
   NSFileCoordinatorWritingOptions ->
   Ptr (Ptr NSError) ->
   IO () ->
