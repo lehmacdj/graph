@@ -45,6 +45,7 @@ import Polysemy.Internal.Scoped (Scoped, scoped_)
 import Polysemy.Readline
 import Polysemy.State
 import System.Console.Terminal.Size qualified as Terminal
+import Utils.Prettyprinter qualified as PP
 import Utils.Singleton
 
 singleErr :: Text -> Set NID -> UserError
@@ -259,9 +260,9 @@ interpretCommand = \case
       targets <-
         for (toList (leftmostConnects mp.path)) \(source, connects) -> do
           let listedNid = last (source `ncons` map (.node) connects)
-              lastTransition = lastMay $ map (.transition) connects
+              transitions = map (.transition) connects
           node <- getNodeWith (fetchTags #| fetchTimestamps) listedNid
-          pure (lastTransition, node)
+          pure (transitions, node)
       when (null targets) do
         say "no targets"
       tz <- liftIO getCurrentTimeZone
@@ -271,6 +272,9 @@ interpretCommand = \case
           Just (Terminal.Window _ width) -> pure width
           Nothing -> pure 80
       for_ targets $ \case
-        (Nothing, Nothing) -> say "current node did not exist"
-        (Just mt, Nothing) -> say $ tshow mt ++ " led to nonexistent node"
-        (mt, Just n) -> say $ renderNodeListing w $ docNodeListing tz now mt n
+        ([], Nothing) -> say "current node did not exist"
+        (ts, Nothing) ->
+          say $
+            renderNodeListing w $
+              docTransitions ts <> PP.softline <> "led to nonexistent node"
+        (ts, Just n) -> say $ renderNodeListing w $ docNodeListing tz now ts n

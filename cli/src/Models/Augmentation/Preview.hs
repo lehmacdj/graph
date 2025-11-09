@@ -21,7 +21,8 @@ renderNodeListing w =
     renderStyle TagBackground = mempty
     renderStyle TagEmphasized = colorDull Magenta <> bold
     renderStyle Time = colorDull Yellow
-    renderStyle Transition = bold
+    renderStyle Transition = mempty
+    renderStyle TransitionEmphasized = bold
     renderStyle NIDStyle = colorDull Blue
 
 data Style
@@ -31,29 +32,35 @@ data Style
     TagEmphasized
   | -- | style for times
     Time
-  | -- | transition
-    Transition
+  | TransitionEmphasized
+  | Transition
   | -- | nid
     NIDStyle
 
-docTransition :: Maybe Text -> Doc a
-docTransition Nothing = "<here>"
-docTransition (Just t)
+docTransitions :: [Text] -> Doc Style
+docTransitions = annotate Transition . go
+  where
+    go [] = "@"
+    go [x] = annotate TransitionEmphasized $ docTransition x
+    go (x : xs) = docTransition x <> "/" <> docTransitions xs
+
+docTransition :: Text -> Doc a
+docTransition t
   | all isIdentChar t && not (null t) = pretty t
   | otherwise = dquotes (pretty t)
 
-docNid :: NID -> Doc a
-docNid nid = "@" <> pretty (nidRepresentation nid)
+docNid :: NID -> Doc Style
+docNid nid = annotate NIDStyle $ "@" <> pretty (nidRepresentation nid)
 
 docNodeListing ::
   TimeZone ->
   UTCTime ->
-  -- | Final transition; there might not be one (e.g. `ls @`)
-  Maybe Text ->
+  -- | transitions leading up to this node (see 'leftmostConnects')
+  [Text] ->
   -- | Node metadata + augmentations to doc
   Node Text PreviewAugmentation ->
   Doc Style
-docNodeListing timeZone currentTime finalTransition node =
+docNodeListing timeZone currentTime transitions node =
   group $
     vsepNonEmpty
       [ transition <+> nid,
@@ -61,22 +68,19 @@ docNodeListing timeZone currentTime finalTransition node =
       ]
       `flatAlt` hsepNonEmpty [transition, tags, timestamp, nid]
   where
-    transition = annotate Transition $ docTransition finalTransition
-    nid = annotate NIDStyle $ docNid node.nid
-    timestamp =
-      annotate Time $
-        docTimestamp timeZone currentTime node.augmentation.timestamps
+    transition = docTransitions transitions
+    nid = docNid node.nid
+    timestamp = docTimestamp timeZone currentTime node.augmentation.timestamps
     tags = docTags node.augmentation.tags
 
 docTimestamp :: TimeZone -> UTCTime -> Set UTCTime -> Doc Style
 docTimestamp timeZone currentTime timestamps =
   case maximum <$> fromNullable timestamps of
     Nothing -> mempty
-    Just t -> pretty $ formatMaybeRelativeTimestamp timeZone currentTime t
+    Just t -> annotate Time . pretty $ formatMaybeRelativeTimestamp timeZone currentTime t
 
 docTag :: Text -> Doc Style
-docTag t =
-  annotate TagEmphasized ("#" <> docTransition (Just t))
+docTag t = annotate TagEmphasized ("#" <> docTransition t)
 
 docTags :: Set Text -> Doc Style
 docTags tags =
