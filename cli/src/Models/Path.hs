@@ -114,9 +114,9 @@ type family HoleVal (p :: PathPhase) :: Type where
   HoleVal 'Prenormal = Void
 
 data IncompleteNID = IncompleteNID
-  { offset :: Int
-  , sourceRange :: SourceRange
-  , base62Chars :: Text
+  { offset :: Int,
+    sourceRange :: SourceRange,
+    base62Chars :: Text
   }
   deriving (Generic, Eq, Ord, Show, Lift)
 
@@ -242,7 +242,8 @@ parsedFromPartial ::
   Either (NonNull [ParseError']) (Path' 'WithDirectives)
 parsedFromPartial = (.either) . go
   where
-    go :: Path' 'Partial ->
+    go ::
+      Path' 'Partial ->
       Validation (NonNull [ParseError']) (Path' 'WithDirectives)
     go = \case
       One -> pure One
@@ -258,10 +259,11 @@ parsedFromPartial = (.either) . go
       l ::& r -> (::&) <$> go l <*> go r
       Directive ann directive -> Directive ann <$> goDirective directive
       Hole err -> Validation (Left (singletonNN err))
-    goNID :: Either IncompleteNID NID ->
+    goNID ::
+      Either IncompleteNID NID ->
       Validation (NonNull [ParseError']) NID
     goNID = \case
-      (Left IncompleteNID{..}) ->
+      (Left IncompleteNID {..}) ->
         Validation . Left . singletonNN $
           FancyError offset (singletonSet (ErrorCustom IncompleteFullNID {..}))
       (Right nid) -> pure nid

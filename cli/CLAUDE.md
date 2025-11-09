@@ -26,31 +26,3 @@ Prefer regular `Set`/`Map` over ordered `OSet`/`OMap` unless order is semantical
 
 ### Effects
 MyPrelude re-exports Polysemy with utilities for early returns, error handling, and state management.
-
-## Code Quality
-
-### HLint
-
-HLint is a linting tool that suggests improvements to Haskell code. The project is configured with a `.hlint.yaml` file at the repository root, and a GitHub Actions workflow enforces that shows HLint warnings on PRs.
-
-**Installing HLint:**
-```bash
-# Using Stack (recommended for this project)
-stack install hlint apply-refact
-```
-
-**Running HLint locally:**
-```bash
-# Check all Haskell files in the cli directory
-hlint cli/
-
-# Check a specific file
-hlint cli/src/Graph/Command.hs
-
-# Apply suggestions automatically (use with caution, only applicable to individual files)
-hlint cli/src/Graph/Command.hs --refactor --refactor-options="--inplace"
-```
-
-**Common workflow:**
-1. Run `hlint cli/` before committing your changes
-2. Review the suggestions and apply fixes manually or using `--refactor`

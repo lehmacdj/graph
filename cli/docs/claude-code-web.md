@@ -59,8 +59,9 @@ To run the CLI:
 STACK_ROOT=~/.stack stack exec graph -- <arguments>
 ```
 
-## Formatting Haskell Code
+# Code Quality
 
+## Formatting Code - Ormolu
 This project uses [ormolu](https://github.com/tweag/ormolu) for consistent Haskell code formatting. All Haskell files must be formatted with ormolu before committing.
 
 ### Installing Ormolu
@@ -101,3 +102,28 @@ find . -name '*.hs' -type f -print0 | xargs -0 ormolu --mode check
 ```
 
 **Note:** The GitHub CI will automatically check that all Haskell files are properly formatted. Make sure to format your code before pushing.
+
+## HLint
+HLint is a linting tool that suggests improvements to Haskell code. The project is configured with a `.hlint.yaml` file at the repository root, and a GitHub Actions workflow enforces that shows HLint warnings on PRs.
+
+**Installing HLint:**
+```bash
+# Using Stack (recommended for this project)
+stack install hlint apply-refact
+```
+
+**Running HLint locally:**
+```bash
+# Check all Haskell files in the cli directory
+hlint cli/
+
+# Check a specific file
+hlint cli/src/Graph/Command.hs
+
+# Apply suggestions automatically (use with caution, only applicable to individual files)
+hlint cli/src/Graph/Command.hs --refactor --refactor-options="--inplace"
+```
+
+**Common workflow:**
+1. Run `hlint cli/` before committing your changes
+2. Review the suggestions and apply fixes manually or using `--refactor`
