@@ -24,8 +24,6 @@ data Command
     Make Path
   | -- | mg
     Merge Path
-  | -- | ls
-    ListOut
   | -- | t
     Tag Path Path
   | Text Text Text
@@ -68,6 +66,6 @@ data Command
     Back Int
   | -- | Execute a list of commands sequentially
     Seq (TwoElemList Command)
-  | -- | debug-v2-path, v2
-    V2Path ParsedPath
+  | -- | preview, ls
+    Preview ParsedPath
   deriving (Eq, Show, Ord, Generic)

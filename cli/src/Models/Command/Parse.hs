@@ -31,9 +31,6 @@ pMake = (command "mk" $> Make) <*> path
 pMerge :: Parser Command
 pMerge = (command "mg" $> Merge) <*> path
 
-pList :: Parser Command
-pList = command "ls" $> ListOut
-
 pTag :: Parser Command
 pTag = (commandFrom ["tag", "t"] $> Tag) <*> path <*> path
 
@@ -91,17 +88,16 @@ pEdit = command "vi" $> Edit
 pBack :: Parser Command
 pBack = (command "back" $> Back) <*> number
 
-pV2Path :: Parser Command
-pV2Path = (commandFrom ["debug-v2-path", "v2"] $> V2Path) <*> pPath
+pPreview :: Parser Command
+pPreview = (commandFrom ["preview", "ls"] $> Preview) <*> option Wild pPath
 
 pCommandTerm :: Parser Command
 pCommandTerm =
   try pChangeNode
-    <|> try pV2Path
+    <|> try pPreview
     <|> try pDualize
     <|> try pMake
     <|> try pMerge
-    <|> try pList
     <|> try pTag
     <|> try pText
     <|> try pDescribe

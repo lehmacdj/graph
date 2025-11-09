@@ -35,7 +35,6 @@ import Models.Edge
 import Models.History
 import Models.MaterializedPath
 import Models.NID
-import Models.Node
 import Models.NormalizedPath (leastConstrainedNormalizedPath, normalizePath)
 import Models.Path.ParsedPath
 import Models.Path.Simple (Path)
@@ -183,9 +182,6 @@ interpretCommand = \case
       (\a s -> insertEdge (Edge nid (t <> pack s) a))
       (toList ambiguities)
       suffixes
-  ListOut -> do
-    n <- subsumeUserError currentNode
-    printTransitions n.outgoing
   ShowImage -> do
     n <- subsumeUserError (currentNode @Text)
     forM_ n.rawData $ subsumeUserError @Missing . displayImage . fromStrict
@@ -248,10 +244,8 @@ interpretCommand = \case
     put @History history'
   Seq ps -> do
     toList ps & traverse_ interpretCommand
-  V2Path p -> do
+  Preview p -> do
     nid <- currentLocation
-    -- say $ "current location: " ++ tshow nid
-    -- say $ "parsed path: " ++ tshow p
     scoped_ do
       p' <- handleDirectivesWith interpretDirective p
       mp <- materializePath nid p'
