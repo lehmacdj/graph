@@ -117,8 +117,7 @@ type TimeBehavior =
 
 type FilesystemOperationsBehavior =
   forall r a.
-  ( Members [RawGraph, Embed IO, Error UserError] r
-  ) =>
+  (Members [RawGraph, Embed IO, Error UserError] r) =>
   Sem (GraphMetadataFilesystemOperations : GraphMetadataFilesystemOperationsWriteDiff : GraphDataFilesystemOperations : r) a ->
   Sem r a
 

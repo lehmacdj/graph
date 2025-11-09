@@ -142,7 +142,7 @@ branches :: [DPBranch Anchor] -> NormalizedPath Anchor
 branches bs =
   NormalizedPath . setFromList $
     [ Rooted (RootedDeterministicPath (singletonMap (Pointlike unanchored) (singletonSet b)) unanchored)
-      | b <- bs
+    | b <- bs
     ]
 
 singletonPointlike :: PointlikeDeterministicPath Anchor -> NormalizedPath Anchor

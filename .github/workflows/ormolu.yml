@@ -1,0 +1,18 @@
+name: Ormolu
+
+on:
+  pull_request:
+  push:
+    branches: [master]
+
+jobs:
+  ormolu:
+    name: Check Haskell formatting
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      - uses: haskell-actions/run-ormolu@v17
+        with:
+          pattern: |
+            cli/**/*.hs
