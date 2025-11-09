@@ -12,7 +12,7 @@ import Models.NID (NID)
 import MyPrelude
 import Network.HTTP.Conduit (HttpException)
 import Polysemy.Error hiding (fromException, try)
-import System.MacOS.NSFileCoordinator (NSErrorException)
+import System.FileCoordination (NSErrorException)
 
 -- | Blanket error type used by the app. This is called @UserError@ because
 -- generally we only want to intercept it when propagating errors to the user.

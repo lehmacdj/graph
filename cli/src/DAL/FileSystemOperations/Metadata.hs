@@ -11,7 +11,7 @@ import Models.NID
 import Models.Node
 import MyPrelude
 import System.Directory (removeFile)
-import System.MacOS.NSFileCoordinator
+import System.FileCoordination
 
 data GraphMetadataFilesystemOperations m a where
   ReadNodeMetadata :: NID -> GraphMetadataFilesystemOperations m (Maybe (Node Text ()))

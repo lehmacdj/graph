@@ -3,99 +3,68 @@ name: CI
 # Trigger the workflow on push or pull request, but only for the master branch
 on:
   pull_request:
+    paths:
+      - 'cli/**'
+      - '.github/workflows/ci.yml'
   push:
     branches: [master]
+    paths:
+      - 'cli/**'
+      - '.github/workflows/ci.yml'
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  # Commented out because I can't be bothered to get cabal builds working yet
-  # cabal:
-  #   name: ${{ matrix.os }} / ghc ${{ matrix.ghc }}
-  #   runs-on: ${{ matrix.os }}
-  #   strategy:
-  #     matrix:
-  #       os: [ubuntu-latest, macOS-latest, windows-latest]
-  #       cabal: ["3.2"]
-  #       ghc:
-  #         - "8.6.5"
-  #         - "8.8.3"
-  #         - "8.10.1"
-  #       exclude:
-  #         - os: macOS-latest
-  #           ghc: 8.8.3
-  #         - os: macOS-latest
-  #           ghc: 8.6.5
-  #         - os: windows-latest
-  #           ghc: 8.8.3
-  #         - os: windows-latest
-  #           ghc: 8.6.5
-
-  #   steps:
-  #   - uses: actions/checkout@v2
-  #     if: github.event.action == 'opened' || github.event.action == 'synchronize' || github.event.ref == 'refs/heads/master'
-
-  #   - uses: actions/setup-haskell@v1.1.1
-  #     id: setup-haskell-cabal
-  #     name: Setup Haskell
-  #     with:
-  #       ghc-version: ${{ matrix.ghc }}
-  #       cabal-version: ${{ matrix.cabal }}
-
-  #   - name: Freeze
-  #     run: |
-  #       cabal freeze
-
-  #   - uses: actions/cache@v1
-  #     name: Cache ~/.cabal/store
-  #     with:
-  #       path: ${{ steps.setup-haskell-cabal.outputs.cabal-store }}
-  #       key: ${{ runner.os }}-${{ matrix.ghc }}-${{ hashFiles('cabal.project.freeze') }}
-
-  #   - name: Build
-  #     run: |
-  #       cabal configure --enable-tests --enable-benchmarks --test-show-details=direct
-  #       cabal build all
-
-  #   - name: Test
-  #     run: |
-  #       cabal test all
-
   stack:
-    name: ${{ matrix.library }} / stack / ghc ${{ matrix.ghc }}
-    runs-on: ubuntu-latest
+    name: ${{ matrix.os }} / stack ${{ matrix.stack }}
+    runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        stack: ["2.3.1"]
-        ghc: ["8.8.3"]
-        library: ["core"]
+        os: [ubuntu-latest, macos-latest]
+        stack: ["3.7.1"]
     defaults:
       run:
         shell: bash
-        working-directory: ${{ matrix.library }}
+        working-directory: cli
 
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v3
       if: github.event.action == 'opened' || github.event.action == 'synchronize' || github.event.ref == 'refs/heads/master'
 
-    - uses: actions/setup-haskell@v1.1.4
+    - uses: haskell-actions/setup@v2
       name: Setup Haskell Stack
       with:
-        ghc-version: ${{ matrix.ghc }}
+        enable-stack: true
+        stack-no-global: true
         stack-version: ${{ matrix.stack }}
 
-    - uses: actions/cache@v1
+    - uses: actions/cache@v4
       name: Cache ~/.stack
       with:
         path: ~/.stack
-        key: ${{ runner.os }}-${{ matrix.ghc }}-stack
+        key: ${{ runner.os }}-${{ matrix.stack }}-stack
+
+    - name: Install system dependencies (Linux)
+      if: runner.os == 'Linux'
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y libpcre3-dev
+
+    - name: Install system dependencies (macOS)
+      if: runner.os == 'macOS'
+      run: |
+        brew install pcre
+
+    - name: Install dependencies
+      run: |
+        stack build --test --bench --no-run-tests --no-run-benchmarks --only-dependencies
 
     - name: Build
       run: |
-        stack build --system-ghc --test --bench --no-run-tests --no-run-benchmarks
+        stack build --test --bench --no-run-tests --no-run-benchmarks
 
     - name: Test
       run: |
-        stack test --system-ghc
+        stack test

@@ -1,9 +1,11 @@
 {-# LANGUAGE CPP #-}
 
--- | This module provides a high-level interface to the NSFileCoordinator API.
--- Though it is only available on macOS, this module provides a cross-platform
--- API by providing a no-op implementation on non-macOS platforms.
-module System.MacOS.NSFileCoordinator
+-- | This module provides a cross-platform file coordination API.
+-- On macOS, it uses NSFileCoordinator to properly coordinate file access
+-- with iCloud and other file presenters.
+-- On other platforms, it provides a no-op implementation that directly
+-- passes through to the provided actions.
+module System.FileCoordination
   ( coordinateReading,
     coordinateWriting,
     coordinateReadingThenWriting,
@@ -14,7 +16,6 @@ module System.MacOS.NSFileCoordinator
     WrappedWriter (..),
     unwrappingWriter,
     coordinateAccessing,
-    allocateNSArray,
     ReadingOptions (..),
     defaultReadingOptions,
     WritingOptions (..),

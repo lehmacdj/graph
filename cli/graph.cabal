@@ -6,7 +6,9 @@ cabal-version: 1.12
 
 name:           graph
 version:        0.1.0.0
+synopsis:       Graph query/manipulation language for filesystem like graphs
 description:    Please see the README on GitHub at <https://github.com/lehmacdj/graph#readme>
+category:       Miscellaneous
 homepage:       https://github.com/lehmacdj/graph#readme
 bug-reports:    https://github.com/lehmacdj/graph/issues
 author:         Devin Lehmacher
@@ -126,12 +128,10 @@ library
       MyPrelude.Vary
       Spec
       System.Directory.Clone
+      System.FileCoordination
       System.IO.Term.BinarySerialize
       System.IO.Term.Image
       System.IO.Term.Image.Payload
-      System.MacOS.NSFileCoordinator
-      System.MacOS.NSFileCoordinator.RawBindings
-      System.MacOS.NSFileCoordinator.Types
       Utils.Base62
       Utils.Parsing
       Utils.Parsing.Common
@@ -196,7 +196,7 @@ library
       TypeOperators
       TypeSynonymInstances
       ViewPatterns
-  ghc-options: -Wall -fplugin=Polysemy.Plugin -flate-specialise -fspecialise-aggressively -fobject-code
+  ghc-options: -Wall -fplugin=Polysemy.Plugin -flate-specialise -fspecialise-aggressively
   cpp-options: -DDEBUG
   build-depends:
       Glob
@@ -233,8 +233,6 @@ library
     , http-conduit
     , http-types
     , indexed-traversable
-    , inline-c
-    , inline-c-objc
     , ixset-typed
     , lens
     , lens-regex-pcre
@@ -279,10 +277,20 @@ library
     , xml-conduit
   default-language: Haskell2010
   if os(darwin)
+    ghc-options: -fobject-code
     extra-libraries:
         objc
     frameworks:
         Foundation
+    build-depends:
+        inline-c
+      , inline-c-objc
+  else
+    ghc-options: -fprefer-byte-code -fbyte-code-and-object-code
+  if os(darwin)
+    exposed-modules:
+        System.MacOS.NSFileCoordinator.RawBindings
+        System.MacOS.NSFileCoordinator.Types
   else
 
 executable ge
@@ -342,7 +350,7 @@ executable ge
       TypeOperators
       TypeSynonymInstances
       ViewPatterns
-  ghc-options: -Wall -fplugin=Polysemy.Plugin -flate-specialise -fspecialise-aggressively -fobject-code -threaded -rtsopts -with-rtsopts=-N
+  ghc-options: -Wall -fplugin=Polysemy.Plugin -flate-specialise -fspecialise-aggressively -threaded -rtsopts -with-rtsopts=-N
   cpp-options: -DDEBUG
   build-depends:
       Glob
@@ -380,8 +388,6 @@ executable ge
     , http-conduit
     , http-types
     , indexed-traversable
-    , inline-c
-    , inline-c-objc
     , ixset-typed
     , lens
     , lens-regex-pcre
@@ -425,6 +431,17 @@ executable ge
     , xdg-basedir
     , xml-conduit
   default-language: Haskell2010
+  if os(darwin)
+    ghc-options: -fobject-code
+    extra-libraries:
+        objc
+    frameworks:
+        Foundation
+    build-depends:
+        inline-c
+      , inline-c-objc
+  else
+    ghc-options: -fprefer-byte-code -fbyte-code-and-object-code
 
 test-suite graph-test
   type: exitcode-stdio-1.0
@@ -484,7 +501,7 @@ test-suite graph-test
       TypeOperators
       TypeSynonymInstances
       ViewPatterns
-  ghc-options: -Wall -fplugin=Polysemy.Plugin -flate-specialise -fspecialise-aggressively -fobject-code -threaded -rtsopts -with-rtsopts=-N -Wall
+  ghc-options: -Wall -fplugin=Polysemy.Plugin -flate-specialise -fspecialise-aggressively -threaded -rtsopts -with-rtsopts=-N
   cpp-options: -DDEBUG
   build-depends:
       Glob
@@ -522,8 +539,6 @@ test-suite graph-test
     , http-conduit
     , http-types
     , indexed-traversable
-    , inline-c
-    , inline-c-objc
     , ixset-typed
     , lens
     , lens-regex-pcre
@@ -567,3 +582,14 @@ test-suite graph-test
     , xdg-basedir
     , xml-conduit
   default-language: Haskell2010
+  if os(darwin)
+    ghc-options: -fobject-code
+    extra-libraries:
+        objc
+    frameworks:
+        Foundation
+    build-depends:
+        inline-c
+      , inline-c-objc
+  else
+    ghc-options: -fprefer-byte-code -fbyte-code-and-object-code
