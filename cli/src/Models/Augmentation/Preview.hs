@@ -37,12 +37,18 @@ data Style
   | -- | nid
     NIDStyle
 
+docTransitionsToNid :: [Text] -> NID -> Doc Style
+docTransitionsToNid [] nid = docNid nid
+docTransitionsToNid transitions nid =
+  docTransitions transitions <> " " <> docNid nid
+
 docTransitions :: [Text] -> Doc Style
 docTransitions = annotate Transition . go
   where
-    go [] = "@"
-    go [x] = annotate TransitionEmphasized $ docTransition x
-    go (x : xs) = docTransition x <> "/" <> docTransitions xs
+    go [] = mempty
+    go [x] = annotate TransitionEmphasized (docTransition x)
+    go (x : xs) =
+      docTransition x <> "/" <> go xs
 
 docTransition :: Text -> Doc a
 docTransition t
@@ -62,14 +68,12 @@ docNodeListing ::
   Doc Style
 docNodeListing timeZone currentTime transitions node =
   group $
-    vsepNonEmpty
-      [ transition <+> nid,
+    sepNonEmpty
+      [ transitionsToNid,
         sepNonEmpty [tags, timestamp]
       ]
-      `flatAlt` hsepNonEmpty [transition, tags, timestamp, nid]
   where
-    transition = docTransitions transitions
-    nid = docNid node.nid
+    transitionsToNid = docTransitionsToNid transitions node.nid
     timestamp = docTimestamp timeZone currentTime node.augmentation.timestamps
     tags = docTags node.augmentation.tags
 
