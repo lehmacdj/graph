@@ -10,6 +10,7 @@ import MyPrelude hiding (many, some, try)
 import Text.Megaparsec (try)
 import Text.Megaparsec qualified as Megaparsec
 import Text.Megaparsec.Char
+import Text.Megaparsec.Char as X (string)
 import Text.Megaparsec.Char.Lexer qualified as L
 import Utils.Parsing.Common as X
 import Utils.Testing

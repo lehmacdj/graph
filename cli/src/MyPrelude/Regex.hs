@@ -57,7 +57,7 @@ instance Show CheckedRegex where
   show (UnsafeCheckedRegex p _ _) =
     -- we need to avoid escaping the backslashes pattern since we don't require
     -- them when parsing
-    "re\"" ++ asString (unpack (decodeUtf8 p)) ++ "\""
+    "regex:\"" ++ asString (unpack (decodeUtf8 p)) ++ "\""
 
 -- | Smart constructor that validates the regex pattern
 compileRegex :: ByteString -> Either String CheckedRegex

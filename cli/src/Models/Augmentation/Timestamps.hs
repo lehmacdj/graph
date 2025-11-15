@@ -33,10 +33,10 @@ fetchTimestamps nid = do
     materializePath
       nid
       [path|
-        ~re"[0-9]{2}:[0-9]{2}:[0-9]{2}\.[0-9]{12}"/%{excludedLargeSystemNodes}
-        /~re"[0-9]{2}"/%{excludedLargeSystemNodes}
-        /~re"[0-9]{2}"/%{excludedLargeSystemNodes}
-        /~re"[0-9]{4}"/%{Absolute importDatesNID}
+        ~regex:"[0-9]{2}:[0-9]{2}:[0-9]{2}\.[0-9]{12}"/%{excludedLargeSystemNodes}
+        /~regex:"[0-9]{2}"/%{excludedLargeSystemNodes}
+        /~regex:"[0-9]{2}"/%{excludedLargeSystemNodes}
+        /~regex:"[0-9]{4}"/%{Absolute importDatesNID}
       |]
   let listUncurry4 f = \case
         [a, b, c, d] -> f a b c d

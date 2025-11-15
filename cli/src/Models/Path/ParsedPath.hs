@@ -68,7 +68,7 @@ spec_showPath = describe "Show Path" $ do
       `shouldBe` [rq|"foo"|]
   it "RegexMatch" $
     show (RegexMatch [re|^foo.*bar$|] :: ParsedPath)
-      `shouldBe` [rq|re"^foo.*bar$"|]
+      `shouldBe` [rq|regex:"^foo.*bar$"|]
   it "Absolute" $
     show (Absolute (smallNID 2) :: ParsedPath)
       `shouldBe` [rq|@000000000002|]
@@ -120,4 +120,4 @@ spec_showPath = describe "Show Path" $ do
           :/ Directive testRange (Splice "excludedLargeSystemNodes") ::
           ParsedPath
       )
-      `shouldBe` [rq|~re"[0-9]{2}:[0-9]{2}:[0-9]{2}\.[0-9]{12}" / %{excludedLargeSystemNodes}|]
+      `shouldBe` [rq|~regex:"[0-9]{2}:[0-9]{2}:[0-9]{2}\.[0-9]{12}" / %{excludedLargeSystemNodes}|]

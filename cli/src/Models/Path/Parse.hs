@@ -68,11 +68,10 @@ pDirectiveNamed :: Text -> Parser a -> Parser a
 pDirectiveNamed name = between (symbol ("%" <> name <> "(")) (symbol ")")
 
 pRegex :: Parser CheckedRegex
-pRegex = label "re\"<regex>\"" do
-  _ <- symbol "re"
+pRegex = label "regex:\"<regex>\"" do
   str <-
-    between (char '"') (char '"') (takeWhileP Nothing (/= '"'))
-      <|> between (char '\'') (char '\'') (takeWhileP Nothing (/= '\''))
+    between (string "regex:\"") (char '"') (takeWhileP Nothing (/= '"'))
+      <|> between (string "regex:'") (char '\'') (takeWhileP Nothing (/= '\''))
   str
     & compileRegex . encodeUtf8
     & codiagonal . bimap fail pure
@@ -136,7 +135,7 @@ test_pPath =
           ),
       "foo/@000000000002" `parsesTo` (Literal "foo" :/ mkAbsolute (smallNID 2)),
       "foo/bar" `parsesTo` (Literal "foo" :/ Literal "bar"),
-      "re\"^foo.*bar$\"" `parsesTo` RegexMatch [re|^foo.*bar$|],
+      "regex:\"^foo.*bar$\"" `parsesTo` RegexMatch [re|^foo.*bar$|],
       "~foo/bar" `parsesTo` (Backwards (Literal "foo") :/ Literal "bar"),
       "~foo/~bar" `parsesTo` (Backwards (Literal "foo") :/ Backwards (Literal "bar")),
       "~(foo/~bar)" `parsesTo` Backwards (Literal "foo" :/ Backwards (Literal "bar")),
@@ -152,7 +151,7 @@ test_pPath =
       "foo/bar&(baz+qux)"
         `parsesTo` (Literal "foo" :/ Literal "bar" :& (Literal "baz" :+ Literal "qux")),
       "foo/(bar&baz+qux)/%never" `parsesTo` (Literal "foo" :/ (Literal "bar" :& Literal "baz" :+ Literal "qux") :/ Zero),
-      "foo/%targets(@000000000002 + re\"^foo$\")/%never"
+      "foo/%targets(@000000000002 + regex:\"^foo$\")/%never"
         `parsesTo` ( Literal "foo"
                        :/ Directive
                          testRange
@@ -169,14 +168,14 @@ test_pPath =
       -- approximation of the pattern we use to detect paths
       "~*/%{mkAbsolute nid}"
         `parsesTo` (Backwards Wild :/ Directive testRange (Splice "mkAbsolute nid")),
-      "re\"asdf\"" `parsesTo` RegexMatch [re|asdf|],
-      "re'asdf'" `parsesTo` RegexMatch [re|asdf|],
-      "re'\\.'" `parsesTo` RegexMatch [re|\.|],
-      "~re\"asdf\"" `parsesTo` Backwards (RegexMatch [re|asdf|]),
+      "regex:\"asdf\"" `parsesTo` RegexMatch [re|asdf|],
+      "regex:'asdf'" `parsesTo` RegexMatch [re|asdf|],
+      "regex:'\\.'" `parsesTo` RegexMatch [re|\.|],
+      "~regex:\"asdf\"" `parsesTo` Backwards (RegexMatch [re|asdf|]),
       -- escape sequences need to not be interpreted in regexes
-      [rq|~re"\."|] `parsesTo` Backwards (RegexMatch [re|\.|]),
+      [rq|~regex:"\."|] `parsesTo` Backwards (RegexMatch [re|\.|]),
       -- regression: caught this as an error while working on Graph.Timestamps
-      [rq|~re"[0-9]{2}:[0-9]{2}:[0-9]{2}\.[0-9]{12}"|]
+      [rq|~regex:"[0-9]{2}:[0-9]{2}:[0-9]{2}\.[0-9]{12}"|]
         `parsesTo` Backwards
           (RegexMatch [re|[0-9]{2}:[0-9]{2}:[0-9]{2}\.[0-9]{12}|]),
       [rq|%{excludedLargeSystemNodes}|]
@@ -188,7 +187,7 @@ test_pPath =
       parseFails "~",
       parseFails "foo~bar",
       parseFails "%last()",
-      parseFails "re\"",
+      parseFails "regex:\"",
       -- we could allow this, but seems wise to exclude for ambiguity reasons
       parseFails "!@000000000001",
       parseFails "!{}"
@@ -228,7 +227,10 @@ test_pDirective =
       parseFails "%history()",
       parseFails "%history(foo)",
       parseFails "%targets()",
-      parseFails "%targets(foo"
+      parseFails "%targets(foo",
+      -- these were old regex syntax
+      parseFails "re\"asdf\"",
+      parseFails "re'asdf'"
     ]
   where
     parsesTo :: Text -> Directive 'Partial -> TestTree
