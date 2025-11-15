@@ -2,12 +2,11 @@
 mk a + b
 mg a + b
 cd a
-d
-ls
+ls ~*
 ==========stdout==========
-g> g> g> g> g> "00:00:00.000000000000" at @w4VxcgSm0Js6
-"a" at @000000000000
-"b" at @000000000000
+g> g> g> g> [0m[0;1m"00:00:00.000000000000"[0m[0m [0;34m@w4VxcgSm0Js6[0m [0m[0m
+[0m[0;1ma[0m[0m [0;34m@000000000000[0m [0m[0m
+[0m[0;1mb[0m[0m [0;34m@000000000000[0m [0m[0m
 g> Goodbye!
 ==========stderr==========
 cd needs a path that resolves to a single node
