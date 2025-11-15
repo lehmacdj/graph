@@ -53,7 +53,7 @@ pPointlike pNID = label "pointlike" do
 -- | Parse rooted deterministic path: "[@<branches]", "[@<branches]>target", "[branches]"
 pRootedPath :: Parser NID -> Parser (RootedDeterministicPath Anchor)
 pRootedPath pNID = label "rooted path" do
-  rootBranches <- brackets (pRootBranches pNID)
+  rootBranches <- impureNonNull <$> brackets (pRootBranches pNID)
   target <- option unanchored (pTarget pNID)
   pure $ RootedDeterministicPath rootBranches target
 
@@ -63,8 +63,8 @@ pSequence pNID = label "sequence" do
   (initial, splitFirst -> ((m, b), rest)) <- pSequenceBranchSet pNID `via1` pMidpoint
   pure . uncurry ($) $
     foldl'
-      (\(acc, x) (n, y) -> (acc . singletonSet . DPSequence x n, y))
-      (DPSequence initial m :: OSet (DPBranch Anchor) -> DPBranch Anchor, b :: OSet (DPBranch Anchor))
+      (\(acc, x) (n, y) -> (acc . impureNonNull . singletonSet . DPSequence (impureNonNull x) n, impureNonNull y))
+      (DPSequence (impureNonNull initial) m :: NonNull (OSet (DPBranch Anchor)) -> DPBranch Anchor, impureNonNull b :: NonNull (OSet (DPBranch Anchor)))
       rest
   where
     pMidpoint =
@@ -102,20 +102,20 @@ pExplicitAnchor pNID =
 -- | Parse root branches: "@<branches & @nid<branches & ..."
 pRootBranches ::
   Parser NID ->
-  Parser (OMap (DeterministicPath Anchor) (OSet (DPBranch Anchor)))
+  Parser (OMap (DeterministicPath Anchor) (NonNull (OSet (DPBranch Anchor))))
 pRootBranches pNID = label "root branches" do
   branches <- sepBy1 (pRootBranch pNID) (symbol "&")
   pure $ unionsWith (<>) $ uncurry singletonMap <$> branches
 
 pRootBranch ::
   Parser NID ->
-  Parser (DeterministicPath Anchor, OSet (DPBranch Anchor))
+  Parser (DeterministicPath Anchor, NonNull (OSet (DPBranch Anchor)))
 pRootBranch pNID = label "root branch" do
   root <-
     option
       (Pointlike unanchored)
       (pDeterministicPath pNID <* symbol "<")
-  branches <- pRootedBranchSet pNID
+  branches <- impureNonNull <$> pRootedBranchSet pNID
   pure (root, branches)
 
 pTarget :: Parser NID -> Parser (PointlikeDeterministicPath Anchor)

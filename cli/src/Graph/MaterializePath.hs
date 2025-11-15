@@ -96,7 +96,7 @@ materializeNPath firstNid normalizedPath = do
     traverseRooted nid RootedDeterministicPath {..} = do
       rootBranches' ::
         [ [ ( DeterministicPath NID,
-              OSet (DPBranch FullyAnchored)
+              NonNull (OSet (DPBranch FullyAnchored))
             )
           ]
         ] <-
@@ -106,15 +106,16 @@ materializeNPath firstNid normalizedPath = do
           <&> map (\(rs, bs) -> (,bs) <$> rs)
           <&> choices
       rootBranches'' ::
-        [(OMap (DeterministicPath NID) (OSet (DPBranch NID)), NID)] <-
+        [(OMap (DeterministicPath NID) (NonNull (OSet (DPBranch NID))), NID)] <-
         rootBranches'
           & (traverse . traverse)
-            (\(dp, bs) -> (dp,) <$> traverseBranches dp.target.anchor bs)
+            (\(dp, bs) -> (dp,) <$> traverseBranches dp.target.anchor (toNullable bs))
           <&> map (map \(r, bas) -> (\(b, a) -> ((r, b), a)) <$> bas)
           <&> concatMap choices
           <&> mapMaybe (ensureSameAnchors . impureNonNull)
           <&> ordNub
-          <&> over (mapped . _1) (mapFromList . toNullable)
+          <&> over (mapped . _1) (impureNonNull . mapFromList . toNullable)
+          <&> over (mapped . _1 . mapped . _2) impureNonNull
       rootBranches''
         & (traverse . _2) (\x -> traversePointlike False x target)
         <&> concatMap (\(rbs, ts) -> (rbs,) <$> ts)
@@ -178,11 +179,11 @@ materializeNPath firstNid normalizedPath = do
       DPOutgoing transition -> traverseTransition nid (.outgoing) DPOutgoing transition
       DPIncoming transition -> traverseTransition nid (.incoming) DPIncoming transition
       DPSequence bs1 midpoint bs2 -> do
-        bs1's <- traverseBranches nid bs1
+        bs1's <- traverseBranches nid (toNullable bs1)
         uptoMidpoints :: [(OSet (DPBranch NID), PointlikeDeterministicPath NID)] <-
           bs1's
             & (traverse . _2) (\x -> traversePointlike False x midpoint)
             <&> concatMap (\(bs1', ms) -> (bs1',) <$> ms)
         uptoMidpoints
-          & (traverse . _2) (\p -> (p,) <$> traverseBranches p.anchor bs2)
-          <&> concatMap (\(bs1', (p, bs2'ts)) -> first (DPSequence bs1' p) <$> bs2'ts)
+          & (traverse . _2) (\p -> (p,) <$> traverseBranches p.anchor (toNullable bs2))
+          <&> concatMap (\(bs1', (p, bs2'ts)) -> first (DPSequence (impureNonNull bs1') p . impureNonNull) <$> bs2'ts)
