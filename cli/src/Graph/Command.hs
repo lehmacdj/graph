@@ -268,8 +268,8 @@ interpretCommand = \case
           pure (transitions, node)
       when (null targets) do
         say "no targets"
-      tz <- liftIO getCurrentTimeZone
-      now <- liftIO getCurrentTime
+      tz <- currentTimeZone
+      now <- currentTime
       w <-
         liftIO Terminal.size >>= \case
           Just (Terminal.Window _ width) -> pure width

@@ -15,7 +15,6 @@ import Data.Time as X
     ZonedTime (..),
     addUTCTime,
     diffUTCTime,
-    getCurrentTimeZone,
     localTimeToUTC,
     parseTimeOrError,
     utc,
