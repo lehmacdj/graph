@@ -90,9 +90,15 @@ interpretDirective ::
       [ GraphMetadataReading,
         State History,
         GetLocation,
-        Error UserError
+        Error UserError,
+        GetTime,
+        Web,
+        FreshNID,
+        Dualizeable,
+        Readline
       ]
-      effs
+      effs,
+    HasGraph Text effs
   ) =>
   SourceRange ->
   Directive 'WithDirectives ->
@@ -106,6 +112,9 @@ interpretDirective sourceRange = \case
     mp <- materializeNPath currentNid (leastConstrainedNormalizedPath np)
     -- this is a little bit inefficient of an embedding, but not too bad
     pure $ foldl' (Simple.:+) Zero (mapSet Absolute $ getTargets mp.path)
+  HttpResource uri -> do
+    guardDangerousDualizedOperation
+    Absolute <$> subsumeUserError @Missing (importUrl uri)
   Splice expr ->
     throw $
       OtherError $

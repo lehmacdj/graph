@@ -111,8 +111,8 @@ parseForTest whatToParse parser input =
 testParserParses ::
   (Eq a, Show a, HasCallStack) => Parser a -> Text -> a -> Assertion
 testParserParses parser string expected =
-  case runParserTest parser string of
-    Right actual -> actual @=? expected
+  case runParserTest (parser <* eof) string of
+    Right actual -> expected @=? actual
     Left err ->
       assertFailure $
         ("expected: " ++ show expected ++ "\n")

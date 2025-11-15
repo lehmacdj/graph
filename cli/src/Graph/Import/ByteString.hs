@@ -19,12 +19,12 @@ importUrl ::
   ( Members [Web, FreshNID, Error Missing, GetTime] effs,
     HasGraph Text effs
   ) =>
-  String ->
+  URI ->
   Sem effs NID
 importUrl url = do
   d <- getHttp url
   nnid <- importData d
-  insertEdge (Edge importUrlsNID (pack url) nnid)
+  insertEdge (Edge importUrlsNID (renderURI url) nnid)
   pure nnid
 
 -- | From an id with an edge with a specific label, add an edge to and create

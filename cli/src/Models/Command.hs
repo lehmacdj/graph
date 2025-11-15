@@ -46,7 +46,7 @@ data Command
   | -- | :i
     Import FilePath
   | -- | wget
-    ImportUrl String
+    ImportUrl URI
   | -- | fsck
     Check
   | -- | fix

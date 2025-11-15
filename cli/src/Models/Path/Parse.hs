@@ -50,8 +50,8 @@ partialPathTerm' pNID =
       (symbol "}")
       (ExcludingNIDs . setFromList <$> pNID `sepEndBy1` symbol ",")
     <|> (RegexMatch <$> try pRegex)
-    <|> (Literal <$> pTransition)
     <|> (uncurry Directive <$> withSourceRange pDirective)
+    <|> (Literal <$> pTransition)
     <|> parens (pPartialPath' pNID)
   where
     pTag :: Parser PartialPath
@@ -60,9 +60,13 @@ partialPathTerm' pNID =
 pDirective :: Parser (Directive 'Partial)
 pDirective =
   try (LocationFromHistory <$> pDirectiveNamed "history" number)
+    <|> try (HttpResource <$> pHttpURI)
     <|> try (LocationFromHistory 1 <$ symbol "%last")
     <|> (Targets <$> pDirectiveNamed "targets" pPartialPath)
     <|> (Splice <$> between (symbol "%{") (symbol "}") (many (noneOf ['}'])))
+
+pHttpURI :: Parser URI
+pHttpURI = lexeme (lookAhead (string "http://" <|> string "https://") *> pURI)
 
 pDirectiveNamed :: Text -> Parser a -> Parser a
 pDirectiveNamed name = between (symbol ("%" <> name <> "(")) (symbol ")")
@@ -180,6 +184,20 @@ test_pPath =
           (RegexMatch [re|[0-9]{2}:[0-9]{2}:[0-9]{2}\.[0-9]{12}|]),
       [rq|%{excludedLargeSystemNodes}|]
         `parsesTo` Directive testRange (Splice "excludedLargeSystemNodes"),
+      "foo/https://example.com/resource"
+        `parsesTo` ( Literal "foo"
+                       :/ Directive
+                         testRange
+                         (HttpResource [quri|https://example.com/resource|])
+                   ),
+      "https://example.com/resource / foo"
+        `parsesTo` ( Directive
+                       testRange
+                       (HttpResource [quri|https://example.com/resource|])
+                       :/ Literal "foo"
+                   ),
+      [rq|"https://example.com/resource"|]
+        `parsesTo` Literal "https://example.com/resource",
       parseFails "foo/bar&",
       parseFails "foo/bar&+qux",
       parseFails "foo+",
@@ -223,6 +241,8 @@ test_pDirective =
       -- parse anything here
       "%{some text here}" `parsesTo` Splice "some text here",
       "%{Absolute nid}" `parsesTo` Splice "Absolute nid",
+      "https://example.com/resource"
+        `parsesTo` HttpResource [quri|https://example.com/resource|],
       parseFails "%last()",
       parseFails "%history()",
       parseFails "%history(foo)",
@@ -230,7 +250,12 @@ test_pDirective =
       parseFails "%targets(foo",
       -- these were old regex syntax
       parseFails "re\"asdf\"",
-      parseFails "re'asdf'"
+      parseFails "re'asdf'",
+      -- don't want to parse things that are barely URIs as HttpResource
+      parseFails "http",
+      parseFails "https",
+      parseFails "https:",
+      parseFails "http:"
     ]
   where
     parsesTo :: Text -> Directive 'Partial -> TestTree

@@ -65,7 +65,7 @@ pImport :: Parser Command
 pImport = (commandFrom [":import", ":i"] $> Import) <*> some anySingle
 
 pImportUrl :: Parser Command
-pImportUrl = (commandFrom [":import-url", ":iurl", "wget"] $> ImportUrl) <*> some anySingle
+pImportUrl = (commandFrom [":import-url", ":iurl", "wget"] $> ImportUrl) <*> pHttpURI
 
 pCheck :: Parser Command
 pCheck = command "fsck" $> Check
@@ -149,6 +149,15 @@ test_parseCommand =
       "{nid}" `parsesTo` NodeId,
       "{nid; si}" `parsesTo` Seq (twoElemList NodeId ShowImage []),
       "at #foo nid" `parsesTo` At (Absolute tagsNID Simple.:/ Literal "foo") NodeId,
+      -- "t #something https://example.com/resource"
+      --   `parsesTo` Tag
+      --     (mkAbsolute tagsNID :/ Literal "something")
+      --     (HttpResource [quri|https://example.com/resource|]),
+      -- "t https://example.com/resource #something"
+      --   `parsesTo` ( Tag
+      --                  (mkAbsolute tagsNID :/ Literal "something")
+      --                  (HttpResource [quri|https://example.com/resource|])
+      --              ),
       -- regression test: this used to parse to t ouch hello-world; incorrectly
       -- not requiring a space between t and ouch
       parseFails "touch hello-world",

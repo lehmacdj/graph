@@ -125,6 +125,10 @@ type family NIDVal (p :: PathPhase) :: Type where
   NIDVal 'WithDirectives = NID
   NIDVal 'Prenormal = NID
 
+-- | Effectively this is an effectful sublanguage of the path language
+-- Directives must be interpreted using handleDirectivesWith or
+-- handleDirectivesQ before paths may be normalized by the pure path
+-- normalization algorithm
 data Directive (p :: PathPhase)
   = -- | Reference a location in the location history of the graph CLI
     -- resolves to `Absolute nid` where `nid` is the NID at that location
@@ -140,6 +144,9 @@ data Directive (p :: PathPhase)
   | -- | A splice of a Haskell expression that resolves to a Path
     -- This is used by the QuasiQuoter, the CLI does not support this
     Splice String
+  | -- | Triggers the import of a URI to the graph, resolving to the NID of
+    -- the imported resource
+    HttpResource URI
   deriving (Generic)
 
 deriving instance
@@ -159,6 +166,7 @@ showsDirective ::
   Directive p ->
   ShowS
 showsDirective = \case
+  HttpResource uri -> renderURIShowS uri
   LocationFromHistory i -> showString "%history(" . shows i . showString ")"
   Targets p -> showString "%targets(" . shows p . showString ")"
   Splice expr -> showString "%{" . showString expr . showString "}"
@@ -268,6 +276,7 @@ parsedFromPartial = (.either) . go
           FancyError offset (singletonSet (ErrorCustom IncompleteFullNID {..}))
       (Right nid) -> pure nid
     goDirective = \case
+      HttpResource uri -> pure (HttpResource uri)
       LocationFromHistory i -> pure (LocationFromHistory i)
       Targets p -> Targets <$> go p
       Splice s -> pure (Splice s)

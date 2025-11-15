@@ -27,6 +27,8 @@ pathExp s = case runParser (whitespace *> pPath <* eof) "" (pack s) of
     -- Interpret Splice directives as TH expressions
     interpretSplice :: SourceRange -> Directive 'WithDirectives -> Q Exp
     interpretSplice _ = \case
+      HttpResource _ ->
+        fail "HttpResource directive cannot be used in path quasi-quoter"
       LocationFromHistory _ ->
         fail "LocationFromHistory directive cannot be used in path quasi-quoter"
       Targets _ -> fail "Targets directive cannot be used in path quasi-quoter"
