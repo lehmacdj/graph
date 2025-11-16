@@ -18,19 +18,6 @@ import System.Random
 data FreshNID m r where
   FreshNID :: FreshNID m NID
 
--- -- | Pick a single NID from a list of NIDs in a case where we generated too
--- -- many and need to pick one to use arbitrarily.
--- --
--- -- Doing this instead of just generating a new NID marginally reduces the
--- -- chances of an NID collision, though argably this entire approach is just
--- -- premature optimization.
--- --
--- -- e.g. consider the use in `materializePathAsGraph`'s `:&` case
--- -- where we want to merge all new targets into a single new target
--- -- (because `:&` semantically should produce only nodes such that both paths
--- -- lead to the same node)
--- PickNID :: [NID] -> FreshNID m NID
-
 makeSem ''FreshNID
 
 -- | Run FreshNID as a computation with a state representing the next value to
