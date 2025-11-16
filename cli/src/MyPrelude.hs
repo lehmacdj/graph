@@ -26,6 +26,7 @@ import Control.DeepSeq as X
 import Data.Coerce as X (Coercible, coerce)
 import Data.Constraint as X (Constraint)
 import Data.Functor.Contravariant as X
+import Data.Monoid as X (Endo (..))
 import Data.Orphans ()
 import Data.Proxy as X (Proxy (..))
 import Data.Text.Encoding qualified as Text

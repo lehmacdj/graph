@@ -526,13 +526,19 @@ leastNodesNormalizedPath ::
   NormalizedPath Anchor ->
   NormalizedPath FullyAnchored
 leastNodesNormalizedPath path =
-  runIdentity $ traverseAnchors (Identity . convertAnchor) path
-  where
-    convertAnchor :: Anchor -> FullyAnchored
-    convertAnchor = \case
-      Unanchored -> FJoinPoint mempty
-      JoinPoint {..} -> FJoinPoint {..}
-      Specific nid -> FSpecific nid
+  runIdentity $ traverseAnchors (Identity . fullyAnchor) path
+
+fullyAnchor :: Anchor -> FullyAnchored
+fullyAnchor = \case
+  Unanchored -> FJoinPoint mempty
+  JoinPoint {..} -> FJoinPoint {..}
+  Specific nid -> FSpecific nid
+
+fullySpecific :: Anchor -> Maybe NID
+fullySpecific = \case
+  Unanchored -> Nothing
+  JoinPoint {} -> Nothing
+  Specific nid -> Just nid
 
 traverseAnchors ::
   forall f a b.

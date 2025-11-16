@@ -117,6 +117,16 @@ runInMemoryGraphMetadataEditing = interpret \case
   InsertEdge edge -> modify $ Models.Graph.insertEdge edge
   DeleteEdge edge -> modify $ Models.Graph.deleteEdge edge
 
+graphFromGraphMetadataEditing ::
+  forall t a.
+  ( ValidTransition t,
+    HasCallStack
+  ) =>
+  Sem '[GraphMetadataEditing' t] a ->
+  Graph t ()
+graphFromGraphMetadataEditing =
+  run . execState emptyGraph . runInMemoryGraphMetadataEditing . raiseUnder
+
 -- | Warning: the operations of this effect are not atomic. You should not use
 -- this effect if other programs/threads might modify the same files at the
 -- same time.
