@@ -156,7 +156,7 @@ renderMultiColumn items =
               [0 ..]
               (if null paddedGroups then [] else replicate (length paddedGroups - 1) False ++ [True])
               paddedGroups
-          | i <- [0 .. maxLines - 1]
+        | i <- [0 .. maxLines - 1]
         ]
    in vsep combinedLines
   where
