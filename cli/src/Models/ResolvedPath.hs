@@ -1,5 +1,5 @@
-module Models.MaterializedPath
-  ( MaterializedPath (..),
+module Models.ResolvedPath
+  ( ResolvedPath (..),
     getTargets,
     finalNonLoopEdges,
     leftmostConnects,
@@ -13,30 +13,24 @@ import Models.Connect
 import Models.Edge
 import Models.Graph
 import Models.NID
+import Models.Node
 import Models.NormalizedPath
 import Models.NormalizedPath.TH
 import MyPrelude
 import Utils.Testing
 
-data MaterializedPath = MaterializedPath
+data ResolvedPath = ResolvedPath
   { path :: NormalizedPath NID,
     graph :: Graph Text IsThin,
     nonexistentNodes :: Set NID
   }
   deriving (Eq, Show, Generic)
 
-dpTarget :: DeterministicPath NID -> NID
-dpTarget = \case
-  Pointlike PointlikeDeterministicPath {..} ->
-    anchor
-  Rooted RootedDeterministicPath {target = PointlikeDeterministicPath {..}} ->
-    anchor
-
 -- | Get the set of all nodes targeted by the NormalizedPath
 -- maybe this actually should belong in some Models.NormalizedPath submodule;
 -- it's here because typically this is used downstream of materializing a path
 getTargets :: NormalizedPath NID -> Set NID
-getTargets (NormalizedPath dps) = foldMap (singletonSet . dpTarget) dps
+getTargets (NormalizedPath dps) = foldMap (singletonSet . (.anchor) . dpTarget) dps
 
 -- | Get the final connects targeted by the NormalizedPath.
 -- This returns two layers of Set:
@@ -63,7 +57,7 @@ finalNonLoopEdges (NormalizedPath dps) =
           singletonSet . impureNonNull $
             ifoldMapOf
               (itraversed <. folded)
-              (\i b -> branchFinalNonLoopEdges (dpTarget i) anchor b)
+              (\i b -> branchFinalNonLoopEdges (dpTarget i).anchor anchor b)
               rootBranches
 
     branchFinalNonLoopEdges ::
@@ -73,7 +67,7 @@ finalNonLoopEdges (NormalizedPath dps) =
       DPOutgoing (DPLiteral l) -> singletonSet (Edge target l branchStart)
       DPSequence _ midpoint b2 ->
         foldMap
-          (branchFinalNonLoopEdges (dpTarget (Pointlike midpoint)) target)
+          (branchFinalNonLoopEdges (dpTarget (Pointlike midpoint)).anchor target)
           b2
       DPIncoming DPWild -> error "invalid in NormalizedPath NID"
       DPOutgoing DPWild -> error "invalid in NormalizedPath NID"

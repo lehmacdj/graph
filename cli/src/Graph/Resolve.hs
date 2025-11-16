@@ -1,29 +1,29 @@
-module Graph.MaterializePath where
+module Graph.Resolve where
 
 import Graph.GraphMetadataEditing
 import Models.Connect (Connect (..), matchConnect)
 import Models.Graph (Graph, emptyGraph)
-import Models.MaterializedPath
 import Models.NID
 import Models.Node
 import Models.NormalizedPath
 import Models.Path.Simple
+import Models.ResolvedPath
 import MyPrelude hiding ((\\))
 import Polysemy.State
 
-materializePath ::
+resolvePath ::
   forall r.
   ( Members '[GraphMetadataReading] r,
     HasCallStack
   ) =>
   NID ->
   Path ->
-  Sem r MaterializedPath
-materializePath nid path =
-  materializeNPath nid (leastConstrainedNormalizedPath (normalizePath path))
+  Sem r ResolvedPath
+resolvePath nid path =
+  resolveNPath nid (leastConstrainedNormalizedPath (normalizePath path))
 
 -- | Traverse a path, fetching node metadata and noting which nodes are missing.
-materializeNPath ::
+resolveNPath ::
   forall r.
   ( Members '[GraphMetadataReading] r,
     HasCallStack
@@ -31,13 +31,13 @@ materializeNPath ::
   -- | The node to start from
   NID ->
   NormalizedPath FullyAnchored ->
-  Sem r MaterializedPath
-materializeNPath firstNid normalizedPath =
+  Sem r ResolvedPath
+resolveNPath firstNid normalizedPath =
   traverseViaTransitions firstNid unifyAnchor traverseDirection normalizedPath
     & cachingReadingInState
     & runState emptyGraph
     & runState mempty
-    & fmap \(nonexistentNodes, (graph, path)) -> MaterializedPath {..}
+    & fmap \(nonexistentNodes, (graph, path)) -> ResolvedPath {..}
   where
     unifyAnchor :: Bool -> NID -> FullyAnchored -> Maybe NID
     unifyAnchor isRoot nid = \case

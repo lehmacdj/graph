@@ -1,12 +1,12 @@
 module Models.Augmentation.Tags where
 
 import Graph.GraphMetadataEditing
-import Graph.MaterializePath
+import Graph.Resolve
 import Graph.Paths
 import Graph.SystemNodes
 import Models.Common
 import Models.Edge
-import Models.MaterializedPath
+import Models.ResolvedPath
 import Models.NID
 import Models.Path.Simple
 import Models.Path.TH
@@ -25,7 +25,7 @@ fetchTags ::
   Sem r Tags
 fetchTags nid = do
   mp <-
-    materializePath
+    resolvePath
       nid
       [path| ~*/%{excludedLargeSystemNodes}/~*/%{Absolute tagsNID} |]
   let tags = mapSet ((.transition) . assertSingleton) $ finalNonLoopEdges mp.path

@@ -21,7 +21,7 @@ import Graph.GraphMetadataEditing (GraphMetadataEditing, GraphMetadataReading)
 import Graph.Import.ByteString
 import Graph.Import.FileSystem
 import Graph.LegacyPathMaterialization
-import Graph.MaterializePath
+import Graph.Resolve
 import Graph.NodeLocated
 import Graph.Time (taggingFreshNodesWithTime)
 import Graph.Utils
@@ -33,7 +33,7 @@ import Models.Command
 import Models.Connect
 import Models.Edge
 import Models.History
-import Models.MaterializedPath
+import Models.ResolvedPath
 import Models.NID
 import Models.NormalizedPath (leastConstrainedNormalizedPath, normalizePath)
 import Models.Path.ParsedPath
@@ -109,7 +109,7 @@ interpretDirective sourceRange = \case
     currentNid <- currentLocation
     p' <- handleDirectivesWith interpretDirective p
     let np = normalizePath p'
-    mp <- materializeNPath currentNid (leastConstrainedNormalizedPath np)
+    mp <- resolveNPath currentNid (leastConstrainedNormalizedPath np)
     -- this is a little bit inefficient of an embedding, but not too bad
     pure $ foldl' (Simple.:+) Zero (mapSet Absolute $ getTargets mp.path)
   HttpResource uri -> do
@@ -132,7 +132,7 @@ interpretCommand ::
     Members [FileTypeOracle, Readline, Warn UserError, Scoped () GraphMetadataEditing] effs,
     -- TODO: remove this inclusion of RawGraph + Embed IO here; probably the
     -- best way to do this is to allow commands to be defined as @stack@
-    -- scripts, and then rewrite materialize and any other commands that
+    -- scripts, and then rewrite resolve and any other commands that
     -- require this outside of
     Members [RawGraph, Embed IO] effs,
     HasGraph Text effs
@@ -257,7 +257,7 @@ interpretCommand = \case
     nid <- currentLocation
     scoped_ do
       p' <- handleDirectivesWith interpretDirective p
-      mp <- materializePath nid p'
+      mp <- resolvePath nid p'
       unless (null mp.nonexistentNodes) $
         say ("nonexistent nodes: " ++ tshow mp.nonexistentNodes)
       targets <-

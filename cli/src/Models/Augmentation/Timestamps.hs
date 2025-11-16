@@ -1,12 +1,12 @@
 module Models.Augmentation.Timestamps where
 
 import Graph.GraphMetadataEditing
-import Graph.MaterializePath
+import Graph.Resolve
 import Graph.Paths
 import Graph.SystemNodes
 import Models.Common
 import Models.Connect
-import Models.MaterializedPath
+import Models.ResolvedPath
 import Models.NID
 import Models.Path.Simple
 import Models.Path.TH
@@ -30,7 +30,7 @@ fetchTimestamps ::
   Sem r Timestamps
 fetchTimestamps nid = do
   mp <-
-    materializePath
+    resolvePath
       nid
       [path|
         ~regex:"[0-9]{2}:[0-9]{2}:[0-9]{2}\.[0-9]{12}"/%{excludedLargeSystemNodes}

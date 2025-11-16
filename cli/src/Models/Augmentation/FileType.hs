@@ -2,14 +2,14 @@ module Models.Augmentation.FileType where
 
 import Error.UserError
 import Graph.GraphMetadataEditing
-import Graph.MaterializePath
+import Graph.Resolve
 import Graph.Paths
 import Graph.SystemNodes
 import Models.Common
 import Models.Connect
 import Models.Edge
 import Models.FileTypeInfo
-import Models.MaterializedPath
+import Models.ResolvedPath
 import Models.MimeType
 import Models.NID
 import Models.Path.Simple
@@ -46,7 +46,7 @@ fetchFileExtension ::
   Sem r FileExtension
 fetchFileExtension nid = do
   mp <-
-    materializePath
+    resolvePath
       nid
       [path|
         ~*/%{excludedLargeSystemNodes}
@@ -68,7 +68,7 @@ fetchFileType ::
   Sem r FileType
 fetchFileType nid = do
   mp <-
-    materializePath
+    resolvePath
       nid
       [path|
         ~*/%{excludedLargeSystemNodes}

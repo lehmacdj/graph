@@ -63,9 +63,9 @@ library
       Graph.Import.FileSystem
       Graph.LegacyPathMaterialization
       Graph.LegacyPathMaterializationSpec
-      Graph.MaterializePath
       Graph.NodeLocated
       Graph.Paths
+      Graph.Resolve
       Graph.SystemNodes
       Graph.SystemNodes.Init
       Graph.Time
@@ -89,7 +89,6 @@ library
       Models.History
       Models.HistorySpec
       Models.LegacyPartialPath
-      Models.MaterializedPath
       Models.MimeType
       Models.MiscSpec
       Models.NID
@@ -106,6 +105,7 @@ library
       Models.Path.PartialPath
       Models.Path.Simple
       Models.Path.TH
+      Models.ResolvedPath
       MyPrelude
       MyPrelude.Collections
       MyPrelude.Collections.Ordered

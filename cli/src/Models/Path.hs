@@ -135,10 +135,10 @@ data Directive (p :: PathPhase)
     LocationFromHistory Int
   | -- | Resolves to the set of targets of a path.
     -- Among other things this is useful for filtering to a specific set of
-    -- nodes, e.g. `""/(@ & %targets(#foo/*))` materializes the transitions
+    -- nodes, e.g. `""/(@ & %targets(#foo/*))` resolves the transitions
     -- which end in a node tagged `#foo`
     -- This can also be used to bake the current location into a later location
-    -- in a path e.g. `*/%targets(@)` materializes only transitions from the
+    -- in a path e.g. `*/%targets(@)` resolves only transitions from the
     -- current location to itself.
     Targets (Path' p)
   | -- | A splice of a Haskell expression that resolves to a Path
