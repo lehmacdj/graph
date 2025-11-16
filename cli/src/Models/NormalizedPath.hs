@@ -78,10 +78,23 @@ data DPTransition
   deriving stock (Eq, Ord, Show, Generic, Lift)
   deriving anyclass (NFData)
 
+data DPDirection
+  = DPIncoming' DPTransition
+  | DPOutgoing' DPTransition
+  deriving stock (Eq, Ord, Show, Generic, Lift)
+  deriving anyclass (NFData)
+
+pattern DPIncoming :: DPTransition -> DPBranch a
+pattern DPIncoming t = DPSingle (DPIncoming' t)
+
+pattern DPOutgoing :: DPTransition -> DPBranch a
+pattern DPOutgoing t = DPSingle (DPOutgoing' t)
+
+{-# COMPLETE DPIncoming, DPOutgoing, DPSequence #-}
+
 -- | A branch in the path.
 data DPBranch a
-  = DPIncoming DPTransition
-  | DPOutgoing DPTransition
+  = DPSingle DPDirection
   | -- | A concatenation of two intersections of branches.
     --
     -- Invariants:
