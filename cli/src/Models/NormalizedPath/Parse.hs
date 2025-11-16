@@ -61,32 +61,30 @@ pRootedPath pNID = label "rooted path" do
 pSequence :: Parser NID -> Parser (DPBranch Anchor)
 pSequence pNID = label "sequence" do
   (initial, splitFirst -> ((m, b), rest)) <- pSequenceBranchSet pNID `via1` pMidpoint
-  let initialNN = impureNonNull initial
-      bNN = impureNonNull b
   pure . uncurry ($) $
     foldl'
       (\(acc, x) (n, y) -> (acc . singletonNNSet . DPSequence x n, y))
-      (DPSequence initialNN m :: NonNull (OSet (DPBranch Anchor)) -> DPBranch Anchor, bNN :: NonNull (OSet (DPBranch Anchor)))
+      (DPSequence initial m :: NonNull (OSet (DPBranch Anchor)) -> DPBranch Anchor, b :: NonNull (OSet (DPBranch Anchor)))
       rest
   where
     pMidpoint =
       symbol "/" *> option unanchored (pPointlike pNID) <* symbol "|"
 
 -- | Parse a set of branches separated by &
-pSequenceBranchSet :: Parser NID -> Parser (OSet (DPBranch Anchor))
+pSequenceBranchSet :: Parser NID -> Parser (NonNull (OSet (DPBranch Anchor)))
 pSequenceBranchSet pNID =
   label "sequence branch set" $
-    try (setFromList <$> pMultiple)
-      <|> (singletonSet <$> pSingleBranch)
+    try (impureNonNull . setFromList <$> pMultiple)
+      <|> (singletonNNSet <$> pSingleBranch)
   where
     pMultiple = parens (pBranch pNID `sepBy1` symbol "&")
 
 -- | Parse a set of branches separated by &
-pRootedBranchSet :: Parser NID -> Parser (OSet (DPBranch Anchor))
+pRootedBranchSet :: Parser NID -> Parser (NonNull (OSet (DPBranch Anchor)))
 pRootedBranchSet pNID =
   label "rooted branch set" $
-    try (singletonSet <$> pBranch pNID)
-      <|> (setFromList <$> pMultiple)
+    try (singletonNNSet <$> pBranch pNID)
+      <|> (impureNonNull . setFromList <$> pMultiple)
   where
     pMultiple = parens (pBranch pNID `sepBy1` symbol "&")
 
@@ -117,7 +115,7 @@ pRootBranch pNID = label "root branch" do
     option
       (Pointlike unanchored)
       (pDeterministicPath pNID <* symbol "<")
-  branches <- impureNonNull <$> pRootedBranchSet pNID
+  branches <- pRootedBranchSet pNID
   pure (root, branches)
 
 pTarget :: Parser NID -> Parser (PointlikeDeterministicPath Anchor)
