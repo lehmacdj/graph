@@ -24,8 +24,7 @@ data FullyAnchored
 data DeterministicPath a
   = Rooted (RootedDeterministicPath a)
   | Pointlike (PointlikeDeterministicPath a)
-  deriving stock (Eq, Ord, Show, Generic, Lift)
-  deriving anyclass (NFData)
+  deriving stock (Eq, Ord, Show, Generic)
 
 instance HasField "target" (DeterministicPath a) (PointlikeDeterministicPath a) where
   getField (Rooted p) = p.target
@@ -47,8 +46,7 @@ data RootedDeterministicPath a = RootedDeterministicPath
         ),
     target :: PointlikeDeterministicPath a
   }
-  deriving stock (Eq, Ord, Show, Generic, Lift)
-  deriving anyclass (NFData)
+  deriving stock (Eq, Ord, Show, Generic)
 
 -- | A pointlike deterministic path. This is a path that has a single Root
 -- and the target is the same as the Root.
@@ -59,8 +57,7 @@ data PointlikeDeterministicPath a
     -- | each of these can also be inverted, see `invertLoop` for details
     loops :: OSet (DPBranch a)
   }
-  deriving stock (Eq, Ord, Show, Generic, Lift)
-  deriving anyclass (NFData)
+  deriving stock (Eq, Ord, Show, Generic)
 
 unanchored :: PointlikeDeterministicPath Anchor
 unanchored = PointlikeDeterministicPath Unanchored mempty
@@ -99,12 +96,10 @@ data DPBranch a
       (NonNull (OSet (DPBranch a)))
       (PointlikeDeterministicPath a)
       (NonNull (OSet (DPBranch a)))
-  deriving stock (Eq, Ord, Show, Generic, Lift)
-  deriving anyclass (NFData)
+  deriving stock (Eq, Ord, Show, Generic)
 
 newtype NormalizedPath a = NormalizedPath {union :: Set (DeterministicPath a)}
-  deriving stock (Eq, Ord, Show, Generic, Lift)
-  deriving anyclass (NFData)
+  deriving stock (Eq, Ord, Show, Generic)
 
 pointify ::
   RootedDeterministicPath Anchor ->

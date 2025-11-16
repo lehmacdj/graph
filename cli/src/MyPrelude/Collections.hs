@@ -292,7 +292,7 @@ nnmap :: (HasCallStack, MonoFoldable (f b), Functor f) => (a -> b) -> NonNull (f
 nnmap f = impureNonNull . fmap f . toNullable
 
 traverseNonNull ::
-  (HasCallStack, MonoFoldable (g b), Traversable f, Applicative g) =>
+  (HasCallStack, MonoFoldable (f b), Traversable f, Applicative g) =>
   (a -> g b) ->
   NonNull (f a) ->
   g (NonNull (f b))
