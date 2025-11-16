@@ -17,6 +17,12 @@ import Effect.IOWrapper.FileSystem
 import Effect.IOWrapper.FileTypeOracle
 import Effect.IOWrapper.GetTime
 import Effect.IOWrapper.Web
+import Effect.Readline
+import Effectful
+import Effectful.Error.Static
+import Effectful.Provider
+import Effectful.Reader.Static
+import Effectful.State.Static.Local
 import Error.UserError
 import Error.Warn
 import Graph.Effect
@@ -26,11 +32,6 @@ import Graph.NodeLocated
 import Models.History
 import Models.NID
 import MyPrelude
-import Effectful
-import Effectful.Reader.Static
-import Effect.Readline
-import Effectful.Labeled
-import Effectful.State.Static.Local
 import System.Console.Haskeline (InputT)
 import System.Console.Haskeline qualified as H
 import System.Random
@@ -60,43 +61,21 @@ initEnv graphDir nidGenerator _replSettings =
     <*> pure _replSettings
 
 printingErrorsAndWarnings :: ErrorHandlingBehavior ()
-printingErrorsAndWarnings = printWarnings >>> printErrors
+printingErrorsAndWarnings = printWarnings . printErrors
 
-type GraphEditorEffects :: [Effect]
+-- Core effect stacks
 type GraphEditorEffects =
   [ FreshNID,
     ReadGraph Text (Maybe ByteString),
     ReadGraphDataless Text,
     WriteGraph Text,
-    Scoped_ GraphMetadataEditing,
-    -- GraphDataEditing,
+    Provider_ GraphMetadataEditing,
     Dualizeable,
     GetLocation,
     SetLocation,
     State History
   ]
 
-runGraphEditorEffects ::
-  ( Members PermissiveDependencyEffects r,
-    Members IOWrapperEffects r,
-    Members ErrorEffects r
-  ) =>
-  Sem (Concat GraphEditorEffects r) ~> Sem r
-runGraphEditorEffects =
-  raiseUnder @(State StdGen)
-    >>> runFreshNIDRandom
-    >>> subsume
-    >>> raise3Under @(Input FilePath)
-    >>> applyInput2 (runReadGraphDualizeableIO @Text)
-    >>> applyInput2 (runReadGraphDatalessDualizeableIO @Text)
-    >>> applyInput2 (runWriteGraphDualizeableIO @Text)
-    >>> supplyInputVia getGraphFilePath
-    >>> runScopedGraphMetadataEditingTransactionally
-    >>> subsume
-    >>> runLocableHistoryState
-    >>> subsume
-
-type IOWrapperEffects :: [Effect]
 type IOWrapperEffects =
   [ Web,
     FileSystem,
@@ -110,66 +89,11 @@ type IOWrapperEffects =
     DisplayImage
   ]
 
-type TimeBehavior =
-  forall r.
-  (IOE :> es) =>
-  Sem (GetTime : r) ~> Sem r
-
-type FilesystemOperationsBehavior =
-  forall r a.
-  ((RawGraph, IOE, Error UserError) :> es) =>
-  Sem (GraphMetadataFilesystemOperations : GraphMetadataFilesystemOperationsWriteDiff : GraphDataFilesystemOperations : r) a ->
-  Eff es a
-
-filesystemBehaviorDryRun :: FilesystemOperationsBehavior
-filesystemBehaviorDryRun =
-  runGraphMetadataFilesystemOperationsDryRun True
-    >>> runGraphMetadataFilesystemOperationsWriteDiffDryRun
-    >>> runGraphDataFilesystemOperationsDryRun
-
-filesystemBehaviorIO :: FilesystemOperationsBehavior
-filesystemBehaviorIO =
-  runGraphMetadataFilesystemOperationsIO True
-    >>> runGraphMetadataFilesystemOperationsWriteDiffIO
-    >>> runGraphDataFilesystemOperationsIO
-
-runIOWrapperEffects ::
-  ( Members PermissiveDependencyEffects r,
-    Members ErrorEffects r
-  ) =>
-  TimeBehavior ->
-  FilesystemOperationsBehavior ->
-  Sem (Concat IOWrapperEffects r) ~> Sem r
-runIOWrapperEffects timeBehavior filesystemBehavior =
-  runWebIO
-    >>> runFileSystemIO
-    >>> runFileTypeOracle
-    >>> timeBehavior
-    >>> filesystemBehavior
-    >>> subsume
-    >>> interpretEditorAsIOVim
-    >>> interpretDisplayImageIO
-
-type ErrorEffects :: [Effect]
 type ErrorEffects =
   [ Warn UserError,
     Error UserError
   ]
 
-type ErrorHandlingBehavior a =
-  forall r.
-  (IOE :> es) =>
-  Sem (Warn UserError : Error UserError : r) a ->
-  Eff es a
-
-runErrorEffects ::
-  (Members PermissiveDependencyEffects r) =>
-  ErrorHandlingBehavior a ->
-  Sem (Concat ErrorEffects r) a ->
-  Eff es a
-runErrorEffects errorHandlingBehavior = errorHandlingBehavior
-
-type PermissiveDependencyEffects :: [Effect]
 type PermissiveDependencyEffects =
   [ Echo,
     Dualizeable,
@@ -179,69 +103,213 @@ type PermissiveDependencyEffects =
     RawGraph
   ]
 
-runPermisiveDependencyEffects ::
-  (IOE :> es) =>
-  FilePath ->
-  Sem (Concat PermissiveDependencyEffects r) ~> Sem r
-runPermisiveDependencyEffects path =
-  runEchoIO
-    >>> evalState (IsDual False)
-    >>> (\m -> initStdGen >>= \stdGen -> evalState stdGen m)
-    >>> subsume
-    >>> evalState (History [] nilNID [])
-    >>> runRawGraphWithPath path
-
-runPermissiveDependencyEffectsEnv ::
-  (Members FinalEffects r) =>
-  Sem (Concat PermissiveDependencyEffects r) ~> Sem r
-runPermissiveDependencyEffectsEnv =
-  runEchoReadline
-    >>> runStateInputIORefOf #isDualized
-    >>> runStateInputIORefOf #randomGen
-    >>> subsume
-    >>> runStateInputIORefOf @History #history
-    >>> raiseUnder
-    >>> runRawGraphAsInput
-    >>> contramapInputSem @FilePath (embed @IO . readIORef . view #filePath)
-
 type FinalEffects =
   [ Readline,
-    Input Env,
-    IOE,
-    Embed (InputT IO),
-    Final (InputT IO)
+    Reader Env,
+    IOE
   ]
+
+type AppEffects =
+  FreshNID
+    : ReadGraph Text (Maybe ByteString)
+    : ReadGraphDataless Text
+    : WriteGraph Text
+    : Provider_ GraphMetadataEditing
+    : Dualizeable
+    : GetLocation
+    : SetLocation
+    : State History
+    : Web
+    : FileSystem
+    : FileTypeOracle
+    : GetTime
+    : GraphMetadataFilesystemOperations
+    : GraphMetadataFilesystemOperationsWriteDiff
+    : GraphDataFilesystemOperations
+    : Echo
+    : Editor
+    : DisplayImage
+    : Warn UserError
+    : Error UserError
+    : Echo
+    : Dualizeable
+    : State StdGen
+    : IOE
+    : State History
+    : RawGraph
+    : Readline
+    : Reader Env
+    : IOE
+    : '[]
+
+-- Effect runners
+runGraphEditorEffects ::
+  forall es a.
+  ( Reader FilePath :> es,
+    Echo :> es,
+    Dualizeable :> es,
+    State StdGen :> es,
+    IOE :> es,
+    State History :> es,
+    RawGraph :> es,
+    GraphMetadataFilesystemOperations :> es,
+    GraphMetadataFilesystemOperationsWriteDiff :> es,
+    GraphDataFilesystemOperations :> es,
+    Warn UserError :> es,
+    Error UserError :> es
+  ) =>
+  Eff
+    ( FreshNID
+        : ReadGraph Text (Maybe ByteString)
+        : ReadGraphDataless Text
+        : WriteGraph Text
+        : Provider_ GraphMetadataEditing
+        : GetLocation
+        : SetLocation
+        : es
+    )
+    a ->
+  Eff es a
+runGraphEditorEffects action = do
+  path <- ask @FilePath
+  action
+    & runFreshNIDRandom
+    & runReadGraphDualizeableIO @Text path
+    & runReadGraphDatalessDualizeableIO @Text path
+    & runWriteGraphDualizeableIO @Text path
+    & runScopedGraphMetadataEditingTransactionally
+    & runLocableHistoryState
+
+type TimeBehavior =
+  forall es a.
+  (IOE :> es) =>
+  Eff (GetTime : es) a ->
+  Eff es a
+
+type FilesystemOperationsBehavior =
+  forall es a.
+  (RawGraph :> es, IOE :> es, Error UserError :> es) =>
+  Eff
+    ( GraphMetadataFilesystemOperations
+        : GraphMetadataFilesystemOperationsWriteDiff
+        : GraphDataFilesystemOperations
+        : es
+    )
+    a ->
+  Eff es a
+
+filesystemBehaviorDryRun :: FilesystemOperationsBehavior
+filesystemBehaviorDryRun =
+  runGraphDataFilesystemOperationsDryRun
+    . runGraphMetadataFilesystemOperationsWriteDiffDryRun
+    . runGraphMetadataFilesystemOperationsDryRun True
+
+filesystemBehaviorIO :: FilesystemOperationsBehavior
+filesystemBehaviorIO =
+  runGraphDataFilesystemOperationsIO
+    . runGraphMetadataFilesystemOperationsWriteDiffIO
+    . runGraphMetadataFilesystemOperationsIO True
+
+runIOWrapperEffects ::
+  forall es a.
+  ( Echo :> es,
+    Dualizeable :> es,
+    State StdGen :> es,
+    IOE :> es,
+    State History :> es,
+    RawGraph :> es,
+    Warn UserError :> es,
+    Error UserError :> es
+  ) =>
+  TimeBehavior ->
+  FilesystemOperationsBehavior ->
+  Eff
+    ( Web
+        : FileSystem
+        : FileTypeOracle
+        : GetTime
+        : GraphMetadataFilesystemOperations
+        : GraphMetadataFilesystemOperationsWriteDiff
+        : GraphDataFilesystemOperations
+        : Echo
+        : Editor
+        : DisplayImage
+        : es
+    )
+    a ->
+  Eff es a
+runIOWrapperEffects timeBehavior filesystemBehavior =
+  interpretDisplayImageIO
+    . interpretEditorAsIOVim
+    . runFileTypeOracle
+    . runFileSystemIO
+    . runWebIO
+    . timeBehavior
+    . filesystemBehavior
+
+type ErrorHandlingBehavior a =
+  forall es.
+  (IOE :> es) =>
+  Eff (Warn UserError : Error UserError : es) a ->
+  Eff es a
+
+runErrorEffects ::
+  forall es a.
+  (Echo :> es, Dualizeable :> es, State StdGen :> es, IOE :> es, State History :> es, RawGraph :> es) =>
+  ErrorHandlingBehavior a ->
+  Eff (Warn UserError : Error UserError : es) a ->
+  Eff es a
+runErrorEffects errorHandlingBehavior = errorHandlingBehavior
+
+runPermissiveDependencyEffects ::
+  (IOE :> es) =>
+  FilePath ->
+  Eff (Echo : Dualizeable : State StdGen : State History : RawGraph : es) a ->
+  Eff es a
+runPermissiveDependencyEffects path action = do
+  stdGen <- liftIO initStdGen
+  action
+    & runRawGraphWithPath path
+    & evalState (History [] nilNID [])
+    & evalState stdGen
+    & evalState (IsDual False)
+    & runEchoIO
+
+runPermissiveDependencyEffectsEnv ::
+  forall es a.
+  (Readline :> es, Reader Env :> es, IOE :> es) =>
+  Eff (Echo : Dualizeable : State StdGen : State History : RawGraph : es) a ->
+  Eff es a
+runPermissiveDependencyEffectsEnv action = do
+  env <- ask @Env
+  path <- liftIO $ readIORef env.filePath
+  action
+    & runReader path . runRawGraphAsReader . raiseUnder
+    & runStateInputIORefOf @History #history
+    & runStateInputIORefOf #randomGen
+    & runStateInputIORefOf #isDualized
+    & runEchoReadline
 
 runFinalEffects ::
   Env ->
-  Sem FinalEffects ~> IO
+  Eff (Readline : Reader Env : IOE : '[]) a ->
+  IO a
 runFinalEffects env =
-  runReadlineFinal
-    >>> runInputConst env
-    >>> runEmbedded liftIO
-    >>> withEffects @'[Embed (InputT IO), Final (InputT IO)]
-    >>> embedToFinal @(InputT IO)
-    >>> runEff
-    >>> H.runInputT env.replSettings
-
-type AppEffects :: [Effect]
-type AppEffects =
-  GraphEditorEffects
-    `Concat` IOWrapperEffects
-    `Concat` ErrorEffects
-    `Concat` PermissiveDependencyEffects
-    `Concat` FinalEffects
+  runEff
+    . runReader env
+    . runReadlineIO
 
 runAppEffects ::
   ErrorHandlingBehavior a ->
   TimeBehavior ->
   FilesystemOperationsBehavior ->
   Env ->
-  Sem AppEffects a ->
+  Eff AppEffects a ->
   IO a
-runAppEffects errorHandlingBehavior timeBehavior filesystemBehavior env =
-  runGraphEditorEffects
-    >>> runIOWrapperEffects timeBehavior filesystemBehavior
-    >>> runErrorEffects errorHandlingBehavior
-    >>> runPermissiveDependencyEffectsEnv
-    >>> runFinalEffects env
+runAppEffects errorHandlingBehavior timeBehavior filesystemBehavior env action =
+  action
+    & runGraphEditorEffects
+    & runIOWrapperEffects timeBehavior filesystemBehavior
+    & runErrorEffects errorHandlingBehavior
+    & runPermissiveDependencyEffectsEnv
+    & runFinalEffects env

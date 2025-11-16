@@ -20,7 +20,7 @@ import Models.Graph qualified
 import Models.NID
 import Models.Node
 import MyPrelude
-import Effectful.Labeled
+import Effectful.Provider
 
 -- | Marker indicating that something promises to only read the graph metadata.
 -- I gave up on trying to enforce this at the type level because it ended up
@@ -311,10 +311,9 @@ runGraphMetadataEditingTransactionally action = do
         writeGraphDiff asLoaded (fst <$> allChanges) (Map.mapMaybe snd allChanges)
         pure result
   action
-    & raiseUnder3
-      @(State GraphWithEdits)
-      @(State (Map NID (Maybe (Node Text ()))))
-      @(State (Set NID))
+    & raiseUnder @(State GraphWithEdits)
+    & raiseUnder @(State (Map NID (Maybe (Node Text ()))))
+    & raiseUnder @(State (Set NID))
     -- this just exists so that we can avoid duplicating the implementation of
     -- runInMemoryGraphMetadataEditing
     & cachingGraphMetadataEditingInState
@@ -323,12 +322,12 @@ runGraphMetadataEditingTransactionally action = do
     & runState mempty
     & (>>= applyGraphDiff)
 
--- | Using labeled effects instead of Scoped_ for effectful
+-- | Using Provider instead of Scoped_ for effectful
 runScopedGraphMetadataEditingTransactionally ::
   ( GraphMetadataFilesystemOperations :> es,
     GraphMetadataFilesystemOperationsWriteDiff :> es
   ) =>
-  Eff (Labeled label GraphMetadataEditing : es) a ->
+  Eff (Provider_ GraphMetadataEditing : es) a ->
   Eff es a
 runScopedGraphMetadataEditingTransactionally =
-  runLabeled @label runGraphMetadataEditingTransactionally
+  provide_ runGraphMetadataEditingTransactionally

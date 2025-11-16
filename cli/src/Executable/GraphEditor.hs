@@ -24,7 +24,7 @@ import Models.History
 import Models.NID
 import MyPrelude
 import Effect.Readline
-import Effectful.Labeled
+import Effectful.Provider
 import Effectful.State.Static.Local
 import System.Console.Haskeline qualified as H
 import System.Directory (createDirectoryIfMissing, doesDirectoryExist)
@@ -58,14 +58,14 @@ withDefaultQuitParser p s
   | otherwise = C <$> p s
 
 repl ::
-  ( (Echo, DisplayImage, SetLocation, GetLocation, Dualizeable, Readline, IOE) :> es,
-    (FileSystem, Web, FreshNID, GetTime, Editor, State History) :> es,
-    Members '[FileTypeOracle, Scoped () GraphMetadataEditing] effs,
-    HasGraph Text effs,
+  ( (Echo, DisplayImage, SetLocation, GetLocation, Dualizeable, Readline, IOE) :>> es,
+    (FileSystem, Web, FreshNID, GetTime, Editor, State History) :>> es,
+    (FileTypeOracle, Provider_ GraphMetadataEditing) :>> es,
+    HasGraph Text es,
     -- TODO: these effects are bad and shouldn't be exposed; need to rewrite
     -- commands using them as plugins once plugins are available. See also
     -- lengthier comment at interpretCommand
-    (IOE, RawGraph) :> es
+    (IOE, RawGraph) :>> es
   ) =>
   Eff es ()
 repl = handleInterrupt repl $ withInterrupt do
@@ -114,7 +114,7 @@ geMain = withOptions $ \options -> do
   -- fancy and uses mfix to tie the knot; it would probably be a better idea to
   -- break the cycle somehow to make this easier to reason about
   env <- mfix (initEnv graphDir nidGenerator <=< defReplSettings)
-  let timeBehavior :: (IOE :> es) => Sem (GetTime : effs) ~> Eff es
+  let timeBehavior :: TimeBehavior
       timeBehavior
         | options.testOnlyMonotonicIncreasingDeterministicTime =
             interpretTimeAsMonotonicIncreasingUnixTime
@@ -125,5 +125,5 @@ geMain = withOptions $ \options -> do
           then filesystemBehaviorIO
           else filesystemBehaviorDryRun
   runAppEffects printingErrorsAndWarnings timeBehavior filesystemBehavior env do
-    scoped_ createSystemNodes
+    provide_ createSystemNodes
     maybe repl interpretCommand options.executeExpression
