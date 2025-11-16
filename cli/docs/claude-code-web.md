@@ -1,240 +1,153 @@
-# Haskell Development Environment for Claude Code Web
+# Haskell Setup for Claude Code Web
 
-This guide helps you set up the Haskell CLI development environment in Claude Code's web/container environment.
+**For Claude:** This is your reference for setting up Haskell in web environments. Copy-paste the commands and move on.
 
-## Quick Start
+## First Time Setup
 
-For experienced users, here's the complete setup in one script:
+Run this once per environment:
 
 ```bash
-# Install ghcup and Stack
+# Install toolchain
 curl --proto '=https' --tlsv1.2 -sSf https://get-ghcup.haskell.org | \
   BOOTSTRAP_HASKELL_NONINTERACTIVE=1 BOOTSTRAP_HASKELL_MINIMAL=1 sh
+
+# Activate (do this in EVERY new shell)
 source ~/.ghcup/env
+
+# Install Stack
 ghcup install stack
 
-# Configure proxy (REQUIRED for Claude Code Web)
+# CRITICAL: Configure proxy (Stack won't work without this)
 mkdir -p ~/.stack
 cat > ~/.stack/config.yaml << 'EOF'
 http-proxy: http://egress.public-claude-proxy.svc.cluster.local:80
 https-proxy: http://egress.public-claude-proxy.svc.cluster.local:80
 EOF
+```
+
+**Verify it worked:**
+```bash
+stack --version  # Should show: Version 3.3.1 or similar
+cat ~/.stack/config.yaml  # Should show the proxy config
+```
+
+## Every New Shell Session
+
+```bash
+source ~/.ghcup/env
+```
+
+That's it. The proxy config persists, ghcup/stack binaries persist, but the PATH doesn't.
+
+## Common Commands
+
+```bash
+# Build the project
+cd cli && stack build
+
+# Fast build (no optimizations, use during development)
+stack build --fast
 
 # Run tests
-cd cli
 stack test
-```
 
-## Step-by-Step Setup
-
-### 1. Install the Haskell Toolchain
-
-Install ghcup (the Haskell toolchain installer):
-
-```bash
-curl --proto '=https' --tlsv1.2 -sSf https://get-ghcup.haskell.org | \
-  BOOTSTRAP_HASKELL_NONINTERACTIVE=1 BOOTSTRAP_HASKELL_MINIMAL=1 sh
-```
-
-Activate the ghcup environment:
-
-```bash
-source ~/.ghcup/env
-```
-
-Install Stack:
-
-```bash
-ghcup install stack
-```
-
-**Optional:** Add ghcup to your shell configuration to persist across sessions:
-
-```bash
-echo 'source ~/.ghcup/env' >> ~/.bashrc  # or ~/.zshrc
-```
-
-### 2. Configure Proxy (REQUIRED for Claude Code Web)
-
-**This step is critical.** Claude Code's web environment requires all HTTPS connections to go through a proxy. Stack doesn't automatically use the `https_proxy` environment variable, so you must configure it manually.
-
-Create the Stack configuration file:
-
-```bash
-mkdir -p ~/.stack
-cat > ~/.stack/config.yaml << 'EOF'
-http-proxy: http://egress.public-claude-proxy.svc.cluster.local:80
-https-proxy: http://egress.public-claude-proxy.svc.cluster.local:80
-EOF
-```
-
-**You only need to do this once.** The configuration persists across Stack commands.
-
-### 3. Verify Your Setup
-
-Run the test suite:
-
-```bash
-cd cli
-stack test
-```
-
-On first run, Stack will:
-- Download and install GHC (Glasgow Haskell Compiler) - ~200MB
-- Download the Hackage package index
-- Build all project dependencies
-- Build and run the tests
-
-This initial build takes several minutes. Subsequent builds are much faster.
-
-## Development Workflow
-
-### Building the Project
-
-Build the CLI executable:
-
-```bash
-cd cli
-stack build
-```
-
-For faster builds during development (skips optimizations):
-
-```bash
-stack build --fast
-```
-
-### Running Tests
-
-Run the full test suite:
-
-```bash
-cd cli
-stack test
-```
-
-Run tests with fast compilation:
-
-```bash
+# Run tests fast
 stack test --fast
-```
 
-### Running the CLI
-
-Execute the CLI directly:
-
-```bash
-cd cli
-stack exec graph -- <arguments>
-```
-
-Examples:
-
-```bash
+# Run the CLI
+stack exec graph -- <args>
 stack exec graph -- --help
 stack exec graph -- ls
-```
 
-## Code Quality Tools
+# Format code (REQUIRED before commits)
+ghcup install ormolu  # once
+find cli -name '*.hs' -exec ormolu --mode inplace {} \;
 
-### Ormolu (Code Formatting)
-
-This project requires [ormolu](https://github.com/tweag/ormolu) for consistent formatting. All Haskell files must be formatted before committing.
-
-**Install ormolu:**
-
-```bash
-ghcup install ormolu
-```
-
-**Format files:**
-
-```bash
-# Format a single file
-ormolu --mode inplace path/to/File.hs
-
-# Format all Haskell files in the project
-find cli -name '*.hs' -type f -print0 | xargs -0 ormolu --mode inplace
-
-# Check formatting without modifying files
-find cli -name '*.hs' -type f -print0 | xargs -0 ormolu --mode check
-```
-
-**Note:** GitHub CI automatically checks formatting on all PRs.
-
-### HLint (Linting)
-
-HLint suggests code improvements. The project includes a `.hlint.yaml` configuration, and GitHub Actions shows HLint warnings on PRs.
-
-**Install HLint:**
-
-```bash
-stack install hlint apply-refact
-```
-
-**Run HLint:**
-
-```bash
-# Check all files in the cli directory
+# Lint code
+stack install hlint  # once
 hlint cli/
-
-# Check a specific file
-hlint cli/src/Graph/Command.hs
-
-# Auto-apply suggestions (use with caution)
-hlint cli/src/Graph/Command.hs --refactor --refactor-options="--inplace"
 ```
 
-**Recommended workflow:**
-1. Run `hlint cli/` before committing
-2. Review suggestions and apply manually or with `--refactor`
+## Errors You'll See (and Can Ignore)
 
-## Troubleshooting
-
-### TLS/SSL Handshake Failures
-
-If you see errors like:
-
-```
-TLS HandshakeFailed (Error_Protocol ... HandshakeFailure)
-```
-
-or
-
-```
-Network.Socket.connect: ... connection refused
-```
-
-**Solution:** Verify your proxy configuration exists:
-
-```bash
-cat ~/.stack/config.yaml
-```
-
-It should contain:
-
-```yaml
-http-proxy: http://egress.public-claude-proxy.svc.cluster.local:80
-https-proxy: http://egress.public-claude-proxy.svc.cluster.local:80
-```
-
-If the file is missing or incorrect, recreate it using the command in Step 2 above.
-
-### Unrecognized Fields Warning
-
-You may see a warning:
-
+**This is NORMAL:**
 ```
 Warning: /root/.stack/config.yaml: Unrecognized fields in ConfigMonoid: http-proxy, https-proxy
 ```
+Stack doesn't officially support these fields but uses them anyway. Ignore.
 
-**This is normal and can be ignored.** Stack still uses the proxy settings correctly despite the warning.
+**This is NORMAL on first build:**
+```
+Preparing to download ghc-tinfo6-9.6.7 ...
+ghc-tinfo6-9.6.7: download has begun
+ghc-tinfo6-9.6.7: ... (lots of progress lines)
+```
+First build downloads ~200MB of GHC. Takes a few minutes. Subsequent builds are fast.
 
-### Build Failures After Environment Reset
+## Errors That Mean Something Is Wrong
 
-If your environment resets (e.g., container restart), you may need to:
+**TLS/SSL handshake failures:**
+```
+TLS HandshakeFailed (Error_Protocol ... HandshakeFailure)
+```
+**Fix:** You forgot the proxy config. Run the proxy config commands from "First Time Setup" above.
 
-1. Re-source the ghcup environment: `source ~/.ghcup/env`
-2. Verify the proxy config still exists: `cat ~/.stack/config.yaml`
+**stack: command not found:**
+```
+/bin/bash: stack: command not found
+```
+**Fix:** Run `source ~/.ghcup/env`
 
-The ghcup installation and Stack proxy config should persist in your home directory (`~/.ghcup` and `~/.stack`), but you need to source the environment in each new shell session.
+**Permission denied on ~/.stack:**
+```
+Permission denied ... ~/.stack
+```
+**Fix:** This shouldn't happen with the config above, but if it does: `chmod -R u+w ~/.stack`
+
+## How It Works (for debugging)
+
+1. **ghcup** installs to `~/.ghcup/` and manages GHC/Stack/etc versions
+2. **Stack** installs to `~/.ghcup/bin/stack` and stores its data in `~/.stack/`
+3. The `~/.stack/config.yaml` file forces Stack to use the egress proxy
+4. Without the proxy, Stack can't reach downloads.haskell.org or hackage.haskell.org
+5. `source ~/.ghcup/env` adds `~/.ghcup/bin` to PATH
+
+## Quick Checks
+
+```bash
+# Is ghcup installed?
+ls ~/.ghcup/bin/
+
+# Is Stack installed?
+source ~/.ghcup/env && stack --version
+
+# Is proxy configured?
+cat ~/.stack/config.yaml
+
+# Can Stack reach the internet?
+stack update  # Should download Hackage index
+```
+
+## Build Times Reference
+
+- **First build:** 5-15 minutes (downloads GHC + all dependencies)
+- **Subsequent clean builds:** 3-5 minutes
+- **Incremental builds:** 10-30 seconds
+- **Fast incremental builds:** 5-15 seconds
+
+## Code Quality Requirements
+
+Before committing:
+1. Format with ormolu: `find cli -name '*.hs' -exec ormolu --mode inplace {} \;`
+2. Check lint: `hlint cli/` (fix what's reasonable)
+3. Tests pass: `stack test`
+
+GitHub CI will fail if formatting is wrong.
+
+## Pro Tips
+
+- Use `--fast` during development, full builds only for final testing
+- Install ormolu once: `ghcup install ormolu`
+- The first Stack command in a new environment is slow (downloads GHC), be patient
+- If builds seem stuck, they're probably downloading packages - check with `ps aux | grep stack`
+- Stack caches aggressively - if something seems wrong, `stack clean` and rebuild
