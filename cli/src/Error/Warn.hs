@@ -2,31 +2,35 @@
 
 module Error.Warn where
 
+import Effectful
+import Effectful.Dispatch.Dynamic
+import Effectful.Error.Static
+import Effectful.TH
 import Error.UserError
 import MyPrelude
 
-data Warn e m r where
+data Warn e :: Effect where
   Warn :: e -> Warn e m ()
 
-makeSem ''Warn
+makeEffect ''Warn
 
 convertError ::
-  forall e effs. (Member (Warn e) effs) => Sem (Error e : effs) () -> Sem effs ()
+  forall e es. (Warn e :> es) => Eff (Error e : es) () -> Eff es ()
 convertError = (`handleError` warn)
 
-warnString :: (Member (Warn UserError) r) => String -> Sem r ()
+warnString :: (Warn UserError :> es) => String -> Eff es ()
 warnString = warn . OtherError . pack
 
-warnText :: (Member (Warn UserError) r) => Text -> Sem r ()
+warnText :: (Warn UserError :> es) => Text -> Eff es ()
 warnText = warn . OtherError
 
 printWarnings ::
-  forall e r a.
-  (Member (Embed IO) r, Show e) =>
-  Sem (Warn e : r) a ->
-  Sem r a
-printWarnings = interpret $ \case
+  forall e es a.
+  (IOE :> es, Show e) =>
+  Eff (Warn e : es) a ->
+  Eff es a
+printWarnings = interpret $ \_ -> \case
   Warn e -> liftIO . eputStr . show $ e
 
-ignoreWarnings :: forall e r a. Sem (Warn e : r) a -> Sem r a
-ignoreWarnings = interpret $ \(Warn _) -> pure ()
+ignoreWarnings :: forall e es a. Eff (Warn e : es) a -> Eff es a
+ignoreWarnings = interpret $ \_ (Warn _) -> pure ()

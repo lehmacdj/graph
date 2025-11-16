@@ -73,7 +73,7 @@ deserializeNodeF ::
   ) =>
   FilePath ->
   NID ->
-  Sem effs (Node t (Maybe ByteString))
+  Eff es (Node t (Maybe ByteString))
 deserializeNodeF base nid = do
   node <- deserializeNodeWithoutDataF base nid
   d <- liftIO $ tryGetBinaryData base nid
@@ -90,7 +90,7 @@ deserializeNodeWithoutDataF ::
   ) =>
   FilePath ->
   NID ->
-  Sem effs (Node t (Maybe ByteString))
+  Eff es (Node t (Maybe ByteString))
 deserializeNodeWithoutDataF base nid = do
   fileContents <- embedCatchingErrors (B.readFile (metadataFile base nid))
   ($> Nothing) <$> decodeNode nid fileContents
@@ -143,7 +143,7 @@ withSerializedNode ::
   NID ->
   IO ()
 withSerializedNode f base nid =
-  runM . printErrors . withEffects @[Error UserError, Embed IO] $ do
+  runEff . printErrors . withEffects @[Error UserError, Embed IO] $ do
     n <- deserializeNodeF @t @[Error UserError, Embed IO] base nid
     embedCatchingErrors $ serializeNodeEx (f n) base
 

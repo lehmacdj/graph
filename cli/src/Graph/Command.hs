@@ -40,9 +40,9 @@ import Models.Path.ParsedPath
 import Models.Path.Simple (Path)
 import Models.Path.Simple qualified as Simple
 import MyPrelude
-import Polysemy.Internal.Scoped (Scoped, scoped_)
-import Polysemy.Readline
-import Polysemy.State
+import Effectful.Labeled
+import Effect.Readline
+import Effectful.State.Static.Local
 import System.Console.Terminal.Size qualified as Terminal
 import Utils.Prettyprinter qualified as PP
 import Utils.Singleton
@@ -58,7 +58,7 @@ singleErr cmd xs =
 printTransitions ::
   (Member Echo effs) =>
   Set (Connect Text) ->
-  Sem effs ()
+  Eff es ()
 printTransitions = mapM_ (echo . dtransition)
   where
     dtransition (Connect t nid) = show t ++ " at " ++ show nid
@@ -66,7 +66,7 @@ printTransitions = mapM_ (echo . dtransition)
 promptYesNo ::
   (Member Readline r) =>
   String ->
-  Sem r Bool
+  Eff es Bool
 promptYesNo prompt = do
   line <- getInputLine prompt
   let result
@@ -77,13 +77,13 @@ promptYesNo prompt = do
 
 -- | Check to make sure that the current state of the graph is not dualized
 guardDangerousDualizedOperation ::
-  (Members [Readline, Error UserError, Dualizeable] r) => Sem r ()
+  ((Readline, Error UserError, Dualizeable) :> es) => Eff es ()
 guardDangerousDualizedOperation = do
   isDual' <- view #isDual <$> get @IsDual
   when isDual' do
     outputStrLn "the graph is currently dualized"
     outputStrLn "the operation you are attempting may be dangerous in that state"
-    promptYesNo "proceed (y/n): " >>= bool (throw OperationCancelled) (pure ())
+    promptYesNo "proceed (y/n): " >>= bool (throwError OperationCancelled) (pure ())
 
 interpretDirective ::
   ( Members
@@ -102,7 +102,7 @@ interpretDirective ::
   ) =>
   SourceRange ->
   Directive 'WithDirectives ->
-  Sem effs Path
+  Eff es Path
 interpretDirective sourceRange = \case
   LocationFromHistory i -> gets @History (Absolute . fst . backInTime i)
   Targets p -> do
@@ -116,7 +116,7 @@ interpretDirective sourceRange = \case
     guardDangerousDualizedOperation
     Absolute <$> subsumeUserError @Missing (importUrl uri)
   Splice expr ->
-    throw $
+    throwError $
       OtherError $
         "the splice directive %{"
           ++ pack expr
@@ -127,18 +127,18 @@ interpretDirective sourceRange = \case
           ++ tshow sourceRange
 
 interpretCommand ::
-  ( Members [DisplayImage, Echo, Error UserError, SetLocation, GetLocation, Dualizeable] effs,
-    Members [FileSystem, Web, FreshNID, GetTime, Editor, State History] effs,
-    Members [FileTypeOracle, Readline, Warn UserError, Scoped () GraphMetadataEditing] effs,
-    -- TODO: remove this inclusion of RawGraph + Embed IO here; probably the
+  ( (DisplayImage, Echo, Error UserError, SetLocation, GetLocation, Dualizeable) :> es,
+    (FileSystem, Web, FreshNID, GetTime, Editor, State History) :> es,
+    (FileTypeOracle, Readline, Warn UserError, Scoped () GraphMetadataEditing) :> es,
+    -- TODO: remove this inclusion of RawGraph + IOE here; probably the
     -- best way to do this is to allow commands to be defined as @stack@
     -- scripts, and then rewrite materialize and any other commands that
     -- require this outside of
-    Members [RawGraph, Embed IO] effs,
+    (RawGraph, IOE) :> es,
     HasGraph Text effs
   ) =>
   Command ->
-  Sem effs ()
+  Eff es ()
 interpretCommand = \case
   ChangeNode p -> do
     nid <- currentLocation

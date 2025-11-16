@@ -2,18 +2,21 @@
 
 module Effect.IOWrapper.DisplayImage where
 
+import Effectful
+import Effectful.Dispatch.Dynamic
+import Effectful.TH
 import MyPrelude
 import System.IO.Term.Image
 
-data DisplayImage m a where
+data DisplayImage :: Effect where
   -- | print a LBS as an image
   DisplayImage :: LByteString -> DisplayImage m ()
 
-makeSem ''DisplayImage
+makeEffect ''DisplayImage
 
 interpretDisplayImageIO ::
-  (Member (Embed IO) effs) =>
-  Sem (DisplayImage : effs) a ->
-  Sem effs a
-interpretDisplayImageIO = interpret $ \case
+  (IOE :> es) =>
+  Eff (DisplayImage : es) a ->
+  Eff es a
+interpretDisplayImageIO = interpret $ \_ -> \case
   DisplayImage i -> liftIO $ printImage i

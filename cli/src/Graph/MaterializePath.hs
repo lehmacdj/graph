@@ -11,16 +11,17 @@ import Models.Node
 import Models.NormalizedPath
 import Models.Path.Simple
 import MyPrelude hiding ((\\))
-import Polysemy.State
+import Effectful
+import Effectful.State.Static.Local
 
 materializePath ::
   forall r.
-  ( Members '[GraphMetadataReading] r,
+  ( (GraphMetadataReading) :>> es,
     HasCallStack
   ) =>
   NID ->
   Path ->
-  Sem r MaterializedPath
+  Eff es MaterializedPath
 materializePath nid path =
   materializeNPath nid (leastConstrainedNormalizedPath (normalizePath path))
 
@@ -29,13 +30,13 @@ materializePath nid path =
 -- | Traverse a path, fetching node metadata and noting which nodes are missing.
 materializeNPath ::
   forall r.
-  ( Members '[GraphMetadataReading] r,
+  ( (GraphMetadataReading) :>> es,
     HasCallStack
   ) =>
   -- | The node to start from
   NID ->
   NormalizedPath FullyAnchored ->
-  Sem r MaterializedPath
+  Eff es MaterializedPath
 materializeNPath firstNid normalizedPath = do
   traverse (traverseDeterministicPath firstNid) (toList normalizedPath.union)
     & fmap (NormalizedPath . setFromList . concat)

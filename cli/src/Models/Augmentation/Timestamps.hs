@@ -27,7 +27,7 @@ instance ShowableAugmentation Timestamps where
 fetchTimestamps ::
   (Members '[GraphMetadataReading] r) =>
   NID ->
-  Sem r Timestamps
+  Eff es Timestamps
 fetchTimestamps nid = do
   mp <-
     materializePath
@@ -57,5 +57,5 @@ writeTimestamps ::
   (Members '[GraphMetadataEditing] r) =>
   NID ->
   Timestamps ->
-  Sem r ()
+  Eff es ()
 writeTimestamps _ _ = error "unimplemented"

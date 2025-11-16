@@ -1,6 +1,6 @@
 {-# LANGUAGE AllowAmbiguousTypes #-}
 
--- | Specialized utilities for Polysemy that aren't general enough to include
+-- | Specialized utilities for Effectful that aren't general enough to include
 -- in my prelude directly
 module Utils.Polysemy where
 
@@ -8,108 +8,99 @@ import Control.Lens
 import Control.Monad.Reader qualified as MTL
 import Control.Monad.State qualified as MTL
 import MyPrelude hiding (Reader, ask, fromEither)
-import Polysemy.Error
-import Polysemy.Input
-import Polysemy.Reader
-import Polysemy.State
+import Effectful.Error.Static
+import Effectful.Reader.Static
+import Effectful.State.Static.Local
+import Effectful (IOE)
 import Utils.Testing
+
+-- Note: In effectful, Input is typically replaced with Reader
+-- We use Reader where polysemy used Input
 
 data NoInputProvided = NoInputProvided
   deriving (Show, Eq, Ord)
 
 applyInput ::
-  forall i r a. (Member (Input i) r) => (i -> Sem r a) -> Sem r a
-applyInput f = input @i >>= f
+  forall i es a. (Reader i :> es) => (i -> Eff es a) -> Eff es a
+applyInput f = ask @i >>= f
 
 applyInput2 ::
-  forall i r a b. (Member (Input i) r) => (i -> b -> Sem r a) -> b -> Sem r a
-applyInput2 f b = input @i >>= flip f b
+  forall i es a b. (Reader i :> es) => (i -> b -> Eff es a) -> b -> Eff es a
+applyInput2 f b = ask @i >>= flip f b
 
 applyMaybeInput ::
-  forall i r a.
-  (Members [Input (Maybe i), Error NoInputProvided] r) =>
-  (i -> Sem r a) ->
-  Sem r a
-applyMaybeInput f =
-  mapError (\None -> NoInputProvided)
-    . subsume @(Input (Maybe i))
-    . inputFromJust
-    . raiseUnder @(Error None)
-    . applyInput
-    $ raise @(Input i)
-      . f
+  forall i es a.
+  (Reader (Maybe i) :> es, Error NoInputProvided :> es) =>
+  (i -> Eff es a) ->
+  Eff es a
+applyMaybeInput f = do
+  maybeVal <- ask @(Maybe i)
+  case maybeVal of
+    Nothing -> throwError NoInputProvided
+    Just val -> f val
 
 applyMaybeInput2 ::
-  forall i r a b.
-  (Members [Input (Maybe i), Error NoInputProvided] r) =>
-  (i -> b -> Sem r a) ->
+  forall i es a b.
+  (Reader (Maybe i) :> es, Error NoInputProvided :> es) =>
+  (i -> b -> Eff es a) ->
   b ->
-  Sem r a
-applyMaybeInput2 f b =
-  mapError (\None -> NoInputProvided)
-    . subsume @(Input (Maybe i))
-    . inputFromJust
-    . raiseUnder @(Error None)
-    . applyInput
-    $ raise @(Input i)
-      . flip f b
+  Eff es a
+applyMaybeInput2 f b = do
+  maybeVal <- ask @(Maybe i)
+  case maybeVal of
+    Nothing -> throwError NoInputProvided
+    Just val -> f val b
 
 applyInputOf ::
-  forall i env r a.
-  (Member (Input env) r) =>
+  forall i env es a.
+  (Reader env :> es) =>
   Lens' env i ->
-  (i -> Sem r a) ->
-  Sem r a
-applyInputOf l f = input @env >>= f . view l
+  (i -> Eff es a) ->
+  Eff es a
+applyInputOf l f = ask @env >>= f . view l
 
 applyInput2Of ::
-  forall i env r a b.
-  (Member (Input env) r) =>
+  forall i env es a b.
+  (Reader env :> es) =>
   Lens' env i ->
-  (i -> b -> Sem r a) ->
+  (i -> b -> Eff es a) ->
   b ->
-  Sem r a
-applyInput2Of l f b = input @env >>= flip f b . view l
+  Eff es a
+applyInput2Of l f b = ask @env >>= flip f b . view l
 
 applyMaybeInputOf ::
-  forall i env r a.
-  (Members [Input (Maybe env), Error NoInputProvided] r) =>
+  forall i env es a.
+  (Reader (Maybe env) :> es, Error NoInputProvided :> es) =>
   Lens' env i ->
-  (i -> Sem r a) ->
-  Sem r a
-applyMaybeInputOf l f =
-  mapError (\None -> NoInputProvided)
-    . subsume @(Input (Maybe env))
-    . inputFromJust
-    . raiseUnder @(Error None)
-    . applyInputOf l
-    $ raise @(Input env)
-      . f
+  (i -> Eff es a) ->
+  Eff es a
+applyMaybeInputOf l f = do
+  maybeEnv <- ask @(Maybe env)
+  case maybeEnv of
+    Nothing -> throwError NoInputProvided
+    Just env -> f (view l env)
 
 applyMaybeInput2Of ::
-  forall i env r a b.
-  (Members [Input (Maybe env), Error NoInputProvided] r) =>
+  forall i env es a b.
+  (Reader (Maybe env) :> es, Error NoInputProvided :> es) =>
   Lens' env i ->
-  (i -> b -> Sem r a) ->
+  (i -> b -> Eff es a) ->
   b ->
-  Sem r a
-applyMaybeInput2Of l f b =
-  mapError (\None -> NoInputProvided)
-    . subsume @(Input (Maybe env))
-    . inputFromJust
-    . raiseUnder @(Error None)
-    . applyInputOf l
-    $ raise @(Input env)
-      . flip f b
+  Eff es a
+applyMaybeInput2Of l f b = do
+  maybeEnv <- ask @(Maybe env)
+  case maybeEnv of
+    Nothing -> throwError NoInputProvided
+    Just env -> f (view l env) b
 
 -- | Utility function to interpret a reader effect as a State effect, via a
 -- the inclusion Reader < State.
 runReaderAsState ::
-  forall r effs a.
-  (Member (State r) effs) =>
-  Sem (Input r : effs) a ->
-  Sem effs a
-runReaderAsState = interpret $ \Input -> get
+  forall r es a.
+  (State r :> es) =>
+  Eff (Reader r : es) a ->
+  Eff es a
+runReaderAsState = runReader =<< get
 
 -- | unit for readThrowMaybe
 data None = None
@@ -117,148 +108,149 @@ data None = None
 -- | Relaxes an input such that it can work for a input that only has maybe
 -- TODO: switch to using a more descriptive name if I can think of a good one
 inputFromJust ::
-  forall r effs a.
-  (Member (Error None) effs) =>
-  Sem (Input r : effs) a ->
-  Sem (Input (Maybe r) : effs) a
-inputFromJust = reinterpret $
-  \Input -> do
-    r <- input @(Maybe r)
-    case r of
-      Nothing -> throw None
-      Just x -> pure x
+  forall r es a.
+  (Error None :> es) =>
+  Eff (Reader r : es) a ->
+  Eff (Reader (Maybe r) : es) a
+inputFromJust action = do
+  maybeR <- ask @(Maybe r)
+  case maybeR of
+    Nothing -> throwError None
+    Just r -> runReader r action
 
 readThrowMaybe ::
-  forall r effs a.
-  (Member (Error None) effs) =>
-  Sem (Input r : effs) a ->
-  Sem (Input (Maybe r) : effs) a
+  forall r es a.
+  (Error None :> es) =>
+  Eff (Reader r : es) a ->
+  Eff (Reader (Maybe r) : es) a
 readThrowMaybe = inputFromJust
 {-# DEPRECATED readThrowMaybe "use inputFromJust" #-}
 
 readerToInput ::
-  forall x r a.
-  (Member (Input x) r) =>
-  Sem (Reader x : r) a ->
-  Sem r a
-readerToInput = go id
-  where
-    go :: forall a'. (x -> x) -> Sem (Reader x : r) a' -> Sem r a'
-    go modifier = interpretH $ \case
-      Ask -> do
-        value <- modifier <$> input @x
-        pureT value
-      Local f m -> do
-        m' <- runT m
-        raise $ go (f . modifier) m'
+  forall x es a.
+  (Reader x :> es) =>
+  Eff (Reader x : es) a ->
+  Eff es a
+readerToInput action = do
+  value <- ask @x
+  runReader value action
 
--- | Map an `Input` contravariantly.
--- taken from: polysemy-extra-0.1.1.0
+-- | Map a `Reader` contravariantly.
 contramapInput ::
-  forall i i' r a.
-  (Members '[Input i'] r) =>
+  forall i i' es a.
+  (Reader i' :> es) =>
   (i' -> i) ->
-  Sem (Input i ': r) a ->
-  Sem r a
-contramapInput f = interpret $ \case
-  Input -> f <$> input @i'
+  Eff (Reader i : es) a ->
+  Eff es a
+contramapInput f action = do
+  i' <- ask @i'
+  runReader (f i') action
 
--- | Map an `Input` contravariantly through a monadic function.
--- taken from: polysemy-extra-0.1.1.0
+-- | Map a `Reader` contravariantly through a monadic function.
 contramapInputSem ::
-  forall i i' r a.
-  (Members '[Input i'] r) =>
-  (i' -> Sem r i) ->
-  Sem (Input i ': r) a ->
-  Sem r a
-contramapInputSem f = interpret $ \case
-  Input -> f =<< input @i'
+  forall i i' es a.
+  (Reader i' :> es) =>
+  (i' -> Eff es i) ->
+  Eff (Reader i : es) a ->
+  Eff es a
+contramapInputSem f action = do
+  i' <- ask @i'
+  i <- f i'
+  runReader i action
 
 supplyInputVia ::
-  forall i r.
-  Sem r i ->
-  Sem (Input i : r) ~> Sem r
-supplyInputVia supplier = interpret $ \Input -> supplier
+  forall i es.
+  Eff es i ->
+  Eff (Reader i : es) ~> Eff es
+supplyInputVia supplier action = do
+  val <- supplier
+  runReader val action
 
 -- | Modify state returning the original value
-modifying :: forall s r. (Member (State s) r) => (s -> s) -> Sem r s
+modifying :: forall s es. (State s :> es) => (s -> s) -> Eff es s
 modifying f = do
   v <- get
   modify f
   pure v
 
 subsumeReaderState ::
-  forall x i r. (Member (State x) r) => (x -> i) -> Sem (Reader i : r) ~> Sem r
-subsumeReaderState getter =
-  interpret (\Input -> getter <$> get @x)
-    . readerToInput
-    . raiseUnder @(Input i)
+  forall x i es. (State x :> es) => (x -> i) -> Eff (Reader i : es) ~> Eff es
+subsumeReaderState getter action = do
+  x <- get @x
+  runReader (getter x) action
 
 runStateInputIORef ::
-  (Members [Input (IORef s), Embed IO] r) =>
-  Sem (State s : r) a ->
-  Sem r a
-runStateInputIORef = applyInput2 runStateIORef
+  (Reader (IORef s) :> es, IOE :> es) =>
+  Eff (State s : es) a ->
+  Eff es a
+runStateInputIORef action = do
+  ref <- ask @(IORef s)
+  runStateIORef ref action
 
 runStateInputIORefOf ::
-  forall s env r a.
-  (Members [Input env, Embed IO] r) =>
+  forall s env es a.
+  (Reader env :> es, IOE :> es) =>
   Lens' env (IORef s) ->
-  Sem (State s : r) a ->
-  Sem r a
-runStateInputIORefOf l = applyInput2Of l runStateIORef
+  Eff (State s : es) a ->
+  Eff es a
+runStateInputIORefOf l action = do
+  env <- ask @env
+  runStateIORef (view l env) action
 
--- | Run an 'Input' effect by always returning the value returned by a monadic
--- action once. This is useful for initializing an input in terms of a State
+-- | Run a 'Reader' effect by always returning the value returned by a monadic
+-- action once. This is useful for initializing a reader in terms of a State
 -- effect for example:
--- prop> runState 0 . runInputConstSem (get @Int) = runState 0 . runInputConst 0
-runInputConstSem :: Sem r x -> Sem (Input x : r) a -> Sem r a
-runInputConstSem initializationAction action =
-  initializationAction >>= \val -> runInputConst val action
+runInputConstSem :: Eff es x -> Eff (Reader x : es) a -> Eff es a
+runInputConstSem initializationAction action = do
+  val <- initializationAction
+  runReader val action
 
--- | even after modifying the state variable used to initialize the Input
--- the input should be the original value; i.e. the initialization action
+-- | even after modifying the state variable used to initialize the Reader
+-- the reader should be the original value; i.e. the initialization action
 -- should not be called multiple times
 unit_runInputConstSem_alwaysSame :: Assertion
 unit_runInputConstSem_alwaysSame =
-  (run . runState 0 . runInputConstSem initAction) action @=? (0, 0)
+  (runPureEff . evalState 0 . runInputConstSem initAction) action @=? 0
   where
-    initAction :: (Member (State Int) r) => Sem r Int
+    initAction :: (State Int :> es) => Eff es Int
     initAction = get @Int
-    action :: (Members [State Int, Input Int] r) => Sem r Int
+    action :: (State Int :> es, Reader Int :> es) => Eff es Int
     action = do
-      orig <- input @Int
+      orig <- ask @Int
       modify @Int (+ 1)
-      newInput <- input @Int
+      newInput <- ask @Int
       put @Int newInput
       pure orig
 
 -- | Run an error ignoring any result that fails and returning Nothing,
 -- returning Just only if the result is successful.
-runErrorMaybe :: Sem (Error e : r) a -> Sem r (Maybe a)
+runErrorMaybe :: Eff (Error e : es) a -> Eff es (Maybe a)
 runErrorMaybe = fmap forgetLeft . runError
 
 fromEitherSem ::
-  (Member (Error e) r) => Sem r (Either e a) -> Sem r a
+  (Error e :> es) => Eff es (Either e a) -> Eff es a
 fromEitherSem = (>>= fromEither)
 
 fromEitherSemVia ::
-  (Member (Error err) r) => (e -> err) -> Sem r (Either e a) -> Sem r a
+  (Error err :> es) => (e -> err) -> Eff es (Either e a) -> Eff es a
 fromEitherSemVia mapper = fromEitherSem . fmap (first mapper)
 
 runStateMonadState ::
-  forall m s r a.
-  (MTL.MonadState s m, Member (Embed m) r) =>
-  Sem (State s : r) a ->
-  Sem r a
-runStateMonadState = interpret $ \case
-  Get -> embed MTL.get
-  Put x -> embed (MTL.put x)
+  forall m s es a.
+  (MTL.MonadState s m, IOE :> es) =>
+  Eff (State s : es) a ->
+  Eff es a
+runStateMonadState action = do
+  initialState <- unsafeEff_ MTL.get
+  (result, finalState) <- runState initialState action
+  unsafeEff_ (MTL.put finalState)
+  pure result
 
 runInputMonadReader ::
-  forall m i r a.
-  (MTL.MonadReader i m, Member (Embed m) r) =>
-  Sem (Input i : r) a ->
-  Sem r a
-runInputMonadReader = interpret $ \case
-  Input -> embed MTL.ask
+  forall m i es a.
+  (MTL.MonadReader i m, IOE :> es) =>
+  Eff (Reader i : es) a ->
+  Eff es a
+runInputMonadReader action = do
+  i <- unsafeEff_ MTL.ask
+  runReader i action

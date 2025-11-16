@@ -23,9 +23,9 @@ import Models.Command.Parse
 import Models.History
 import Models.NID
 import MyPrelude
-import Polysemy.Readline
-import Polysemy.Scoped
-import Polysemy.State
+import Effect.Readline
+import Effectful.Labeled
+import Effectful.State.Static.Local
 import System.Console.Haskeline qualified as H
 import System.Directory (createDirectoryIfMissing, doesDirectoryExist)
 import System.Environment.XDG.BaseDir (getUserDataDir)
@@ -58,16 +58,16 @@ withDefaultQuitParser p s
   | otherwise = C <$> p s
 
 repl ::
-  ( Members [Echo, DisplayImage, SetLocation, GetLocation, Dualizeable, Readline, Embed IO] effs,
-    Members [FileSystem, Web, FreshNID, GetTime, Editor, State History] effs,
+  ( (Echo, DisplayImage, SetLocation, GetLocation, Dualizeable, Readline, IOE) :> es,
+    (FileSystem, Web, FreshNID, GetTime, Editor, State History) :> es,
     Members '[FileTypeOracle, Scoped () GraphMetadataEditing] effs,
     HasGraph Text effs,
     -- TODO: these effects are bad and shouldn't be exposed; need to rewrite
     -- commands using them as plugins once plugins are available. See also
     -- lengthier comment at interpretCommand
-    Members [Embed IO, RawGraph] effs
+    (IOE, RawGraph) :> es
   ) =>
-  Sem effs ()
+  Eff es ()
 repl = handleInterrupt repl $ withInterrupt do
   command <- getInputLine "g> "
   case withDefaultQuitParser parseCommand . pack <$> command of
@@ -114,7 +114,7 @@ geMain = withOptions $ \options -> do
   -- fancy and uses mfix to tie the knot; it would probably be a better idea to
   -- break the cycle somehow to make this easier to reason about
   env <- mfix (initEnv graphDir nidGenerator <=< defReplSettings)
-  let timeBehavior :: (Member (Embed IO) effs) => Sem (GetTime : effs) ~> Sem effs
+  let timeBehavior :: (IOE :> es) => Sem (GetTime : effs) ~> Eff es
       timeBehavior
         | options.testOnlyMonotonicIncreasingDeterministicTime =
             interpretTimeAsMonotonicIncreasingUnixTime

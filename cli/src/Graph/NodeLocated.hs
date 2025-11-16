@@ -1,3 +1,5 @@
+{-# LANGUAGE TemplateHaskell #-}
+
 module Graph.NodeLocated
   ( module Graph.NodeLocated,
     -- | for use in overriding location temporarily
@@ -5,30 +7,37 @@ module Graph.NodeLocated
   )
 where
 
+import Effectful
+import Effectful.Dispatch.Dynamic
+import Effectful.Reader.Static
+import Effectful.State.Static.Local
+import Effectful.TH
 import Models.History (History, pushHistory)
 import Models.NID (NID)
 import MyPrelude hiding (Reader, ask)
-import Polysemy.Output
-import Polysemy.Reader
-import Polysemy.State
 import Utils.Polysemy
 
 type GetLocation = Reader NID
 
-type SetLocation = Output NID
+-- Output effect for SetLocation
+data SetLocation :: Effect where
+  Output :: NID -> SetLocation m ()
 
-currentLocation :: (Member GetLocation effs) => Sem effs NID
+makeEffect ''SetLocation
+
+currentLocation :: (GetLocation :> es) => Eff es NID
 currentLocation = ask
 
-changeLocation :: (Member SetLocation effs) => NID -> Sem effs ()
+changeLocation :: (SetLocation :> es) => NID -> Eff es ()
 changeLocation = output
 
 runLocableHistoryState ::
-  (Member (State History) effs) =>
-  Sem (GetLocation : SetLocation : effs) ~> Sem effs
-runLocableHistoryState = subsumeReaderState (view #now) >>> runSetLocationHistoryState
+  (State History :> es) =>
+  Eff (GetLocation : SetLocation : es) a ->
+  Eff es a
+runLocableHistoryState = subsumeReaderState (view #now) . runSetLocationHistoryState . raiseUnder
 
 runSetLocationHistoryState ::
-  (Member (State History) r) => Sem (SetLocation : r) ~> Sem r
-runSetLocationHistoryState = interpret $ \case
+  (State History :> es) => Eff (SetLocation : es) a -> Eff es a
+runSetLocationHistoryState = interpret $ \_ -> \case
   Output nid -> modify @History (pushHistory nid)

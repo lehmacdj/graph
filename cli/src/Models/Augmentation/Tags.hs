@@ -22,7 +22,7 @@ instance ShowableAugmentation Tags where
 fetchTags ::
   (Members '[GraphMetadataReading] r) =>
   NID ->
-  Sem r Tags
+  Eff es Tags
 fetchTags nid = do
   mp <-
     materializePath
@@ -35,5 +35,5 @@ writeTags ::
   (Members '[GraphMetadataEditing] r) =>
   NID ->
   Tags ->
-  Sem r ()
+  Eff es ()
 writeTags _ _ = error "unimplemented"

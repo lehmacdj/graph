@@ -1,6 +1,6 @@
 module Error.UserError
   ( module Error.UserError,
-    module Polysemy.Error,
+    module Effectful.Error.Static,
     left,
     (#),
   )
@@ -8,10 +8,11 @@ where
 
 import Control.Exception qualified as E
 import Control.Lens
+import Effectful
+import Effectful.Error.Static hiding (fromException, try)
 import Models.NID (NID)
 import MyPrelude
 import Network.HTTP.Conduit (HttpException)
-import Polysemy.Error hiding (fromException, try)
 import System.FileCoordination (NSErrorException)
 
 -- | Blanket error type used by the app. This is called @UserError@ because
@@ -60,28 +61,28 @@ instance Semigroup UserError where
 
 instance Exception UserError
 
-throwString :: (Member (Error UserError) effs) => String -> Sem effs a
+throwString :: (Error UserError :> es) => String -> Eff es a
 throwString = throwConvertible
 
-throwText :: (Member (Error UserError) effs) => Text -> Sem effs a
+throwText :: (Error UserError :> es) => Text -> Eff es a
 throwText = throwConvertible
 
 throwConvertible ::
-  (ToUserError e, Member (Error UserError) effs) =>
+  (ToUserError e, Error UserError :> es) =>
   e ->
-  Sem effs a
-throwConvertible = throw . toUserError
+  Eff es a
+throwConvertible = throwError . toUserError
 
 throwLeft ::
-  (Member (Error UserError) effs, ToUserError err) =>
+  (Error UserError :> es, ToUserError err) =>
   Either err a ->
-  Sem effs a
+  Eff es a
 throwLeft (Right x) = pure x
-throwLeft (Left err) = throw $ toUserError err
+throwLeft (Left err) = throwError $ toUserError err
 
 -- | capture errors and convert them to an error
 embedCatchingErrors ::
-  (Members [Error UserError, Embed IO] r) => IO a -> Sem r a
+  (Error UserError :> es, IOE :> es) => IO a -> Eff es a
 embedCatchingErrors = fromExceptionVia mapExceptionToUserError
   where
     mapExceptionToUserError = \case
@@ -91,20 +92,20 @@ embedCatchingErrors = fromExceptionVia mapExceptionToUserError
       e -> OtherException e
 
 printErrors ::
-  (Member (Embed IO) effs) =>
-  Sem (Error UserError ': effs) () ->
-  Sem effs ()
+  (IOE :> es) =>
+  Eff (Error UserError ': es) () ->
+  Eff es ()
 printErrors = (`handleError` liftIO . eprint)
 
 class ToUserError e where
   toUserError :: e -> UserError
 
 subsumeUserError ::
-  forall e r a.
-  (Member (Error UserError) r, ToUserError e) =>
-  Sem (Error e : r) a ->
-  Sem r a
-subsumeUserError = (`handleError` (throw . toUserError))
+  forall e es a.
+  (Error UserError :> es, ToUserError e) =>
+  Eff (Error e : es) a ->
+  Eff es a
+subsumeUserError = (`handleError` (throwError . toUserError))
 
 instance ToUserError IOException where
   toUserError = IOFail

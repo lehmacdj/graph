@@ -1,6 +1,9 @@
 module Graph.Time where
 
 import Data.Set qualified as Set
+import Effectful
+import Effectful.Dispatch.Dynamic
+import Effectful.State.Static.Local
 import Effect.IOWrapper.GetTime
 import Error.Missing
 import Graph.Effect
@@ -8,25 +11,24 @@ import Graph.FreshNID
 import Graph.SystemNodes
 import Graph.Utils
 import MyPrelude
-import Polysemy.State
 
 -- | Tag the current node with a path to it that represents the current time
 tagWithTime ::
-  (Members [FreshNID, Error Missing, GetTime] effs, HasGraph Text effs) =>
+  (FreshNID :> es, Error Missing :> es, GetTime :> es, HasGraph Text es) =>
   NID ->
-  Sem effs ()
+  Eff es ()
 tagWithTime targetNID = do
   timeStrings <- timeToDateStrings <$> currentTime
   transitionsViaManyTo importDatesNID timeStrings targetNID
 
 -- | Intercept FreshNID effects & tag all fresh NIDs created with the date
 taggingFreshNodesWithTime ::
-  forall a effs.
-  (Members [FreshNID, Error Missing, GetTime] effs, HasGraph Text effs) =>
-  Sem effs a ->
-  Sem effs a
+  forall a es.
+  (FreshNID :> es, Error Missing :> es, GetTime :> es, HasGraph Text es) =>
+  Eff es a ->
+  Eff es a
 taggingFreshNodesWithTime action = evalState @(Set NID) mempty $ do
-  let interceptor = intercept $ \case
+  let interceptor = interpose $ \_ -> \case
         FreshNID -> do
           newNID <- freshNID
           modify @(Set NID) $ Set.insert newNID

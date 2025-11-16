@@ -56,7 +56,7 @@ decodeNode ::
   (Ord t, NFData t, FromJSON t, Member (Error UserError) effs) =>
   NID ->
   ByteString ->
-  Sem effs (Node t ())
+  Eff es (Node t ())
 decodeNode nid input = do
   decoded <-
     throwLeft

@@ -10,12 +10,15 @@ module Graph.FreshNID
   )
 where
 
+import Effectful
+import Effectful.Dispatch.Dynamic
+import Effectful.State.Static.Local
+import Effectful.TH
 import Models.NID (NID)
 import MyPrelude
-import Polysemy.State
 import System.Random
 
-data FreshNID m r where
+data FreshNID :: Effect where
   FreshNID :: FreshNID m NID
 
 -- -- | Pick a single NID from a list of NIDs in a case where we generated too
@@ -31,16 +34,16 @@ data FreshNID m r where
 -- -- lead to the same node)
 -- PickNID :: [NID] -> FreshNID m NID
 
-makeSem ''FreshNID
+makeEffect ''FreshNID
 
 -- | Run FreshNID as a computation with a state representing the next value to
 -- use for a Fresh NID.
 runFreshNIDRandom ::
-  forall r a.
-  (Member (State StdGen) r) =>
-  Sem (FreshNID : r) a ->
-  Sem r a
-runFreshNIDRandom = interpret \case
+  forall es a.
+  (State StdGen :> es) =>
+  Eff (FreshNID : es) a ->
+  Eff es a
+runFreshNIDRandom = interpret $ \_ -> \case
   FreshNID -> embedStateful uniform
 
 -- PickNID nids -> do

@@ -87,7 +87,7 @@ bundled :: forall a. a -> Bundled '[a]
 bundled a = Bundled $ TMap.cons @a a TMap.empty
 {-# INLINE bundled #-}
 
-bundling :: (nid -> Sem r a) -> nid -> Sem r (Bundled '[a])
+bundling :: (nid -> Eff es a) -> nid -> Eff es (Bundled '[a])
 bundling f = fmap bundled . f
 
 injDefaultA ::

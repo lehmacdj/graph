@@ -2,19 +2,23 @@
 
 module DAL.RawGraph where
 
+import Effectful
+import Effectful.Dispatch.Dynamic
+import Effectful.Reader.Static
+import Effectful.TH
 import MyPrelude
-import Polysemy.Input
 
 -- | Effect for getting the filepath of the graph; useful for doing low level
 -- operations together with Graph.Serialize* modules.
-data RawGraph m a where
+data RawGraph :: Effect where
   GetGraphFilePath :: RawGraph m FilePath
 
-makeSem ''RawGraph
+makeEffect ''RawGraph
 
-runRawGraphAsInput ::
-  (Member (Input FilePath) r) => Sem (RawGraph : r) a -> Sem r a
-runRawGraphAsInput = transform @_ @(Input FilePath) (\GetGraphFilePath -> Input)
+runRawGraphAsReader ::
+  (Reader FilePath :> es) => Eff (RawGraph : es) a -> Eff es a
+runRawGraphAsReader = interpret $ \_ -> \case
+  GetGraphFilePath -> ask
 
-runRawGraphWithPath :: FilePath -> Sem (RawGraph : r) a -> Sem r a
-runRawGraphWithPath p = runInputConst p . runRawGraphAsInput . raiseUnder
+runRawGraphWithPath :: FilePath -> Eff (RawGraph : es) a -> Eff es a
+runRawGraphWithPath p = runReader p . runRawGraphAsReader . raiseUnder

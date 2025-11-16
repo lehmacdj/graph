@@ -5,41 +5,41 @@ module MyPrelude.Effect
 where
 
 import ClassyPrelude
-import Polysemy as X
-import Polysemy.Error
-import Polysemy.State
+import Effectful as X
+import Effectful.Error.Static
+import Effectful.State.Static.Local
 
--- | The identity funciton
-withEffects :: forall effs a. Sem effs a -> Sem effs a
+-- | The identity function
+withEffects :: forall es a. Eff es a -> Eff es a
 withEffects = id
 
 -- | Handle error without allowing error to be present in resulting computation.
 -- Added in migration from freer-simple to polysemy, soft deprecated, consider
 -- finding a sufficient replacement in the near future
-handleError :: Sem (Error e : effs) a -> (e -> Sem effs a) -> Sem effs a
+handleError :: Eff (Error e : es) a -> (e -> Eff es a) -> Eff es a
 handleError action handler = do
   result <- runError action
   case result of
     Right x -> pure x
     Left e -> handler e
 
-embedStateful :: forall s r a. (Member (State s) r) => (s -> (a, s)) -> Sem r a
+embedStateful :: forall s es a. (State s :> es) => (s -> (a, s)) -> Eff es a
 embedStateful f = do
-  state <- get
-  let (result, newState) = f state
+  s <- get
+  let (result, newState) = f s
   put newState
   pure result
 
 errorToLeft ::
-  (Show e) => Sem (Error e : effs) a -> Sem effs (Either e a)
+  (Show e) => Eff (Error e : es) a -> Eff es (Either e a)
 errorToLeft = (`handleError` pure . Left) . fmap Right
 
 errorToNothing ::
-  Sem (Error e : effs) a -> Sem effs (Maybe a)
+  Eff (Error e : es) a -> Eff es (Maybe a)
 errorToNothing = (`handleError` const (pure Nothing)) . fmap Just
 
-untry :: Sem r (Either e a) -> Sem (Error e : r) a
+untry :: Eff es (Either e a) -> Eff (Error e : es) a
 untry x =
   raise x >>= \case
-    Left e -> throw e
+    Left e -> throwError e
     Right v -> pure v

@@ -4,10 +4,14 @@ module Effect.IOWrapper.GetTime where
 
 import Data.Time
 import Data.Time.Clock.POSIX
+import Effectful
+import Effectful.Dispatch.Dynamic
+import Effectful.State.Static.Local
+import Effectful.TH
 import MyPrelude
-import Polysemy.State
+import System.Random
 
-data GetTime m r where
+data GetTime :: Effect where
   CurrentTime :: GetTime m UTCTime
   CurrentTimeZone :: GetTime m TimeZone
 
@@ -20,30 +24,30 @@ data GetTime m r where
 -- this could also be implemented just as an interpreter which caches the time
 -- and returns the same value for all calls to CurrentTime
 
-makeSem ''GetTime
+makeEffect ''GetTime
 
 interpretTimeAsIO ::
-  (Member (Embed IO) effs) =>
-  Sem (GetTime : effs) ~> Sem effs
-interpretTimeAsIO = interpret $ \case
+  (IOE :> es) =>
+  Eff (GetTime : es) a ->
+  Eff es a
+interpretTimeAsIO = interpret $ \_ -> \case
   CurrentTime -> liftIO getCurrentTime
   CurrentTimeZone -> liftIO getCurrentTimeZone
 
 interpretTimeAsMonotonicIncreasingUnixTime ::
-  Sem (GetTime : effs) a -> Sem effs a
+  Eff (GetTime : es) a -> Eff es a
 interpretTimeAsMonotonicIncreasingUnixTime x = evalState (0 :: Int) $
-  (`interpret` raiseUnder x) $
-    \case
-      CurrentTime -> posixSecondsToUTCTime . fromIntegral <$> get <* modify' (+ 1)
-      CurrentTimeZone -> pure utc
+  raiseUnder x & interpret (\_ -> \case
+    CurrentTime -> posixSecondsToUTCTime . fromIntegral <$> get <* modify' (+ 1)
+    CurrentTimeZone -> pure utc)
 
 collapsingTimeToInstant ::
-  (Member GetTime effs) =>
-  Sem effs a ->
-  Sem effs a
+  (GetTime :> es) =>
+  Eff es a ->
+  Eff es a
 collapsingTimeToInstant action = do
   instant <- currentTime
-  let interceptor = intercept $ \case
+  let interceptor = interpose $ \_ -> \case
         CurrentTime -> pure instant
         CurrentTimeZone -> currentTimeZone
   interceptor action

@@ -26,11 +26,11 @@ import Graph.NodeLocated
 import Models.History
 import Models.NID
 import MyPrelude
-import Polysemy.Embed
-import Polysemy.Input
-import Polysemy.Readline
-import Polysemy.Scoped
-import Polysemy.State
+import Effectful
+import Effectful.Reader.Static
+import Effect.Readline
+import Effectful.Labeled
+import Effectful.State.Static.Local
 import System.Console.Haskeline (InputT)
 import System.Console.Haskeline qualified as H
 import System.Random
@@ -112,14 +112,14 @@ type IOWrapperEffects =
 
 type TimeBehavior =
   forall r.
-  (Member (Embed IO) r) =>
+  (IOE :> es) =>
   Sem (GetTime : r) ~> Sem r
 
 type FilesystemOperationsBehavior =
   forall r a.
-  (Members [RawGraph, Embed IO, Error UserError] r) =>
+  ((RawGraph, IOE, Error UserError) :> es) =>
   Sem (GraphMetadataFilesystemOperations : GraphMetadataFilesystemOperationsWriteDiff : GraphDataFilesystemOperations : r) a ->
-  Sem r a
+  Eff es a
 
 filesystemBehaviorDryRun :: FilesystemOperationsBehavior
 filesystemBehaviorDryRun =
@@ -158,15 +158,15 @@ type ErrorEffects =
 
 type ErrorHandlingBehavior a =
   forall r.
-  (Member (Embed IO) r) =>
+  (IOE :> es) =>
   Sem (Warn UserError : Error UserError : r) a ->
-  Sem r a
+  Eff es a
 
 runErrorEffects ::
   (Members PermissiveDependencyEffects r) =>
   ErrorHandlingBehavior a ->
   Sem (Concat ErrorEffects r) a ->
-  Sem r a
+  Eff es a
 runErrorEffects errorHandlingBehavior = errorHandlingBehavior
 
 type PermissiveDependencyEffects :: [Effect]
@@ -174,13 +174,13 @@ type PermissiveDependencyEffects =
   [ Echo,
     Dualizeable,
     State StdGen,
-    Embed IO,
+    IOE,
     State History,
     RawGraph
   ]
 
 runPermisiveDependencyEffects ::
-  (Member (Embed IO) r) =>
+  (IOE :> es) =>
   FilePath ->
   Sem (Concat PermissiveDependencyEffects r) ~> Sem r
 runPermisiveDependencyEffects path =
@@ -207,7 +207,7 @@ runPermissiveDependencyEffectsEnv =
 type FinalEffects =
   [ Readline,
     Input Env,
-    Embed IO,
+    IOE,
     Embed (InputT IO),
     Final (InputT IO)
   ]
@@ -221,7 +221,7 @@ runFinalEffects env =
     >>> runEmbedded liftIO
     >>> withEffects @'[Embed (InputT IO), Final (InputT IO)]
     >>> embedToFinal @(InputT IO)
-    >>> runFinal
+    >>> runEff
     >>> H.runInputT env.replSettings
 
 type AppEffects :: [Effect]

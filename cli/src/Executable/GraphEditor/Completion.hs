@@ -70,7 +70,7 @@ failCompletionWithOriginalInputOnErrorOrWarning ::
   -- | The original input
   String ->
   Sem (Warn UserError : Error UserError : effs) (String, [Completion]) ->
-  Sem effs (String, [Completion])
+  Eff es (String, [Completion])
 failCompletionWithOriginalInputOnErrorOrWarning i =
   printWarnings
     >>> (`handleError` const (pure (i, [])))

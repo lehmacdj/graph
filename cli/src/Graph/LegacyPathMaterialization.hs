@@ -27,7 +27,7 @@ import Models.Graph hiding (insertEdge)
 import Models.Node
 import Models.Path.Simple
 import MyPrelude
-import Polysemy.State (evalState)
+import Effectful.State.Static.Local (evalState)
 
 isFullyRelativePath :: Path -> Bool
 isFullyRelativePath = all (isNothing . fst) . setToList . listifyNewPath
@@ -39,10 +39,10 @@ successfulDPathEndpoint _ = Nothing
 
 resolvePathSuccesses ::
   forall effs.
-  (Members [ReadGraph Text (Maybe ByteString), Error Missing] effs) =>
+  ((ReadGraph Text (Maybe ByteString), Error Missing) :> es) =>
   NID ->
   Path ->
-  Sem effs (Set NID)
+  Eff es (Set NID)
 resolvePathSuccesses nid = \case
   Zero -> pure mempty
   One -> pure $ singleton nid
@@ -70,10 +70,10 @@ resolvePathSuccesses nid = \case
 -- for the initial node in case it does not exist
 resolvePathSuccessesDetail' ::
   forall a effs.
-  (Members [ReadGraph Text a, Error Missing] effs, ValidNode Text a) =>
+  ((ReadGraph Text a, Error Missing) :> es, ValidNode Text a) =>
   NID ->
   Path ->
-  Sem effs (OSet DPath)
+  Eff es (OSet DPath)
 resolvePathSuccessesDetail' nid = \case
   One -> pure $ OSet.singleton (DPath nid [] nid [])
   Zero -> pure OSet.empty
@@ -119,10 +119,10 @@ resolvePathSuccessesDetail' nid = \case
 
 resolvePathSuccessesDetail ::
   forall effs.
-  (Members [ReadGraph Text (Maybe ByteString), Error Missing] effs) =>
+  ((ReadGraph Text (Maybe ByteString), Error Missing) :> es) =>
   NID ->
   Path ->
-  Sem effs (Set DPath)
+  Eff es (Set DPath)
 resolvePathSuccessesDetail nid p = resolvePathSuccessesDetail' nid p <&> OSet.toSet
 
 -- | Assert that the result of listifyNewPath is relative. This should be the
@@ -138,12 +138,12 @@ assertListifiedRelativePath = mapSet \case
 -- can't think of a better one to use without just banning one or the other
 mkPath ::
   forall effs.
-  ( Members [FreshNID, Error Missing] effs,
+  ( (FreshNID, Error Missing) :> es,
     HasGraph Text effs
   ) =>
   NID ->
   Path ->
-  Sem effs (Set NID)
+  Eff es (Set NID)
 mkPath nid p =
   fmap setFromList
     . forM (setToList (listifyNewPath p))
@@ -151,12 +151,12 @@ mkPath nid p =
 
 delPath ::
   forall effs.
-  ( Members [FreshNID, Error Missing] effs,
+  ( (FreshNID, Error Missing) :> es,
     HasGraph Text effs
   ) =>
   NID ->
   Path ->
-  Sem effs ()
+  Eff es ()
 delPath nid p = resolvePathSuccessesDetail nid p >>= mapM_ delDPath
   where
     delDPath (DPath _ xs@(_ : _) nid' []) = case lastEx xs of -- safe because list nonempty
@@ -165,24 +165,24 @@ delPath nid p = resolvePathSuccessesDetail nid p >>= mapM_ delDPath
 
 mvPath ::
   forall effs.
-  ( Members [FreshNID, Error Missing] effs,
+  ( (FreshNID, Error Missing) :> es,
     HasGraph Text effs
   ) =>
   NID ->
   Path ->
   NID ->
-  Sem effs ()
+  Eff es ()
 mvPath s p target =
   resolvePathSuccessesDetail s p >>= mapM_ (mvDPathTo target)
 
 mvDPathTo ::
   forall effs.
-  ( Members [FreshNID, Error Missing] effs,
+  ( (FreshNID, Error Missing) :> es,
     HasGraph Text effs
   ) =>
   NID ->
   DPath ->
-  Sem effs ()
+  Eff es ()
 mvDPathTo target (DPath _ xs@(_ : _) nid []) = case lastEx xs of
   FromVia nid2 t -> do
     Graph.Effect.deleteEdge (Edge nid2 t nid)
@@ -193,7 +193,7 @@ mvDPathTo _ _ = pure ()
 -- the renaming only operates on the last / separated path segment
 renameDPath ::
   forall effs.
-  ( Members [FreshNID, Error Missing] effs,
+  ( (FreshNID, Error Missing) :> es,
     HasGraph Text effs
   ) =>
   DPath ->
@@ -201,7 +201,7 @@ renameDPath ::
   -- | this path must either be of the form DPath _ nid [t]
   -- or of the form (splitLast -> Just (DPath _ nid _, t, _))
   Path ->
-  Sem effs ()
+  Eff es ()
 renameDPath dpathFrom nidPathStart pathTo =
   withJust (splitLast dpathFrom) $ \(DPath _ _ oldRoot _, t, nid) -> do
     successes <- resolvePathSuccessesDetail nidPathStart pathTo
@@ -217,7 +217,7 @@ renameDPath dpathFrom nidPathStart pathTo =
 -- | alias a one path to another path
 aliasDPath ::
   forall effs.
-  ( Members [FreshNID, Error Missing] effs,
+  ( (FreshNID, Error Missing) :> es,
     HasGraph Text effs
   ) =>
   DPath ->
@@ -225,7 +225,7 @@ aliasDPath ::
   -- | this path must either be of the form DPath _ nid [t]
   -- or of the form (splitLast -> Just (DPath _ nid _, t, _))
   Path ->
-  Sem effs ()
+  Eff es ()
 aliasDPath dpathFrom nidPathStart pathTo =
   withJust (splitLast dpathFrom) $ \(DPath {}, _, nid) -> do
     successes <- resolvePathSuccessesDetail nidPathStart pathTo

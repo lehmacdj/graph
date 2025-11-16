@@ -14,13 +14,13 @@ import Models.Node
 import MyPrelude
 import Witherable
 
-getNodes :: (Member (ReadGraph t (Maybe ByteString)) effs) => [NID] -> Sem effs [Node t (Maybe ByteString)]
+getNodes :: (Member (ReadGraph t (Maybe ByteString)) effs) => [NID] -> Eff es [Node t (Maybe ByteString)]
 getNodes = wither getNode
 
 getNodeSem ::
   (Members [ReadGraph t a, Error Missing] effs) =>
   NID ->
-  Sem effs (Node t a)
+  Eff es (Node t a)
 getNodeSem nid =
   getNode nid >>= \case
     Nothing -> throwMissing nid
@@ -29,7 +29,7 @@ getNodeSem nid =
 getNodeDatalessSem ::
   (Members [ReadGraphDataless t, Error Missing] effs) =>
   NID ->
-  Sem effs (Node t (Maybe ByteString))
+  Eff es (Node t (Maybe ByteString))
 getNodeDatalessSem nid =
   getNodeDataless nid >>= \case
     Nothing -> throwMissing nid
@@ -44,7 +44,7 @@ insertNode ::
   forall t effs.
   (Member (Error Missing) effs, HasGraph t effs) =>
   Node t (Maybe ByteString) ->
-  Sem effs ()
+  Eff es ()
 insertNode n = do
   let nid = n ^. #nid
   touchNode @t nid
@@ -56,7 +56,7 @@ insertNode n = do
 
 currentNode ::
   (Members [ReadGraph t (Maybe ByteString), GetLocation, Error Missing] effs) =>
-  Sem effs (Node t (Maybe ByteString))
+  Eff es (Node t (Maybe ByteString))
 currentNode = currentLocation >>= getNodeSem
 
 -- | nid `transitionsVia` t finds a node that can be transitioned to via the
@@ -65,7 +65,7 @@ transitionsVia ::
   (Members [FreshNID, Error Missing] effs, HasGraph t effs) =>
   NID ->
   t ->
-  Sem effs NID
+  Eff es NID
 transitionsVia nid t = do
   n <- getNodeSem nid
   case matchConnect t n.outgoing of
@@ -81,7 +81,7 @@ transitionsFreshVia ::
   (Members [FreshNID, Error Missing] effs, HasGraph t effs) =>
   NID ->
   t ->
-  Sem effs NID
+  Eff es NID
 transitionsFreshVia nid t = do
   -- we need to actually try to fetch to throw if it is missing
   _ <- getNodeSem @t nid
@@ -97,7 +97,7 @@ transitionsViaManyFresh ::
   (Members [FreshNID, Error Missing] effs, HasGraph t effs) =>
   NID ->
   [t] ->
-  Sem effs NID
+  Eff es NID
 transitionsViaManyFresh nid = \case
   [] -> pure nid
   [x] -> transitionsFreshVia nid x
@@ -108,7 +108,7 @@ transitionsViaMany ::
   (Members [FreshNID, Error Missing] effs, HasGraph t effs) =>
   NID ->
   [t] ->
-  Sem effs NID
+  Eff es NID
 transitionsViaMany nid = \case
   [] -> pure nid
   x : xs -> transitionsVia nid x >>= (`transitionsViaMany` xs)
@@ -123,7 +123,7 @@ transitionsViaManyTo ::
   NID ->
   NonNull seq ->
   NID ->
-  Sem effs ()
+  Eff es ()
 transitionsViaManyTo s transitions t = do
   secondToLast <- transitionsViaMany s (toList (init transitions))
   insertEdge (Edge secondToLast (last transitions) t)
@@ -134,7 +134,7 @@ mergeNode ::
   (Members [FreshNID, Error Missing] effs, HasGraph t effs) =>
   NID ->
   NID ->
-  Sem effs NID
+  Eff es NID
 mergeNode nid1 nid2 = do
   n1 <- getNodeSem nid1
   n2 <- getNodeSem nid2
@@ -158,7 +158,7 @@ mergeNodes ::
     Element mono ~ NID
   ) =>
   NonNull mono ->
-  Sem effs NID
+  Eff es NID
 mergeNodes = foldlM1 (mergeNode @t)
 
 -- | Create a node with the same transitions as the original node.
@@ -167,7 +167,7 @@ cloneNode ::
   forall t effs.
   (Members [FreshNID, Error Missing] effs, HasGraph t effs) =>
   NID ->
-  Sem effs NID
+  Eff es NID
 cloneNode nid = do
   nid' <- freshNID
   n <- getNodeSem nid
@@ -183,7 +183,7 @@ unsafeRenumberNode ::
   (Member (Error Missing) effs, HasGraph Text effs) =>
   -- | Node to rewrite on left, number to be rewritten to on right
   (NID, NID) ->
-  Sem effs ()
+  Eff es ()
 unsafeRenumberNode (nid, nid') = do
   n <- getNodeSem nid
   let i = selfLoopify nid nid' n.incoming

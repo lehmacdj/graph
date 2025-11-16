@@ -13,57 +13,59 @@ module MyPrelude.EarlyReturn
   )
 where
 
+import Effectful
+import Effectful.Dispatch.Dynamic
+import Effectful.Error.Static
+import Effectful.TH
 import GHC.Generics
 import MyPrelude.MaybeEither
-import Polysemy
-import Polysemy.Error
 import Prelude
 
-data EarlyReturn result m a where
+data EarlyReturn result :: Effect where
   ReturnEarly :: result -> EarlyReturn result m a
 
-makeSem ''EarlyReturn
+makeEffect ''EarlyReturn
 
 unwrapReturningDefault ::
-  (Member (EarlyReturn result) r) =>
+  (EarlyReturn result :> es) =>
   result ->
   Maybe a ->
-  Sem r a
+  Eff es a
 unwrapReturningDefault def = unwrapDefaulting (returnEarly def)
 
 unwrapReturningDefaultM ::
-  (Member (EarlyReturn result) r) =>
+  (EarlyReturn result :> es) =>
   result ->
-  Sem r (Maybe a) ->
-  Sem r a
+  Eff es (Maybe a) ->
+  Eff es a
 unwrapReturningDefaultM def = unwrapDefaultingM (returnEarly def)
 
 unwrap ::
-  (Member (EarlyReturn (Maybe result)) r) =>
+  (EarlyReturn (Maybe result) :> es) =>
   Maybe a ->
-  Sem r a
+  Eff es a
 unwrap = unwrapReturningDefault Nothing
 
 unwrapM ::
-  (Member (EarlyReturn (Maybe result)) r) =>
-  Sem r (Maybe a) ->
-  Sem r a
+  (EarlyReturn (Maybe result) :> es) =>
+  Eff es (Maybe a) ->
+  Eff es a
 unwrapM = unwrapReturningDefaultM Nothing
 
 newtype EarlyReturnResult result = EarlyReturnResult {result :: result}
   deriving stock (Show, Eq, Ord, Generic)
 
-withEarlyReturn_ :: Sem '[EarlyReturn result] result -> result
-withEarlyReturn_ = run . withEarlyReturn
+withEarlyReturn_ :: Eff '[EarlyReturn result] result -> result
+withEarlyReturn_ = runPureEff . withEarlyReturn
 
 withEarlyReturnIO ::
-  Sem '[EarlyReturn result, Embed IO, Final IO] result ->
+  Eff '[EarlyReturn result, IOE] result ->
   IO result
-withEarlyReturnIO = runFinal . embedToFinal . withEarlyReturn
+withEarlyReturnIO = runEff . withEarlyReturn
 
 withEarlyReturn ::
-  Sem (EarlyReturn result : r) result ->
-  Sem r result
+  Eff (EarlyReturn result : es) result ->
+  Eff es result
 withEarlyReturn =
-  fmap (either id id) . runError . reinterpret \case
-    ReturnEarly x -> throw x
+  fmap (either id id) . runError . reinterpret (\_ -> \case
+    ReturnEarly x -> throwError x)

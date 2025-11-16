@@ -43,7 +43,7 @@ instance ShowableAugmentation FileType where
 fetchFileExtension ::
   (Members '[GraphMetadataReading, Error UserError] r) =>
   NID ->
-  Sem r FileExtension
+  Eff es FileExtension
 fetchFileExtension nid = do
   mp <-
     materializePath
@@ -65,7 +65,7 @@ fetchFileExtension nid = do
 fetchFileType ::
   (Members '[GraphMetadataReading, Error UserError] r) =>
   NID ->
-  Sem r FileType
+  Eff es FileType
 fetchFileType nid = do
   mp <-
     materializePath
@@ -89,5 +89,5 @@ writeTags ::
   (Members '[GraphMetadataEditing] r) =>
   NID ->
   FileType ->
-  Sem r ()
+  Eff es ()
 writeTags _ _ = error "unimplemented"

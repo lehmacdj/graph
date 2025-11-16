@@ -2,24 +2,25 @@ module DAL.Interpreters where
 
 import Control.Exception qualified as E
 import DAL.RawGraph
+import Effectful
+import Effectful.Error.Static
 import Error.UserError
 import MyPrelude
-import Polysemy.Error
 
-type RawGraphUserErrorIO = [RawGraph, Error UserError, Embed IO, Final IO]
+type RawGraphUserErrorIO = [RawGraph, Error UserError, IOE]
 
 -- | Function for "unlifting" a computation that uses the RawGraph effect
 runRawGraphUserErrorIO ::
   FilePath ->
-  Sem RawGraphUserErrorIO a ->
+  Eff RawGraphUserErrorIO a ->
   IO (Either UserError a)
 runRawGraphUserErrorIO path =
-  runFinal . embedToFinal . errorToIOFinal . runRawGraphWithPath path
+  runEff . runError . runRawGraphWithPath path
 
 withUnliftIORawGraphUserError ::
-  (Members [RawGraph, Error UserError, Embed IO] r) =>
-  (UnliftIO (Sem RawGraphUserErrorIO) -> IO a) ->
-  Sem r a
+  (RawGraph :> es, Error UserError :> es, IOE :> es) =>
+  (UnliftIO (Eff RawGraphUserErrorIO) -> IO a) ->
+  Eff es a
 withUnliftIORawGraphUserError f = do
   graphPath <- getGraphFilePath
   fromException @UserError $
@@ -30,10 +31,10 @@ withUnliftIORawGraphUserError f = do
       )
 
 withUnliftIORawGraphUserError' ::
-  (Members [RawGraph, Error UserError, Embed IO] r) =>
-  (forall x. m x -> Sem RawGraphUserErrorIO x) ->
+  (RawGraph :> es, Error UserError :> es, IOE :> es) =>
+  (forall x. m x -> Eff RawGraphUserErrorIO x) ->
   (UnliftIO m -> IO a) ->
-  Sem r a
+  Eff es a
 withUnliftIORawGraphUserError' extraInterpreters f = do
   graphPath <- getGraphFilePath
   fromException @UserError $

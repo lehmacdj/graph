@@ -2,12 +2,16 @@
 
 module Effect.IOWrapper.FileSystem where
 
+import Effectful
+import Effectful.Dispatch.Dynamic
+import Effectful.Error.Static
+import Effectful.TH
 import Error.UserError
 import MyPrelude
 import System.Directory qualified as Directory
 import System.Directory.Tree
 
-data FileSystem m r where
+data FileSystem :: Effect where
   ReadDirectory :: FilePath -> FileSystem m (DirTree ByteString)
   WriteDirectory :: FilePath -> DirTree ByteString -> FileSystem m (DirTree ())
   CanonicalizePath ::
@@ -15,12 +19,13 @@ data FileSystem m r where
     FilePath ->
     FileSystem m (Either IOError FilePath)
 
-makeSem ''FileSystem
+makeEffect ''FileSystem
 
 runFileSystemIO ::
-  (Member (Embed IO) effs, Member (Error UserError) effs) =>
-  Sem (FileSystem : effs) ~> Sem effs
-runFileSystemIO = interpret $ \case
+  (IOE :> es, Error UserError :> es) =>
+  Eff (FileSystem : es) a ->
+  Eff es a
+runFileSystemIO = interpret $ \_ -> \case
   ReadDirectory fp ->
     liftIO $ dirTree <$> readDirectoryWithL readFile fp
   WriteDirectory fp dt ->

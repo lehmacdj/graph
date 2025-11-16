@@ -13,16 +13,19 @@ where
 import Control.Lens.Regex.ByteString as ByteString
 import Control.Lens.Regex.Text as Text
 import Data.Text qualified as T
+import Effectful
+import Effectful.Dispatch.Dynamic
+import Effectful.TH
 import Models.FileTypeInfo
 import Models.MimeType
 import MyPrelude
 import System.Process.Typed
 
-data FileTypeOracle m r where
+data FileTypeOracle :: Effect where
   GetFileTypeInfo ::
     Either ByteString FilePath -> FileTypeOracle m (Maybe FileTypeInfo)
 
-makeSem ''FileTypeOracle
+makeEffect ''FileTypeOracle
 
 -- | Extension lookup table for mimetypes where file(1) can't determine
 -- extension
@@ -116,8 +119,8 @@ getFileTypeInfoIO source = liftIO . withEarlyReturnIO $ do
 
 -- | Run FileTypeOracle effect
 runFileTypeOracle ::
-  (Member (Embed IO) r) =>
-  Sem (FileTypeOracle : r) a ->
-  Sem r a
-runFileTypeOracle = interpret \case
-  GetFileTypeInfo source -> embed $ getFileTypeInfoIO source
+  (IOE :> es) =>
+  Eff (FileTypeOracle : es) a ->
+  Eff es a
+runFileTypeOracle = interpret $ \_ -> \case
+  GetFileTypeInfo source -> liftIO $ getFileTypeInfoIO source

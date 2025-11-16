@@ -8,7 +8,7 @@ the' ::
   (MonoFoldable mono, Member (Error UserError) effs) =>
   (mono -> UserError) ->
   mono ->
-  Sem effs (Element mono)
+  Eff es (Element mono)
 the' toErr = \case
   (toList -> [x]) -> pure x
   xs -> throw (toErr xs)

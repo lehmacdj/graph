@@ -9,7 +9,7 @@ import Models.Edge
 import Models.NID
 import MyPrelude
 
-createSystemNodes :: (Member GraphMetadataEditing effs) => Sem effs ()
+createSystemNodes :: (Member GraphMetadataEditing effs) => Eff es ()
 createSystemNodes = do
   touchNode systemNodeNID
   touchNode nilNID

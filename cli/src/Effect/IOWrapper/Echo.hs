@@ -2,18 +2,21 @@
 
 module Effect.IOWrapper.Echo where
 
+import Effectful
+import Effectful.Dispatch.Dynamic
+import Effectful.TH
 import MyPrelude
-import Polysemy.Readline
+import Effect.Readline
 
-data Echo m k where
+data Echo :: Effect where
   Echo :: String -> Echo m ()
 
-makeSem ''Echo
+makeEffect ''Echo
 
-runEchoReadline :: (Member Readline effs) => Sem (Echo : effs) ~> Sem effs
-runEchoReadline = interpret $ \case
+runEchoReadline :: (Readline :> es) => Eff (Echo : es) a -> Eff es a
+runEchoReadline = interpret $ \_ -> \case
   Echo s -> outputStrLn s
 
-runEchoIO :: (Member (Embed IO) effs) => Sem (Echo : effs) ~> Sem effs
-runEchoIO = interpret $ \case
-  Echo s -> embed $ putStrLn $ pack $ unpack s
+runEchoIO :: (IOE :> es) => Eff (Echo : es) a -> Eff es a
+runEchoIO = interpret $ \_ -> \case
+  Echo s -> liftIO $ putStrLn $ pack $ unpack s
