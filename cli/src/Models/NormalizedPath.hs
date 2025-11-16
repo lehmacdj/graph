@@ -584,12 +584,34 @@ traverseAnchors f (NormalizedPath paths) =
 
 {-# HLINT ignore traverseViaTransitions "Functor law" #-}
 
+-- | Traverse a normalized path by its transitions starting from a specified
+-- anchor.
+--
+-- See resolveNPath/createNPath for examples that use this in different ways.
 traverseViaTransitions ::
   forall f a b.
   (Monad f, Ord a, Ord b) =>
+  -- | The initial anchor (type @b@) to start traversal from
   b ->
+  -- | Anchor unification function.
+  --
+  -- Parameters:
+  -- * @isRoot@ - whether this is the root anchor of the path
+  -- * @current@ - the current anchor we've reached (type @b@)
+  -- * @expected@ - the anchor specified in the path structure (type @a@)
+  --
+  -- Returns @Just@ the unified anchor if compatible, @Nothing@ if incompatible
   (Bool -> b -> a -> Maybe b) ->
-  (b -> DPDirection -> f [(DPDirection, b)]) ->
+  -- | Transition callback.
+  --
+  -- Parmameters:
+  -- * @start@ - the anchor we're starting from (type @b@)
+  -- * @direction@ - the direction and transition label to follow
+  -- * @target@ - the anchor we should end up at (type @a@)
+  --
+  -- Returns a list of possible (direction, end) pairs representing successful
+  -- traversals
+  (b -> DPDirection -> a -> f [(DPDirection, b)]) ->
   NormalizedPath a ->
   f (NormalizedPath b)
 traverseViaTransitions initial fanchor ftransition normalizedPath =
@@ -617,7 +639,7 @@ traverseViaTransitions initial fanchor ftransition normalizedPath =
       case fanchor isRoot nid anchor of
         Nothing -> pure []
         Just nid' -> do
-          loops' <- traverseBranches nid' loops
+          loops' <- traverseBranches nid' anchor loops
           pure $
             loops'
               & filter ((== nid') . snd)
@@ -653,7 +675,7 @@ traverseViaTransitions initial fanchor ftransition normalizedPath =
         [(OMap (DeterministicPath b) (OSet (DPBranch b)), b)] <-
         rootBranches'
           & (traverse . traverse)
-            (\(dp, bs) -> (dp,) <$> traverseBranches dp.target.anchor bs)
+            (\(dp, bs) -> (dp,) <$> traverseBranches dp.target.anchor target.anchor bs)
           <&> map (map \(r, bas) -> (\(b, a) -> ((r, b), a)) <$> bas)
           <&> concatMap choices
           <&> mapMaybe (ensureSameAnchors . impureNonNull)
@@ -667,15 +689,16 @@ traverseViaTransitions initial fanchor ftransition normalizedPath =
     traverseBranches ::
       (HasCallStack) =>
       b ->
+      a ->
       OSet (DPBranch a) ->
       f [(OSet (DPBranch b), b)]
-    traverseBranches nid branches
+    traverseBranches nid target branches
       | -- in the case where the OSet is empty (only when loops),
         -- we return the same anchor as the input
         null branches =
           pure [(mempty, nid)]
       | otherwise = do
-          branches' <- traverse (traverseBranch nid) (toList branches)
+          branches' <- traverse (traverseBranch nid target) (toList branches)
           pure $
             branches'
               & choices
@@ -685,17 +708,18 @@ traverseViaTransitions initial fanchor ftransition normalizedPath =
     traverseBranch ::
       (HasCallStack) =>
       b ->
+      a ->
       DPBranch a ->
       f [(DPBranch b, b)]
-    traverseBranch nid = \case
+    traverseBranch nid target = \case
       DPSingle direction ->
-        over (mapped . _1) DPSingle <$> ftransition nid direction
+        over (mapped . _1) DPSingle <$> ftransition nid direction target
       DPSequence bs1 midpoint bs2 -> do
-        bs1's <- traverseBranches nid bs1
+        bs1's <- traverseBranches nid midpoint.anchor bs1
         uptoMidpoints :: [(OSet (DPBranch b), PointlikeDeterministicPath b)] <-
           bs1's
             & (traverse . _2) (\x -> traversePointlike False x midpoint)
             <&> concatMap (\(bs1', ms) -> (bs1',) <$> ms)
         uptoMidpoints
-          & (traverse . _2) (\p -> (p,) <$> traverseBranches p.anchor bs2)
+          & (traverse . _2) (\p -> (p,) <$> traverseBranches p.anchor target bs2)
           <&> concatMap (\(bs1', (p, bs2'ts)) -> first (DPSequence bs1' p) <$> bs2'ts)
