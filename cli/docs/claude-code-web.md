@@ -65,6 +65,7 @@ stack exec graph -- --help
 - Downloads ~200MB of GHC (takes 2-5 minutes)
 - Compiles all dependencies (takes 5-10 minutes)
 - Subsequent builds are much faster (seconds to minutes)
+- **Pro tip:** Start `stack build --fast` in the background immediately after setup, then begin making edits while dependencies compile. Most of the build time is compiling dependencies (not your code), so you can work in parallel.
 
 ## Troubleshooting
 
