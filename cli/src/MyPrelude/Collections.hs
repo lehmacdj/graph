@@ -296,7 +296,5 @@ traverseNonNull ::
   (a -> g b) ->
   NonNull (f a) ->
   g (NonNull (f b))
-traverseNonNull f xs = case toList (toNullable xs) of
-  [] -> error "traverseNonNull: impossible - NonNull is empty"
-  (y : ys) -> ncons <$> f y <*> traverse f ys
+traverseNonNull f = fmap impureNonNull . traverse f . toNullable
 
