@@ -186,4 +186,4 @@ materializeNPath firstNid normalizedPath = do
             <&> concatMap (\(bs1', ms) -> (bs1',) <$> ms)
         uptoMidpoints
           & (traverse . _2) (\p -> (p,) <$> traverseBranches p.anchor (toNullable bs2))
-          <&> concatMap (\(bs1', (p, bs2'ts)) -> first (DPSequence (impureNonNull bs1') p . impureNonNull) <$> bs2'ts)
+          <&> concatMap (\(bs1', (p, bs2'ts)) -> first (\bs2' -> DPSequence (impureNonNull bs1') p (impureNonNull bs2')) <$> bs2'ts)

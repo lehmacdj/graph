@@ -157,7 +157,7 @@ branchify RootedDeterministicPath {..} =
         NonNull (OSet (DPBranch Anchor))
       )
     convertToBranches ((w, x, y), z) =
-      (toNullable w, impureNonNull $ singletonSet $ smartBuildSequence x y z)
+      (toNullable w, singletonNNSet $ smartBuildSequence x y z)
     partitionRootedPointlike ::
       [(DeterministicPath a, NonNull (OSet (DPBranch a)))] ->
       ( [(RootedDeterministicPath a, NonNull (OSet (DPBranch a)))],
@@ -224,7 +224,7 @@ smartBuildSequence ::
 smartBuildSequence as1 midpoint bs2 = case toList as1 of
   [DPSequence leftBs leftMid leftRightBs] ->
     DPSequence leftBs leftMid $
-      impureNonNull $ singletonSet $
+      singletonNNSet $
         smartBuildSequence leftRightBs midpoint bs2
   _ -> DPSequence as1 midpoint bs2
 
@@ -236,9 +236,10 @@ smartBuildRootedDeterministicPath ::
 smartBuildRootedDeterministicPath rootBranches target =
   case mapToList rootBranches of
     [(r@(Rooted (RootedDeterministicPath (olength -> 1) _)), b)] ->
-      smartBuildRootedDeterministicPath
-        (impureNonNull $ uncurry singletonMap (smartBuildRootBranch r b))
-        target
+      let (dp, branches) = smartBuildRootBranch r b
+       in smartBuildRootedDeterministicPath
+            (singletonNNMap dp branches)
+            target
     _ -> RootedDeterministicPath rootBranches target
 
 smartBuildRootBranch ::
@@ -251,7 +252,7 @@ smartBuildRootBranch ::
 smartBuildRootBranch
   (Rooted (RootedDeterministicPath (mapToList -> [(dp, branches)]) midpoint))
   branchExtensions =
-    (dp, impureNonNull $ singletonSet $ smartBuildSequence branches midpoint branchExtensions)
+    (dp, singletonNNSet $ smartBuildSequence branches midpoint branchExtensions)
 smartBuildRootBranch dp branches = (dp, branches)
 
 sequenceDeterministicPaths ::
@@ -267,7 +268,7 @@ sequenceDeterministicPaths
     Just $
       Rooted $
         smartBuildRootedDeterministicPath
-          (impureNonNull $ singletonMap (Pointlike newRoot) branches)
+          (singletonNNMap (Pointlike newRoot) branches)
           target
 sequenceDeterministicPaths (Rooted p1) (Pointlike p2) = do
   newTarget <- mergePointlike p1.target p2
@@ -278,7 +279,7 @@ sequenceDeterministicPaths
     midpoint <- foldlM1 mergePointlike (p1.target `ncons` toList roots)
     Just . Rooted $
       smartBuildRootedDeterministicPath
-        (impureNonNull $ singletonMap (Rooted p1 {target = midpoint}) p2Branches)
+        (singletonNNMap (Rooted p1 {target = midpoint}) p2Branches)
         p2Target
 
 invertBranch :: (Ord a) => DPBranch a -> DPBranch a
@@ -287,9 +288,9 @@ invertBranch = \case
   DPIncoming trans -> DPOutgoing trans
   DPSequence as1 midpoint bs2 ->
     DPSequence
-      (impureNonNull $ mapOSet invertBranch as1)
+      (mapOSetNN invertBranch as1)
       (invertPointlike midpoint)
-      (impureNonNull $ mapOSet invertBranch bs2)
+      (mapOSetNN invertBranch bs2)
 
 flipBranch :: (Ord a) => DPBranch a -> DPBranch a
 flipBranch = \case
@@ -299,7 +300,7 @@ flipBranch = \case
     case flipBranch <$> toList bs23 of
       [DPSequence bs2 m23 bs3] ->
         smartBuildSequence bs3 (invertPointlike m23) $
-          impureNonNull $ singletonSet (smartBuildSequence bs2 (invertPointlike m12) as1)
+          singletonNNSet (smartBuildSequence bs2 (invertPointlike m12) as1)
       xs -> smartBuildSequence (impureNonNull $ setFromList xs) (invertPointlike m12) as1
 
 backwardsCount :: DPBranch a -> Int
@@ -345,10 +346,10 @@ invertDeterministicPath (Pointlike p) = Just . Pointlike $ invertPointlike p
 invertDeterministicPath
   (Rooted (branchify -> (roots, branches, target))) = do
     newTarget <- foldlM1 mergePointlike =<< fromNullable (toList roots)
-    let newBranches = impureNonNull $ mapOSet invertBranch branches
+    let newBranches = mapOSetNN invertBranch branches
     Just . Rooted $
       smartBuildRootedDeterministicPath
-        (impureNonNull $ singletonMap (Pointlike target) newBranches)
+        (singletonNNMap (Pointlike target) newBranches)
         newTarget
 
 normalizePath :: Path -> NormalizedPath Anchor
@@ -365,17 +366,17 @@ normalizePath = \case
   Wild ->
     NormalizedPath . singletonSet . Rooted $
       smartBuildRootedDeterministicPath
-        (impureNonNull $ singletonMap (Pointlike unanchored) (impureNonNull $ singletonSet (DPOutgoing DPWild)))
+        (singletonNNMap (Pointlike unanchored) (singletonNNSet (DPOutgoing DPWild)))
         unanchored
   Literal t ->
     NormalizedPath . singletonSet . Rooted $
       smartBuildRootedDeterministicPath
-        (impureNonNull $ singletonMap (Pointlike unanchored) (impureNonNull $ singletonSet (DPOutgoing (DPLiteral t))))
+        (singletonNNMap (Pointlike unanchored) (singletonNNSet (DPOutgoing (DPLiteral t))))
         unanchored
   RegexMatch r ->
     NormalizedPath . singletonSet . Rooted $
       smartBuildRootedDeterministicPath
-        (impureNonNull $ singletonMap (Pointlike unanchored) (impureNonNull $ singletonSet (DPOutgoing (DPRegex r))))
+        (singletonNNMap (Pointlike unanchored) (singletonNNSet (DPOutgoing (DPRegex r))))
         unanchored
   Backwards p ->
     let np = normalizePath p
@@ -457,11 +458,11 @@ leastConstrainedNormalizedPath =
                   ( \((root, b1), b2) ->
                       smartBuildRootBranch
                         root
-                        ( impureNonNull $ singletonSet $
+                        ( singletonNNSet $
                             smartBuildSequence
-                              (impureNonNull $ singletonSet b1)
+                              (singletonNNSet b1)
                               (PointlikeDeterministicPath (FJoinPoint mempty) mempty)
-                              (impureNonNull $ singletonSet b2)
+                              (singletonNNSet b2)
                         )
                   )
       (dp, bs) ->
@@ -498,9 +499,9 @@ leastConstrainedNormalizedPath =
                 mapOSet
                   ( \(x, y) ->
                       smartBuildSequence
-                        (impureNonNull $ singletonSet x)
+                        (singletonNNSet x)
                         (convertPointlike joinPoint)
-                        (impureNonNull $ singletonSet y)
+                        (singletonNNSet y)
                   )
                   (as1' `cartesianProductSet` bs2')
             | otherwise -> error "broken invariant: Unanchored path with loops"
@@ -543,7 +544,7 @@ traverseAnchors f (NormalizedPath paths) =
         convertRootBranch (dp, branches) =
           (,)
             <$> convertDeterministicPath dp
-            <*> (impureNonNull . setFromList <$> traverse convertBranch (toList branches))
+            <*> traverseNonNull convertBranch branches
 
     convertPointlike :: PointlikeDeterministicPath a -> f (PointlikeDeterministicPath b)
     convertPointlike (PointlikeDeterministicPath anchor loops) =
@@ -556,7 +557,7 @@ traverseAnchors f (NormalizedPath paths) =
       DPOutgoing t -> pure $ DPOutgoing t
       DPIncoming t -> pure $ DPIncoming t
       DPSequence as1 midpoint as2 ->
-        smartBuildSequence . impureNonNull . setFromList
-          <$> traverse convertBranch (toList as1)
+        smartBuildSequence
+          <$> traverseNonNull convertBranch as1
           <*> convertPointlike midpoint
-          <*> (impureNonNull . setFromList <$> traverse convertBranch (toList as2))
+          <*> traverseNonNull convertBranch as2

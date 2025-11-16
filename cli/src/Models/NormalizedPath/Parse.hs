@@ -61,10 +61,12 @@ pRootedPath pNID = label "rooted path" do
 pSequence :: Parser NID -> Parser (DPBranch Anchor)
 pSequence pNID = label "sequence" do
   (initial, splitFirst -> ((m, b), rest)) <- pSequenceBranchSet pNID `via1` pMidpoint
+  let initialNN = impureNonNull initial
+      bNN = impureNonNull b
   pure . uncurry ($) $
     foldl'
-      (\(acc, x) (n, y) -> (acc . impureNonNull . singletonSet . DPSequence (impureNonNull x) n, impureNonNull y))
-      (DPSequence (impureNonNull initial) m :: NonNull (OSet (DPBranch Anchor)) -> DPBranch Anchor, impureNonNull b :: NonNull (OSet (DPBranch Anchor)))
+      (\(acc, x) (n, y) -> (acc . singletonNNSet . DPSequence x n, y))
+      (DPSequence initialNN m :: NonNull (OSet (DPBranch Anchor)) -> DPBranch Anchor, bNN :: NonNull (OSet (DPBranch Anchor)))
       rest
   where
     pMidpoint =

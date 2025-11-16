@@ -125,6 +125,9 @@ mapSet = Set.map
 mapOSet :: (Ord b) => (a -> b) -> OSet a -> OSet b
 mapOSet f = setFromList . map f . toList
 
+mapOSetNN :: (HasCallStack, Ord b) => (a -> b) -> NonNull (OSet a) -> NonNull (OSet b)
+mapOSetNN f = impureNonNull . mapOSet f . toNullable
+
 mapFromSet :: (Ord k) => Set k -> Map k ()
 mapFromSet = Map.fromSet (const ())
 
@@ -287,3 +290,11 @@ ixsetmapped = iso IxSet.toSet IxSet.fromSet . setmapped
 
 nnmap :: (HasCallStack, MonoFoldable (f b), Functor f) => (a -> b) -> NonNull (f a) -> NonNull (f b)
 nnmap f = impureNonNull . fmap f . toNullable
+
+traverseNonNull ::
+  (HasCallStack, MonoFoldable (g b), Traversable f, Applicative g) =>
+  (a -> g b) ->
+  NonNull (f a) ->
+  g (NonNull (f b))
+traverseNonNull f = fmap impureNonNull . traverse f . toNullable
+
