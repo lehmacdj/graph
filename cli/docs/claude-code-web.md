@@ -26,6 +26,30 @@ We recommend using ghcup to install Stack:
    echo 'source ~/.ghcup/env' >> ~/.bashrc  # or ~/.zshrc
    ```
 
+## Proxy Configuration for Claude Code Web
+
+**IMPORTANT:** When using Claude Code in a web/container environment, Stack requires explicit proxy configuration to download packages from Hackage and other Haskell resources.
+
+### Why This Is Needed
+
+In Claude Code web environments, all HTTPS connections must go through a proxy. While most tools (like `curl` and `wget`) automatically use the `https_proxy` environment variable, Stack's HTTP library does not. This causes TLS/SSL handshake failures when Stack tries to download GHC, packages, or the Hackage index.
+
+### Configuring the Proxy
+
+Before running any Stack commands, create a Stack configuration file with proxy settings:
+
+```bash
+mkdir -p ~/.stack
+cat > ~/.stack/config.yaml << 'EOF'
+http-proxy: http://egress.public-claude-proxy.svc.cluster.local:80
+https-proxy: http://egress.public-claude-proxy.svc.cluster.local:80
+EOF
+```
+
+This configuration tells Stack to route all HTTP and HTTPS traffic through the Claude Code web environment's internal proxy, which has access to the necessary Haskell package repositories.
+
+**Note:** You only need to do this once. The configuration file will persist across Stack commands. If you see errors like "TLS HandshakeFailed" or "Network.Socket.connect", verify that this configuration file exists and contains the correct proxy settings.
+
 ## Running Tests
 
 From the `cli/` directory, run:
