@@ -45,10 +45,10 @@ test_pNormalizedPath =
       "[@<a & @1<b & c]>@"
         `parsesTo` singletonRooted
           ( RootedDeterministicPath
-              ( mapFromList
-                  [ (Pointlike joinPoint, singletonSet (DPOutgoing (DPLiteral "a"))),
-                    (Pointlike $ specific (smallNID 1), singletonSet (DPOutgoing (DPLiteral "b"))),
-                    (Pointlike unanchored, singletonSet (DPOutgoing (DPLiteral "c")))
+              ( impureNonNull $ mapFromList
+                  [ (Pointlike joinPoint, singletonNNSet (DPOutgoing (DPLiteral "a"))),
+                    (Pointlike $ specific (smallNID 1), singletonNNSet (DPOutgoing (DPLiteral "b"))),
+                    (Pointlike unanchored, singletonNNSet (DPOutgoing (DPLiteral "c")))
                   ]
               )
               joinPoint
