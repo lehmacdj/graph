@@ -670,14 +670,18 @@ traverseViaTransitions initial fanchor ftransition normalizedPath =
         ] <-
         rootBranches
           & mapToList
-          & traverse (\(dpa, bs) -> do
-              dpbs <- traverseDeterministicPath nid dpa
-              pure $ map (dpa, , bs) dpbs)
+          & traverse
+            ( \(dpa, bs) -> do
+                dpbs <- traverseDeterministicPath nid dpa
+                pure $ map (dpa,,bs) dpbs
+            )
       rootBranches'' ::
         [(OMap (DeterministicPath b) (OSet (DPBranch b)), b)] <-
         rootBranches'
-          & (traverse . traverse) (\(dpa, dpb, bs) ->
-              (dpb,) <$> traverseBranches dpb.target.anchor dpa.target.anchor target.anchor bs)
+          & (traverse . traverse)
+            ( \(dpa, dpb, bs) ->
+                (dpb,) <$> traverseBranches dpb.target.anchor dpa.target.anchor target.anchor bs
+            )
           <&> map (map \(r, bas) -> (\(b, a) -> ((r, b), a)) <$> bas)
           <&> concatMap choices
           <&> mapMaybe (ensureSameAnchors . impureNonNull)
@@ -727,3 +731,19 @@ traverseViaTransitions initial fanchor ftransition normalizedPath =
         uptoMidpoints
           & (traverse . _2) (\p -> (p,) <$> traverseBranches p.anchor midpoint.anchor target bs2)
           <&> concatMap (\(bs1', (p, bs2'ts)) -> first (DPSequence bs1' p) <$> bs2'ts)
+
+-- | Like 'traverseViaTransitions', but only performs side effects via the
+-- transition function and ignores the resulting/path.
+traverseViaTransitions_ ::
+  forall f a.
+  (Monad f, Ord a) =>
+  (a -> DPDirection -> a -> f ()) ->
+  NormalizedPath a ->
+  f ()
+traverseViaTransitions_ ftransition normalizedPath =
+  void $
+    traverseViaTransitions
+      ()
+      (\_ _ _ -> Just ())
+      (\_ a dir b -> ftransition a dir b $> [(dir, ())])
+      normalizedPath
