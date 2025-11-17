@@ -3,7 +3,6 @@ module Models.ResolvedPath
     getTargets,
     finalNonLoopEdges,
     leftmostConnects,
-    pathResidualsUnresolvedBy,
     spec_leftmostConnects,
     module X,
   )
@@ -14,7 +13,6 @@ import Models.Connect
 import Models.Edge
 import Models.Graph
 import Models.NID
-import Models.Node
 import Models.NormalizedPath
 import Models.NormalizedPath.TH
 import MyPrelude
@@ -135,17 +133,3 @@ spec_leftmostConnects = do
   it "takes leftmost part of intersections" $
     leftmostConnects [npathNID| [@0<a & @1<b]>@2|]
       `shouldBe` setFromList [(smallNID 0, [Connect "a" (smallNID 2)])]
-
--- | The portion of a path that can't be resolved in the given graph from the
--- given start NID. For generality this operates on `NormalizedPath Anchor`
--- rather than `FullyAnchored` or `NID`.
---
--- This can be used to get the residual path that wasn't resolved while
--- resolving a path using resolvePath if you pass the non-thin graph from the
--- ResolvedPath and the same starting NID that was used to resolve it.
---
--- You might want to use this to then create the new nodes/transitions that
--- would have been necessary for it to be resolved.
-pathResidualsUnresolvedBy ::
-  NID -> Graph Text () -> NormalizedPath Anchor -> NormalizedPath Anchor
-pathResidualsUnresolvedBy startNid graph (NormalizedPath dps) = undefined

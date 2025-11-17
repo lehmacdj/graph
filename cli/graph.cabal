@@ -68,7 +68,6 @@ library
       Graph.NodeLocated
       Graph.Paths
       Graph.Resolve
-      Graph.ResolveSpec
       Graph.SystemNodes
       Graph.SystemNodes.Init
       Graph.Time
@@ -106,6 +105,7 @@ library
       Models.NormalizedPath.TH
       Models.NormalizedPath.Traversals
       Models.NormalizedPath.Types
+      Models.NormalizedPath.UnresolvedResiduals
       Models.NormalizedPathSpec
       Models.Path
       Models.Path.Parse
