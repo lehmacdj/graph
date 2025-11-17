@@ -17,6 +17,7 @@ module Utils.Testing
     goldenTestBinary,
     goldenTest,
     goldenTestShow,
+    shouldBeMultiline,
   )
 where
 
@@ -179,3 +180,29 @@ getCallingModule cs =
     [] -> error "goldenTest: unable to determine calling module from callstack"
   where
     isUtilsTestingModule modName = modName == "Utils.Testing"
+
+newtype NewlineBeforeShow a = NewlineBeforeShow {underlying :: a}
+  deriving (Eq)
+
+instance (Show a) => Show (NewlineBeforeShow a) where
+  show a = "\n" ++ show a.underlying
+
+-- | The default output of `shouldBe` isn't ideal when the show instance is
+-- multiline, e.g.:
+-- ```
+-- expected: @1{out=[@2 via "a"]}
+-- @2{out=[@3 via "b"]}
+-- @3{out=[@5 via "c"]}
+-- @4{out=[@5 via "d"]}
+-- @5{out=[]}
+-- but got: @1{out=[]}
+-- @2{out=[]}
+-- @3{out=[]}
+-- @4{out=[@5 via "d"]}
+-- @5{out=[]}
+-- ```
+--
+-- This prepends newlines before the show instances in the output
+shouldBeMultiline :: (HasCallStack, Eq a, Show a) => a -> a -> Expectation
+shouldBeMultiline actual expected = do
+  NewlineBeforeShow actual `shouldBe` NewlineBeforeShow expected
