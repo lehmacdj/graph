@@ -11,6 +11,7 @@ module Utils.Testing
     node,
     disconnectedGraph,
     stronglyConnectedGraph,
+    graphWithEdges,
     parseForTest,
     testParserParses,
     testParserFails,
@@ -83,6 +84,9 @@ runSpec s = defaultMain =<< testSpec "<interactive>" s
 
 connect :: Int -> Connect ()
 connect n = Connect () (smallNID n)
+
+graphWithEdges :: (ValidTransition a) => [Edge a] -> Graph a ()
+graphWithEdges edges = insertEdges edges emptyGraph
 
 edge :: Int -> Int -> Edge ()
 edge i o = Edge (smallNID i) () (smallNID o)
