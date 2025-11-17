@@ -112,7 +112,7 @@ runInMemoryGraphMetadataEditing = interpret \case
     modify @(Graph t ()) $
       -- it is important that we only write emptyNode if the node does not exist
       -- otherwise we will overwrite the node with an empty node
-      at nid . _Just .~ emptyNode nid
+      at nid %~ Just . fromMaybe (emptyNode nid)
   DeleteNode nid -> modify @(Graph t ()) $ at nid .~ Nothing
   InsertEdge edge -> modify $ Models.Graph.insertEdge edge
   DeleteEdge edge -> modify $ Models.Graph.deleteEdge edge
