@@ -10,5 +10,5 @@ import MyPrelude
 createNPath ::
   (Member GraphMetadataEditing r) =>
   NormalizedPath NID ->
-  Sem r (NormalizedPath NID)
+  Sem r ()
 createNPath = undefined

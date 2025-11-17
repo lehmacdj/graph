@@ -53,10 +53,11 @@ resolveNPath firstNid normalizedPath =
         HasCallStack
       ) =>
       NID ->
+      FullyAnchored ->
       DPDirection ->
       FullyAnchored ->
       Sem q [(DPDirection, NID)]
-    traverseDirection nid direction _target = case direction of
+    traverseDirection nid _startAnchor direction _target = case direction of
       DPIncoming' t -> traverseTransition nid (.incoming) DPIncoming' t
       DPOutgoing' t -> traverseTransition nid (.outgoing) DPOutgoing' t
 

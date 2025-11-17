@@ -605,13 +605,14 @@ traverseViaTransitions ::
   -- | Transition callback.
   --
   -- Parmameters:
-  -- * @start@ - the anchor we're starting from (type @b@)
+  -- * @start@ - the anchor we're starting from after unification (type @b@)
+  -- * @startAnchor@ - the starting anchor from the path structure (type @a@)
   -- * @direction@ - the direction and transition label to follow
   -- * @target@ - the anchor we should end up at (type @a@)
   --
   -- Returns a list of possible (direction, end) pairs representing successful
   -- traversals
-  (b -> DPDirection -> a -> f [(DPDirection, b)]) ->
+  (b -> a -> DPDirection -> a -> f [(DPDirection, b)]) ->
   NormalizedPath a ->
   f (NormalizedPath b)
 traverseViaTransitions initial fanchor ftransition normalizedPath =
@@ -639,7 +640,7 @@ traverseViaTransitions initial fanchor ftransition normalizedPath =
       case fanchor isRoot nid anchor of
         Nothing -> pure []
         Just nid' -> do
-          loops' <- traverseBranches nid' anchor loops
+          loops' <- traverseBranches nid' anchor anchor loops
           pure $
             loops'
               & filter ((== nid') . snd)
@@ -661,21 +662,22 @@ traverseViaTransitions initial fanchor ftransition normalizedPath =
       f [RootedDeterministicPath b]
     traverseRooted nid RootedDeterministicPath {..} = do
       rootBranches' ::
-        [ [ ( DeterministicPath b,
+        [ [ ( DeterministicPath a,
+              DeterministicPath b,
               OSet (DPBranch a)
             )
           ]
         ] <-
         rootBranches
           & mapToList
-          & (traverse . _1) (traverseDeterministicPath nid)
-          <&> map (\(rs, bs) -> (,bs) <$> rs)
-          <&> choices
+          & traverse (\(dpa, bs) -> do
+              dpbs <- traverseDeterministicPath nid dpa
+              pure $ map (dpa, , bs) dpbs)
       rootBranches'' ::
         [(OMap (DeterministicPath b) (OSet (DPBranch b)), b)] <-
         rootBranches'
-          & (traverse . traverse)
-            (\(dp, bs) -> (dp,) <$> traverseBranches dp.target.anchor target.anchor bs)
+          & (traverse . traverse) (\(dpa, dpb, bs) ->
+              (dpb,) <$> traverseBranches dpb.target.anchor dpa.target.anchor target.anchor bs)
           <&> map (map \(r, bas) -> (\(b, a) -> ((r, b), a)) <$> bas)
           <&> concatMap choices
           <&> mapMaybe (ensureSameAnchors . impureNonNull)
@@ -690,15 +692,16 @@ traverseViaTransitions initial fanchor ftransition normalizedPath =
       (HasCallStack) =>
       b ->
       a ->
+      a ->
       OSet (DPBranch a) ->
       f [(OSet (DPBranch b), b)]
-    traverseBranches nid target branches
+    traverseBranches nid startAnchor target branches
       | -- in the case where the OSet is empty (only when loops),
         -- we return the same anchor as the input
         null branches =
           pure [(mempty, nid)]
       | otherwise = do
-          branches' <- traverse (traverseBranch nid target) (toList branches)
+          branches' <- traverse (traverseBranch nid startAnchor target) (toList branches)
           pure $
             branches'
               & choices
@@ -709,17 +712,18 @@ traverseViaTransitions initial fanchor ftransition normalizedPath =
       (HasCallStack) =>
       b ->
       a ->
+      a ->
       DPBranch a ->
       f [(DPBranch b, b)]
-    traverseBranch nid target = \case
+    traverseBranch nid startAnchor target = \case
       DPSingle direction ->
-        over (mapped . _1) DPSingle <$> ftransition nid direction target
+        over (mapped . _1) DPSingle <$> ftransition nid startAnchor direction target
       DPSequence bs1 midpoint bs2 -> do
-        bs1's <- traverseBranches nid midpoint.anchor bs1
+        bs1's <- traverseBranches nid startAnchor midpoint.anchor bs1
         uptoMidpoints :: [(OSet (DPBranch b), PointlikeDeterministicPath b)] <-
           bs1's
             & (traverse . _2) (\x -> traversePointlike False x midpoint)
             <&> concatMap (\(bs1', ms) -> (bs1',) <$> ms)
         uptoMidpoints
-          & (traverse . _2) (\p -> (p,) <$> traverseBranches p.anchor target bs2)
+          & (traverse . _2) (\p -> (p,) <$> traverseBranches p.anchor midpoint.anchor target bs2)
           <&> concatMap (\(bs1', (p, bs2'ts)) -> first (DPSequence bs1' p) <$> bs2'ts)
