@@ -82,3 +82,9 @@ spec_pathResidualsUnresolvedBy = do
     testResiduals "[@1<a]>@2" "[a] + [b]" "[b]"
     testResiduals "[@1<a]>@2" "[a & b] + [c]" "[@1<b]>@2 + [c]"
     testResiduals "[@1<a]>@2" "[a] + [a & b]" "[@1<b]>@2"
+
+  describe "regex is \"fulfilled\" by matching transitions" do
+    testResiduals "[@1<apple]>@2" "[regex:'a.*']" "%never"
+    testResiduals "[@1<banana]>@2" "[regex:'a.*']" "[@1<banana]>@2"
+    testResiduals "[@1<apple]>@2" "[regex:'a.*' & regex:'b.*']" "[@1<regex:'b.*']>@2"
+    testResiduals "[@1<apple]>@2" "[regex:'b.*']" "[regex:'b.*']"
