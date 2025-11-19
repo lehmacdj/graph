@@ -10,7 +10,21 @@ data Edge t = Edge
     transition :: t,
     sink :: NID
   }
-  deriving (Eq, Ord, Generic, NFData, Show)
+  deriving (Eq, Ord, Generic, NFData)
+
+instance (Show t) => CompactNodeShow (Edge t) where
+  type Augmentation (Edge t) = Void
+  minimumNidLength settings c =
+    min
+      (minimumNidLength settings c.source)
+      (minimumNidLength settings c.sink)
+  nshowSettings settings Edge {..} =
+    nshowSettings settings source
+      ++ (">" ++ tshow transition ++ ">")
+      ++ nshowSettings settings sink
+
+instance (Show t) => Show (Edge t) where
+  show = unpack . nshowDefault
 
 data EdgeSide = Source | Sink
   deriving (Eq, Ord, Generic, NFData, Show)
