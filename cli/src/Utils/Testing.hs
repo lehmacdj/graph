@@ -97,7 +97,7 @@ edge' i t o = Edge (smallNID i) t (smallNID o)
 node :: (ValidTransition t) => Int -> Node t ()
 node i = emptyNode (smallNID i)
 
-disconnectedGraph :: [Int] -> Graph () ()
+disconnectedGraph :: (ValidTransition t) => [Int] -> Graph t ()
 disconnectedGraph nids = insertNodes (node <$> nids) emptyGraph
 
 stronglyConnectedGraph :: [Int] -> Graph () ()

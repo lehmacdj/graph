@@ -424,6 +424,26 @@ delNodes ::
   Graph t a
 delNodes = listify delNode
 
+nidSet :: Graph t a -> Set NID
+nidSet = keysSet . (.nodeMap)
+
+edgeSet :: forall t a. (ValidTransition t) => Graph t a -> Set (Edge t)
+edgeSet = foldMap getEdges . (.nodeMap)
+  where
+    getEdges :: Node t a -> Set (Edge t)
+    getEdges n =
+      mapSet (`incomingEdge` n.nid) n.incoming
+        ++ mapSet (outgoingEdge n.nid) n.outgoing
+
+compactGraphRepresentation :: (ValidTransition t) => Graph t a -> Text
+compactGraphRepresentation g =
+  ("[" ++) . (++ "]") . intercalate "," $
+    map tshow nids ++ map tshow (toList es)
+  where
+    es = edgeSet g
+    edgeNids = mapSet (.sink) es ++ mapSet (.source) es
+    nids = toList $ nidSet g \\ edgeNids
+
 -- * Operations on augmentations (formerly referred to as data)
 
 -- | sets the data, setting to nothing is equivalent to deleting the data
