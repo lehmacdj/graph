@@ -71,15 +71,6 @@ pHttpURI = lexeme (lookAhead (string "http://" <|> string "https://") *> pURI)
 pDirectiveNamed :: Text -> Parser a -> Parser a
 pDirectiveNamed name = between (symbol ("%" <> name <> "(")) (symbol ")")
 
-pRegex :: Parser CheckedRegex
-pRegex = label "regex:\"<regex>\"" do
-  str <-
-    between (string "regex:\"") (char '"') (takeWhileP Nothing (/= '"'))
-      <|> between (string "regex:'") (char '\'') (takeWhileP Nothing (/= '\''))
-  str
-    & compileRegex . encodeUtf8
-    & codiagonal . bimap fail pure
-
 partialPathTerm :: Parser PartialPath
 partialPathTerm = partialPathTerm' pFullNID
 

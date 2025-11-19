@@ -129,6 +129,15 @@ debugParser parser input = do
     Right x -> say $ "Parser succeeded with: " ++ tshow x
     Left err -> say $ "Parser failed with:\n" ++ pack (errorBundlePretty err)
 
+pRegex :: Parser CheckedRegex
+pRegex = label "regex:\"<regex>\"" do
+  str <-
+    between (string "regex:\"") (char '"') (takeWhileP Nothing (/= '"'))
+      <|> between (string "regex:'") (char '\'') (takeWhileP Nothing (/= '\''))
+  str
+    & compileRegex . encodeUtf8
+    & codiagonal . bimap fail pure
+
 unit_command_emptyStillRequiresSpace :: Assertion
 unit_command_emptyStillRequiresSpace = testParserFails (command "") "1"
 

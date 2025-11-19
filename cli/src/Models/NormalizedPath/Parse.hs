@@ -33,10 +33,13 @@ pDeterministicPath pNID =
 pSingleBranch :: Parser (DPBranch Anchor)
 pSingleBranch =
   label "single branch" $
-    try (symbol "~*" $> DPIncoming DPWild)
-      <|> (symbol "*" $> DPOutgoing DPWild)
-      <|> try (DPIncoming . DPLiteral <$> (char '~' *> pTransition))
-      <|> (DPOutgoing . DPLiteral <$> pTransition)
+    try (DPIncoming <$> (char '~' *> pDPTransition))
+      <|> (DPOutgoing <$> pDPTransition)
+  where
+    pDPTransition =
+      try (DPRegex <$> pRegex)
+        <|> try (symbol "*" $> DPWild)
+        <|> (DPLiteral <$> pTransition)
 
 pBranch :: Parser NID -> Parser (DPBranch Anchor)
 pBranch pNID =
