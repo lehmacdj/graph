@@ -6,6 +6,7 @@ import Models.Graph (Graph, emptyGraph)
 import Models.NID
 import Models.Node
 import Models.NormalizedPath
+import Models.NormalizedPath.Traversals
 import Models.Path.Simple
 import Models.ResolvedPath
 import MyPrelude hiding ((\\))

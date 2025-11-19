@@ -98,9 +98,14 @@ library
       Models.NIDSpec
       Models.Node
       Models.NormalizedPath
+      Models.NormalizedPath.Anchor
+      Models.NormalizedPath.FullyAnchor
+      Models.NormalizedPath.Normalize
       Models.NormalizedPath.Parse
       Models.NormalizedPath.ParseSpec
       Models.NormalizedPath.TH
+      Models.NormalizedPath.Traversals
+      Models.NormalizedPath.Types
       Models.NormalizedPathSpec
       Models.Path
       Models.Path.Parse

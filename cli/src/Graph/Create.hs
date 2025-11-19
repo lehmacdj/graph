@@ -5,6 +5,7 @@ import Models.Edge
 import Models.NID
 import Models.NormalizedPath
 import Models.NormalizedPath.Parse
+import Models.NormalizedPath.Traversals
 import MyPrelude
 import Utils.Testing
 
