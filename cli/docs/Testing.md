@@ -1,29 +1,6 @@
 # Testing Best Practices
 
-## Test Organization
-
-### In-File Tests (Preferred)
-- **Prefer** placing tests directly in the same file as the implementation
-- Place test functions alongside regular functions (no preprocessor directives needed)
-- Example: `Models/Path/Parse.hs`, `MyPrelude/Time.hs`
-
-### Separate Test Files
-- Use `*Spec.hs` files for tests that require additional dependencies
-- Place in same directory structure under `cli/src/`
-- Use `tasty-discover` naming: `test_*` for `TestTree`, `spec_*` for Hspec `Spec`
-
-## Test Utilities
-
-### Utils.Testing vs Utils.Testing.External
-- **Utils.Testing.External**: Use in MyPrelude modules to avoid cyclic imports
-  - Only depends on ClassyPrelude and testing libraries
-  - Re-exports: Tasty, HUnit, Hspec, QuickCheck
-- **Utils.Testing**: Use in application code
-  - Includes all of Utils.Testing.External
-  - Additional utilities: golden tests, graph helpers, parser testing
-
-### Creating Readable Tests
-
+## Creating Readable Tests
 Use helper functions to make tests more readable:
 
 ```haskell
@@ -45,6 +22,32 @@ Benefits:
 - Concise test cases that look like data
 - Descriptive test names generated automatically
 - Easy to add new test cases
+
+## Tasty
+- We use the tasty-discover as our test runner. To run specific tests use `stack test --test-arguments "--pattern <string pattern>"`.
+- Prefer writing Hspec `spec_` tests, over using `testGroup`
+
+## Test Organization
+
+### In-File Tests (Preferred)
+- **Prefer** placing tests directly in the same file as the implementation
+- Place test functions alongside regular functions (no preprocessor directives needed)
+- Example: `Models/Path/Parse.hs`, `MyPrelude/Time.hs`
+
+### Separate Test Files
+- Use `*Spec.hs` files for tests that require additional dependencies
+- Place in same directory structure under `cli/src/`
+- Use `tasty-discover` naming: `test_*` for `TestTree`, `spec_*` for Hspec `Spec`
+
+## Test Utilities
+
+### Utils.Testing vs Utils.Testing.External
+- **Utils.Testing.External**: Use in MyPrelude modules to avoid cyclic imports
+  - Only depends on ClassyPrelude and testing libraries
+  - Re-exports: Tasty, HUnit, Hspec, QuickCheck
+- **Utils.Testing**: Use in application code
+  - Includes all of Utils.Testing.External
+  - Additional utilities: golden tests, graph helpers, parser testing
 
 ## Golden Tests
 
