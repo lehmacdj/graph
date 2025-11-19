@@ -35,7 +35,60 @@ test_pNormalizedPath =
       "[~a/@|b]" `parsesTo` singletonBranch (DPSequence (setFromList [DPIncoming (DPLiteral "a")]) joinPoint (setFromList [DPOutgoing (DPLiteral "b")])),
       "[(a & b)/@|c]" `parsesTo` singletonBranch (DPSequence (setFromList [DPOutgoing (DPLiteral "a"), DPOutgoing (DPLiteral "b")]) joinPoint (setFromList [DPOutgoing (DPLiteral "c")])),
       "[a/@|(b & c)]" `parsesTo` singletonBranch (DPSequence (setFromList [DPOutgoing (DPLiteral "a")]) joinPoint (setFromList [DPOutgoing (DPLiteral "b"), DPOutgoing (DPLiteral "c")])),
+      "[a & b/@|c]"
+        `parsesTo` singletonRooted
+          ( RootedDeterministicPath
+              ( mapFromList
+                  [ ( Pointlike unanchored,
+                      setFromList
+                        [ DPOutgoing
+                            (DPLiteral "a"),
+                          DPSequence
+                            ( singletonSet
+                                ( DPOutgoing
+                                    (DPLiteral "b")
+                                )
+                            )
+                            joinPoint
+                            ( singletonSet
+                                ( DPOutgoing
+                                    (DPLiteral "c")
+                                )
+                            )
+                        ]
+                    )
+                  ]
+              )
+              unanchored
+          ),
+      "[b/@|c & a]"
+        `parsesTo` singletonRooted
+          ( RootedDeterministicPath
+              ( mapFromList
+                  [ ( Pointlike unanchored,
+                      setFromList
+                        [ DPSequence
+                            ( singletonSet
+                                ( DPOutgoing
+                                    (DPLiteral "b")
+                                )
+                            )
+                            joinPoint
+                            ( singletonSet
+                                ( DPOutgoing
+                                    (DPLiteral "c")
+                                )
+                            ),
+                          DPOutgoing
+                            (DPLiteral "a")
+                        ]
+                    )
+                  ]
+              )
+              unanchored
+          ),
       "[a/|b]" `parsesTo` singletonBranch (DPSequence (setFromList [DPOutgoing (DPLiteral "a")]) unanchored (setFromList [DPOutgoing (DPLiteral "b")])),
+      "[a/|b/|c]" `parsesTo` singletonBranch (DPSequence (setFromList [DPOutgoing (DPLiteral "a")]) unanchored (setFromList [DPSequence (singletonSet (DPOutgoing (DPLiteral "b"))) unanchored (singletonSet (DPOutgoing (DPLiteral "c")))])),
       "[a/|(b/|c)]" `parsesTo` singletonBranch (DPSequence (setFromList [DPOutgoing (DPLiteral "a")]) unanchored (setFromList [DPSequence (setFromList [DPOutgoing (DPLiteral "b")]) unanchored (setFromList [DPOutgoing (DPLiteral "c")])])),
       "[(b/|c)/|a]" `parsesTo` singletonBranch (DPSequence (setFromList [DPSequence (setFromList [DPOutgoing (DPLiteral "b")]) unanchored (setFromList [DPOutgoing (DPLiteral "c")])]) unanchored (setFromList [DPOutgoing (DPLiteral "a")])),
       "[a/@1|b]" `parsesTo` singletonBranch (DPSequence (setFromList [DPOutgoing (DPLiteral "a")]) (specific (smallNID 1)) (setFromList [DPOutgoing (DPLiteral "b")])),
