@@ -211,21 +211,22 @@ showsRooted (RootedDeterministicPath rootBranches target) =
       showsRootBranch rb . showString " & " . showsRootBranches rbs
 
     showsRootBranch (root, branches) =
-      showsRootPrefix root . showsBranchSet branches
+      showsBranchSet root branches
 
     showsRootPrefix dp@(Pointlike p)
-      | null p.loops = id
+      | null p.loops && null (show p.anchor) = id
       | otherwise = showsDeterministicPath 0 dp . showString "<"
     showsRootPrefix dp = showsDeterministicPath 0 dp . showString "<"
 
-    showsBranchSet branches =
+    showsBranchSet root branches =
       case toList branches of
-        [single] -> showsPrec 2 single
-        multiple -> showsBranchList multiple
+        [single] -> showsRootPrefix root . showsPrec 2 single
+        multiple -> showsBranchList root multiple
 
-    showsBranchList [] = id
-    showsBranchList [b] = showsPrec 3 b
-    showsBranchList (b : bs) = showsPrec 3 b . showString " & " . showsBranchList bs
+    showsBranchList _ [] = id
+    showsBranchList root [b] = showsRootPrefix root . showsPrec 3 b
+    showsBranchList root (b : bs) =
+      showsRootPrefix root . showsPrec 3 b . showString " & " . showsBranchList root bs
 
 instance Show DPTransition where
   showsPrec _ = showsDPTransition
@@ -464,3 +465,27 @@ spec_showNormalizedPath = do
             joinPoint
         )
         `shouldBe` [rq|[@[*]<"a" & "b"]>@|]
+
+    it "specific" $
+      show
+        ( RootedDeterministicPath
+            ( singletonMap
+                (Pointlike $ specific (unsafeNID "000000000xyz"))
+                (singletonSet (DPOutgoing (DPLiteral "a")))
+            )
+            (specific (unsafeNID "000000000abc"))
+        )
+        `shouldBe` [rq|[@000000000xyz<"a"]>@000000000abc|]
+
+    it "specific intersected" $
+      show
+        ( RootedDeterministicPath
+            ( singletonMap
+                (Pointlike $ specific (unsafeNID "000000000xyz"))
+                (setFromList [DPOutgoing (DPLiteral "a")
+                              , DPOutgoing (DPLiteral "b")
+                             ])
+            )
+            (specific (unsafeNID "000000000abc"))
+        )
+        `shouldBe` [rq|[@000000000xyz<"a" & @000000000xyz<"b"]>@000000000abc|]
