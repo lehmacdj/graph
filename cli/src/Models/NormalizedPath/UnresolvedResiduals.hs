@@ -124,5 +124,5 @@ spec_pathResidualsUnresolvedBy = do
 
   describe "unions" do
     testResiduals [edge' 1 "a" 2] "[a] + [b]" "[b]"
-    testResiduals [edge' 1 "a" 2] "[a & b] + [c]" "[@1<b]>@2 + [c]"
-    testResiduals [edge' 1 "a" 2] "[a] + [a & b]" "[@1<b]>@2"
+    testResiduals [edge' 1 "a" 2] "[@<a & @<b]>@ + [c]" "[@1<b]>@2 + [c]"
+    testResiduals [edge' 1 "a" 2] "[@<a]>@ + [@<a & @<b]>@" "[@1<b]>@2"
