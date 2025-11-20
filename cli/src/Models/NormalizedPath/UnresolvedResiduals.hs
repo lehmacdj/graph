@@ -57,7 +57,7 @@ spec_pathResidualsUnresolvedBy = do
     testResiduals [edge' 1 "a" 2] "[a]>@" "%never"
     testResiduals [edge' 1 "a" 2] "[a]>@2" "%never"
     testResiduals [edge' 1 "a" 2] "[@1<a]>@2" "%never"
-    testResiduals [edge' 1 "~a" 2] "[~a]" "%never"
+    testResiduals [edge' 2 "a" 1] "[~a]" "%never"
 
     testResiduals [edge' 1 "a" 1, edge' 1 "b" 1] "@[a]" "%never"
     testResiduals [edge' 1 "a" 1] "@[a]" "%never"
@@ -66,7 +66,6 @@ spec_pathResidualsUnresolvedBy = do
     testResiduals [edge' 1 "apple" 1] [rq|@[regex:"a"]|] "%never"
     testResiduals [edge' 1 "a" 1] "@[a]" "%never"
     testResiduals [edge' 1 "a" 1] "@1[a]" "%never"
-    testResiduals [edge' 1 "~a" 1] "@[~a]" "%never"
 
   describe "intersection matches" do
     testResiduals [edge' 1 "a" 2, edge' 1 "b" 2] "[a & b]" "%never"
@@ -102,6 +101,8 @@ spec_pathResidualsUnresolvedBy = do
 
   describe "unchanged when unmatched" do
     testResiduals [] "[a]" "[a]"
+    testResiduals [edge' 1 "~a" 2] "[~a]" "[~a]"
+    testResiduals [edge' 1 "~a" 1] "@[~a]" "@[~a]"
     testResiduals [edge' 1 "a" 2] "[~a]" "[~a]"
     testResiduals' (disconnectedGraph [1]) "[a]" "[a]"
     testResiduals [] "[@<a & @<b]" "[@<a & @<b]"
