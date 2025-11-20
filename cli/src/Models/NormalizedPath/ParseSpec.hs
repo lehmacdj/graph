@@ -106,6 +106,42 @@ test_pNormalizedPath =
               )
               joinPoint
           ),
+      "[@<a /| b]>@"
+        `parsesTo` singletonRooted
+          ( RootedDeterministicPath
+              ( mapFromList
+                  [ ( Pointlike joinPoint,
+                      singletonSet
+                        ( DPSequence
+                            (singletonSet (DPOutgoing (DPLiteral "a")))
+                            unanchored
+                            (singletonSet (DPOutgoing (DPLiteral "b")))
+                        )
+                    )
+                  ]
+              )
+              joinPoint
+          ),
+      "[@<a /| (b & c)]>@"
+        `parsesTo` singletonRooted
+          ( RootedDeterministicPath
+              ( mapFromList
+                  [ ( Pointlike joinPoint,
+                      singletonSet
+                        ( DPSequence
+                            (singletonSet (DPOutgoing (DPLiteral "a")))
+                            unanchored
+                            ( setFromList
+                                [ DPOutgoing (DPLiteral "b"),
+                                  DPOutgoing (DPLiteral "c")
+                                ]
+                            )
+                        )
+                    )
+                  ]
+              )
+              joinPoint
+          ),
       "[@[*]<a & b]>@"
         `parsesTo` singletonRooted
           ( RootedDeterministicPath
@@ -171,7 +207,12 @@ test_pNormalizedPath =
       parseFails "~@",
       -- we require [] around all RootedDeterministicPaths
       parseFails "a + b",
-      parseFails "a"
+      parseFails "a",
+      -- don't add parens around sequences in a branch set; it's hard to
+      -- disambiguate so we don't parse it
+      -- we could allow this but it adds too much complexity for a parser we
+      -- only use for tests
+      parseFails "[@<a /| ((b /| c) & d)]"
     ]
   where
     parsesTo :: (HasCallStack) => Text -> NormalizedPath Anchor -> TestTree
