@@ -92,7 +92,7 @@ spec_pathResidualsUnresolvedBy = do
     testResiduals [edge' 1 "a" 2] "[a /| b]" "[@2<b]"
     -- we want to keep the resulting expression minimally constrained; so we
     -- don't e.g. specialize "c /| d" to "c /@2| d"
-    testResiduals [edge' 1 "a" 2] "[a /| b & c /| d]" "[@2<b & @1<(c /| d)]"
+    testResiduals [edge' 1 "a" 2] "[@<(a /| b) & @<(c /| d)]" "[@2<b & @1<(c /| d)]"
     testResiduals [edge' 1 "a" 2, edge' 2 "a" 1] "@[a /@2| ~a]" "%never"
     testResiduals [edge' 1 "a" 2, edge' 2 "a" 1] "@[a /@| ~a]" "%never"
     testResiduals [edge' 1 "a" 1, edge' 1 "a" 1] "@[a /@| ~a]" "%never"
