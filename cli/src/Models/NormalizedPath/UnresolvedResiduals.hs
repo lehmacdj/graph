@@ -40,7 +40,7 @@ spec_pathResidualsUnresolvedBy = do
           testName =
             "residuals of "
               <> pathToResidualStr
-              <> " in graph the graph "
+              <> " in the graph "
               <> compactGraphRepresentation graph
               <> " = "
               <> expectedStr
@@ -86,10 +86,18 @@ spec_pathResidualsUnresolvedBy = do
     -- testResiduals [edge' 1 "a" 2] "[a & b]" "[b]"
     -- testResiduals [edge' 1 "a" 2] "[a & b]" "[b]"
     testResiduals [edge' 1 "a" 2] "[@<a & @<b & @<c]>@" "[@1<b & @1<c]>@2"
+    testResiduals [edge' 1 "b" 2] "[@<a & @<b & @<c]>@" "[@1<a & @1<c]>@2"
+    testResiduals [edge' 1 "c" 2] "[@<a & @<b & @<c]>@" "[@1<a & @1<b]>@2"
+    testResiduals
+      [edge' 1 "c" 2, edge' 1 "a" 2]
+      "[@<a & @<b & @<c]>@"
+      "[@1<b]>@2"
 
   describe "sequence matches" do
     testResiduals [edge' 1 "a" 2, edge' 2 "b" 3] "[a /| b]" "%never"
     testResiduals [edge' 1 "a" 2] "[a /| b]" "[@2<b]"
+    testResiduals [edge' 1 "a" 2] "@[a /| b]" "[@2<b]>@1"
+    testResiduals [edge' 1 "a" 2] "@1[a /| b]" "[@2<b]>@1"
     -- we want to keep the resulting expression minimally constrained; so we
     -- don't e.g. specialize "c /| d" to "c /@2| d"
     testResiduals
@@ -97,9 +105,21 @@ spec_pathResidualsUnresolvedBy = do
       "[@<(a /| b) & @<(c /| d)]"
       "[@2<b & @1<(c /| d)]"
     testResiduals
+      [edge' 1 "c" 2]
+      "[@<(a /| b) & @<(c /| d)]"
+      "[@2<d & @1<(a /| b)]"
+    testResiduals
       [edge' 1 "z" 2, edge' 2 "a" 3]
       "[@<z /| (a /| b & c /| d)]"
       "[@3<b & @2<(c /| d)]"
+    testResiduals
+      [edge' 1 "z" 2, edge' 2 "c" 3]
+      "[@<z /| (a /| b & c /| d)]"
+      "[@3<d & @2<(a /| b)]"
+    testResiduals
+      [edge' 1 "z" 2, edge' 2 "c" 3, edge' 3 "d" 4]
+      "[@<z /| (a /| b & c /| d)]"
+      "[@2<(a /| b)]"
     testResiduals [edge' 1 "a" 2, edge' 2 "a" 1] "@[a /@2| ~a]" "%never"
     testResiduals [edge' 1 "a" 2, edge' 2 "a" 1] "@[a /@| ~a]" "%never"
     testResiduals [edge' 1 "a" 1, edge' 1 "a" 1] "@[a /@| ~a]" "%never"
@@ -107,6 +127,74 @@ spec_pathResidualsUnresolvedBy = do
     testResiduals [edge' 1 "a" 1, edge' 1 "a" 1] "@[a /| ~a]" "%never"
     testResiduals [edge' 1 "a" 2] "[a /| (b & c)]" "[@2<(b & c)]"
     testResiduals [edge' 1 "a" 2, edge' 2 "b" 3] "[a /| (b & c)]" "[@2<c]"
+
+    describe "with loops at midpoints" do
+      testResiduals [edge' 1 "a" 2, edge' 2 "c" 3] "[a /@[b]| c]" "@2[b]"
+      testResiduals [edge' 1 "a" 2, edge' 2 "c" 3] "[a /@2[b]| c]" "@2[b]"
+      testResiduals [edge' 1 "a" 2, edge' 2 "b" 2] "[a /@[b]| c]" "[@2<c]"
+      testResiduals [edge' 1 "a" 2, edge' 2 "b" 2] "[a /@2[b]| c]" "[@2<c]"
+      testResiduals
+        [edge' 1 "a" 2, edge' 2 "b" 3, edge' 3 "c" 2]
+        "[a /@[b/|c]| d]"
+        "[@2<d]"
+      testResiduals
+        [edge' 1 "a" 2, edge' 2 "b" 2, edge' 2 "c" 2]
+        "[a /@[b & c]| d]"
+        "[@2<d]"
+      testResiduals [edge' 1 "a" 2] "[a /@[b/|c]| d]" "[@2[b /| c]<d]"
+      testResiduals [edge' 1 "a" 2, edge' 3 "c" 2] "[a /@[b/|c]| d]" "[@3<c /| d]"
+      testResiduals [edge' 1 "a" 2] "[a /@2[b]| c]" "[@2[b]<c]"
+      testResiduals [edge' 1 "a" 2] "[a /@[b & c]| d]" "[@2[b & c]<d]"
+
+  describe "keeps deconstructed loops as deterministic as possible" do
+    testResiduals
+      [edge' 1 "a" 2]
+      "[@[a/|b]<c]"
+      -- we want to keep the resulting paths as connected/deterministic as
+      -- possible, e.g. we could produce "[@2<b]>@1 + [@1<c]" which encodes the
+      -- same edges, but that requires two deterministic paths instead of just
+      -- one
+      "[@2<b /@2| c]"
+    testResiduals
+      [edge' 1 "a" 2, edge' 2 "b" 3]
+      "[a /@[b/|c]| d]"
+      "[@3<c /@2| d]"
+    testResiduals
+      [edge' 1 "a" 2, edge' 3 "c" 2]
+      "[a /@[b/|c]| d]"
+      "[@3<~b /@2| d]"
+    testResiduals
+      [edge' 1 "a" 2]
+      "@[a/|b/|c]"
+      "[@2<b /| c]>@1"
+    testResiduals
+      [edge' 1 "a" 2]
+      "[@[a/|b/|c]<d]"
+      "[@2<b /| c /@1| d]"
+    testResiduals
+      [edge' 2 "c" 1]
+      "[@[a/|b/|c]<d]"
+      -- inverting edges is preferrable to disconnecting DPaths
+      "[@2<~b /| ~a /@1| d]"
+    testResiduals
+      [edge' 2 "c" 1, edge' 1 "d" 3]
+      "[@[a/|b/|c & d/|e/|f]<g]"
+      "[[@2<~b /| ~a  & @3<e /| d]>@1<g]"
+    testResiduals
+      [edge' 2 "c" 1, edge' 1 "a" 3]
+      "[@[a/|b/|c/|d]<e]"
+      -- it's possible for it to be necessary to separate out an edge though
+      "[@3<b/|c]>@2 + [@1<e]"
+    testResiduals
+      [edge' 2 "c" 1, edge' 1 "a" 3]
+      "[@[a/|~b/|~c/|d]<e]"
+      -- this should preference the original orientation of edges
+      "[@3<~b/|~c]>@2 + [@1<e]"
+
+  describe "multiple transition matches" do
+    testResiduals [edge' 1 "a" 2, edge' 1 "a" 3] "[a]" "%never"
+    testResiduals [edge' 1 "a" 2, edge' 1 "a" 3] "[a/|b]" "[@2<b & @3<b]"
+    testResiduals [edge' 2 "b" 3, edge' 2 "c" 4] "[a/|b/|c]" "[@3<c & @4<c]"
 
   describe "unchanged when unmatched" do
     testResiduals [] "[a]" "[a]"
