@@ -39,16 +39,18 @@ unwrapReturningDefaultM ::
 unwrapReturningDefaultM def = unwrapDefaultingM (returnEarly def)
 
 unwrap ::
-  (Member (EarlyReturn (Maybe result)) r) =>
+  (Monoid m) =>
+  (Member (EarlyReturn m) r) =>
   Maybe a ->
   Sem r a
-unwrap = unwrapReturningDefault Nothing
+unwrap = unwrapReturningDefault mempty
 
 unwrapM ::
-  (Member (EarlyReturn (Maybe result)) r) =>
+  (Monoid m) =>
+  (Member (EarlyReturn m) r) =>
   Sem r (Maybe a) ->
   Sem r a
-unwrapM = unwrapReturningDefaultM Nothing
+unwrapM = unwrapReturningDefaultM mempty
 
 newtype EarlyReturnResult result = EarlyReturnResult {result :: result}
   deriving stock (Show, Eq, Ord, Generic)
