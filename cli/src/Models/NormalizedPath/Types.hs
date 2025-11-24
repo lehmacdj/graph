@@ -482,9 +482,11 @@ spec_showNormalizedPath = do
         ( RootedDeterministicPath
             ( singletonMap
                 (Pointlike $ specific (unsafeNID "000000000xyz"))
-                (setFromList [DPOutgoing (DPLiteral "a")
-                              , DPOutgoing (DPLiteral "b")
-                             ])
+                ( setFromList
+                    [ DPOutgoing (DPLiteral "a"),
+                      DPOutgoing (DPLiteral "b")
+                    ]
+                )
             )
             (specific (unsafeNID "000000000abc"))
         )
