@@ -133,7 +133,8 @@ struct TransitionCell: View {
             .contextMenu {
                 nodeMenuItems(
                     nid: vm.destination.nid,
-                    dataURL: vm.dataURL.loaded ?? nil
+                    dataURL: vm.dataURL.loaded ?? nil,
+                    transition: vm.transition
                 )
             }
             .swipeActions(edge: .leading) {

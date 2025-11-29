@@ -8,7 +8,7 @@
 import SwiftUI
 
 @ViewBuilder
-func nodeMenuItems(nid: NID, dataURL: URL?) -> some View {
+func nodeMenuItems(nid: NID, dataURL: URL?, transition: String?) -> some View {
     Button {
         UIPasteboard.general.string = String(describing: nid)
     } label: {
@@ -20,6 +20,21 @@ func nodeMenuItems(nid: NID, dataURL: URL?) -> some View {
             UIPasteboard.general.string = dataURL.absoluteString
         } label: {
             Label("Copy data file path", systemImage: "document")
+        }
+    }
+    if let transition {
+        if let url = URL(string: transition),
+           url.scheme != nil {
+            Button {
+                UIApplication.shared.open(url)
+            } label: {
+                Label("Open in browser", systemImage: "safari")
+            }
+        }
+        Button {
+            UIPasteboard.general.string = transition
+        } label: {
+            Label("Copy transition", systemImage: "character")
         }
     }
 }

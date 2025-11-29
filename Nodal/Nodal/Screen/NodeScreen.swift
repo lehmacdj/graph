@@ -84,7 +84,7 @@ struct NodeScreen: View {
     func toolbarContent(for state: NodeState) -> some ToolbarContent {
         ToolbarItem(placement: .navigationBarTrailing) {
             Menu {
-                nodeMenuItems(nid: vm.nid, dataURL: state.dataURL)
+                nodeMenuItems(nid: vm.nid, dataURL: state.dataURL, transition: nil)
             } label: {
                 Image(systemName: "link")
             } primaryAction: {
