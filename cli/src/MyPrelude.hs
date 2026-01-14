@@ -11,6 +11,7 @@ module MyPrelude
     minOn,
     maxOn,
     eitherDecodeUtf8,
+    inverseMap,
 
     -- * Extra exports (see the import list below)
     module X,
@@ -58,6 +59,22 @@ import MyPrelude.Vary as X
 import Prelude as X (MonadFail (..), Show (showsPrec), ShowS, fail, showParen, showString, shows)
 
 -- import MyPrelude.OsPath as X
+
+-- | Given a function from a `Bounded` and `Enum` type `a` to some key type `k`,
+-- produce a function that attempts to invert `f` by building a lookup table.
+--
+-- Declare the `k` argument in a lambda so GHC thinks the function
+-- is "fully applied" with one argument. This allows GHC to share the map
+-- across calls to this function.
+--
+-- This could also use `enumerate :: (Bounded a, Enum a) => [a]`,
+-- which arrives in base-4.22 (GHC 9.14).
+inverseMap ::
+  forall a k.
+  (Bounded a, Enum a, Ord k) => (a -> k) -> k -> Maybe a
+inverseMap f =
+  let m = asMap $ mapFromList [(f a, a) | a <- [minBound .. maxBound] :: [a]]
+   in (`lookup` m)
 
 eitherDecodeUtf8 :: ByteString -> Either Text.UnicodeException Text
 eitherDecodeUtf8 = Text.decodeUtf8'
