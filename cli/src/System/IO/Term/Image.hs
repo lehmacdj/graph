@@ -1,15 +1,22 @@
--- | Simple implementation of iterm2 image protocol for displaying images.
-module System.IO.Term.Image where
+-- | Display images in the terminal, with support for multiple
+--   protocols. Uses kitty's kitten icat when available, falling
+--   back to the iTerm2 inline image protocol.
+module System.IO.Term.Image (printImage) where
 
-import Data.ByteString.Builder
 import MyPrelude hiding (putStrLn)
-import System.IO
-import System.IO.Term.BinarySerialize
-import System.IO.Term.Image.Payload
+import System.Directory (findExecutable)
+import System.IO.Term.Image.ITerm qualified as ITerm
+import System.Process.Typed
 
 printImage :: LByteString -> IO ()
 printImage d = do
-  hPutBuilder stdout . intoBuilder $ payload
-  putStrLn ""
-  where
-    payload = Payload (PayloadArgs (Just "unnamed.jpg") Nothing Auto Auto True True) d
+  kittenAvailable <- isJust <$> findExecutable "kitten"
+  if kittenAvailable
+    then printImageKitten d
+    else ITerm.printImage d
+
+printImageKitten :: LByteString -> IO ()
+printImageKitten d =
+  runProcess_ $
+    setStdin (byteStringInput d) $
+      proc "kitten" ["icat", "--stdin=yes"]

@@ -140,7 +140,8 @@ library
       System.FileCoordination
       System.IO.Term.BinarySerialize
       System.IO.Term.Image
-      System.IO.Term.Image.Payload
+      System.IO.Term.Image.ITerm
+      System.IO.Term.Image.ITerm.Payload
       Utils.Base62
       Utils.Parsing
       Utils.Parsing.Common
