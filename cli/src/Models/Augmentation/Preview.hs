@@ -81,7 +81,17 @@ docTimestamp :: TimeZone -> UTCTime -> Set UTCTime -> Doc Style
 docTimestamp timeZone currentTime timestamps =
   case maximum <$> fromNullable timestamps of
     Nothing -> mempty
-    Just t -> annotate Time . pretty $ formatMaybeRelativeTimestamp timeZone currentTime t
+    Just t ->
+      annotate Time $
+        pretty (formatMaybeRelativeTimestamp timeZone currentTime t)
+          <> badge t
+  where
+    -- Show edit count badge only for recent entries; older entries
+    -- are already implicitly assumed to have been modified before.
+    badge t
+      | length timestamps > 1 && diffUTCTime currentTime t < 3600 =
+          " [+" <> pretty (length timestamps - 1) <> "]"
+      | otherwise = mempty
 
 docTag :: Text -> Doc Style
 docTag t = annotate TagEmphasized ("#" <> docTransition t)
