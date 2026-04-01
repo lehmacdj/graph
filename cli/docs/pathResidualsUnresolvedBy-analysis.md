@@ -30,7 +30,7 @@ to have `a` edges in other test cases — but here it doesn't.
 startNid)? Or should it attempt resolution starting from startNid=@1,
 failing because @1 != @2?
 
-<!-- COMMENT: -->
+<!-- COMMENT: As written I'd expect this test to return exactly what the original is. Are the inputs for this test the same as a different test that has the actual output as its expected output? It's possible this is a redundant/bad test -->
 
 ### B. Complex roots: loop failure tainting resolved branches (likely test bug)
 
@@ -51,7 +51,7 @@ branch, not the resolved `@2[c]<a`.
 **Assessment**: The expected output is likely a test bug. The correct
 expected output should be `[@2<c]>@2` (just the unresolved loop).
 
-<!-- COMMENT: -->
+<!-- COMMENT: this seems right to me. -->
 
 ### C. Complex roots: target concretization when one root resolves
 
@@ -303,5 +303,3 @@ If the full annotation type feels heavy, a simpler variant: modify
 do with non-returning loop branches" instead of silently dropping them.
 This addresses the biggest pain point (loops becoming rooted paths in
 residuals) while keeping the existing architecture mostly intact.
-
-<!-- COMMENT: -->

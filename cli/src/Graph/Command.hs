@@ -21,8 +21,8 @@ import Graph.GraphMetadataEditing (GraphMetadataEditing, GraphMetadataReading)
 import Graph.Import.ByteString
 import Graph.Import.FileSystem
 import Graph.LegacyPathMaterialization
-import Graph.Resolve
 import Graph.NodeLocated
+import Graph.Resolve
 import Graph.Time (taggingFreshNodesWithTime)
 import Graph.Utils
 import Models.Augmentation.Bundled
@@ -33,12 +33,12 @@ import Models.Command
 import Models.Connect
 import Models.Edge
 import Models.History
-import Models.ResolvedPath
 import Models.NID
 import Models.NormalizedPath (leastConstrainedNormalizedPath, normalizePath)
 import Models.Path.ParsedPath
 import Models.Path.Simple (Path)
 import Models.Path.Simple qualified as Simple
+import Models.ResolvedPath
 import MyPrelude
 import Polysemy.Internal.Scoped (Scoped, scoped_)
 import Polysemy.Readline
@@ -265,7 +265,7 @@ interpretCommand = \case
           let listedNid = last (source `ncons` map (.node) connects)
               transitions = map (.transition) connects
           node <- getNodeWith (fetchTags #| fetchTimestamps) listedNid
-          pure (transitions, node)
+          pure (transitions, listedNid, node)
       when (null targets) do
         say "no targets"
       tz <- currentTimeZone
@@ -275,9 +275,13 @@ interpretCommand = \case
           Just (Terminal.Window _ width) -> pure width
           Nothing -> pure 80
       for_ targets $ \case
-        ([], Nothing) -> say "current node did not exist"
-        (ts, Nothing) ->
+        ([], lnid, Nothing) ->
+          say ("current node " ++ tshow lnid ++ " did not exist")
+        (ts, lnid, Nothing) ->
           say $
             renderNodeListing w $
-              docTransitions ts <> PP.softline <> "led to nonexistent node"
-        (ts, Just n) -> say $ renderNodeListing w $ docNodeListing tz now ts n
+              docTransitions ts
+                <> PP.softline
+                <> "led to nonexistent node "
+                <> PP.pretty (tshow lnid)
+        (ts, _, Just n) -> say $ renderNodeListing w $ docNodeListing tz now ts n
