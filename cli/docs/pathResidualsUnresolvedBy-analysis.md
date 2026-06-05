@@ -25,12 +25,14 @@ resolves `@2<a` AND concretizes the target to @3. This only makes sense
 if `@2<a` is interpreted as "start from @2 independently" and @2 happens
 to have `a` edges in other test cases — but here it doesn't.
 
+<!-- COMMENT: @2<a should be interpreted as start from @2 independently when it is a root like this. However, that still shouldn't match in the graph because @2 doesn't match. -->
+
 **Design question**: When a path has `[@2<a & @<b]>@` and we start from
 @1, should `@2<a` attempt resolution starting from @2 (independent of
 startNid)? Or should it attempt resolution starting from startNid=@1,
 failing because @1 != @2?
 
-<!-- COMMENT: As written I'd expect this test to return exactly what the original is. Are the inputs for this test the same as a different test that has the actual output as its expected output? It's possible this is a redundant/bad test -->
+<!-- COMMENT: Yes, it should be treated as starting a path from @2 rather than an assertion which immediately fails because @1 != @2 -->
 
 ### B. Complex roots: loop failure tainting resolved branches (likely test bug)
 
@@ -51,7 +53,13 @@ branch, not the resolved `@2[c]<a`.
 **Assessment**: The expected output is likely a test bug. The correct
 expected output should be `[@2<c]>@2` (just the unresolved loop).
 
-<!-- COMMENT: this seems right to me. -->
+<!-- COMMENT:
+
+The overriding goal is that creating the unresolved path residual (e.g. with createNPath) should create all of the nodes/transitions such that the path is fully resolveable in the original graph with the addition of those nodes/transitions.
+
+Adding just the unresolved loop @2>"c">@2 would allow this, so that is the correct behavior
+
+-->
 
 ### C. Complex roots: target concretization when one root resolves
 
@@ -78,7 +86,11 @@ residual for unresolved roots.
 Same pattern: `@<b` from @1 resolves to @3, so the target should be
 concretized to @3 in the residual for the unresolved `@2<a`.
 
-<!-- COMMENT: -->
+<!-- COMMENT:
+
+Yes, I agree with your analysis. We need to concretize when one of the roots resolves because otherwise the path might not fully resolve after creating the residual.
+
+-->
 
 ### D. Unanchored intersection semantics (commented-out tests, line 1474-1483)
 
@@ -98,7 +110,13 @@ For `[a & b]` when only `a` resolves — should the result be `[b]`
    minimal (preserve anchoring), and have `mk` append `/@` to enforce
    anchoring.
 
-<!-- COMMENT: -->
+<!-- COMMENT:
+
+(3) Preserving original anchoring and then having `mk` append `/@` to enforce anchoring makes the most sense to me. I will note that we do still need to concretize `/@`, and that we want to call out in a doc comment that the behavior for unanchored paths is somewhat dubious and can lead to inconsistent results.
+
+I think it would aso be worth thinking about sequences of multiple unanchored things a bit more. We should try to derive what behavior is necessary from the property tests by testing a complete implementation on examples that use unanchored in complicated ways.
+
+-->
 
 ### E. Property tests crash with NullError
 
@@ -109,7 +127,13 @@ list being passed to `impureNonNull` somewhere in
 generated path shapes (probably empty branch sets or degenerate
 sequences).
 
-<!-- COMMENT: -->
+<!-- COMMENT:
+
+We need to fix the property tests. If anything they are more important than the unit tests, because they encode the property that makes this a "residual".
+
+Read through the unit tests in more detail and report extra details so that I can give more detailed guidance.
+
+-->
 
 ## 2. Repurposing `createNPath` for `graphResolvingPathFrom`
 
@@ -149,7 +173,7 @@ override the current NID. For `graphResolvingPathFrom`, `Specific nid`
 should always jump to `nid` regardless of current position. The existing
 `unifyAnchor` in TestUtils already handles this (ignoring `_isRoot`).
 
-<!-- COMMENT: -->
+<!-- COMMENT: explain this subtlety in more detail. Is this overriding behavior specific to `createNPath` or `graphResolvingPathFrom`? What behavior would the proposed approach give? -->
 
 ## 3. Comprehensive Spec for `pathResidualsUnresolvedBy`
 
@@ -172,16 +196,20 @@ filtered out.
 
 **Pointlike paths (anchor with optional loops)**:
 - Anchor doesn't unify with startNid -> return unchanged
+  - COMMENT: this is only the case when there are loops that go unfulfilled. If there are no loops and the node exists, then that should be treated as a jump to that note (to be consistent with behavior for complex roots) and be fulfilled
 - Node doesn't exist in graph -> return unchanged
 - No loops, node exists -> return `%never`
 - Loops all resolve (each returns to anchor NID) -> return `%never`
 - Some loops unresolved -> return residual with only unresolved loops,
   anchored to the concrete NID if any loops resolved
 
+<!-- COMMENT: this could be tightened up, there's redundant specifications for behavior here -->
+
 **Rooted paths (`[root<branches]>target`)**:
 - Each (root, branches) pair resolves independently
 - Root resolution: unify root anchor with startNid (or with root's
   specific NID for `@N` anchors), check root loops
+  - COMMENT: I think this should just be delegating to the behavior for pointlike paths
 - Branch resolution: follow each branch from the resolved root NID
 - Intersection semantics: ALL branches must succeed for full resolution
 - Partial intersection: residual contains only failed branches, with
@@ -189,6 +217,8 @@ filtered out.
 - Target concretization: if any branch (from any root in the
   intersection) resolves to a destination, concretize the target to that
   NID
+
+<!-- COMMENT: I think this is missing behavior for resolving backwards / partially from the back side which is behavior that we have -->
 
 **Sequences (`bs1 /@ midpoint | bs2`)**:
 - Follow bs1 from start -> set of destination NIDs
@@ -200,6 +230,8 @@ filtered out.
 - bs1 succeeds, bs2 fails -> residual is `[@midNid<bs2]>target` (or
   `[@midNid<bs2_failed]>target` for partial bs2 intersections)
 - Midpoint loops fail -> residual includes the loop portion
+
+<!-- COMMENT: what happens if the midpoint loop partially resolves? -->
 
 **Loop resolution (branches in a pointlike that must return to the
 anchor NID)**:
@@ -213,17 +245,17 @@ anchor NID)**:
 - Deconstructed loop residuals should stay as connected/deterministic as
   possible (prefer `[@2<b /@1| c]` over `[@2<b]>@1 + [@1<c]`)
 
+<!-- COMMENT: what is the relationship between forward/backward/bidirectional behavior? In what order are they tried / can we try them simultaneously in a deterministic way? -->
+
 **Anchor concretization rules**:
 - Concretize root anchor to specific NID when any branch partially
   resolves
-- Concretize target anchor when any branch fully resolves to a
-  destination
+  - COMMENT: I think we actually don't need to do this because `@2<`, etc. is treated as starting from a different location. This means that we can leave `@<` as is when it is a root, even though we need to change it when it occurs later in a path as a midpoint or destination
+- Concretize target anchor when any branch fully resolves to a destination
 - Preserve original anchoring (Unanchored/JoinPoint) when nothing
   resolves
 - Minimize concretization: only anchor what's necessary (e.g., prefer
   `[@<b]>@3` over `[@1<b]>@3` when the root doesn't need concretizing)
-
-<!-- COMMENT: -->
 
 ## 4. Generalizing `traverseViaTransitions` for `pathResidualsUnresolvedBy`
 
@@ -287,6 +319,8 @@ Then residual extraction is a pure function:
 extractResiduals :: [AnnotatedDP Anchor NID] -> NormalizedPath Anchor
 ```
 
+<!-- COMMENT: how does this approach handle the backwards resolution we need to do for calculating residuals? -->
+
 ### Benefits
 
 - Traversal logic shared with `resolveNPath`/`createNPath` (DRY)
@@ -303,3 +337,5 @@ If the full annotation type feels heavy, a simpler variant: modify
 do with non-returning loop branches" instead of silently dropping them.
 This addresses the biggest pain point (loops becoming rooted paths in
 residuals) while keeping the existing architecture mostly intact.
+
+<!-- COMMENT: I have no idea what this means -->
