@@ -34,21 +34,12 @@ resolveNPath ::
   NormalizedPath FullyAnchored ->
   Sem r ResolvedPath
 resolveNPath firstNid normalizedPath =
-  traverseViaTransitions firstNid unifyAnchor traverseDirection normalizedPath
+  traverseViaTransitions firstNid unifyFullyAnchored traverseDirection normalizedPath
     & cachingReadingInState
     & runState emptyGraph
     & runState mempty
     & fmap \(nonexistentNodes, (graph, path)) -> ResolvedPath {..}
   where
-    unifyAnchor :: Bool -> NID -> FullyAnchored -> Maybe NID
-    unifyAnchor isRoot nid = \case
-      FSpecific fnid
-        | not isRoot && nid /= fnid -> Nothing
-        | otherwise -> pure fnid
-      FJoinPoint {..}
-        | nid `notMember` excluding -> pure nid
-        | otherwise -> Nothing
-
     traverseDirection ::
       ( Members [GraphMetadataReading, State (Graph Text IsThin), State (Set NID)] q,
         HasCallStack

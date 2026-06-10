@@ -15,7 +15,7 @@ data Edge t = Edge
 instance (Show t) => CompactNodeShow (Edge t) where
   type Augmentation (Edge t) = Void
   minimumNidLength settings c =
-    min
+    max
       (minimumNidLength settings c.source)
       (minimumNidLength settings c.sink)
   nshowSettings settings Edge {..} =

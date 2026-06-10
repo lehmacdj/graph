@@ -54,3 +54,28 @@ showsFullyAnchored = \case
           . showString (intercalate ", " $ map show (toList nids))
           . showString "}"
   FSpecific nid -> shows nid
+
+unifyFullyAnchored :: Bool -> NID -> FullyAnchored -> Maybe NID
+unifyFullyAnchored isRoot nid = \case
+  FSpecific fnid
+    | not isRoot && nid /= fnid -> Nothing
+    | otherwise -> pure fnid
+  FJoinPoint {..}
+    | nid `notMember` excluding -> pure nid
+    | otherwise -> Nothing
+
+unifyAnchors :: Bool -> Anchor -> Anchor -> Maybe Anchor
+unifyAnchors isRoot a1 a2 = case (a1, a2) of
+  (Specific n1, Specific n2)
+    | n1 == n2 -> Just (Specific n1)
+    | otherwise -> Nothing
+  (Specific n, JoinPoint {..})
+    | n `notMember` excluding -> Just (Specific n)
+    | otherwise -> Nothing
+  (JoinPoint {..}, Specific n)
+    | n `notMember` excluding -> Just (Specific n)
+    | otherwise -> Nothing
+  (JoinPoint {excluding = ex1}, JoinPoint {excluding = ex2}) ->
+    Just (JoinPoint {excluding = ex1 `union` ex2})
+  (Unanchored, a) -> Just a
+  (a, Unanchored) -> Just a

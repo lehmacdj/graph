@@ -99,9 +99,11 @@ library
       Models.NormalizedPath
       Models.NormalizedPath.Anchor
       Models.NormalizedPath.FullyAnchor
+      Models.NormalizedPath.Generators
       Models.NormalizedPath.Normalize
       Models.NormalizedPath.Parse
       Models.NormalizedPath.ParseSpec
+      Models.NormalizedPath.TestUtils
       Models.NormalizedPath.TH
       Models.NormalizedPath.Traversals
       Models.NormalizedPath.Types

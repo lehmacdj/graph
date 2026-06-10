@@ -151,7 +151,9 @@ traverseViaTransitions initial fanchor ftransition normalizedPath =
             )
           <&> map (map \(r, bas) -> (\(b, a) -> ((r, b), a)) <$> bas)
           <&> concatMap choices
-          <&> mapMaybe (ensureSameAnchors . impureNonNull)
+          -- a root with no resolutions yields an empty combination
+          -- (choices [] == [[]]); it must not resolve rather than crash
+          <&> mapMaybe (ensureSameAnchors <=< fromNullable)
           <&> ordNub
           <&> over (mapped . _1) (mapFromList . toNullable)
       rootBranches''
