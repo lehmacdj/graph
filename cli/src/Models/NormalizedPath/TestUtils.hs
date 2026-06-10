@@ -4,6 +4,7 @@ module Models.NormalizedPath.TestUtils
     graphResolvingPathFrom,
     graphEdges,
     requiresUnanchoredJoin,
+    coveredPathFrom,
   )
 where
 
@@ -162,6 +163,42 @@ requiresUnanchoredJoin = \case
     branchTerminals = \case
       DPSingle _ -> 1
       DPSequence _ _ bs2 -> sum (map branchTerminals (toList bs2))
+
+-- | Rewrite a generated path so the residual property tests' preconditions
+-- hold by construction, instead of being filtered for with
+-- 'Test.QuickCheck.suchThat' / '==>':
+--
+-- * a path falling under the residual invariant's carve-out (see
+--   'requiresUnanchoredJoin') has its top-level Unanchored target
+--   normalized to @JoinPoint ∅@ — the spec's "append @>\@@" normalization,
+--   and exactly how 'leastConstrainedNormalizedPath' already interprets
+--   such a target at resolution time;
+-- * @startNid@ is removed from every JoinPoint exclusion set: a
+--   root-position JoinPoint excluding the start NID can never resolve from
+--   it no matter which edges are created, so such paths fail the "the
+--   generated graph resolves the path" precondition. (Non-root exclusion
+--   sets are stripped too for simplicity; the generator resolves those
+--   anchors to fresh uniformly random NIDs, so their exclusions essentially
+--   never bite either way.)
+coveredPathFrom :: NID -> DeterministicPath Anchor -> DeterministicPath Anchor
+coveredPathFrom startNid dp =
+  dp & normalizeUnanchoredJoin & allowStartNid
+  where
+    normalizeUnanchoredJoin = \case
+      d@(Rooted r)
+        | requiresUnanchoredJoin d ->
+            Rooted r {target = r.target {anchor = JoinPoint mempty}}
+      d -> d
+    allowStartNid d =
+      NormalizedPath (singletonSet d)
+        & traverseAnchors (Identity . dropStart)
+        & runIdentity
+        & \case
+          NormalizedPath (toList -> [d']) -> d'
+          _ -> error "coveredPathFrom: singleton union changed size"
+    dropStart = \case
+      JoinPoint excluding -> JoinPoint (deleteSet startNid excluding)
+      a -> a
 
 -- | Extract all edges from a graph
 graphEdges :: Graph Text () -> [Edge Text]

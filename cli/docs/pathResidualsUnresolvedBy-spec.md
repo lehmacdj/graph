@@ -279,12 +279,20 @@ this function applied to the residual.
 ## 8. Property tests
 
 Three properties, all generating paths via
-`genDeterministicPathLiteralOnly` filtered by
-`not . requiresUnanchoredJoin` (the §3 carve-out predicate, exported from
-`TestUtils`; it checks for a top-level `Unanchored` target with more than
-one branch endpoint — unanchored midpoints and nested-root targets are
-split per branch pair by `leastConstrainedNormalizedPath` and need no
-exemption):
+`genDeterministicPathLiteralOnly` post-processed by `coveredPathFrom`
+(exported from `TestUtils`) rather than filtered with
+`suchThat`/`==>`. `coveredPathFrom startNid` makes the preconditions hold
+by construction:
+
+- a path matching `requiresUnanchoredJoin` (the §3 carve-out predicate: a
+  top-level `Unanchored` target with more than one branch endpoint —
+  unanchored midpoints and nested-root targets are split per branch pair
+  by `leastConstrainedNormalizedPath` and need no exemption) has its
+  target normalized to `JoinPoint ∅`, the spec's "append `>@`"
+  normalization;
+- the start NID is stripped from `JoinPoint` exclusion sets, since a root
+  excluding the start NID can never resolve from it no matter which edges
+  are created.
 
 1. resolving graph ⇒ residual is `%never`;
 2. removing one edge ⇒ the residual resolves in the single-edge graph;
@@ -293,12 +301,12 @@ exemption):
    `resolveNPath` fully resolves the original path in the combined graph
    (run purely via `runInMemoryGraphMetadataEditing`).
 
-All three precondition on the generated graph actually resolving the path
-(checked with `resolveNPath`): some paths cannot resolve from the chosen
-start NID no matter the graph — e.g. a root `JoinPoint` whose exclusion
-set contains it, which `genNID`'s small 1–100 range makes a real
-occurrence — and for those the correct residual is the unchanged path,
-not `%never`.
+All three still guard on the generated graph actually resolving the path
+(checked with `resolveNPath`), but as a safety net only: after
+`coveredPathFrom` the guard essentially never discards. (Without the
+exclusion stripping it would: `genNID`'s small 1–100 range makes a root
+`JoinPoint` excluding the start NID a real occurrence, and for such paths
+the correct residual is the unchanged path, not `%never`.)
 
 ## 9. Test-suite status
 
