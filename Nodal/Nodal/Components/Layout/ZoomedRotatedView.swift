@@ -7,15 +7,23 @@
 
 import SwiftUI
 
-@Animatable
-struct ZoomedRotatedView<Content: View>: View {
+struct ZoomedRotatedView<Content: View>: View, Animatable {
     let content: Content
 
     var scale: CGFloat
     var rotation: Angle
 
-    @AnimatableIgnored
-    @State var contentSize: CGSize = .zero
+    @State private var contentSize: CGSize = .zero
+
+    nonisolated var animatableData: AnimatablePair<CGFloat, Angle.AnimatableData> {
+        get {
+            AnimatablePair(scale, rotation.animatableData)
+        }
+        set {
+            scale = newValue.first
+            rotation.animatableData = newValue.second
+        }
+    }
 
     /// Size accounting for scale/rotation
     var transformedSize: CGSize {
