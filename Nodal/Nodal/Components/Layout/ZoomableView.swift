@@ -215,6 +215,15 @@ struct ZoomableView<Content: View>: View {
                 )
                 .ignoredByLayout()
             }
+            // Keep the content centered when it's smaller than the viewport.
+            // A ScrollView pins its content to the top-leading corner, so
+            // without this a fit-scaled image smaller than the screen would
+            // stick to the top-left instead of being centered.
+            .frame(
+                minWidth: viewportFrame?.width,
+                minHeight: viewportFrame?.height,
+                alignment: .center
+            )
         }
         .onGeometryChange(
             for: CGRect.self,
