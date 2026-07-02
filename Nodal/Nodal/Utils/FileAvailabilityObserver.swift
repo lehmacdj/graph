@@ -25,8 +25,12 @@ actor FileAvailabilityObserver {
         self.url = url
         Task { [weak self] in
             while !Task.isCancelled && self != nil {
-                await self?.updateAvailability()
-                try await Task.sleep(for: refreshInterval)
+                do {
+                    await self?.updateAvailability()
+                    try await Task.sleep(for: refreshInterval)
+                } catch {
+                    logWarn("caught error: \(error)")
+                }
             }
         }
     }
