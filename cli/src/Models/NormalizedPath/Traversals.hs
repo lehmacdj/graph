@@ -149,13 +149,23 @@ traverseViaTransitions initial fanchor ftransition normalizedPath =
             ( \(dpa, dpb, bs) ->
                 (dpb,) <$> traverseBranches (dpTarget dpb).anchor (dpTarget dpa).anchor target.anchor bs
             )
-          <&> map (map \(r, bas) -> (\(b, a) -> ((r, b), a)) <$> bas)
-          <&> concatMap choices
-          -- a root with no resolutions yields an empty combination
-          -- (choices [] == [[]]); it must not resolve rather than crash
+          -- flatten each root's alternatives: any way of resolving the
+          -- root's own path combined with any resolution of its branches
+          <&> map (concatMap \(r, bas) -> (\(b, a) -> ((r, b), a)) <$> bas)
+          -- combinations pick one alternative per root: every root must
+          -- resolve, so a root with no alternatives makes `choices` produce
+          -- no combinations and the whole path yields no resolutions
+          <&> choices
+          -- all roots' branches must land on the same anchor so that they
+          -- unify at the shared target (fromNullable only fails if
+          -- rootBranches is empty, which smartBuild rules out)
           <&> mapMaybe (ensureSameAnchors <=< fromNullable)
           <&> ordNub
-          <&> over (mapped . _1) (mapFromList . toNullable)
+          -- distinct roots may resolve to the same path; merge their
+          -- branch sets instead of dropping one via mapFromList
+          <&> over
+            (mapped . _1)
+            (unionsWith (<>) . map (uncurry singletonMap) . toNullable)
       rootBranches''
         & (traverse . _2) (\x -> traversePointlike False x target)
         <&> concatMap (\(rbs, ts) -> (rbs,) <$> ts)

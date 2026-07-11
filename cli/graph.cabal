@@ -68,6 +68,7 @@ library
       Graph.NodeLocated
       Graph.Paths
       Graph.Resolve
+      Graph.ResolveSpec
       Graph.SystemNodes
       Graph.SystemNodes.Init
       Graph.Time
