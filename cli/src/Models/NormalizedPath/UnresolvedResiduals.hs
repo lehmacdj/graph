@@ -20,16 +20,25 @@ import Polysemy.State (evalState)
 import System.Random
 import Utils.Testing
 
--- | The portion of a path that can't be resolved in the given graph from the
--- given start NID. For generality this operates on `NormalizedPath Anchor`
--- rather than `FullyAnchored` or `NID`.
+-- | The residual alternatives of a path: each element of the result is a
+-- complete description of the edges whose creation makes the path
+-- resolvable from the given start NID in the given graph. For generality
+-- this operates on `NormalizedPath Anchor` rather than `FullyAnchored` or
+-- `NID`.
 --
--- This can be used to get the residual path that wasn't resolved while
--- resolving a path using resolvePath if you pass the non-thin graph from the
--- ResolvedPath and the same starting NID that was used to resolve it.
+-- The result is a meta-union: ANY ONE alternative suffices (the preferred
+-- one is first; the list is deduplicated). Within one alternative the
+-- ordinary NormalizedPath union means "create every member". The result is
+-- exactly @pure %never@ iff the path already fully resolves (every union
+-- member, every root). Alternatives arise where the graph — not the path —
+-- is ambiguous about what is missing (several recovered seams, fan-outs,
+-- arrival choices); see docs/pathResidualsUnresolvedBy-spec.md (v2).
 --
--- You might want to use this to then create the new nodes/transitions that
--- would have been necessary for it to be resolved.
+-- This can be used to get the residual of a path that wasn't fully
+-- resolved by resolvePath if you pass the non-thin graph from the
+-- ResolvedPath and the same starting NID that was used to resolve it, and
+-- then to create the new nodes/transitions that would have been necessary
+-- for it to be resolved (the future @mk@ command).
 --
 -- Note: behavior for intersections whose target is Unanchored is dubious:
 -- residuals never pin Unanchored anchors, but resolution requires such
@@ -37,10 +46,18 @@ import Utils.Testing
 -- to make the path resolve. Callers that want join semantics must anchor
 -- the target (e.g. by appending @>\@@). See
 -- docs/pathResidualsUnresolvedBy-spec.md.
+--
+-- TODO(stage 3): the implementation still computes the pre-review
+-- single-path behavior, wrapped as a singleton alternative; the tests
+-- already encode the target behavior. See
+-- docs/pathResidualsUnresolvedBy-implementation-notes.md for the worklist.
 pathResidualsUnresolvedBy ::
-  NID -> Graph Text () -> NormalizedPath Anchor -> NormalizedPath Anchor
+  NID ->
+  Graph Text () ->
+  NormalizedPath Anchor ->
+  NonEmpty (NormalizedPath Anchor)
 pathResidualsUnresolvedBy startNid graph (NormalizedPath dps) =
-  NormalizedPath . setFromList $
+  pure . NormalizedPath . setFromList $
     concatMap (residualOfDp startNid graph) (toList dps)
 
 residualOfDp ::
@@ -1204,14 +1221,22 @@ residualRooted startNid g r
 
 spec_pathResidualsUnresolvedBy :: Spec
 spec_pathResidualsUnresolvedBy = do
-  let testResiduals' :: Graph Text () -> Text -> Text -> Spec
-      testResiduals' graph pathToResidualStr expectedStr =
+  let -- expected alternatives, in order (meta-union: any one alternative
+      -- is a complete repair; see the spec)
+      testResidualAlts' :: Graph Text () -> Text -> [Text] -> Spec
+      testResidualAlts' graph pathToResidualStr expectedStrs =
         it (unpack testName) do
           pathToResidual <-
             parseForTest "normalized path" pNormalizedPath pathToResidualStr
-          expected <- parseForTest "normalized path" pNormalizedPath expectedStr
+          expected <-
+            traverse
+              (parseForTest "normalized path" pNormalizedPath)
+              expectedStrs
+          expectedAlts <- case expected of
+            (e : es) -> pure (e :| es)
+            [] -> fail "testResidualAlts': no expected alternatives given"
           pathResidualsUnresolvedBy (smallNID 1) graph pathToResidual
-            `shouldBe` expected
+            `shouldBe` expectedAlts
         where
           testName =
             "residuals of "
@@ -1219,8 +1244,12 @@ spec_pathResidualsUnresolvedBy = do
               <> " in the graph "
               <> compactGraphRepresentation graph
               <> " = "
-              <> expectedStr
+              <> intercalate " | " expectedStrs
+      testResiduals' :: Graph Text () -> Text -> Text -> Spec
+      testResiduals' graph pathToResidualStr expectedStr =
+        testResidualAlts' graph pathToResidualStr [expectedStr]
       testResiduals edges = testResiduals' (graphWithEdges edges)
+      testResidualAlts edges = testResidualAlts' (graphWithEdges edges)
 
   describe "simple matches" do
     testResiduals [edge' 1 "a" 2, edge' 1 "b" 2] "[a]" "%never"
@@ -1280,7 +1309,9 @@ spec_pathResidualsUnresolvedBy = do
     testResiduals
       [edge' 1 "c" 2]
       "[@<(a /| b) & @<(c /| d)]"
-      "[@2<d & @1<(a /| b)]"
+      -- root-map keys follow the declaration order of the branches that
+      -- produced them (a /| b came first), not consumed-first order
+      "[@1<(a /| b) & @2<d]"
     testResiduals
       [edge' 1 "z" 2, edge' 2 "a" 3]
       "[@<z /| (a /| b & c /| d)]"
@@ -1368,8 +1399,16 @@ spec_pathResidualsUnresolvedBy = do
 
   describe "multiple transition matches" do
     testResiduals [edge' 1 "a" 2, edge' 1 "a" 3] "[a]" "%never"
-    testResiduals [edge' 1 "a" 2, edge' 1 "a" 3] "[a/|b]" "[@2<b & @3<b]"
-    testResiduals [edge' 1 "a" 2, edge' 2 "b" 3, edge' 2 "b" 4] "[a/|b/|c]" "[@3<c & @4<c]"
+    -- a fan-out of ONE branch's matching yields alternatives (either
+    -- continuation alone repairs the path), ascending NID order
+    testResidualAlts
+      [edge' 1 "a" 2, edge' 1 "a" 3]
+      "[a/|b]"
+      ["[@2<b]", "[@3<b]"]
+    testResidualAlts
+      [edge' 1 "a" 2, edge' 2 "b" 3, edge' 2 "b" 4]
+      "[a/|b/|c]"
+      ["[@3<c]", "[@4<c]"]
 
   describe "unchanged when unmatched" do
     testResiduals [] "[a]" "[a]"
@@ -1405,15 +1444,18 @@ spec_pathResidualsUnresolvedBy = do
 
   describe "edge cases" do
     describe "multiple incoming sources" do
-      -- Both @2 and @3 have 'c' edges to @1, should produce residuals from both
-      testResiduals
+      -- Both @2 and @3 have 'c' edges to @1: either seam alone repairs the
+      -- path, so they are alternatives (not a union), each expressed
+      -- forward from the pinned loop root
+      testResidualAlts
         [edge' 2 "c" 1, edge' 3 "c" 1]
         "@[a/|b/|c]"
-        "[@2<~b /| ~a]>@1 + [@3<~b /| ~a]>@1"
+        ["[@1<a /| b]>@2", "[@1<a /| b]>@3"]
 
     describe "wildcard matching incoming" do
-      -- Wildcard matches the incoming 'x' edge from @2, but 'a' still needs resolution
-      testResiduals [edge' 2 "x" 1] "@[a/|*]" "[@2<~a]>@1"
+      -- Wildcard matches the 'x' edge back to @1, but 'a' still needs
+      -- resolution; the gap is expressed forward from the pinned loop root
+      testResiduals [edge' 2 "x" 1] "@[a/|*]" "[@1<a]>@2"
       -- There still needs to be an edge that is actually a loop for the
       -- wildcard to succeed
       testResiduals [edge' 2 "x" 1] "@[*]" "@[*]"
@@ -1435,8 +1477,10 @@ spec_pathResidualsUnresolvedBy = do
         testResiduals [edge' 1 "a" 2] "[@[a /| b]<c]" "[@2<b/@1|c]"
       describe "partial resolution from incoming end only" do
         -- Multiple incoming edges forming a chain should all be resolved
-        -- @2>"c">@1 handles 'c', @3>"b">@2 handles 'b', only 'a' remains
-        testResiduals [edge' 2 "c" 1, edge' 3 "b" 2] "@[a/|b/|c]" "[@3<~a]>@1"
+        -- @2>"c">@1 handles 'c', @3>"b">@2 handles 'b', only 'a' remains;
+        -- the gap is expressed forward (original orientation) from the
+        -- pinned loop root @1 to the seam @3
+        testResiduals [edge' 2 "c" 1, edge' 3 "b" 2] "@[a/|b/|c]" "[@1<a]>@3"
         -- Neither branch has outgoing, both complete via incoming
         testResiduals
           [edge' 2 "c" 1, edge' 3 "f" 1]
@@ -1453,22 +1497,29 @@ spec_pathResidualsUnresolvedBy = do
           [edge' 1 "a" 2, edge' 1 "b" 2, edge' 2 "c" 3]
           "@[a/|~c/|~b]"
           "[@2<~c]>@2"
+      describe "self-loop bias" do
+        -- Forward can consume a then d (via the self-loop @2>"d">@2, a
+        -- coincidental match of a non-loop step) with backward consuming
+        -- ~b: gap [~c] (total 3). Backward can instead consume ~b then ~c
+        -- with forward consuming only a: gap [d] (total 3). The tie is
+        -- broken against the split that depends on the self-loop match,
+        -- so the backward seam wins (see spec §4.1.1/§5.1)
         testResiduals
           [edge' 1 "a" 2, edge' 2 "d" 2, edge' 1 "b" 2, edge' 2 "c" 3]
           "@[a/|d/|~c/|~b]"
-          "[@2<~c]>@2"
+          "[@2<d]>@3"
         testResiduals
           [edge' 1 "a" 2, edge' 2 "d" 2, edge' 1 "b" 2, edge' 2 "c" 3]
           "[@[a/|d/|~c/|~b]<e]"
-          "[@2<~c]>@2 + [@1<e]"
+          "[@2<d]>@3 + [@1<e]"
         testResiduals
           [edge' 1 "a" 2, edge' 2 "d" 2, edge' 1 "b" 2, edge' 2 "c" 3]
           "[@[a/|(d/|~c/|~b & f)]<e]"
-          "[@2<~c]>@2 + [@2<f/@1|e]"
+          "[@2<d]>@3 + [@2<f/@1|e]"
         testResiduals
           [edge' 1 "a" 2, edge' 2 "d" 2, edge' 1 "b" 2, edge' 2 "c" 3]
           "[@[a/|(d/|~c/|~b & f & g)]<e]"
-          "[@2<~c]>@2 + [@2<(f & g)/@1|e]"
+          "[@2<d]>@3 + [@2<(f & g)/@1|e]"
       describe "flexible middle transition" do
         -- if we can resolve from both ends we can/should
         testResiduals
@@ -1631,9 +1682,27 @@ spec_pathResidualsUnresolvedBy = do
         "[@2[c]<a & @1<b]"
         -- Both branches resolve and agree on target @3; only the loop `c` at
         -- @2 is unresolved. Adding just `@2>"c">@2` makes the original path
-        -- fully resolvable, so the residual is only the unresolved loop. The
-        -- resolved `@1<b` branch is excluded from the residual.
-        "[@2<c]>@2"
+        -- fully resolvable, so the residual is only the unresolved loop,
+        -- which consumed zero steps and therefore stays attached to its
+        -- pointlike instead of deconstructing. The resolved `@1<b` branch
+        -- is excluded from the residual.
+        "@2[c]"
+
+    describe "multi-root residuals" do
+      -- one connected multi-root alternative: the nested root's unresolved
+      -- branch b chains through the nested target @3 into the outer branch
+      -- c, and the other root's branch d stays in the same deterministic
+      -- path (spec §6.1)
+      testResiduals
+        [edge' 1 "a" 3]
+        "[[@1<a & @2<b]>@3<c & @4<d]>@5"
+        "[@2<b/@3|c & @4<d]>@5"
+      -- a root JoinPoint excluding the start NID can never unify, and
+      -- resolution is conjunctive across roots, so no edge creation can
+      -- help: the whole deterministic path is unsatisfiable and returned
+      -- unchanged; its branches are not dropped
+      testResiduals [edge' 1 "b" 2] "[!{@1}<a & @<b]" "[!{@1}<a & @<b]"
+      testResiduals [] "[!{@1}<a]" "[!{@1}<a]"
 
   describe "property tests" do
     -- Generated paths are made "covered" constructively instead of being
@@ -1675,7 +1744,7 @@ spec_pathResidualsUnresolvedBy = do
         pure $
           resolvesIn graph startNid path
             ==> residual
-            === NormalizedPath mempty
+            === pure (NormalizedPath mempty)
 
     it "removing one edge produces residuals that resolve in removed edge graph" $
       property $ do
@@ -1689,13 +1758,18 @@ spec_pathResidualsUnresolvedBy = do
             ==> forAll (elements edges)
           $ \edgeToRemove ->
             let graphMinusEdge = deleteEdge edgeToRemove graph
-                residual = pathResidualsUnresolvedBy startNid graphMinusEdge path
-                -- The residual (if non-empty) should resolve in just the removed edge
+                residualAlts = pathResidualsUnresolvedBy startNid graphMinusEdge path
                 singleEdgeGraph = insertEdges [edgeToRemove] emptyGraph
-                residualResolved =
-                  pathResidualsUnresolvedBy startNid singleEdgeGraph residual
-             in -- Either path fully resolves (edge wasn't critical) or
-                -- residual resolves in just the removed edge
+                -- an alternative is the exact repair iff it fully resolves
+                -- in the graph containing only the removed edge
+                altResolves alt =
+                  pathResidualsUnresolvedBy startNid singleEdgeGraph alt
+                    == pure (NormalizedPath mempty)
+             in -- Either the path still fully resolves (the edge wasn't
+                -- critical) or SOME alternative is the exact repair: the
+                -- removed edge's contribution must be among the enumerated
+                -- alternatives even when the graph alone can't determine
+                -- which one it was
                 counterexample
                   ( "path: "
                       <> show path
@@ -1703,13 +1777,15 @@ spec_pathResidualsUnresolvedBy = do
                       <> show startNid
                       <> "\ngraph: "
                       <> show edges
+                      <> "\nresidual alternatives: "
+                      <> show residualAlts
                   )
-                  $ (residual === NormalizedPath mempty)
-                    .||. (residualResolved === NormalizedPath mempty)
+                  $ (residualAlts === pure (NormalizedPath mempty))
+                    .||. property (any altResolves (toList residualAlts))
 
-    -- the core invariant, stated directly: creating the residual's edges on
-    -- top of the partial graph must make the original path resolvable by
-    -- resolveNPath
+    -- the core invariant, stated directly: EVERY alternative is a complete
+    -- repair — creating its edges on top of the partial graph must make
+    -- the original path resolvable by resolveNPath
     it "creating the residual's edges makes the path resolve" $
       property $ do
         seed <- arbitrary
@@ -1720,10 +1796,10 @@ spec_pathResidualsUnresolvedBy = do
           resolvesIn graph startNid path
             ==> forAll (sublistOf (graphEdges graph)) \removedEdges ->
               let partialGraph = deleteEdges removedEdges graph
-                  residual = pathResidualsUnresolvedBy startNid partialGraph path
-                  combined =
+                  residualAlts = pathResidualsUnresolvedBy startNid partialGraph path
+                  combinedFor alt =
                     partialGraph
-                      <> graphResolvingPathFrom residualGen startNid residual
+                      <> graphResolvingPathFrom residualGen startNid alt
                in counterexample
                     ( "path: "
                         <> show path
@@ -1731,10 +1807,14 @@ spec_pathResidualsUnresolvedBy = do
                         <> show startNid
                         <> "\ngraph: "
                         <> show (graphEdges graph)
-                        <> "\nresidual: "
-                        <> show residual
+                        <> "\nresidual alternatives: "
+                        <> show residualAlts
                     )
                     -- a single case occasionally blows up combinatorially
-                    -- (20+ min); bound it so the offending input gets
-                    -- printed instead of hanging the suite
-                    (within 10000000 (resolvesIn combined startNid path))
+                    -- (20+ min); bound each alternative so the offending
+                    -- input gets printed instead of hanging the suite
+                    $ conjoin
+                      [ counterexample ("alternative: " <> show alt) $
+                          within 10000000 (resolvesIn (combinedFor alt) startNid path)
+                      | alt <- toList residualAlts
+                      ]
