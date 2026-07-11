@@ -1,316 +1,213 @@
-# `pathResidualsUnresolvedBy` — Implementation Notes
+# `pathResidualsUnresolvedBy` — Decision Record & Worklist
 
-Notes from the from-scratch rewrite specified in
-`pathResidualsUnresolvedBy-spec.md`. Status (re-measured 2026-06-10, after
-making the property generators constructive, see §3):
+Status (2026-07-11). A design review settled every ambiguity recorded by
+the previous version of this document. Work is staged:
 
-- the 139 unit tests and property 1 pass deterministically (property 1
-  verified at 1000 cases, 0.56s);
-- the "removing one edge" property (property 2 of §8) fails roughly every
-  other 100-case run because some generated instances are inherently
-  ambiguous (see §1);
-- property 3 (the spec's §3 invariant stated directly) is **also
-  flaky** — about
-  1 in 8 hundred-case runs falsifies it, i.e. some generated path/graph
-  shapes still genuinely violate the invariant (a captured instance is in
-  §4; an earlier claim that property 3 passes at 1000+ cases did not
-  reproduce). In addition, a rare case can blow up combinatorially (one
-  observed instance ran 20+ minutes); property 3 now bounds each case
-  with `within 10s` so such cases fail and print themselves instead of
-  hanging the suite.
+- **Stage 0 — done, committed**: `resolveNPath` multi-root union bug fixed
+  in `traverseRooted` (`Traversals.hs`); regression tests in
+  `Graph/ResolveSpec.hs`.
+- **Stage 1 — done**: `pathResidualsUnresolvedBy-spec.md` rewritten (v2)
+  to encode all decisions; this document rewritten as the decision record.
+- **Stage 2 — done**: unit/property tests updated to the new behavior; the
+  API changed to `NonEmpty (NormalizedPath Anchor)` with the old
+  implementation wrapped as a singleton alternative. Tests whose
+  expectations changed are red and form the worklist (§3).
+- **Stage 3 — pending**: implement the spec (intended for a fresh agent).
+- **Stage 4 — pending**: property burn-in (1000 cases × ~10 runs, all
+  three properties, no `within` timeouts).
 
-## 1. The property-2 ambiguity finding
+## 1. Decisions (with rationale)
 
-Property 2 demands: after deleting one edge `e` from a graph that resolves
-the path, the residual computed against `graph − e` must itself fully
-resolve in the graph containing only `e`. In other words the residual must
-be *exactly* the removed edge's contribution — a much stronger requirement
-than the §3 invariant (which properties 1 and 3 test and which holds).
+1. **Multi-root resolution is conjunctive.** Roots (keys of
+   `rootBranches`) start independently, but every root's branch set must
+   resolve and all landings must unify at the shared target. The
+   union-over-roots behavior in `resolveNPath` was a bug (fixed, stage 0).
+   Consequence: a root that can never unify (a `JoinPoint` excluding
+   `startNid`) makes the whole deterministic path unsatisfiable — the
+   residual returns it **unchanged** (previously that root's branches were
+   silently dropped).
+2. **Meta-union API.** The residual returns
+   `NonEmpty (NormalizedPath Anchor)`: each alternative is a *complete*
+   repair satisfying the §3 invariant on its own; any one suffices; the
+   preferred one is first; dedup required. The inner `NormalizedPath`
+   union keeps meaning "create every member" (union members of the input
+   are each completed — `[a] + [b]` in `[@1>"a">@2]` ⇒ `[b]`).
+   Rationale: distinguishes the two union levels that were previously
+   conflated — graph-derived *alternatives* (multi-seam, fan-out, arrival
+   choices, reach-vs-unpinned joins), where only one repair is needed,
+   versus path-derived unions, where everything must exist. It also makes
+   property 2 satisfiable: for ambiguous instances the true repair is
+   *among* the alternatives even though no deterministic single-valued
+   function could pick it (the removed edge is not an input).
+3. **Self-loop soft bias, residual only.** Prefer consumption/seams/pins
+   that don't depend on a self-loop edge matching a non-loop step; fall
+   back when they're the only source of progress or full resolution.
+   `resolveNPath` is untouched (a hard rule would be a query-language
+   change: `[a]` would stop traversing `@1>"a">@1`, breaking the
+   `@[a /@| ~a]` unit tests and real reflexive-edge queries).
+4. **Maximize-consumption split selection.** Among (k forward, j backward)
+   splits of a run: maximize k+j; ties prefer non-self-loop progress, then
+   forward. Replaces the old greedy-forward rule and its narrow
+   "frontier-preserving ∧ fully-rolled-back" exception. Verified against
+   the key unit tests: `[a/|b]>@4` and `@[a/|~c/|~b]` keep their answers
+   (ties → forward); the `@[a/|d/|~c/|~b]` family flips to the
+   backward-seam answer (see §3).
+5. **Join pinning simplified, staged.** Targets pin only on agreed
+   landings (disagreement demotes; both unchanged from spec §5). With no
+   landings the safe residual leaves the join unpinned — instantiation
+   mints a fresh join node, always invariant-sound. The whole-graph
+   minimal-weight pin search (`searchPin`) and the loops-resolve
+   preference are **deleted** (prime suspects for the old property-3
+   failures: every pin without a landing is a bet that all branches,
+   re-aimed gaps, and target loops assemble consistently around the chosen
+   node). Reach pinning returns in a second step as an *additional
+   alternative* (needed for property 2's exactness, guarded by property 3
+   over every alternative).
+6. **Fan-out gaps are alternatives, not conjunctions.** `[a/|b]` in
+   `[@1>"a">@2, @1>"a">@3]` ⇒ alternatives `[@2<b]` | `[@3<b]` (one chain
+   suffices). Distinguish from intersections landing on different nodes
+   (`@[(a & b)/|c]` ⇒ `[@2<c & @3<c]>@1`): intersected branches are all
+   required, so those stay conjoined in one alternative.
+7. **Backward multi-source seams are alternatives** (same reasoning), each
+   forward-expressed.
+8. **Midpoint stations with several arrivals**: fully-resolving arrivals
+   union into one alternative; otherwise each progressing arrival is its
+   own alternative (replaces the arbitrary first-progress pick).
+9. **Zero-consumption loops stay attached** to their pointlike in every
+   position; only partially-consumed loops deconstruct. (Removes the old
+   position-dependent root/midpoint split.)
+10. **Orientation: forward, original direction, unless inversion buys
+    connectivity** (chaining through a loop root into a continuation, or
+    merging several required gaps into one path). E.g. `@[a/|b/|c]` in
+    `[@2>"c">@1, @3>"b">@2]` ⇒ `[@1<a]>@3` (was `[@3<~a]>@1`), but
+    `[@[a/|b/|c]<d]` in `[@2>"c">@1]` keeps `[@2<~b /| ~a /@1| d]`.
+11. **Connectedness / intersection preservation.** Per-root residual
+    fragments merge into one multi-root `Rooted` path wherever ends allow;
+    gaps ending at a concrete node chain into continuations leaving that
+    node: `[[@1<a & @2<b]>@3<c & @4<d]>@5` in `[@1>"a">@3]` ⇒
+    `[@2<b/@3|c & @4<d]>@5`. Union-splitting only when unavoidable.
+12. **Ordering preserves the original path.** Root maps/branch sets follow
+    the declaration order of the branches that produced them; ascending
+    NID only for genuinely graph-derived sets (fan-out members, seams) and
+    for alternatives differing only by NID. (Replaces "consumed gaps
+    before re-rooted gaps" and blanket ascending-NID.)
+13. **Nested `Rooted` roots with `Unanchored` targets get no special
+    rewrite** (the old internal `JoinPoint ∅` treatment is dropped). Its
+    recorded justification — property 3 failing — predates the stage-0
+    conjunction fix and decision 5; if property 3 reproduces the failure,
+    re-add narrowly with the counterexample as a regression test.
+14. **Kept as-is**: open-backward all-nodes seeding for a branch's final
+    run (property 2 needs seam recovery), and tail-candidate recovery /
+    connected chaining behind unknowable boundaries.
+15. **Properties.** Prop 1: result `=== [%never]`. Prop 2: shared 11-word
+    label pool, **some** alternative resolves in the removed-edge graph.
+    Prop 3: **every** alternative satisfies the invariant; keep `within`
+    bounds and `counterexample` printing. Acceptance: 1000 cases × ~10
+    fresh-seed runs, no timeouts; suite default stays 100.
 
-Some generated instances make this requirement unsatisfiable: `graph − e`
-can contain **two structurally symmetric single-edge residuals, both
-correct under the §3 invariant, of identical size, with no information
-distinguishing them** — and only one of them matches the removed edge.
+### Historical context: the property-2 ambiguity finding
 
-### Minimal counterexample (found by shrinking)
+The old implementation hit instances where `graph − e` contained two
+structurally symmetric repairs of identical size — e.g. a path whose
+midpoint loop `@1["e"]` minted `@1>"e">@1`, which coincidentally also
+matched the mid→target step `e`; after deleting the target's `~e` loop
+edge, pinning the join at `@1` (residual `@1["bar"]`) and at `@t`
+(residual `@t[~e]`) were both complete repairs, but only one minted the
+removed edge. No deterministic single-valued rule can choose (rows of
+locally-identical evidence demanded opposite answers in unit tests vs.
+property instances). Decisions 2–4 dissolve this: the soft bias prefers
+the non-coincidental reading, and where the graph is genuinely symmetric
+the meta-union returns both repairs and property 2 accepts either.
+Duplicate-label fan-outs (`[a/|b & a/|c]` minting two `a`-edges) are the
+same story via decision 6.
 
-```
-path:    [!{@F,@f}<(~d & ~c)/@1["e" & ~d]|e]>@[~e & bar]
-start:   @a
-graph−e: [@1>"c">@a, @1>"d">@1, @1>"d">@a, @1>"e">@1,
-          @1>"e">@t, @t>"bar">@t]            (t is the minted join target)
-removed: @t>"e">@t                           (the target's ~e loop edge)
-```
+## 2. Code changes already made (stages 0/2)
 
-(`@F` and `@f` in the root's exclusion set are inert shrinking leftovers —
-they never coincide with any node involved.)
+- `Traversals.hs` `traverseRooted`: cross-root combinations via `choices`
+  over per-root alternatives; `ensureSameAnchors` spans the whole
+  combination; root map rebuilt with `unionsWith (<>)`.
+- `Graph/ResolveSpec.hs`: `spec_resolveNPath` — 8 multi-root agreement
+  cases. (Separate module: importing `Utils.Testing` into `Graph.Resolve`
+  pulls ObjC bindings into TH modules' dependency closure and breaks TH
+  linking.)
+- `UnresolvedResiduals.hs`: signature changed to return
+  `NonEmpty (NormalizedPath Anchor)`; the existing computation is wrapped
+  as `pure (…)` — a compile shim so unchanged tests stay green and changed
+  tests are red. Test helpers: `testResiduals` compares against a single
+  parsed alternative (`pure expected`); `testResidualsAlts` compares
+  against an explicit list of alternatives in order.
 
-Piece by piece, what the path demands (per the spec's §2 semantics) and
-which minted edge satisfied each piece:
+## 3. Stage-3 worklist: red tests and what they encode
 
-| path piece | role | demands | minted edge | in `graph − e`? |
-|---|---|---|---|---|
-| `!{@F,@f}` | root join point | unifies with start `@a` | (node `@a`) | ✓ |
-| `~d` | root branch | edge `X>"d">@a`, arrives at `X` | `@1>"d">@a`, arrives `@1` | ✓ |
-| `~c` | root branch | edge `Y>"c">@a`, with `Y = X` | `@1>"c">@a`, arrives `@1` | ✓ |
-| `@1["e" & ~d]` | midpoint + loops | `@1>"e">@1` and `@1>"d">@1` | both | ✓ |
-| `e` | mid → target step | edge `@1>"e">Z`, `Z` is the join | `@1>"e">@t` | ✓ |
-| `~e` | target loop | `Z>"e">Z` | `@t>"e">@t` | ✗ **removed** |
-| `bar` | target loop | `Z>"bar">Z` | `@t>"bar">@t` | ✓ |
+Expectations changed (old ⇒ new), all in
+`spec_pathResidualsUnresolvedBy`:
 
-As a picture (self-loops written next to their node):
-
-```
-   start                midpoint @1                join target @[~e & bar]
-                ~c, ~d                  e
-   ( @a ) ◄════════════ ( @1 ) ───────────────► ( @t )
-            edges c, d   loops: d, e             loops: bar, e ✂removed
-                                ▲
-                                └── @1>"e">@1: minted for the midpoint's
-                                    "e" loop, but it ALSO matches the
-                                    mid→target step e — the coincidence
-```
-
-The trouble: in `graph − e` the final step `e` from `@1` lands on **two**
-nodes — `@t` via the genuine `@1>"e">@t`, and `@1` via the self-loop
-`@1>"e">@1` that was minted for the midpoint's `"e"` loop (the label `e` is
-reused within the path, which is what creates the coincidence). The
-join-point target `@` may pin either landing, and each landing already has
-exactly one of the two target loops:
-
-| pin join at | `~e` loop | `bar` loop | residual | mints | §3 invariant | prop 2: resolves in `{@t>"e">@t}` |
-|---|---|---|---|---|---|---|
-| `@1` | ✓ have `@1>"e">@1` | ✗ missing | `@1["bar"]` | `@1>"bar">@1` | ✓ holds | ✗ fails |
-| `@t` | ✗ missing | ✓ have `@t>"bar">@t` | `@t[~e]` | `@t>"e">@t` | ✓ holds | ✓ passes |
-
-Both candidates mint exactly one edge and both make the original path
-resolve (I verified both directions). `graph − e` is perfectly symmetric
-between them; only knowing *which* edge was removed breaks the tie, and
-that information is not part of the function's input. The same shape
-recurs with sequence steps instead of loops: a forward self-loop match vs.
-a backward-recoverable seam, e.g. `~c/|bar` where `~c` coincidentally
-matches a root-loop edge `@1H>"c">@1H` while the true seam edge
-`@xho>"c">@1H` was the one removed.
-
-### Why a tie-break cannot fix it
-
-The local situation — "the forward pass matched something, and the
-backward pass also makes progress" — also occurs in unit tests, and they
-demand *forward*-keeping answers; some property-2 instances demand the
-opposite answer on locally identical evidence:
-
-| instance | local evidence | required answer | required by |
+| test (path ⊢ graph) | old | new | decision |
 |---|---|---|---|
-| `[a/|b]>@4` in `[@1>"a">@2, @3>"b">@4]` | fwd: `a` matched, at `@2`; bwd: `b` matched, from `@3` | keep the fwd match, re-mint the suffix: `[@2<b]>@4`, *not* `[a]>@3` | unit test ("unchanged when unmatched") |
-| `@[a/|d/|~c/|~b]` in `[@1>"a">@2, @2>"d">@2, @1>"b">@2, @2>"c">@3]` | fwd: `d` matched by a *genuine* self-loop `@2>"d">@2`; bwd: `~b` progresses | keep the self-loop fwd match: `[@2<~c]>@2` | unit test ("don't meet up in middle") |
-| property-2 instance (`~c/|bar` shape above) | fwd: `~c` matched by a *coincidental* self-loop `@1H>"c">@1H`; bwd: seam recoverable | trust the bwd seam (the removed edge was the seam `@xho>"c">@1H`) | property 2 |
+| `[@<(a /| b) & @<(c /| d)]` ⊢ `[@1>"c">@2]` | `[@2<d & @1<(a /| b)]` | `[@1<(a /| b) & @2<d]` | 12 (ordering) |
+| `[a/|b]` ⊢ `[@1>"a">@2, @1>"a">@3]` | `[@2<b & @3<b]` | alts `[@2<b]`, `[@3<b]` | 6 |
+| `[a/|b/|c]` ⊢ `[@1>"a">@2, @2>"b">@3, @2>"b">@4]` | `[@3<c & @4<c]` | alts `[@3<c]`, `[@4<c]` | 6 |
+| `@[a/|b/|c]` ⊢ `[@2>"c">@1, @3>"c">@1]` | `[@2<~b /| ~a]>@1 + [@3<~b /| ~a]>@1` | alts `[@1<a /| b]>@2`, `[@1<a /| b]>@3` | 7, 10 |
+| `@[a/|*]` ⊢ `[@2>"x">@1]` | `[@2<~a]>@1` | `[@1<a]>@2` | 10 |
+| `@[a/|b/|c]` ⊢ `[@2>"c">@1, @3>"b">@2]` | `[@3<~a]>@1` | `[@1<a]>@3` | 10 |
+| `@[a/|d/|~c/|~b]` ⊢ `[@1>"a">@2, @2>"d">@2, @1>"b">@2, @2>"c">@3]` | `[@2<~c]>@2` | `[@2<d]>@3` | 3, 4 |
+| `[@[a/|d/|~c/|~b]<e]` ⊢ same graph | `[@2<~c]>@2 + [@1<e]` | `[@2<d]>@3 + [@1<e]` | 3, 4 |
+| `[@[a/|(d/|~c/|~b & f)]<e]` ⊢ same graph | `[@2<~c]>@2 + [@2<f/@1|e]` | `[@2<d]>@3 + [@2<f/@1|e]` | 3, 4 |
+| `[@[a/|(d/|~c/|~b & f & g)]<e]` ⊢ same graph | `[@2<~c]>@2 + [@2<(f & g)/@1|e]` | `[@2<d]>@3 + [@2<(f & g)/@1|e]` | 3, 4 |
+| `[@2[c]<a & @1<b]` ⊢ `[@2>"a">@3, @1>"b">@3]` | `[@2<c]>@2` | `@2[c]` | 9 |
 
-Rows 2 and 3 present the matcher with indistinguishable local evidence but
-need opposite choices. I implemented the one discriminator that is
-consistent with all unit tests (prefer the backward seam only when every
-forward match was frontier-preserving *and* the backward pass was fully
-rolled back, see §2.8), which fixed the most common collision class, but
-the residual ambiguity above survives any deterministic rule.
+New decision-pinning tests (red until stage 3 where noted):
 
-### Root cause and suggestions
+- `[[@1<a & @2<b]>@3<c & @4<d]>@5` ⊢ `[@1>"a">@3]` ⇒
+  `[@2<b/@3|c & @4<d]>@5` (decision 11; red).
+- `[!{@1}<a & @<b]` ⊢ `[@1>"b">@2]` ⇒ unchanged (decision 1; red —
+  the old code drops the excluded root's branches).
+- `[!{@1}<a]` ⊢ `[]` ⇒ unchanged (decision 1).
 
-The coincidences come from `genTransitionLabel`'s 11-word pool: reused
-labels inside one path make unrelated edges (especially self-loops minted
-for pointlike loops) match other occurrences' steps. Options:
+Unchanged-on-purpose (verified against the new rules during the review —
+do not "fix" these): `[a/|b]>@4` ⊢ `[@3>"b">@4, @1>"a">@2]` stays
+`[@2<b]>@4` (tie → forward); `@[a/|~c/|~b]` ⊢
+`[@1>"a">@2, @1>"b">@2, @2>"c">@3]` stays `[@2<~c]>@2` (tie → forward, no
+self-loop involved); `@[a/|d/|~c/|~b]` ⊢ the graph with `@2>"c">@2` stays
+`%never` (bias falls back for full resolution);
+`@[a/|b/|c & d/|e/|f]` ⊢ `[@2>"c">@1, @3>"f">@1]` stays
+`[@2<~b /| ~a & @3<~e /| ~d]>@1` (inversion merges required gaps);
+`[@[a/|b/|c]<d]` ⊢ `[@2>"c">@1]` stays `[@2<~b /| ~a /@1| d]` (inversion
+chains); intersection splits like `@[(a & b) /| c]` stay conjoined.
 
-1. Weaken property 2 to the §3 invariant form: instead of requiring the
-   residual to resolve in `{e}`, require `resolvesIn (graphMinusEdge <>
-   instantiate residual)` — this is property 3 restricted to singleton
-   removals and is unambiguous. (The current property 3 already covers
-   this.)
-2. Make the generator label each transition occurrence uniquely (or
-   precondition property 2 on paths whose labels are distinct), removing
-   the collision source.
-3. Accept the flake rate (~1 per few hundred cases ⇒ a 100-case run fails
-   occasionally) and fix the QuickCheck seed.
+Properties (updated in stage 2, red until stage 3):
 
-## 2. Ambiguous implementation decisions
+- prop 1 compares to `pure %never`;
+- prop 2: `residual === pure %never` `.||.` some alternative's residual in
+  the single-edge graph `=== pure %never`;
+- prop 3: `conjoin` over all alternatives, each `within`-bounded, each
+  instantiated independently.
 
-Places where neither the spec nor the tests determine the behavior, and
-what I chose. All choices are exercised by the property tests, so changing
-them later should be guarded by those.
+Implementation guidance for stage 3: the spec (v2) is normative. Expect to
+restructure layer 1 around a nondeterminism/alternatives structure
+(cartesian composition + dedup); delete `searchPin`, the loops-resolve pin
+preference, the `alone`-flag machinery (subsumed by alternatives), and the
+`AttachZeroLoops`/`DeconstructZeroLoops` split (attach everywhere). Keep
+`resolveSegment`'s frontier-trail core but replace split selection with
+maximize-consumption + tie-breaks. Risks: alternative blowup (dedup
+aggressively; the `within` bound catches the rest) and the old
+property-3 failure class (three intersected roots + several `/@|` join
+midpoints + a loops-carrying join target) — if it reproduces, suspect
+decisions 5/13 interactions first and capture the instance as a
+regression test.
 
-Overview — each numbered item below in one line, with a concrete example
-where the unit suite has one (examples marked *prop* are only exercised by
-the property tests):
+## 4. Environment notes
 
-| # | when it bites | rule chosen | example (graph ⊢ path ⇒ residual) |
-|---|---|---|---|
-| 1 | a loop consumed zero steps | deconstruct at root positions, keep attached at midpoint/target positions | root: `[@1>"b">@3, @2>"a">@3] ⊢ [@2[c]<a & @1<b] ⇒ [@2<c]>@2`; midpoint: `[@1>"a">@2, @2>"x">@3] ⊢ [a /@[x]| b] ⇒ [@2[x]<b]` |
-| 2 | one gap, several frontier NIDs | forward fan-out ⇒ intersected roots of *one* path; backward multi-source ⇒ separate *union* members | fwd: `[@1>"a">@2, @1>"a">@3] ⊢ [a/|b] ⇒ [@2<b & @3<b]`; bwd: `[@2>"c">@1, @3>"c">@1] ⊢ @[a/|b/|c] ⇒ [@2<~b /| ~a]>@1 + [@3<~b /| ~a]>@1` |
-| 3 | root JoinPoint excludes the start NID | drop that root's branches (creating edges can't help); unchanged if *all* roots are like that | *prop* |
-| 4 | nested rooted root with Unanchored target | treat as `JoinPoint ∅` internally: branches must meet, junction may pin | *prop* (property 3 fails otherwise) |
-| 5 | join target where no resolved branches agree | pin by reach, then by minimal residual weight; prefer candidates whose target loops resolve | basic agree-rule: `[@1>"a">@2] ⊢ [@<a & @<b & @<c]>@ ⇒ [@1<b & @1<c]>@2`; extensions: *prop* |
-| 6 | midpoint reached at several NIDs | all fully-resolving arrivals contribute; else first arrival with progress | *prop* |
-| 7 | expressing a gap backward (`[@3<~a]>@1`) | only for `EndAt` ends with a pinnable start; Unanchored-rooted gaps always forward | `[@2>"c">@1, @3>"b">@2] ⊢ @[a/|b/|c] ⇒ [@3<~a]>@1` (loop root pins); but `[@1>"a">@2] ⊢ [a & b] ⇒ [b]` (Unanchored root, never pinned) |
-| 8 | forward and backward passes overlap | forward greedy, except: all fwd matches frontier-preserving ∧ bwd fully rolled back ∧ bwd-only makes progress ⇒ backward seam wins | greedy: `[@1>"a">@2, @3>"b">@4] ⊢ [a/|b]>@4 ⇒ [@2<b]>@4`; exception: *prop* |
-| 9 | final run of a branch ends open/at a join | backward pass seeded with *every* graph node (recovers seams like `[a]>@m` from `m>"b">f`) | *prop* (property 2) |
-| 10 | gap runs into a JoinPoint midpoint / intersection | match the tail from every node; close at the seam if the whole tail resolves, else keep one chained gap | *prop* |
-| 11 | OMap/OSet insertion order in the residual | consumed gaps before re-rooted gaps; root maps in declaration order; fan-outs ascending by NID | (ordering only) |
-
-1. **Zero-consumption loop gaps are position-dependent.** A loop that
-   consumed nothing deconstructs at *root* positions (`[@2<c]>@2`, test
-   line ~477) but stays attached to the pointlike at *midpoint* positions
-   (`@2[b]`, `[@2[b]<c]`, lines ~147/162). The spec describes only the
-   deconstruction; the position split is inferred from the tests and
-   generalized to unseen combinations (e.g. target loops behave like
-   midpoints).
-
-2. **Conjunction vs. union for multi-NID gaps.** A forward fan-out gap
-   becomes intersected root branches of one deterministic path
-   (`[@2<b & @3<b]`, line ~212) while a multi-NID *backward* gap becomes
-   separate union members (line ~251), even though the shapes are
-   isomorphic. I followed the tests and additionally never merge backward
-   alternatives with any other gap (the `alone` flag), since merging
-   alternatives of one gap would wrongly conjoin them.
-
-3. **Roots that can never unify are dropped, not kept.** `resolveNPath`
-   resolves each root of a multi-root path independently (its result is a
-   union over roots), so `resolvesIn` is true even when a root is a
-   `JoinPoint` excluding the start NID. Since creating edges can never
-   help such a root, its branches are omitted from the residual; a path
-   consisting *only* of such roots still returns unchanged (no progress),
-   which is the §8 behavior. The spec's "unchanged" wording only
-   contemplates the single-root case.
-
-4. **Nested roots with Unanchored targets are treated as join points.**
-   The §3 carve-out exempts only the *top-level* target. A nested rooted
-   root with an Unanchored target must make its branches meet for the
-   invariant to hold, so internally it is rewritten to `JoinPoint ∅`, its
-   junction may be pinned, and outer branches resume from the pinned NID.
-   Justified by §5's "concrete resume points are required structure, not
-   anchor pinning"; without this property 3 fails.
-
-5. **Join pinning beyond §5's rule.** §5 pins a JoinPoint target to "the
-   NID the resolved branches agreed on". Extensions needed by the
-   properties:
-   - *reach pinning*: a branch that gapped early but whose suffix fully
-     resolves to the target reports that terminal ("reach"); when no
-     branch fully lands, the join pins on agreeing reaches;
-   - *loop/cost search*: when nothing lands or reaches, every admissible
-     node is evaluated as the join (re-aiming all branches at it) and the
-     one minimizing total residual weight wins;
-   - among meet candidates, prefer one where the target's own loops
-     resolve (otherwise property 1 fails when branch fan-out makes the
-     meet ambiguous).
-   The spec's disagreement rule (resolved branches disagree ⇒ demote, no
-   pin) is preserved and takes precedence.
-
-6. **Midpoints with several arrivals.** Stations try every arrival NID;
-   all fully-resolving arrivals contribute (landings unioned), otherwise
-   the first arrival showing progress is used. Explicit `/@|` join
-   midpoints following an intersection get the same candidate search as
-   target joins when the fast path (all sub-branches agree) fails.
-   Unanchored midpoints use junction pinning: a failed sub-branch's gap
-   ends at the junction a sibling resolved through; if no continuation
-   resolved anywhere, the continuation is duplicated per pair (exploded
-   semantics).
-
-7. **Backward expression is restricted.** Backward-expressed gaps
-   (`[@3<~a]>@1`) are produced only for `EndAt` contexts with a pinnable
-   start (loops, pinned roots); gaps starting at Unanchored roots are
-   always forward-expressed since their root must never pin.
-
-8. **Forward greedy matching, with one exception.** Linear runs always
-   consume the longest forward prefix (this is what the unit tests
-   require, see §1), except: if every consumed forward step left the
-   frontier unchanged (only self-loop matches) *and* the backward pass
-   from the end was fully rolled back *and* re-running backward with no
-   forward consumption makes real progress, the backward seam wins. This
-   discriminates coincidental self-loop matches from genuine ones (lines
-   297–312) in all tested cases.
-
-9. **Open-backward matching.** §4.1 says an open backward frontier
-   "accepts any landing" but leaves the mode-On behavior open. For the
-   *final* run of a branch, an open/join end gets a backward pass seeded
-   with every node of the graph; this is what lets `[a /| b]` recover the
-   seam `[a]>@m` when only `m>"b">f` survives (required by property 2).
-   Non-final runs do not (their boundary is recovered structurally, see
-   10).
-
-10. **Recovery behind unknown boundaries.** When a run gaps into a
-    JoinPoint midpoint or an intersection (whose NID is unknowable), the
-    remaining tail is matched from every graph node ("tail candidates");
-    if the whole tail resolves somewhere, the gap closes at that seam,
-    otherwise the structure is kept as one connected gap (chaining), which
-    is safe for the invariant but not minimal. Structures inside a chained
-    gap are not re-attempted.
-
-11. **Residual assembly order.** OMap/OSet equality is insertion-order
-    sensitive, so the tests pin orderings: gaps that consumed something
-    precede gaps re-rooted at their start position; root maps follow
-    branch declaration order; forward fan-outs are in ascending NID order.
-
-## 3. Constructive property-test generation (2026-06-10)
-
-The property tests originally *filtered* generated data — `suchThat (not .
-requiresUnanchoredJoin)` on paths, and `==>` on "the generated graph
-resolves the path". Both filters are now replaced by a constructive
-rewrite, `coveredPathFrom` (in `TestUtils`), applied to every generated
-path:
-
-- a top-level Unanchored target with several terminal branches (the
-  spec's §3 carve-out) is normalized to `JoinPoint ∅` — the "append `>@`"
-  normalization, and exactly how `leastConstrainedNormalizedPath` already
-  interprets such a target at resolution time. These paths were previously
-  discarded outright; now they are exercised in normalized form;
-- the start NID is stripped from every JoinPoint exclusion set, since a
-  root excluding the start NID can never resolve from it no matter which
-  edges are created (with `genNID`'s 1–100 range this was a real
-  occurrence).
-
-The `resolvesIn` guards (`==>`) remain as safety nets but essentially
-never discard now. The properties also print the generated `path`,
-`start`, and `graph` via `counterexample` on failure — previously only the
-removed edges and the residual were shown, which made failures
-undiagnosable after the fact.
-
-Measured after the change: property 1 passes 1000 cases in 0.56s;
-properties 2/3 run 100 cases in ~0.1–0.35s. Wall-clock speed was never
-dominated by the filters — the dominant risk is the rare combinatorial
-blowup case bounded by `within` (see §4).
-
-## 4. Open issue: property 3 genuinely falsifies (pre-existing)
-
-Property 3 (the spec's §3 invariant) falsifies roughly once per ~800
-cases. A
-captured instance (printed by the new counterexample annotations; there is
-no seed replay, so this is the artifact to debug from):
-
-```
-path:    [@H[~"z"]<"baz"/@|("c" & (~"e" & "baz" & ~"baz")/|(~"bar" & ~"baz"))
-          & @H[~"z"]<("baz" & ~"e"/@|(~"z" & ~"d"))/|(~"baz" & ~"c" & "e")/@e|("y" & ~"b")
-          & @H[~"z"]<("b" & ~"e" & "a")/@X|~"d"]>@[~"e" & "d"]
-start:   @1X
-removed: [@H>"b">@X, @H>"baz">@eTea…, @H>"z">@H, @e>"c">@dIDB…,
-          @e>"y">@mI2G…, @CYQn…>"baz">@eTea…, @CYQn…>"e">@eTea…,
-          @dIDB…>"d">@MdWG…, @dIDB…>"z">@MdWG…, @eTea…>"baz">@CYQn…,
-          @mI2G…>"b">@e, @mI2G…>"bar">@CYQn…, @mI2G…>"d">@mI2G…,
-          @mI2G…>"e">@mI2G…]
-(full graph and residual in the test output; rerun
-`stack test --ta '-p creating'` in a loop to reproduce a fresh instance)
-```
-
-Note the failing path's target `@[~"e" & "d"]` is a JoinPoint-with-loops
-target — a shape the old, filtering generator also produced, so this class
-of failure predates the constructive generation change (the baseline
-suite, before any of these changes, falsified property 3 in roughly half
-of its 100-case runs). The join-pinning extensions of §2.5/§2.6 are the
-prime suspect: with three intersected root branches, several explicit `/@|`
-join midpoints, and a join target whose loops must also resolve, the
-candidate search has many ways to pin a meet that the instantiated
-residual then fails to realize.
+- `stack` on this machine needs `--ghc-options='-framework Foundation'`
+  (GHC TH loader otherwise fails with
+  `symbol not found in flat namespace '_OBJC_CLASS_$_NSArray'`).
+- tasty patterns through `stack test --ta '-p …'` must be single words.
 
 ## 5. Where things live
 
-- Implementation: `src/Models/NormalizedPath/UnresolvedResiduals.hs`
-  (layer 0: `resolveSegment`; layer 1: `resolveBranch` for branch
-  structure, `residualRooted`/`resolveRoot` for path structure).
-- Constructive generator post-processing: `coveredPathFrom` in
-  `src/Models/NormalizedPath/TestUtils.hs`.
-- Run the suite: `stack test --ta '-p pathResidualsUnresolvedBy'`.
+- Implementation + tests: `src/Models/NormalizedPath/UnresolvedResiduals.hs`
+- Spec (normative): `docs/pathResidualsUnresolvedBy-spec.md`
+- Multi-root resolve regression tests: `src/Graph/ResolveSpec.hs`
+- Generator post-processing: `coveredPathFrom` in
+  `src/Models/NormalizedPath/TestUtils.hs`
+- Run the suite: `stack test --ta '-p pathResidualsUnresolvedBy'`
