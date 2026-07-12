@@ -46,53 +46,56 @@ import Utils.Testing
 -- to make the path resolve. Callers that want join semantics must anchor
 -- the target (e.g. by appending @>\@@). See
 -- docs/pathResidualsUnresolvedBy-spec.md.
---
--- TODO(stage 3): the implementation still computes the pre-review
--- single-path behavior, wrapped as a singleton alternative; the tests
--- already encode the target behavior. See
--- docs/pathResidualsUnresolvedBy-implementation-notes.md for the worklist.
 pathResidualsUnresolvedBy ::
   NID ->
   Graph Text () ->
   NormalizedPath Anchor ->
   NonEmpty (NormalizedPath Anchor)
 pathResidualsUnresolvedBy startNid graph (NormalizedPath dps) =
-  pure . NormalizedPath . setFromList $
-    concatMap (residualOfDp startNid graph) (toList dps)
+  let memberAlts = [residualOfDp startNid graph dp | dp <- toList dps]
+      alts =
+        ordNub
+          [ NormalizedPath (setFromList (concat combo))
+          | combo <- combineAlts memberAlts
+          ]
+   in case alts of
+        (a : as) -> a :| as
+        [] -> error "pathResidualsUnresolvedBy: no alternatives"
 
+-- | All ways of picking one alternative from each sub-result, first
+-- sub-result outermost so the all-preferred combination comes first.
+combineAlts :: [[a]] -> [[a]]
+combineAlts = foldr (\xs rest -> [x : r | x <- xs, r <- rest]) [[]]
+
+-- | The residual alternatives of one deterministic path; each alternative
+-- is the list of union members to create.
 residualOfDp ::
-  NID ->
-  Graph Text () ->
-  DeterministicPath Anchor ->
-  [DeterministicPath Anchor]
-residualOfDp startNid g dp = case dp of
-  Pointlike p -> case unifyRootAnchor startNid p.anchor of
-    Nothing -> [dp]
-    Just n
-      | null p.loops ->
-          if isJust (maybeLookupNode g n) then [] else [dp]
-      | otherwise ->
-          let lr = processLoops g DeconstructZeroLoops n p.loops
-           in if lr.resolved
-                then []
-                else
-                  if not lr.progress
-                    then [dp]
-                    else
-                      let (groups, alones) = groupLoopFrags lr.frags
-                       in [mkRootedDp rm (specificPdp e) | (e, rm) <- groups]
-                            <> [ mkRootedDp fr.roots (specificPdp fr.end)
-                               | fr <- alones
-                               ]
-                            <> lr.dones
-  Rooted r ->
-    let res = residualRooted startNid g r
-     in if isJust res.landed
-          then []
-          else
-            if not res.progress
-              then [dp]
-              else maybeToList res.main <> res.dones
+  NID -> Graph Text () -> DeterministicPath Anchor -> [[DeterministicPath Anchor]]
+residualOfDp startNid g dp
+  | dpUnsatisfiable startNid dp = [[dp]]
+  | otherwise =
+      let alts = case dp of
+            Pointlike p -> residualPointlikeAlts startNid g p
+            Rooted r -> residualRootedAlts startNid g r
+       in if any (isJust . (.landed)) alts
+            then [[]]
+            else case ordNub [dpAltMembers a | a <- alts, a.progress] of
+              [] -> [[dp]]
+              ms -> ms
+
+-- | A deterministic path that no edge creation can make resolve: a root
+-- (recursively including nested Rooted roots) that is a JoinPoint
+-- excluding the start NID can never unify with it, and resolution is
+-- conjunctive across roots (§3 of the spec). Such paths are returned
+-- unchanged; their branches are not dropped.
+dpUnsatisfiable :: NID -> DeterministicPath Anchor -> Bool
+dpUnsatisfiable startNid = \case
+  Pointlike p -> rootAnchorUnsat p.anchor
+  Rooted r -> any (dpUnsatisfiable startNid) (keys r.rootBranches)
+  where
+    rootAnchorUnsat = \case
+      JoinPoint exc -> startNid `member` exc
+      _ -> False
 
 -- * Anchors
 
@@ -114,8 +117,19 @@ pinAnchor a n = case a of
   JoinPoint _ -> Specific n
   Specific m -> Specific m
 
+-- | The end context of a midpoint position. An Unanchored midpoint is an
+-- implicit pair point: 'leastConstrainedNormalizedPath' explodes it per
+-- branch pair, but intersections meeting it must still agree on a landing.
 anchorCtx :: Anchor -> EndCtx
 anchorCtx = \case
+  Unanchored -> EndPair
+  JoinPoint exc -> EndJoin exc
+  Specific n -> EndAt (singletonSet n)
+
+-- | The end context of a rooted path's target. An Unanchored target is
+-- fully open: the residual never pins it (§3 carve-out).
+targetEndCtx :: Anchor -> EndCtx
+targetEndCtx = \case
   Unanchored -> EndOpen
   JoinPoint exc -> EndJoin exc
   Specific n -> EndAt (singletonSet n)
@@ -136,23 +150,34 @@ specificDp = Pointlike . specificPdp
 
 -- | What a linear run must arrive at.
 data EndCtx
-  = -- | unconstrained landing
+  = -- | unconstrained landing (an Unanchored target, never pinned)
     EndOpen
+  | -- | an implicit pair point inside a branch: unconstrained for
+    -- matching, but an intersection ending here must agree on one landing
+    EndPair
   | -- | land anywhere outside the exclusion set (unpinned join point)
     EndJoin (Set NID)
   | -- | land exactly at one of these
     EndAt (Set NID)
 
-endCtxNid :: EndCtx -> Maybe NID
-endCtxNid = \case
-  EndAt s -> Just (minimumEx (toList s))
-  _ -> Nothing
+-- | The ends a gap that runs all the way to the end context can take, one
+-- alternative per element: a gap into a Specific end lands exactly there
+-- (per-NID alternatives when several); a gap into an open/join end runs to
+-- the (possibly unpinned) end position.
+gapEndAlts :: EndCtx -> [Maybe NID]
+gapEndAlts = \case
+  EndAt s -> [Just n | n <- toList s]
+  EndJoin _ -> [Nothing]
+  EndOpen -> [Nothing]
+  EndPair -> [Nothing]
 
 data SegResult
   = -- | frontiers met; the meeting NIDs
     SegResolved (Set NID)
-  | -- | fwd consumed, fwd frontier, gap, bwd consumed, bwd frontier
-    SegGap Int (Set NID) [DPDirection] Int (Set NID)
+  | -- | fwd consumed count, fwd frontier, gap steps, bwd consumed count,
+    -- and the recovered seams paired with the landings their resolved
+    -- suffix reaches (for reach pinning, §5.2)
+    SegGap Int (Set NID) [DPDirection] Int [(NID, Set NID)]
 
 matchTransition :: Set (Connect Text) -> DPTransition -> Set NID
 matchTransition conns = \case
@@ -180,85 +205,85 @@ stepBackward g nid dir = case maybeLookupNode g nid of
 
 -- | Frontiers after each consumed step, stopping before the first empty one.
 frontierTrail ::
-  Graph Text () ->
-  (Graph Text () -> NID -> DPDirection -> Set NID) ->
+  (NID -> DPDirection -> Set NID) ->
   Set NID ->
   [DPDirection] ->
   [Set NID]
-frontierTrail g step = go
+frontierTrail step = go
   where
     go f = \case
       [] -> []
       (d : ds) ->
-        let f' = unions [step g n d | n <- toList f]
+        let f' = unions [step n d | n <- toList f]
          in if null f' then [] else f' : go f' ds
 
 -- | Bidirectionally match one linear run of directed steps between a forward
 -- frontier and the end context.
 --
--- When @openBwd@ is set (the run ends the branch), an open/join end still
+-- When @openBwd@ is set (the run ends its branch), an open/join end still
 -- gets a backward pass starting from every node of the graph: matching the
 -- run's suffix anywhere recovers a concrete seam node for the residual.
+--
+-- Split selection (§4.1.1): among (k forward, j backward) splits, maximize
+-- k + j; ties prefer the split whose progress does not depend on a
+-- self-loop edge matching a non-loop step (§5.1); remaining ties prefer
+-- the larger k (forward wins). A gap always keeps at least one step
+-- (k + j <= length - 1); consuming every step but missing the backward
+-- frontier is not progress — the run failed as a whole.
 resolveSegment ::
   Graph Text () -> Bool -> Set NID -> [DPDirection] -> EndCtx -> SegResult
 resolveSegment g openBwd start steps end
-  | kAll == length steps,
-    Just met <- meets fwdFinal =
-      SegResolved met
+  | kAll == len, Just met <- meets fwdFinal = SegResolved met
   | otherwise =
-      -- consuming every step but missing the backward frontier is not
-      -- progress; the run failed as a whole
-      let kMax = if kAll == length steps then 0 else kAll
-          greedy = gapAt kMax
-          greedyJ = case fst greedy of
-            SegGap _ _ _ j _ -> j
-            SegResolved _ -> 0
-       in if kMax > 0
-            && trailEff start (take kMax fwds) == 0
-            && greedyJ == 0
-            && snd (gapAt 0) > 0
-            then -- every forward match was frontier-preserving (self-loop
-            -- coincidences) and incompatible with the backward pass,
-            -- which does make real progress: trust the backward seam
-              fst (gapAt 0)
-            else fst greedy
+      let (k, j) = lastEx (sortOn splitKey splits)
+          fF = if k == 0 then start else fwds `indexEx` (k - 1)
+          seams
+            | j == 0 = []
+            | otherwise = [(s, reachOf j s) | s <- toList (bwds `indexEx` (j - 1))]
+       in SegGap k fF (take (len - k - j) (drop k steps)) j seams
   where
-    fwds = frontierTrail g stepForward start steps
+    len = length steps
+    fwdStep = stepForward g
+    bwdStep = stepBackward g
+    noSelf step n d = step n d `difference` singletonSet n
+    fwds = frontierTrail fwdStep start steps
     kAll = length fwds
     fwdFinal = fromMaybe start (lastMay fwds)
-    -- how many steps of a frontier trail actually moved the frontier
-    trailEff prev0 trail =
-      length (filter id (zipWith (/=) trail (prev0 : trail)))
     meets f = case end of
       EndOpen -> Just f
+      EndPair -> Just f
       EndJoin exc ->
         let ok = f `difference` exc
          in justIfTrue (not (null ok)) ok
       EndAt s ->
         let ok = f `intersection` s
          in justIfTrue (not (null ok)) ok
-    -- the gap when only the first @k@ steps are consumed forward, paired
-    -- with the backward pass's effective progress
-    gapAt k =
-      let fF = if k == 0 then start else fwds `indexEx` (k - 1)
-          remaining = drop k steps
-          bwdStart = case end of
-            EndAt s -> Just s
-            EndJoin exc -> justIfTrue openBwd (nidSet g `difference` exc)
-            EndOpen -> justIfTrue openBwd (nidSet g)
-       in case bwdStart of
-            Nothing -> (SegGap k fF remaining 0 mempty, 0 :: Int)
-            Just s ->
-              let bwds = frontierTrail g stepBackward s (reverse remaining)
-                  -- a backward pass that consumes every remaining step can
-                  -- never meet the forward frontier (forward matching would
-                  -- already have met), so at least one step must remain to
-                  -- bridge the frontiers
-                  j = min (length remaining - 1) (length bwds)
-                  bFinal = if j == 0 then mempty else bwds `indexEx` (j - 1)
-               in ( SegGap k fF (take (length remaining - j) remaining) j bFinal,
-                    trailEff s (take j bwds)
-                  )
+    bwdSeed = case end of
+      EndAt s -> Just s
+      EndJoin exc -> justIfTrue openBwd (nidSet g `difference` exc)
+      EndOpen -> justIfTrue openBwd (nidSet g)
+      EndPair -> justIfTrue openBwd (nidSet g)
+    bwds = maybe [] (\s -> frontierTrail bwdStep s (reverse steps)) bwdSeed
+    fwdsClean = frontierTrail (noSelf fwdStep) start steps
+    bwdsClean = maybe [] (\s -> frontierTrail (noSelf bwdStep) s (reverse steps)) bwdSeed
+    clean (k, j) = k <= length fwdsClean && j <= length bwdsClean
+    splitKey (k, j) = (k + j, clean (k, j), k)
+    splits =
+      [ (k, j)
+      | k <- [0 .. min kAll (len - 1)],
+        j <- [0 .. min (length bwds) (len - 1 - k)]
+      ]
+    -- where the suffix the backward pass consumed lands when resolved
+    -- forward from the seam, filtered to admissible landings
+    reachOf j s =
+      let landing =
+            fromMaybe (singletonSet s) $
+              lastMay (frontierTrail fwdStep (singletonSet s) (drop (len - j) steps))
+       in case end of
+            EndAt s0 -> landing `intersection` s0
+            EndJoin exc -> landing `difference` exc
+            EndOpen -> landing
+            EndPair -> landing
 
 -- * Residual building blocks
 
@@ -270,29 +295,29 @@ type ARootsMap = OMap (DeterministicPath Anchor) ABranches
 data GapRoots
   = -- | nothing was consumed before the gap: it begins at the position the
     -- branch started from, and the enclosing structure decides how to
-    -- anchor it (pinned root form, midpoint station, ...)
+    -- anchor it (root form, station key, ...)
     AtStart ABranches
   | -- | concrete resume points with the unresolved branches from each
     AtRoots ARootsMap
+  deriving stock (Eq, Ord)
 
 data Gap = Gap
   { roots :: GapRoots,
     -- | Nothing = the gap runs to the (possibly unpinned) end position
-    end :: Maybe NID,
-    -- | alternatives of a single multi-NID backward gap must not be merged
-    -- with other gaps into one deterministic path
-    alone :: Bool
+    end :: Maybe NID
   }
+  deriving stock (Eq, Ord)
 
+-- | One alternative of resolving a branch.
 data BrRes = BrRes
   { progress :: Bool,
     dones :: [DeterministicPath Anchor],
     outcome :: Either [Gap] (Set NID),
     -- | even when the outcome is gapped, the branch's terminal position may
-    -- have been reached by its fully-resolved suffix; join-point targets
-    -- can pin there
+    -- have been reached by its fully-resolved suffix (reach pinning, §5.2)
     reach :: Maybe (Set NID)
   }
+  deriving stock (Eq, Ord)
 
 -- | A 'BrRes' with no terminal reach information.
 brRes :: Bool -> [DeterministicPath Anchor] -> Either [Gap] (Set NID) -> BrRes
@@ -302,42 +327,27 @@ brRes p ds o = BrRes p ds o Nothing
 resReach :: BrRes -> Maybe (Set NID)
 resReach r = either (const r.reach) Just r.outcome
 
-gapRootsMap :: Gap -> ARootsMap
-gapRootsMap gp = case gp.roots of
-  AtRoots rm -> rm
-  AtStart _ -> error "gapRootsMap: unanchored gap escaped its position"
-
--- | Rough size of the unresolved structure, for ranking pin candidates.
-branchWeight :: DPBranch Anchor -> Int
-branchWeight = \case
-  DPSingle _ -> 1
-  DPSequence b1 m b2 ->
-    branchesWeight b1 + branchesWeight m.loops + branchesWeight b2
-
-branchesWeight :: ABranches -> Int
-branchesWeight = sum . map branchWeight . toList
-
-gapWeight :: Gap -> Int
-gapWeight gp = case gp.roots of
-  AtStart bs -> branchesWeight bs
-  AtRoots rm -> sum (map branchesWeight (toList rm))
-
-loopsWeight :: LoopsRes -> Int
-loopsWeight lr =
-  branchesWeight lr.attached
-    + sum [sum (map branchesWeight (toList fr.roots)) | fr <- lr.frags]
+-- | The landing of the first fully-resolved alternative, if any. By the
+-- collapse rule (fully-resolving alternatives merge into one, see
+-- 'stationFromArrivals') there is at most one.
+firstRight :: [BrRes] -> Maybe (Set NID)
+firstRight rs = headMay [ls | r <- rs, Right ls <- [r.outcome]]
 
 isAtStartGap :: Gap -> Bool
 isAtStartGap gp = case gp.roots of
   AtStart _ -> True
   AtRoots _ -> False
 
-nidsRoots :: Set NID -> ABranches -> ARootsMap
-nidsRoots f bs = unionsWith (<>) [singletonMap (specificDp n) bs | n <- toList f]
+gapRootsMap :: Gap -> ARootsMap
+gapRootsMap gp = case gp.roots of
+  AtRoots rm -> rm
+  AtStart _ -> error "gapRootsMap: unanchored gap escaped its position"
 
 mkRootedDp ::
   ARootsMap -> PointlikeDeterministicPath Anchor -> DeterministicPath Anchor
-mkRootedDp rm t = Rooted (smartBuildRootedDeterministicPath rm t)
+mkRootedDp rm t =
+  Rooted . flip smartBuildRootedDeterministicPath t . unionsWith (<>) $
+    [uncurry singletonMap (smartBuildRootBranch k v) | (k, v) <- mapToList rm]
 
 upsertAssoc :: (Eq k) => (v -> v -> v) -> k -> v -> [(k, v)] -> [(k, v)]
 upsertAssoc f k v = \case
@@ -353,6 +363,7 @@ intersectAll = \case
 
 combineLandings :: EndCtx -> [Set NID] -> Maybe (Set NID)
 combineLandings ctx ls = case ctx of
+  -- an Unanchored target imposes no meet (§3 carve-out)
   EndOpen -> Just (unions ls)
   _ ->
     let m = intersectAll ls
@@ -401,6 +412,12 @@ invertDirection = \case
 invertedRun :: [DPDirection] -> [DPDirection]
 invertedRun = reverse . map invertDirection
 
+-- | Invert a branch that is one pure linear run.
+invertPureRun :: DPBranch Anchor -> Maybe (DPBranch Anchor)
+invertPureRun b = case flattenBranch b of
+  [PRun ds] -> Just (runToBranch (invertedRun ds))
+  _ -> Nothing
+
 rebuildParts :: [Part] -> ABranches
 rebuildParts = \case
   [] -> error "rebuildParts: empty parts"
@@ -421,219 +438,347 @@ rebuildParts = \case
     singletonSet $ smartBuildSequence bs unanchored (rebuildParts rest)
   (PMid _ : _) -> error "rebuildParts: leading midpoint"
 
--- * Loops
+-- * Gap orientation and assembly (§6)
 
-data LoopStyle = AttachZeroLoops | DeconstructZeroLoops
-  deriving stock (Eq)
-
-data LoopFrag = LoopFrag
-  { roots :: ARootsMap,
-    end :: NID,
-    alone :: Bool
-  }
-
-data LoopsRes = LoopsRes
-  { progress :: Bool,
-    resolved :: Bool,
-    attached :: ABranches,
-    frags :: [LoopFrag],
-    dones :: [DeterministicPath Anchor]
-  }
-
--- | Resolve the loops of a pointlike at a concrete node. Unresolved loops
--- with no consumption either stay attached to the pointlike (midpoint
--- positions) or are deconstructed into rooted fragments (root positions);
--- partially consumed loops always deconstruct.
-processLoops :: Graph Text () -> LoopStyle -> NID -> ABranches -> LoopsRes
-processLoops g style n loops = foldl' combine (LoopsRes False True mempty [] []) (toList loops)
+-- | Orientation of deconstructed loop gaps at a station node @n@. The
+-- original (forward) orientation is preferred; a k=0 gap (rooted at @n@
+-- itself, ending at a recovered seam) is re-expressed inverted — rooted at
+-- the seam, ending at @n@ — only when that buys structure: chaining
+-- through the station into a continuation that leaves it, or merging with
+-- other gaps that end at @n@ into one deterministic path.
+orientGaps :: NID -> Bool -> [Gap] -> [Gap]
+orientGaps n contAtN gaps
+  | doInvert = map (\gp -> fromMaybe gp (invertAtN gp)) gaps
+  | otherwise = gaps
   where
-    combine acc b =
-      let br =
-            resolveBranch g True (Just n) (singletonSet n) b (EndAt (singletonSet n))
-       in case br.outcome of
-            Right _ ->
-              LoopsRes True acc.resolved acc.attached acc.frags acc.dones
-            Left gaps
-              | not br.progress,
-                AttachZeroLoops <- style ->
-                  LoopsRes
-                    acc.progress
-                    False
-                    (acc.attached <> singletonSet b)
-                    acc.frags
-                    acc.dones
-              | otherwise ->
-                  LoopsRes
-                    (acc.progress || br.progress)
-                    False
-                    acc.attached
-                    (acc.frags <> map (gapFrag n) gaps)
-                    (acc.dones <> br.dones)
+    endsAtN gp = gp.end == Just n
+    invertAtN gp = do
+      guard (not (endsAtN gp))
+      s <- gp.end
+      rm <- case gp.roots of
+        AtRoots rm -> Just rm
+        AtStart _ -> Nothing
+      (rk, bs) <- case mapToList rm of
+        [entry] -> Just entry
+        _ -> Nothing
+      guard (rk == specificDp n)
+      ibs <- traverse invertPureRun (toList bs)
+      pure (Gap (AtRoots (singletonMap (specificDp s) (setFromList ibs))) (Just n))
+    nEligible = length (filter (isJust . invertAtN) gaps)
+    nAtN = length (filter endsAtN gaps)
+    doInvert = nEligible > 0 && (contAtN || nAtN > 0 || nEligible >= 2)
 
-gapFrag :: NID -> Gap -> LoopFrag
-gapFrag n gp =
-  LoopFrag
-    ( case gp.roots of
-        AtStart bs -> singletonMap (specificDp n) bs
-        AtRoots rm -> rm
-    )
-    (fromMaybe n gp.end)
-    gp.alone
+-- | Assemble the pieces at a pointlike station (a root pointlike, a
+-- midpoint, or a nested root's landing): orient its loop gaps, chain the
+-- ones ending at the station into the continuation gaps that leave it
+-- (AtStart continuation gaps root at the station key), and emit the form
+-- standalone when nothing roots at it but it still carries structure.
+assembleStation ::
+  -- | station node, when concrete
+  Maybe NID ->
+  -- | root key for AtStart continuation gaps when no loop chaining applies
+  DeterministicPath Anchor ->
+  -- | emit the form standalone even without AtStart gaps
+  Bool ->
+  -- | attached (zero-consumption) loops, already part of the form
+  ABranches ->
+  -- | deconstructed loop gaps
+  [Gap] ->
+  -- | continuation gaps, in branch declaration order
+  [Gap] ->
+  ([Gap], [DeterministicPath Anchor])
+assembleStation mn form formEmit attached loopGaps contGaps =
+  let hasAtStart = any isAtStartGap contGaps
+      oriented = case mn of
+        Just n -> orientGaps n hasAtStart loopGaps
+        Nothing -> loopGaps
+      (chainable, offGaps) = case mn of
+        Just n
+          | hasAtStart -> partition ((== Just n) . (.end)) oriented
+        _ -> ([], oriented)
+      key = case (chainable, mn) of
+        (_ : _, Just n) ->
+          mkRootedDp
+            (unionsWith (<>) (map gapRootsMap chainable))
+            (PointlikeDeterministicPath (Specific n) attached)
+        _ -> form
+      convert gp = case gp.roots of
+        AtStart bs -> gp {roots = AtRoots (singletonMap key bs)}
+        AtRoots _ -> gp
+      formDone = [form | not hasAtStart, formEmit || not (null attached)]
+   in (map convert contGaps <> offGaps, formDone)
 
--- | Group mergeable fragments by the NID they end at (preserving encounter
--- order); alternatives marked alone stay separate.
-groupLoopFrags :: [LoopFrag] -> ([(NID, ARootsMap)], [LoopFrag])
-groupLoopFrags fs =
-  let (alones, mergeables) = partition (.alone) fs
+-- | Merge a gap that ends at a concrete node into the (unique) gap whose
+-- root map resumes from exactly that node (§6 preference 1: one connected
+-- deterministic path per alternative wherever ends allow).
+chainGaps :: [Gap] -> [Gap]
+chainGaps = go
+  where
+    go gaps = maybe gaps go (findChain gaps)
+    findChain gaps = headMay do
+      (i, gi) <- zip [0 :: Int ..] gaps
+      x <- maybeToList gi.end
+      rmi <- case gi.roots of
+        AtRoots rm -> [rm]
+        AtStart _ -> []
+      -- gi must be the only gap ending at x
+      guard (length (filter ((== Just x) . (.end)) gaps) == 1)
+      (jIdx, gj) <- zip [0 :: Int ..] gaps
+      guard (jIdx /= i)
+      rmj <- case gj.roots of
+        AtRoots rm -> [rm]
+        AtStart _ -> []
+      bs <- maybeToList (lookup (specificDp x) rmj)
+      -- and gj the only gap resuming from x
+      guard
+        ( length
+            [ ()
+            | (kIdx, gk) <- zip [0 :: Int ..] gaps,
+              kIdx /= i,
+              AtRoots rmk <- [gk.roots],
+              specificDp x `member` rmk
+            ]
+            == 1
+        )
+      let newEntry =
+            uncurry singletonMap (smartBuildRootBranch (mkRootedDp rmi (specificPdp x)) bs)
+          rmj' =
+            unionsWith (<>) $
+              [ if k == specificDp x then newEntry else singletonMap k v
+              | (k, v) <- mapToList rmj
+              ]
+          gj' = gj {roots = AtRoots rmj'}
+      pure
+        [ if idx == jIdx then gj' else gk
+        | (idx, gk) <- zip [0 :: Int ..] gaps,
+          idx /= i
+        ]
+
+-- | Build the residual members from a target pointlike and the collected
+-- gaps: gaps that run to the target (or end at its pin) merge into one
+-- main rooted path; the rest group by their end node into standalones.
+buildMembers ::
+  PointlikeDeterministicPath Anchor ->
+  Maybe NID ->
+  [Gap] ->
+  (Maybe (DeterministicPath Anchor), [DeterministicPath Anchor])
+buildMembers targetPdp targetPin gaps =
+  let gaps' = chainGaps gaps
+      isMain gp = case gp.end of
+        Nothing -> True
+        Just x -> Just x == targetPin
+      (mainGaps, offGaps) = partition isMain gaps'
+      main =
+        justIfTrue (not (null mainGaps)) $
+          mkRootedDp (unionsWith (<>) (map gapRootsMap mainGaps)) targetPdp
       grouped =
         foldl'
-          (\acc fr -> upsertAssoc (\a b -> unionsWith (<>) [a, b]) fr.end fr.roots acc)
+          ( \acc gp ->
+              upsertAssoc (\a b -> unionsWith (<>) [a, b]) gp.end (gapRootsMap gp) acc
+          )
           []
-          mergeables
-   in (grouped, alones)
+          offGaps
+      offMembers = [mkRootedDp rm (specificPdp x) | (Just x, rm) <- grouped]
+   in (main, offMembers)
+
+-- * Loops
+
+-- | One alternative of resolving all loops of a pointlike at a node.
+data LoopsAlt = LoopsAlt
+  { progress :: Bool,
+    resolved :: Bool,
+    -- | zero-consumption loops stay attached to their pointlike (§6)
+    attached :: ABranches,
+    -- | partially-consumed loops deconstruct into gaps with concrete roots
+    gaps :: [Gap],
+    dones :: [DeterministicPath Anchor]
+  }
+  deriving stock (Eq, Ord)
+
+-- | Resolve the loops of a pointlike at a concrete node; alternatives per
+-- loop combine by cartesian product. A loop that consumed zero steps stays
+-- attached in every position; a fully-resolved loop drops out.
+processLoops :: Graph Text () -> NID -> ABranches -> [LoopsAlt]
+processLoops g n loops =
+  ordNub (map (foldl' merge emptyLoopsAlt) (combineAlts (map perLoop (toList loops))))
+  where
+    emptyLoopsAlt = LoopsAlt False True mempty [] []
+    merge a p =
+      LoopsAlt
+        (a.progress || p.progress)
+        (a.resolved && p.resolved)
+        (a.attached <> p.attached)
+        (a.gaps <> p.gaps)
+        (a.dones <> p.dones)
+    perLoop :: DPBranch Anchor -> [LoopsAlt]
+    perLoop b =
+      let rs = resolveBranch g True True (singletonSet n) b (EndAt (singletonSet n))
+       in case [r | r <- rs, isRight r.outcome] of
+            (r : _) -> [LoopsAlt True True mempty [] r.dones]
+            [] ->
+              ordNub
+                [ if r.progress
+                    then
+                      LoopsAlt
+                        True
+                        False
+                        mempty
+                        (map toRooted (either id (const []) r.outcome))
+                        r.dones
+                    else LoopsAlt False False (singletonSet b) [] []
+                | r <- rs
+                ]
+    toRooted gp = case gp.roots of
+      AtStart bs -> gp {roots = AtRoots (singletonMap (specificDp n) bs)}
+      AtRoots _ -> gp
 
 -- * Layer 1: structural recursion over a branch
 
--- | Resolve one branch from a frontier toward an end context, computing the
--- gaps that remain.
+-- | Resolve one branch from a frontier toward an end context, computing
+-- the gap alternatives that remain. The result is a nonempty list of
+-- alternatives, preferred first; if any alternative fully resolves it is
+-- the only one (fully-resolving alternatives merge, §4.2.2).
 resolveBranch ::
   Graph Text () ->
+  -- | whether the branch's final run may seed its backward pass from every
+  -- node of the graph (§4.1.2); False inside implicit split midpoints
+  Bool ->
   -- | origin: the frontier is exactly the branch's start position, so gaps
   -- with nothing consumed are reported 'AtStart'
   Bool ->
-  -- | the start position as a concrete pinnable node, used as the target of
-  -- backward-expressed gaps (Nothing for never-pinned Unanchored roots)
-  Maybe NID ->
   Set NID ->
   DPBranch Anchor ->
   EndCtx ->
-  BrRes
-resolveBranch g origin0 pin0 start branch endCtx =
-  goParts origin0 pin0 start (flattenBranch branch)
+  [BrRes]
+resolveBranch g openBwd origin0 start branch endCtx =
+  ordNub (goParts origin0 start (flattenBranch branch))
   where
-    finalEnd = endCtxNid endCtx
-
     boundaryCtx :: [Part] -> EndCtx
     boundaryCtx = \case
       [] -> endCtx
       (PMid m : _) -> anchorCtx m.anchor
-      _ -> EndOpen
+      _ -> EndPair
 
-    goParts :: Bool -> Maybe NID -> Set NID -> [Part] -> BrRes
-    goParts origin pin f = \case
-      [] -> brRes False [] (Right f)
+    finalEndAlts :: [Maybe NID]
+    finalEndAlts = gapEndAlts endCtx
+
+    goParts :: Bool -> Set NID -> [Part] -> [BrRes]
+    goParts origin f = \case
+      [] -> [brRes False [] (Right f)]
       (PRun ds : rest) ->
-        case resolveSegment g (null rest) f ds (boundaryCtx rest) of
-          SegResolved f' -> afterUnit pin True [] f' rest
-          SegGap k fFwd mid j bFwd -> afterGap origin pin k fFwd mid j bFwd rest
-      (PSplit bs : rest) -> goSplit origin pin f bs rest
+        case resolveSegment g (null rest && openBwd) f ds (boundaryCtx rest) of
+          SegResolved f' -> afterUnit True [] f' rest
+          SegGap k fF mid j seams -> afterGap origin k fF mid j seams rest
+      (PSplit bs : rest) -> goSplit origin f bs rest
       (PMid _ : _) -> error "goParts: branch begins with a midpoint"
 
     -- continue after a fully-resolved leading unit
     afterUnit ::
-      Maybe NID -> Bool -> [DeterministicPath Anchor] -> Set NID -> [Part] -> BrRes
-    afterUnit pin prog ds f' = \case
-      [] -> brRes prog ds (Right f')
-      (PMid m : rest') ->
-        let st = stationFromArrivals f' m rest'
-         in BrRes (prog || st.progress) (ds <> st.dones) st.outcome st.reach
-      rest ->
-        let r = goParts False pin f' rest
-         in BrRes (prog || r.progress) (ds <> r.dones) r.outcome r.reach
+      Bool -> [DeterministicPath Anchor] -> Set NID -> [Part] -> [BrRes]
+    afterUnit prog ds f' = \case
+      [] -> [BrRes prog ds (Right f') Nothing]
+      (PMid m : rest') -> map (addProg prog ds) (stationFromArrivals f' m rest')
+      rest -> map (addProg prog ds) (goParts False f' rest)
+
+    addProg :: Bool -> [DeterministicPath Anchor] -> BrRes -> BrRes
+    addProg prog ds r =
+      BrRes (prog || r.progress) (ds <> r.dones) r.outcome r.reach
+
+    -- root alternatives for a gap whose forward consumption stopped at fF:
+    -- a fan-out followed by a gap is one alternative per frontier node (§3)
+    gapRootAlts :: Bool -> Int -> Set NID -> ABranches -> [GapRoots]
+    gapRootAlts origin k fF bs
+      | k == 0 && origin = [AtStart bs]
+      | otherwise = [AtRoots (singletonMap (specificDp v) bs) | v <- toList fF]
 
     afterGap ::
       Bool ->
-      Maybe NID ->
       Int ->
       Set NID ->
       [DPDirection] ->
       Int ->
-      Set NID ->
+      [(NID, Set NID)] ->
       [Part] ->
-      BrRes
-    afterGap origin pin k fFwd mid j bFwd rest =
-      let consumed = k > 0 || j > 0
-          mkRoots bs
-            | k == 0 && origin = AtStart bs
-            | otherwise = AtRoots (nidsRoots fFwd bs)
-          mkGaps mid' j' bFwd' fallbackEnd
-            | k == 0,
-              j' > 0,
-              origin,
-              Just p <- pin =
-                -- backward-expressed: inverted steps from the backward
-                -- frontier targeting the start position (§6)
-                [ Gap
-                    ( AtRoots
-                        ( singletonMap
-                            (specificDp b)
-                            (singletonSet (runToBranch (invertedRun mid')))
-                        )
-                    )
-                    (Just p)
-                    (length bFwd' > 1)
-                | b <- toList bFwd'
-                ]
-            | j' > 0 =
-                [ Gap (mkRoots (singletonSet (runToBranch mid'))) (Just b) (length bFwd' > 1)
-                | b <- toList bFwd'
-                ]
-            | otherwise = [Gap (mkRoots (singletonSet (runToBranch mid'))) fallbackEnd False]
-          segEnd = boundaryCtx rest
-          gapsHere = mkGaps mid j bFwd (endCtxNid segEnd)
-          chainGap parts = Gap (mkRoots (rebuildParts parts)) finalEnd False
-          -- the boundary's NID is unknown: look for positions the whole
-          -- remaining tail resolves from to recover a concrete seam,
-          -- otherwise keep one connected structural gap
-          recoverOrChain parts =
-            let cands = tailCandidates parts
-             in if null cands
-                  then brRes consumed [] (Left [chainGap (PRun mid : parts)])
-                  else case resolveSegment g True fFwd mid (EndAt cands) of
-                    SegResolved met -> afterUnit pin True [] met parts
-                    SegGap _ _ mid2 j2 b2 ->
-                      BrRes
-                        True
-                        []
-                        (Left (mkGaps mid2 j2 b2 (Just (minimumEx (toList cands)))))
-                        (tailLandingFrom parts (minimumEx (toList cands)))
-       in case rest of
-            [] -> brRes consumed [] (Left gapsHere)
-            (PMid m : rest')
-              | Just n <- specificMidNid m ->
-                  let st = stationAt n m rest'
-                   in if j == 0 && not st.progress
-                        then
-                          -- keep one connected gap through the midpoint
-                          brRes consumed [] (Left [chainGap (PRun mid : PMid m : rest')])
-                        else
-                          BrRes
-                            (consumed || st.progress)
-                            st.dones
-                            (Left (gapsHere <> either id (const []) st.outcome))
-                            (resReach st)
-              | otherwise -> recoverOrChain (PMid m : rest')
-            _ -> recoverOrChain rest
+      [BrRes]
+    afterGap origin k fF mid j seams rest = case rest of
+      [] ->
+        let bs = singletonSet (runToBranch mid)
+            prog = k > 0 || j > 0
+         in ordNub
+              [ BrRes prog [] (Left [Gap roots e]) reach
+              | roots <- gapRootAlts origin k fF bs,
+                (e, reach) <-
+                  if j > 0
+                    then [(Just s, justIfTrue (not (null r)) r) | (s, r) <- seams]
+                    else [(e, Nothing) | e <- finalEndAlts]
+              ]
+      (PMid m : rest')
+        | Just n <- specificMidNid m ->
+            let bs = singletonSet (runToBranch mid)
+                prog = k > 0 || j > 0
+             in ordNub
+                  [ BrRes
+                      (prog || st.progress)
+                      st.dones
+                      (Left (Gap roots e : either id (const []) st.outcome))
+                      (resReach st)
+                  | roots <- gapRootAlts origin k fF bs,
+                    e <-
+                      if j > 0
+                        then [Just s | (s, _) <- seams]
+                        else [Just n],
+                    st <- stationAt n m rest'
+                  ]
+        | otherwise -> recoverOrChain origin k fF mid rest
+      _ -> recoverOrChain origin k fF mid rest
+
+    -- the boundary's NID is unknown (§4.2.1): look for positions the whole
+    -- remaining tail resolves from to recover a concrete seam, otherwise
+    -- keep one connected structural gap
+    recoverOrChain ::
+      Bool -> Int -> Set NID -> [DPDirection] -> [Part] -> [BrRes]
+    recoverOrChain origin k fF mid parts =
+      let cands = tailCandidates parts
+          chained =
+            [ brRes (k > 0) [] (Left [Gap roots e])
+            | roots <- gapRootAlts origin k fF (rebuildParts (PRun mid : parts)),
+              e <- finalEndAlts
+            ]
+       in if null cands
+            then chained
+            else case resolveSegment g True fF mid (EndAt cands) of
+              SegResolved met ->
+                map (addProg True []) (continueTail met parts)
+              SegGap k2 fF2 mid2 j2 seams2 ->
+                let bs = singletonSet (runToBranch mid2)
+                    seamReach cs =
+                      let ls = unions (mapMaybe (tailLandingFrom parts) (toList cs))
+                       in justIfTrue (not (null ls)) ls
+                 in ordNub
+                      [ BrRes True [] (Left [Gap roots (Just s)]) reach
+                      | roots <- gapRootAlts origin k2 fF2 bs,
+                        (s, reach) <-
+                          if j2 > 0
+                            then [(s, seamReach r) | (s, r) <- seams2]
+                            else [(c, tailLandingFrom parts c) | c <- toList cands]
+                      ]
+
+    continueTail :: Set NID -> [Part] -> [BrRes]
+    continueTail met = \case
+      (PMid m : rest') -> stationFromArrivals met m rest'
+      parts -> goParts False met parts
 
     tailCandidates :: [Part] -> Set NID
     tailCandidates parts =
-      setFromList [v | v <- toList (nidSet g), tailResolvesFrom parts v]
+      setFromList [v | v <- toList (nidSet g), isJust (tailLandingFrom parts v)]
 
-    tailResolvesFrom :: [Part] -> NID -> Bool
-    tailResolvesFrom parts v = isJust (tailLandingFrom parts v)
-
-    -- \| where the tail lands when fully resolved from @v@
+    -- where the tail lands when fully resolved from @v@
     tailLandingFrom :: [Part] -> NID -> Maybe (Set NID)
     tailLandingFrom parts v = case parts of
       (PMid m : rest')
-        | anchorAdmits m.anchor v ->
-            either (const Nothing) Just (stationAt v m rest').outcome
+        | anchorAdmits m.anchor v -> firstRight (stationAt v m rest')
         | otherwise -> Nothing
-      _ ->
-        either
-          (const Nothing)
-          Just
-          (goParts False Nothing (singletonSet v) parts).outcome
+      _ -> firstRight (goParts False (singletonSet v) parts)
 
     specificMidNid :: PointlikeDeterministicPath Anchor -> Maybe NID
     specificMidNid m = case m.anchor of
@@ -647,577 +792,568 @@ resolveBranch g origin0 pin0 start branch endCtx =
 
     -- a midpoint position reached at a concrete node: resolve its loops
     -- there and continue with the rest of the branch
-    stationAt :: NID -> PointlikeDeterministicPath Anchor -> [Part] -> BrRes
-    stationAt n m rest =
-      let lr = processLoops g AttachZeroLoops n m.loops
-          cr = goParts True (Just n) (singletonSet n) rest
-       in case (lr.resolved, cr.outcome) of
-            (True, Right f') ->
-              brRes (lr.progress || cr.progress) (lr.dones <> cr.dones) (Right f')
-            _ ->
-              let contGaps = either id (const []) cr.outcome
-                  (atStartGaps, otherGaps) = partition isAtStartGap contGaps
-                  (groups, alones) = groupLoopFrags lr.frags
-                  (connectRM, plainGroups)
-                    | not (null atStartGaps),
-                      Just rm <- lookup n groups =
-                        (Just rm, filter ((/= n) . fst) groups)
-                    | otherwise = (Nothing, groups)
-                  stationAnchor = pinAnchor m.anchor n
-                  -- gaps resuming at this midpoint root at the station:
-                  -- partially-consumed loops become its (deconstructed)
-                  -- root, zero-consumption loops stay attached
-                  stationKey = case connectRM of
-                    Just rm ->
-                      mkRootedDp rm (PointlikeDeterministicPath (Specific n) lr.attached)
-                    Nothing ->
-                      Pointlike (PointlikeDeterministicPath stationAnchor lr.attached)
-                  rooted =
-                    [ Gap (AtRoots (singletonMap stationKey bs)) e a
-                    | Gap (AtStart bs) e a <- atStartGaps
-                    ]
-                  fragGaps =
-                    [Gap (AtRoots rm) (Just e) False | (e, rm) <- plainGroups]
-                      <> [Gap (AtRoots fr.roots) (Just fr.end) True | fr <- alones]
-                  attachedDone =
-                    [ Pointlike (PointlikeDeterministicPath stationAnchor lr.attached)
-                    | null atStartGaps,
-                      not (null lr.attached)
-                    ]
-               in BrRes
-                    (lr.progress || cr.progress)
-                    (lr.dones <> cr.dones <> attachedDone)
-                    (Left (otherGaps <> rooted <> fragGaps))
-                    (resReach cr)
+    stationAt :: NID -> PointlikeDeterministicPath Anchor -> [Part] -> [BrRes]
+    stationAt n m rest = ordNub do
+      la <- processLoops g n m.loops
+      cr <- goParts True (singletonSet n) rest
+      case (la.resolved, cr.outcome) of
+        (True, Right f') ->
+          pure $
+            BrRes (la.progress || cr.progress) (la.dones <> cr.dones) (Right f') Nothing
+        _ -> do
+          let contGaps = either id (const []) cr.outcome
+              stationPdp =
+                PointlikeDeterministicPath (pinAnchor m.anchor n) la.attached
+              (gaps', formDones) =
+                assembleStation
+                  (Just n)
+                  (Pointlike stationPdp)
+                  False
+                  la.attached
+                  la.gaps
+                  contGaps
+          pure $
+            BrRes
+              (la.progress || cr.progress)
+              (la.dones <> cr.dones <> formDones)
+              (Left gaps')
+              (resReach cr)
 
+    -- a midpoint reached at several NIDs (§4.2.2): all fully-resolving
+    -- arrivals merge into one alternative; otherwise each progressing
+    -- arrival is its own alternative
     stationFromArrivals ::
-      Set NID -> PointlikeDeterministicPath Anchor -> [Part] -> BrRes
+      Set NID -> PointlikeDeterministicPath Anchor -> [Part] -> [BrRes]
     stationFromArrivals arrivals m rest =
-      let results = [stationAt n m rest | n <- toList arrivals]
-          resolveds = [(r, f') | r <- results, Right f' <- [r.outcome]]
+      let perArrival = [stationAt n m rest | n <- toList arrivals]
+          resolveds =
+            [(r, ls) | rs <- perArrival, r <- rs, Right ls <- [r.outcome]]
        in case resolveds of
             (_ : _) ->
-              brRes
-                (any ((.progress) . fst) resolveds)
-                (concatMap ((.dones) . fst) resolveds)
-                (Right (unions (map snd resolveds)))
-            [] -> case filter (.progress) results of
-              (r : _) -> r
-              [] -> case results of
-                (r : _) -> r
-                [] -> error "stationFromArrivals: empty arrival frontier"
-
-    goSplit :: Bool -> Maybe NID -> Set NID -> ABranches -> [Part] -> BrRes
-    goSplit origin pin f bs rest =
-      let subEnd = boundaryCtx rest
-          subs = [(b, resolveBranch g origin pin f b subEnd) | b <- toList bs]
-          landed = [(b, ls) | (b, r) <- subs, Right ls <- [r.outcome]]
-          failed = [gs | (_, r) <- subs, Left gs <- [r.outcome]]
-          subDones = concatMap ((.dones) . snd) subs
-          subProgress = any ((.progress) . snd) subs
-       in case rest of
+              [ BrRes
+                  (any ((.progress) . fst) resolveds)
+                  (ordNub (concatMap ((.dones) . fst) resolveds))
+                  (Right (unions (map snd resolveds)))
+                  Nothing
+              ]
             [] ->
-              if null failed
-                then case combineLandings subEnd (map snd landed) of
-                  Just ls -> brRes subProgress subDones (Right ls)
-                  Nothing -> chainAll
-                else
+              let allAlts = concat perArrival
+               in ordNub case filter (.progress) allAlts of
+                    [] -> allAlts
+                    ps -> ps
+
+    goSplit :: Bool -> Set NID -> ABranches -> [Part] -> [BrRes]
+    goSplit origin f bs rest = ordNub do
+      let subEnd = boundaryCtx rest
+          subOpenBwd = null rest && openBwd
+          chainAll =
+            [ brRes False [] (Left [Gap roots e])
+            | roots <- gapRootAlts origin 0 f (rebuildParts (PSplit bs : rest)),
+              e <- finalEndAlts
+            ]
+      combo <-
+        combineAlts
+          [ map (b,) (resolveBranch g subOpenBwd origin f b subEnd)
+          | b <- toList bs
+          ]
+      let landed = [(b, ls) | (b, r) <- combo, Right ls <- [r.outcome]]
+          failed = concat [gs | (_, r) <- combo, Left gs <- [r.outcome]]
+          anyFailed = any (isLeft . (.outcome) . snd) combo
+          subDones = concatMap ((.dones) . snd) combo
+          subProgress = any ((.progress) . snd) combo
+      case rest of
+        [] ->
+          if not anyFailed
+            then case combineLandings subEnd (map snd landed) of
+              Just ls -> pure (brRes subProgress subDones (Right ls))
+              Nothing -> chainAll
+            else case subEnd of
+              -- at a pair point the intersection's members must agree on
+              -- one landing; failed members re-aim at the resolved
+              -- members' agreed landing (reuse), and with no agreed
+              -- landing the whole intersection is recreated as one gap so
+              -- its members meet at one fresh pair point
+              EndPair
+                | not (null landed),
+                  ms <- intersectAll (map snd landed),
+                  not (null ms) -> do
+                    v <- toList ms
+                    reaimed <-
+                      combineAlts
+                        [ resolveBranch g False origin f b (EndAt (singletonSet v))
+                        | (b, r) <- combo,
+                          isLeft r.outcome
+                        ]
+                    let gaps = concat [either id (const []) r.outcome | r <- reaimed]
+                        ds = concatMap (.dones) reaimed
+                    pure $
+                      BrRes
+                        (subProgress || any (.progress) reaimed)
+                        (subDones <> ds)
+                        (Left gaps)
+                        (Just (singletonSet v))
+                | otherwise ->
+                    [ brRes subProgress subDones (Left [Gap roots Nothing])
+                    | roots <- gapRootAlts origin 0 f bs
+                    ]
+              _ ->
+                pure $
                   BrRes
                     subProgress
                     subDones
-                    (Left (concat failed))
-                    ( justIfTrue
-                        (not (null landed) && not (null (intersectAll (map snd landed))))
-                        (intersectAll (map snd landed))
+                    (Left failed)
+                    ( let ms = intersectAll (map snd landed)
+                       in justIfTrue (not (null landed) && not (null ms)) ms
                     )
-            (PMid m : rest')
-              | Just n <- specificMidNid m ->
-                  if null failed && not (null landed)
-                    then afterUnit pin subProgress subDones (singletonSet n) rest
+        (PMid m : rest')
+          | Just n <- specificMidNid m ->
+              if not anyFailed && not (null landed)
+                then
+                  map (addProg subProgress subDones) (afterUnit False [] (singletonSet n) rest)
+                else do
+                  st <- stationAt n m rest'
+                  if not subProgress && not st.progress
+                    then chainAll
                     else
-                      let st = stationAt n m rest'
-                       in if not subProgress && not st.progress
-                            then chainAll
-                            else
-                              BrRes
-                                (subProgress || st.progress)
-                                (subDones <> st.dones)
-                                (Left (concat failed <> either id (const []) st.outcome))
-                                (resReach st)
-              | otherwise ->
-                  -- an explicit join midpoint: every branch of the
-                  -- intersection must agree on it
-                  let meet = intersectAll (map snd landed) `difference` excOf m
-                   in if not (null landed) && not (null meet) && null failed
-                        then afterUnit pin subProgress subDones meet rest
-                        else joinMidSearch m rest'
-            _ -> goSplitImplicit pin subProgress subDones landed failed rest
-      where
-        -- search for the node that unifies a join midpoint best: every
-        -- branch of the intersection and the continuation must work from
-        -- one node, so try each admissible node and keep the one where
-        -- the most pieces resolve
-        joinMidSearch m rest' =
-          let evalAt v =
-                let subRes =
-                      [ resolveBranch g origin pin f b (EndAt (singletonSet v))
-                      | b <- toList bs
-                      ]
-                    st = stationAt v m rest'
-                    score =
-                      length [() | r <- subRes, isRight r.outcome]
-                        + (if isRight st.outcome then 1 else 0)
-                    gaps =
-                      concat [either id (const []) r.outcome | r <- subRes]
-                        <> either id (const []) st.outcome
-                    ds = concatMap (.dones) subRes <> st.dones
-                    prog = any (.progress) subRes || st.progress
-                 in (score, v, prog, gaps, ds)
-              ranked =
-                sortOn (\(score, v, _, _, _) -> (negate score, v)) $
-                  [ evalAt v
-                  | v <- toList (nidSet g),
-                    anchorAdmits m.anchor v
-                  ]
-           in case ranked of
-                ((score, _, prog, gaps, ds) : _)
-                  | score > 0 && prog ->
-                      brRes True ds (Left gaps)
-                _ -> chainAll
+                      pure $
+                        BrRes
+                          (subProgress || st.progress)
+                          (subDones <> st.dones)
+                          (Left (failed <> either id (const []) st.outcome))
+                          (resReach st)
+          | otherwise ->
+              joinMidRecover origin f combo landed anyFailed subDones subProgress m rest' chainAll
+        _ ->
+          let failedReaches =
+                [rs | (_, r) <- combo, isLeft r.outcome, Just rs <- [r.reach]]
+           in goSplitImplicit origin f landed failed failedReaches subDones subProgress rest chainAll
 
-        mkRootsSplit bs'
-          | origin = AtStart bs'
-          | otherwise = AtRoots (nidsRoots f bs')
+    -- an explicit join midpoint after an intersection: every branch must
+    -- agree on it; when they don't, try every node the whole tail resolves
+    -- from as an alternative seam (§4.2.1), else keep one connected gap
+    joinMidRecover ::
+      Bool ->
+      Set NID ->
+      [(DPBranch Anchor, BrRes)] ->
+      [(DPBranch Anchor, Set NID)] ->
+      Bool ->
+      [DeterministicPath Anchor] ->
+      Bool ->
+      PointlikeDeterministicPath Anchor ->
+      [Part] ->
+      [BrRes] ->
+      [BrRes]
+    joinMidRecover origin f combo landed anyFailed subDones subProgress m rest' chainAll =
+      let meet = intersectAll (map snd landed) `difference` excOf m
+       in if not (null landed) && not anyFailed && not (null meet)
+            then map (addProg subProgress subDones) (stationFromArrivals meet m rest')
+            else
+              let cands =
+                    [ v
+                    | v <- toList (nidSet g),
+                      anchorAdmits m.anchor v,
+                      isJust (tailLandingFrom (PMid m : rest') v)
+                    ]
+                  perCand v = do
+                    rs <-
+                      combineAlts
+                        [ resolveBranch g False origin f b (EndAt (singletonSet v))
+                        | (b, _) <- combo
+                        ]
+                    st <- stationAt v m rest'
+                    let gaps =
+                          concat [either id (const []) r.outcome | r <- rs]
+                            <> either id (const []) st.outcome
+                        ds = concatMap (.dones) rs <> st.dones
+                        prog = any (.progress) rs || st.progress
+                    guard prog
+                    pure (BrRes True ds (Left gaps) (resReach st))
+               in case ordNub (concatMap perCand cands) of
+                    [] -> chainAll
+                    alts -> alts
 
-        chainAll =
-          brRes False [] . Left $
-            [Gap (mkRootsSplit (rebuildParts (PSplit bs : rest))) finalEnd False]
-
-        -- continuation after an implicit (unanchored, exploded per pair)
-        -- midpoint: each landing continues independently
-        goSplitImplicit pin' subProgress subDones landed failed rest' =
-          let landingSets = ordNub (map snd landed)
-              conts = [(ls, goParts False pin' ls rest') | ls <- landingSets]
-              contRights = [(ls, f') | (ls, r) <- conts, Right f' <- [r.outcome]]
-              contProgress = any ((.progress) . snd) conts
-              contDones = concatMap ((.dones) . snd) conts
-              contGaps = concat [either id (const []) r.outcome | (_, r) <- conts]
-              extendGap gp =
-                let extendBs bs' =
-                      singletonSet $
-                        smartBuildSequence bs' unanchored (rebuildParts rest')
-                 in Gap
-                      ( case gp.roots of
-                          AtStart bs' -> AtStart (extendBs bs')
-                          AtRoots rm -> AtRoots (map extendBs rm)
-                      )
-                      finalEnd
-                      gp.alone
-              retargetTo jn gp
-                | isNothing gp.end = Gap gp.roots (Just jn) gp.alone
-                | otherwise = gp
-           in if not subProgress && not contProgress
-                then chainAll
-                else case contRights of
-                  ((jls, _) : _) ->
-                    -- a junction with a working continuation exists; failed
-                    -- branches end at it and branches that landed where the
-                    -- continuation fails are re-aimed at it
-                    let jn = minimumEx (toList jls)
-                        failingSets = [ls | (ls, r) <- conts, isLeft r.outcome]
-                        reaims =
-                          [ resolveBranch g origin pin' f b (EndAt (singletonSet jn))
-                          | (b, ls) <- landed,
-                            ls `elem` failingSets
-                          ]
-                        reaimGaps =
-                          concat [either id (const []) r.outcome | r <- reaims]
-                        reaimDones = concatMap (.dones) reaims
-                        failedGaps = map (retargetTo jn) (concat failed)
-                     in if null failed && null reaimGaps
-                          then case combineLandings endCtx (map snd contRights) of
-                            Just ls ->
-                              brRes
-                                (subProgress || contProgress)
-                                (subDones <> contDones <> reaimDones)
-                                (Right ls)
-                            Nothing -> chainAll
-                          else
-                            BrRes
-                              (subProgress || contProgress)
-                              (subDones <> contDones <> reaimDones)
-                              (Left (failedGaps <> reaimGaps))
-                              (combineLandings endCtx (map snd contRights))
-                  [] ->
-                    -- no continuation resolved anywhere: pin failed branches
-                    -- to a landing if one exists, otherwise the continuation
-                    -- must be minted per pair
-                    let adjust gp
-                          | isNothing gp.end = case landingSets of
-                              (ls : _) -> retargetTo (minimumEx (toList ls)) gp
-                              [] -> extendGap gp
-                          | otherwise = gp
-                        failedGaps = map adjust (concat failed)
-                     in brRes
-                          (subProgress || contProgress)
-                          (subDones <> contDones)
-                          (Left (failedGaps <> contGaps))
+    -- continuation after an implicit (unanchored, exploded per pair)
+    -- midpoint: each landing set continues independently, all required
+    goSplitImplicit ::
+      Bool ->
+      Set NID ->
+      [(DPBranch Anchor, Set NID)] ->
+      [Gap] ->
+      -- \| terminal positions gapped members' residuals land at: their
+      -- pair-continuations must exist from there too
+      [Set NID] ->
+      [DeterministicPath Anchor] ->
+      Bool ->
+      [Part] ->
+      [BrRes] ->
+      [BrRes]
+    goSplitImplicit origin f landed failed failedReaches subDones subProgress rest' chainAll = do
+      let landingSets = ordNub (map snd landed <> failedReaches)
+      contCombo <-
+        combineAlts [map (ls,) (goParts False ls rest') | ls <- landingSets]
+      let contRights = [(ls, f') | (ls, r) <- contCombo, Right f' <- [r.outcome]]
+          contProgress = any ((.progress) . snd) contCombo
+          contDones = concatMap ((.dones) . snd) contCombo
+          contGaps = concat [either id (const []) r.outcome | (_, r) <- contCombo]
+          extendBs bs' =
+            singletonSet (smartBuildSequence bs' unanchored (rebuildParts rest'))
+          extendGap gp =
+            gp
+              { roots = case gp.roots of
+                  AtStart bs' -> AtStart (extendBs bs')
+                  AtRoots rm -> AtRoots (omap extendBs rm)
+              }
+          retargetTo jn gp
+            | isNothing gp.end = gp {end = Just jn}
+            | otherwise = gp
+      if not subProgress && not contProgress
+        then chainAll
+        else case contRights of
+          ((jls, _) : _) -> do
+            -- a junction with a working continuation exists; failed
+            -- branches end at it and branches that landed where the
+            -- continuation fails are re-aimed at it
+            let jn = minimumEx (toList jls)
+                failingSets = [ls | (ls, r) <- contCombo, isLeft r.outcome]
+            reaims <-
+              combineAlts
+                [ resolveBranch g False origin f b (EndAt (singletonSet jn))
+                | (b, ls) <- landed,
+                  ls `elem` failingSets
+                ]
+            let reaimGaps = concat [either id (const []) r.outcome | r <- reaims]
+                reaimDones = concatMap (.dones) reaims
+                failedGaps = map (retargetTo jn) failed
+            if null failedGaps && null reaimGaps
+              then case combineLandings endCtx (map snd contRights) of
+                Just ls ->
+                  pure $
+                    brRes
+                      (subProgress || contProgress)
+                      (subDones <> contDones <> reaimDones)
+                      (Right ls)
+                Nothing -> chainAll
+              else
+                pure $
+                  BrRes
+                    (subProgress || contProgress)
+                    (subDones <> contDones <> reaimDones)
+                    (Left (failedGaps <> reaimGaps))
+                    (combineLandings endCtx (map snd contRights))
+          [] -> do
+            -- no continuation resolved anywhere: pin failed branches to a
+            -- landing if one exists, otherwise the continuation must be
+            -- minted per pair
+            let adjust gp
+                  | isNothing gp.end = case landingSets of
+                      (ls : _) -> retargetTo (minimumEx (toList ls)) gp
+                      [] -> extendGap gp
+                  | otherwise = gp
+            pure $
+              brRes
+                (subProgress || contProgress)
+                (subDones <> contDones)
+                (Left (map adjust failed <> contGaps))
 
 -- * Layer 1: structural recursion over deterministic paths
 
-data RootInfo = RootInfo
-  { -- | the root anchor can never unify (a JoinPoint excluding the start
-    -- NID): creating edges cannot help, so its branches are dropped
-    unreachable :: Bool,
-    -- | where branches from this root start (Nothing = unknown)
-    frontier :: Maybe (Set NID),
-    -- | the start position as a pinnable node, for backward-expressed gaps
+-- | One alternative for a whole deterministic path.
+data DpAlt = DpAlt
+  { progress :: Bool,
+    -- | Just landings when the path fully resolved
+    landed :: Maybe (Set NID),
+    -- | the residual path ending at the dp's target, chainable by an
+    -- enclosing structure
+    main :: Maybe (DeterministicPath Anchor),
+    extras :: [DeterministicPath Anchor],
+    -- | the concrete node the target resolved/pinned to, if any
     pin :: Maybe NID,
-    -- | root form for gaps that resume at the root
+    -- | whether every branch landing agrees on the landed set; False for
+    -- an Unanchored target whose branches landed at disjoint positions
+    -- (nested reuse is unsound then: the exploded pairs need a common
+    -- continuation point)
+    agreed :: Bool
+  }
+  deriving stock (Eq, Ord)
+
+dpAltMembers :: DpAlt -> [DeterministicPath Anchor]
+dpAltMembers a = maybeToList a.main <> a.extras
+
+residualPointlikeAlts ::
+  NID -> Graph Text () -> PointlikeDeterministicPath Anchor -> [DpAlt]
+residualPointlikeAlts startNid g p = case unifyRootAnchor startNid p.anchor of
+  Nothing -> [DpAlt False Nothing Nothing [] Nothing True]
+  Just n
+    | null p.loops ->
+        if isJust (maybeLookupNode g n)
+          then [DpAlt True (Just (singletonSet n)) Nothing [] (Just n) True]
+          else [DpAlt False Nothing Nothing [] (Just n) True]
+    | otherwise -> ordNub do
+        la <- processLoops g n p.loops
+        let pdp = PointlikeDeterministicPath (pinAnchor p.anchor n) la.attached
+        if la.resolved
+          then pure (DpAlt True (Just (singletonSet n)) Nothing [] (Just n) True)
+          else do
+            let (main, offMembers) =
+                  buildMembers pdp (Just n) (orientGaps n False la.gaps)
+                attachedDone =
+                  [Pointlike pdp | isNothing main, not (null la.attached)]
+            pure
+              DpAlt
+                { progress = la.progress,
+                  landed = Nothing,
+                  main,
+                  extras = offMembers <> la.dones <> attachedDone,
+                  pin = Just n,
+                  agreed = True
+                }
+
+-- | How one root of a rooted path resolved (one alternative).
+data RootInfo = RootInfo
+  { -- | where branches from this root start (Nothing = unknown)
+    frontier :: Maybe (Set NID),
+    -- | root key for gaps that resume at the root
     form :: DeterministicPath Anchor,
-    -- | the root pointlike's node, for connecting its loop fragments
-    stationNid :: Maybe NID,
-    frags :: [LoopFrag],
-    extraDones :: [DeterministicPath Anchor],
     -- | emit 'form' standalone if no gap roots at it (nested residuals)
     formMustEmit :: Bool,
+    -- | the root pointlike's node, for chaining its loop gaps
+    stationNid :: Maybe NID,
+    -- | the root pointlike's attached loops (already inside 'form')
+    attached :: ABranches,
+    loopGaps :: [Gap],
+    extraDones :: [DeterministicPath Anchor],
     clean :: Bool,
     progress :: Bool
   }
+  deriving stock (Eq, Ord)
 
-resolveRoot :: NID -> Graph Text () -> DeterministicPath Anchor -> RootInfo
-resolveRoot startNid g = \case
+resolveRootAlts :: NID -> Graph Text () -> DeterministicPath Anchor -> [RootInfo]
+resolveRootAlts startNid g = \case
   Pointlike p -> case unifyRootAnchor startNid p.anchor of
-    Nothing ->
-      RootInfo True Nothing Nothing (Pointlike p) Nothing [] [] False False False
+    Nothing -> error "resolveRootAlts: unsatisfiable root escaped dpUnsatisfiable"
     Just n ->
-      let lr = processLoops g DeconstructZeroLoops n p.loops
-          pin = case p.anchor of
-            Unanchored -> Nothing
-            _ -> Just n
-       in RootInfo
-            False
-            (Just (singletonSet n))
-            pin
-            (Pointlike (PointlikeDeterministicPath (pinAnchor p.anchor n) mempty))
-            (Just n)
-            lr.frags
-            lr.dones
-            False
-            lr.resolved
-            lr.progress
-  Rooted nested ->
-    let -- a nested root's unanchored target must unify like a join point:
-        -- the §3 carve-out only applies to the top-level target, so the
-        -- residual has to make the nested root's branches meet (and may
-        -- pin that meet as a concrete resume point)
-        nested' = case nested.target.anchor of
-          Unanchored ->
-            RootedDeterministicPath
-              nested.rootBranches
-              (PointlikeDeterministicPath (JoinPoint mempty) nested.target.loops)
-          _ -> nested
-        sub = residualRooted startNid g nested'
-     in case sub.landed of
-          Just ls ->
-            let pin = sub.pin <|> Just (minimumEx (toList ls))
-             in RootInfo
-                  False
-                  (Just ls)
-                  pin
-                  (maybe (Rooted nested) specificDp pin)
-                  Nothing
-                  []
-                  []
-                  False
-                  True
-                  sub.progress
-          Nothing ->
-            RootInfo
-              False
-              (singletonSet <$> sub.pin)
-              sub.pin
-              (maybe (fromMaybe (Rooted nested) sub.main) specificDp sub.pin)
-              Nothing
-              []
-              (sub.dones <> (if isJust sub.pin then maybeToList sub.main else []))
-              (isNothing sub.pin && isJust sub.main)
-              False
-              sub.progress
-
-data DpRes = DpRes
-  { progress :: Bool,
-    landed :: Maybe (Set NID),
-    main :: Maybe (DeterministicPath Anchor),
-    dones :: [DeterministicPath Anchor],
-    -- | the concrete node the target resolved/pinned to, if any
-    pin :: Maybe NID
-  }
-
-residualRooted ::
-  NID -> Graph Text () -> RootedDeterministicPath Anchor -> DpRes
-residualRooted startNid g r
-  | resolvedAll = DpRes True (Just finalLanding) Nothing [] targetPin
-  | otherwise = DpRes totalProgress Nothing mainDp allStandalones targetPin
-  where
-    targetCtx = anchorCtx r.target.anchor
-
-    rootEntries :: [(RootInfo, ABranches)]
-    rootEntries =
-      [ (resolveRoot startNid g rootDp, bs)
-      | (rootDp, bs) <- mapToList r.rootBranches
+      [ RootInfo
+          { frontier = Just (singletonSet n),
+            form =
+              Pointlike (PointlikeDeterministicPath (pinAnchor p.anchor n) la.attached),
+            formMustEmit = False,
+            stationNid = Just n,
+            attached = la.attached,
+            loopGaps = la.gaps,
+            extraDones = la.dones,
+            clean = la.resolved,
+            progress = la.progress
+          }
+      | la <- processLoops g n p.loops
       ]
-
-    branchOf :: RootInfo -> DPBranch Anchor -> EndCtx -> BrRes
-    branchOf info b ctx = case info.frontier of
-      Just f -> resolveBranch g True info.pin f b ctx
-      Nothing
-        | info.unreachable -> brRes False [] (Left [])
-        | otherwise ->
-            brRes False [] (Left [Gap (AtStart (singletonSet b)) (endCtxNid ctx) False])
-
-    results0 :: [(RootInfo, [(DPBranch Anchor, BrRes)])]
-    results0 =
-      [ (info, [(b, branchOf info b targetCtx) | b <- toList bs])
-      | (info, bs) <- rootEntries
-      ]
-
-    landings0 :: [Set NID]
-    landings0 =
-      [ls | (_, brs) <- results0, (_, res) <- brs, Right ls <- [res.outcome]]
-
-    -- terminal positions reached by branches whose suffix resolved even
-    -- though they are gapped; a join target can pin there too
-    reaches0 :: [Set NID]
-    reaches0 =
-      [ ls
-      | (_, brs) <- results0,
-        (_, res) <- brs,
-        Left _ <- [res.outcome],
-        Just ls <- [res.reach]
-      ]
-
-    joinMeet :: Maybe (Set NID)
-    joinMeet = case r.target.anchor of
-      JoinPoint _
-        | not (null landings0) ->
-            let m = intersectAll landings0
-             in justIfTrue (not (null m)) m
-        | not (null reaches0) ->
-            let m = intersectAll reaches0
-             in justIfTrue (not (null m)) m
-      _ -> Nothing
-
-    targetPin :: Maybe NID
-    targetPin = case r.target.anchor of
-      Specific n -> Just n
-      JoinPoint _ -> case joinMeet of
-        Just s -> Just (chooseTargetNid s)
-        -- nothing landed: search the graph for the node that unifies the
-        -- join best (smallest residual when every branch is aimed at it)
-        Nothing
-          | null landings0 -> searchPin
-          | otherwise -> Nothing
-      Unanchored -> Nothing
-      where
-        loopsOkAt n =
-          (processLoops g AttachZeroLoops n r.target.loops).resolved
-        -- prefer a meet node whose target loops resolve
-        chooseTargetNid s =
-          let cands = toList s
-           in case filter loopsOkAt cands of
-                (n : _) -> n
-                [] -> minimumEx cands
-
-    searchPin :: Maybe NID
-    searchPin = case r.target.anchor of
-      JoinPoint exc ->
-        let cands = [v | v <- toList (nidSet g), v `notMember` exc]
-            costAt v =
-              let brs =
-                    [ branchOf info b (EndAt (singletonSet v))
-                    | (info, bs) <- rootEntries,
-                      b <- toList bs
-                    ]
-                  lt = processLoops g AttachZeroLoops v r.target.loops
-                  gapsW =
-                    sum
-                      [ gapWeight gp
-                      | res <- brs,
-                        gp <- either id (const []) res.outcome
-                      ]
-               in (gapsW + loopsWeight lt, v)
-         in case sortOn id (map costAt cands) of
-              ((_, v) : _) -> Just v
-              [] -> Nothing
-      _ -> Nothing
-
-    results :: [(RootInfo, [(DPBranch Anchor, BrRes)])]
-    results = case r.target.anchor of
-      JoinPoint _
-        | not (null landings0) -> case (joinMeet, targetPin) of
-            -- resolved branches disagree: the join is unsatisfied, so they
-            -- are treated as unresolved and nothing pins
-            (Nothing, _) ->
-              [(info, map demote brs) | (info, brs) <- results0]
-            -- the pinned join becomes a concrete backward frontier for the
-            -- still-unresolved branches
-            (Just _, Just p) ->
-              [ (info, [(b, rerun info p b res) | (b, res) <- brs])
-              | (info, brs) <- results0
-              ]
-            _ -> results0
-        | Just p <- targetPin ->
-            -- nothing landed, but reaches or target loops pinned the join
-            [ (info, [(b, rerun info p b res) | (b, res) <- brs])
-            | (info, brs) <- results0
+  Rooted nested -> ordNub do
+    sub <- residualRootedAlts startNid g nested
+    case sub.landed of
+      Just ls
+        | sub.agreed ->
+            [ RootInfo
+                { frontier = Just ls,
+                  form = specificDp v,
+                  formMustEmit = False,
+                  stationNid = Nothing,
+                  attached = mempty,
+                  loopGaps = [],
+                  extraDones = [],
+                  clean = True,
+                  progress = sub.progress
+                }
+            | v <- toList (maybe ls singletonSet sub.pin)
             ]
-      _ -> results0
-      where
-        demote (b, res) = case res.outcome of
-          Right _ ->
-            (b, brRes False [] (Left [Gap (AtStart (singletonSet b)) Nothing False]))
-          Left _ -> (b, res)
-        rerun info p b res = case res.outcome of
-          Right _ -> res
-          Left _ -> branchOf info b (EndAt (singletonSet p))
+      _
+        | nested.target.anchor == Unanchored ->
+            -- an Unanchored nested target is never pinned, and a partial
+            -- residual would drop the resolved nested branches, whose
+            -- exploded pair continuations then follow existing edges to a
+            -- different terminal than the recreated ones; the only safe
+            -- reuse is none: recreate the nested root wholesale, so
+            -- instantiation's one-NID-per-occurrence makes every nested
+            -- branch meet before the outer branches continue
+            pure
+              RootInfo
+                { frontier = Nothing,
+                  form = Rooted nested,
+                  formMustEmit = True,
+                  stationNid = Nothing,
+                  attached = mempty,
+                  loopGaps = [],
+                  extraDones = [],
+                  clean = False,
+                  progress = sub.progress
+                }
+      _ ->
+        let (form, formMustEmit, extraDones) = case (sub.main, sub.pin) of
+              (Just mn, _) -> (mn, True, sub.extras)
+              (Nothing, Just pn) -> (specificDp pn, False, sub.extras)
+              (Nothing, Nothing) -> (Rooted nested, True, [])
+         in pure
+              RootInfo
+                { frontier = singletonSet <$> sub.pin,
+                  form,
+                  formMustEmit,
+                  stationNid = Nothing,
+                  attached = mempty,
+                  loopGaps = [],
+                  extraDones,
+                  clean = False,
+                  progress = sub.progress
+                }
 
-    allLanded :: Bool
-    allLanded =
-      all (isRight . (.outcome) . snd) (concatMap snd results)
+branchOf ::
+  Graph Text () -> EndCtx -> RootInfo -> DPBranch Anchor -> [BrRes]
+branchOf g ctx info b = case info.frontier of
+  Just f -> resolveBranch g True True f b ctx
+  Nothing ->
+    [ brRes False [] (Left [Gap (AtStart (singletonSet b)) e])
+    | e <- gapEndAlts ctx
+    ]
 
-    rootsClean :: Bool
-    rootsClean = all ((.clean) . fst) rootEntries
+residualRootedAlts ::
+  NID -> Graph Text () -> RootedDeterministicPath Anchor -> [DpAlt]
+residualRootedAlts startNid g r = ordNub do
+  let rootPairs = mapToList r.rootBranches
+      targetCtx = targetEndCtx r.target.anchor
+  infos <- combineAlts [resolveRootAlts startNid g rk | (rk, _) <- rootPairs]
+  let entries = zip infos (map snd rootPairs)
+  probe <-
+    combineAlts
+      [ combineAlts [map (b,) (branchOf g targetCtx info b) | b <- toList bs]
+      | (info, bs) <- entries
+      ]
+  let landings =
+        [ls | brs <- probe, (_, res) <- brs, Right ls <- [res.outcome]]
+  (targetPin, results) <- case r.target.anchor of
+    Specific t -> pure (Just t, probe)
+    Unanchored -> pure (Nothing, probe)
+    JoinPoint exc
+      | null landings -> pure (Nothing, map (map demoteGapped) probe)
+      | otherwise ->
+          -- the join pins only on agreed landings; when resolved branches
+          -- disagree (or all agreement is excluded) the join is
+          -- unsatisfied: the landed branches are treated as unresolved and
+          -- nothing pins (§5)
+          let meet = intersectAll landings `difference` exc
+           in if null meet
+                then pure (Nothing, map (map (demoteGapped . demote)) probe)
+                else do
+                  p <- toList meet
+                  rerun <-
+                    combineAlts
+                      [ combineAlts
+                          [map (b,) (rerunOne p info b res) | (b, res) <- brs]
+                      | ((info, _), brs) <- zip entries probe
+                      ]
+                  pure (Just p, rerun)
+  finishRooted g r entries targetPin results
+  where
+    demote (b, res) = case res.outcome of
+      Right _ ->
+        (b, brRes False [] (Left [Gap (AtStart (singletonSet b)) Nothing]))
+      Left _ -> (b, res)
+    -- when the join stays unpinned, instantiation mints a fresh join node
+    -- all residual branches must meet at; a partially-resolved branch
+    -- residual that reuses its suffix (or resolved tail structure) lands
+    -- at a concrete existing node instead, so the safe unpinned residual
+    -- recreates every unresolved branch wholesale, running to the join.
+    -- Suffix reuse returns as the reach-pinned minimality alternative
+    -- (§5.2), where the pin makes it sound.
+    demoteGapped (b, res) = case res.outcome of
+      Right _ -> (b, res)
+      Left _ ->
+        (b, BrRes res.progress [] (Left [Gap (AtStart (singletonSet b)) Nothing]) res.reach)
+    rerunOne p info b res = case res.outcome of
+      Right _ -> [res]
+      Left _ -> branchOf g (EndAt (singletonSet p)) info b
 
-    -- target loops are evaluated as soon as the target node is known
-    lrT :: Maybe LoopsRes
-    lrT = targetPin <&> \t -> processLoops g AttachZeroLoops t r.target.loops
-
-    targetResolved :: Bool
-    targetResolved = maybe (null r.target.loops) (.resolved) lrT
-
-    resolvedAll :: Bool
-    resolvedAll = allLanded && rootsClean && targetResolved && not (null landings0)
-
-    baseLanding :: Set NID
-    baseLanding = case r.target.anchor of
-      Specific n -> singletonSet n
-      JoinPoint _ -> fromMaybe mempty joinMeet
-      Unanchored ->
-        let m = intersectAll landings0
-         in if null m then unions landings0 else m
-
-    finalLanding :: Set NID
-    finalLanding
-      | null r.target.loops = baseLanding
-      | otherwise = maybe baseLanding singletonSet targetPin
-
-    attachedTarget :: ABranches
-    attachedTarget = maybe r.target.loops (.attached) lrT
-
-    mainTargetPdp :: PointlikeDeterministicPath Anchor
-    mainTargetPdp =
-      PointlikeDeterministicPath
-        ( case r.target.anchor of
-            Specific n -> Specific n
+finishRooted ::
+  Graph Text () ->
+  RootedDeterministicPath Anchor ->
+  [(RootInfo, ABranches)] ->
+  Maybe NID ->
+  [[(DPBranch Anchor, BrRes)]] ->
+  [DpAlt]
+finishRooted g r entries targetPin results = do
+  lrT <- case targetPin of
+    Just t | not (null r.target.loops) -> processLoops g t r.target.loops
+    _ -> pure (LoopsAlt False (null r.target.loops) r.target.loops [] [])
+  let infos = map fst entries
+      allRes = concat results
+      allBranchLanded = all (isRight . (.outcome) . snd) allRes
+      rootsClean = all (.clean) infos
+      landings = [ls | (_, res) <- allRes, Right ls <- [res.outcome]]
+      progressTotal =
+        any (.progress) infos
+          || any ((.progress) . snd) allRes
+          || lrT.progress
+      resolvedAll = allBranchLanded && rootsClean && lrT.resolved
+      landingsAgree = case r.target.anchor of
+        Unanchored -> not (null landings) && not (null (intersectAll landings))
+        _ -> True
+      baseLanding = case r.target.anchor of
+        Specific t -> singletonSet t
+        JoinPoint _ -> maybe mempty singletonSet targetPin
+        Unanchored ->
+          let m = intersectAll landings
+           in if null m then unions landings else m
+      finalLanding
+        | null r.target.loops = baseLanding
+        | otherwise = maybe baseLanding singletonSet targetPin
+  if resolvedAll
+    then
+      pure
+        DpAlt
+          { progress = True,
+            landed = Just finalLanding,
+            main = Nothing,
+            extras = [],
+            pin = targetPin,
+            agreed = landingsAgree
+          }
+    else do
+      let targetAnchor = case r.target.anchor of
+            Specific t -> Specific t
             JoinPoint exc -> maybe (JoinPoint exc) Specific targetPin
             Unanchored -> Unanchored
-        )
-        attachedTarget
-
-    rootStationGaps ::
-      RootInfo ->
-      [(DPBranch Anchor, BrRes)] ->
-      ([Gap], [DeterministicPath Anchor])
-    rootStationGaps info brs =
-      let gaps = concat [either id (const []) res.outcome | (_, res) <- brs]
-          ds = concat [res.dones | (_, res) <- brs]
-          (atStartGaps, others) = partition isAtStartGap gaps
-          (groups, alones) = groupLoopFrags info.frags
-          (connectRM, plainGroups)
-            | not (null atStartGaps),
-              Just n <- info.stationNid,
-              Just rm <- lookup n groups =
-                (Just (n, rm), filter ((/= n) . fst) groups)
-            | otherwise = (Nothing, groups)
-          rootKey = case connectRM of
-            Just (n, rm) -> mkRootedDp rm (specificPdp n)
-            Nothing -> info.form
-          rooted =
-            [ Gap (AtRoots (singletonMap rootKey bs)) e a
-            | Gap (AtStart bs) e a <- atStartGaps
+          targetPdp = PointlikeDeterministicPath targetAnchor lrT.attached
+          perRoot =
+            [ assembleStation
+                info.stationNid
+                info.form
+                info.formMustEmit
+                info.attached
+                info.loopGaps
+                (concat [either id (const []) res.outcome | (_, res) <- brs])
+            | ((info, _), brs) <- zip entries results
             ]
-          fragGaps =
-            [Gap (AtRoots rm) (Just e) False | (e, rm) <- plainGroups]
-              <> [Gap (AtRoots fr.roots) (Just fr.end) True | fr <- alones]
-          danglingForm = [info.form | info.formMustEmit, null atStartGaps]
-       in (others <> rooted <> fragGaps, ds <> info.extraDones <> danglingForm)
-
-    perRoot :: [([Gap], [DeterministicPath Anchor])]
-    perRoot = [rootStationGaps info brs | (info, brs) <- results]
-
-    targetFragGaps :: [Gap]
-    targetFragGaps = case lrT of
-      Nothing -> []
-      Just lt ->
-        let (groups, alones) = groupLoopFrags lt.frags
-         in [Gap (AtRoots rm) (Just e) False | (e, rm) <- groups]
-              <> [Gap (AtRoots fr.roots) (Just fr.end) True | fr <- alones]
-
-    allGaps :: [Gap]
-    allGaps = concatMap fst perRoot <> targetFragGaps
-
-    (mainGaps, offGaps) =
-      partition (\gp -> not gp.alone && gp.end == targetPin) allGaps
-
-    mainRootsMap :: ARootsMap
-    mainRootsMap = unionsWith (<>) (map gapRootsMap mainGaps)
-
-    mainDp :: Maybe (DeterministicPath Anchor)
-    mainDp =
-      justIfTrue (not (null mainRootsMap)) (mkRootedDp mainRootsMap mainTargetPdp)
-
-    -- when everything landed but the target's own loops did not resolve,
-    -- the attached loops still need a home
-    attachedTargetDone :: [DeterministicPath Anchor]
-    attachedTargetDone =
-      [ Pointlike mainTargetPdp
-      | isNothing mainDp,
-        not (null attachedTarget),
-        maybe False (not . (.resolved)) lrT
-      ]
-
-    standaloneOf :: Gap -> DeterministicPath Anchor
-    standaloneOf gp =
-      mkRootedDp (gapRootsMap gp) (maybe mainTargetPdp specificPdp gp.end)
-
-    offStandalones :: [DeterministicPath Anchor]
-    offStandalones =
-      let (alones, mergeables) = partition (.alone) offGaps
-          grouped =
-            foldl'
-              ( \acc gp ->
-                  upsertAssoc (\a b -> unionsWith (<>) [a, b]) gp.end (gapRootsMap gp) acc
-              )
-              []
-              mergeables
-       in [mkRootedDp rm (maybe mainTargetPdp specificPdp e) | (e, rm) <- grouped]
-            <> map standaloneOf alones
-
-    allStandalones :: [DeterministicPath Anchor]
-    allStandalones =
-      offStandalones
-        <> concatMap snd perRoot
-        <> maybe [] (.dones) lrT
-        <> attachedTargetDone
-
-    totalProgress :: Bool
-    totalProgress =
-      any ((.progress) . fst) rootEntries
-        || any
-          (.progress)
-          [res | (_, brs) <- results, (_, res) <- brs]
-        || maybe False (.progress) lrT
+          targetGaps = case targetPin of
+            Just t -> orientGaps t False lrT.gaps
+            Nothing -> lrT.gaps
+          allGaps = concatMap fst perRoot <> targetGaps
+          allDones =
+            concatMap ((.dones) . snd) allRes
+              <> concatMap (.extraDones) infos
+              <> concatMap snd perRoot
+              <> lrT.dones
+          (main, offMembers) = buildMembers targetPdp targetPin allGaps
+          attachedTargetDone =
+            [ Pointlike targetPdp
+            | isNothing main,
+              not (null lrT.attached),
+              not lrT.resolved
+            ]
+      pure
+        DpAlt
+          { progress = progressTotal,
+            landed = Nothing,
+            main,
+            extras = offMembers <> allDones <> attachedTargetDone,
+            pin = targetPin,
+            agreed = landingsAgree
+          }
 
 spec_pathResidualsUnresolvedBy :: Spec
 spec_pathResidualsUnresolvedBy = do

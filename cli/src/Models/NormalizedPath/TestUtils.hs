@@ -150,19 +150,51 @@ resolveAnchorNids startNid (NormalizedPath dps) =
 -- are excluded from the property tests; see
 -- docs/pathResidualsUnresolvedBy-spec.md.
 --
--- Unanchored midpoints and Unanchored targets of nested roots don't require
--- a meet ('leastConstrainedNormalizedPath' splits them per branch pair), so
--- only the top-level target is checked.
+-- Only the top-level target is checked, but the terminal count must follow
+-- 'leastConstrainedNormalizedPath''s explosion: an unanchored midpoint
+-- multiplies its sequence per (as1, bs2) branch pair, and a nested root
+-- with an Unanchored target multiplies its outer branches per nested
+-- (root, branch) pair — every exploded copy terminates at the top-level
+-- target and must meet there.
 requiresUnanchoredJoin :: DeterministicPath Anchor -> Bool
 requiresUnanchoredJoin = \case
   Pointlike _ -> False
   Rooted r -> r.target.anchor == Unanchored && terminalCount r > 1
   where
+    terminalCount :: RootedDeterministicPath Anchor -> Int
     terminalCount r =
-      sum [sum (map branchTerminals (toList bs)) | bs <- toList r.rootBranches]
+      sum
+        [ rootMultiplier root * sum (map branchTerminals (toList bs))
+        | (root, bs) <- mapToList r.rootBranches
+        ]
+    -- the number of exploded (root, branch) pairs a nested root with an
+    -- Unanchored target contributes as prefixes of each outer branch
+    rootMultiplier = \case
+      Rooted nested
+        | nested.target.anchor == Unanchored ->
+            sum
+              [ rootMultiplier root * sum (map branchCopies (toList bs))
+              | (root, bs) <- mapToList nested.rootBranches
+              ]
+      _ -> 1
+    -- how many branches this branch explodes into
+    branchCopies = \case
+      DPSingle _ -> 1
+      b@(DPSequence as1 _ bs2)
+        | isPairMidpoint b ->
+            sum (map branchCopies (toList as1)) * sum (map branchCopies (toList bs2))
+        | otherwise -> 1
+    -- how many terminals this branch has after explosion
     branchTerminals = \case
       DPSingle _ -> 1
-      DPSequence _ _ bs2 -> sum (map branchTerminals (toList bs2))
+      b@(DPSequence as1 _ bs2)
+        | isPairMidpoint b ->
+            sum (map branchCopies (toList as1))
+              * sum (map branchTerminals (toList bs2))
+        | otherwise -> sum (map branchTerminals (toList bs2))
+    isPairMidpoint = \case
+      DPSequence _ m _ -> m.anchor == Unanchored && null m.loops
+      DPSingle _ -> False
 
 -- | Rewrite a generated path so the residual property tests' preconditions
 -- hold by construction, instead of being filtered for with
