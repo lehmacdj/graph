@@ -113,14 +113,28 @@ traverseViaTransitions initial fanchor ftransition normalizedPath =
               & filter ((== nid') . snd)
               & map (PointlikeDeterministicPath nid' . fst)
 
-    ensureSameAnchors ::
-      forall x. (HasCallStack) => NonNull [(x, b)] -> Maybe (NonNull [x], b)
-    ensureSameAnchors xs =
-      let example = snd (head xs)
-          as = mapNonNull fst xs
-       in justIfTrue
-            (all ((== example) . snd) $ toNullable xs)
-            (as, example)
+    -- Group each conjunct's resolutions by landing anchor and take
+    -- combinations only within the landings common to all conjuncts.
+    -- Equivalent to taking the full cartesian product and keeping the
+    -- combinations whose landings all agree, but exponentially smaller
+    -- when resolutions fan out to many disagreeing landings.
+    agreeingCombinations ::
+      forall x. (Ord x) => [[(x, b)]] -> [([x], b)]
+    agreeingCombinations conjuncts =
+      let perLanding :: [Map b [x]]
+          perLanding =
+            [ unionsWith (<>) [singletonMap l [x] | (x, l) <- rs]
+            | rs <- conjuncts
+            ]
+          common :: Set b
+          common = case map (setFromList . keys) perLanding of
+            [] -> mempty
+            (s : ss) -> foldl' intersection s ss
+       in [ (combo, l)
+          | l <- toList common,
+            combo <-
+              choices [ordNub (findWithDefault [] l m) | m <- perLanding]
+          ]
 
     traverseRooted ::
       (HasCallStack) =>
@@ -152,20 +166,18 @@ traverseViaTransitions initial fanchor ftransition normalizedPath =
           -- flatten each root's alternatives: any way of resolving the
           -- root's own path combined with any resolution of its branches
           <&> map (concatMap \(r, bas) -> (\(b, a) -> ((r, b), a)) <$> bas)
-          -- combinations pick one alternative per root: every root must
-          -- resolve, so a root with no alternatives makes `choices` produce
-          -- no combinations and the whole path yields no resolutions
-          <&> choices
-          -- all roots' branches must land on the same anchor so that they
-          -- unify at the shared target (fromNullable only fails if
-          -- rootBranches is empty, which smartBuild rules out)
-          <&> mapMaybe (ensureSameAnchors <=< fromNullable)
+          -- combinations pick one alternative per root at a common
+          -- landing: every root must resolve, so a root with no
+          -- alternatives yields no combinations and the whole path yields
+          -- no resolutions; all roots' branches must land on the same
+          -- anchor so that they unify at the shared target
+          <&> agreeingCombinations
           <&> ordNub
           -- distinct roots may resolve to the same path; merge their
           -- branch sets instead of dropping one via mapFromList
           <&> over
             (mapped . _1)
-            (unionsWith (<>) . map (uncurry singletonMap) . toNullable)
+            (unionsWith (<>) . map (uncurry singletonMap))
       rootBranches''
         & (traverse . _2) (\x -> traversePointlike False x target)
         <&> concatMap (\(rbs, ts) -> (rbs,) <$> ts)
@@ -187,9 +199,9 @@ traverseViaTransitions initial fanchor ftransition normalizedPath =
           branches' <- traverse (traverseBranch nid startAnchor target) (toList branches)
           pure $
             branches'
-              & choices
-              & mapMaybe (ensureSameAnchors . impureNonNull)
-              & over (mapped . _1) (setFromList . toNullable)
+              & agreeingCombinations
+              & over (mapped . _1) setFromList
+              & ordNub
 
     traverseBranch ::
       (HasCallStack) =>

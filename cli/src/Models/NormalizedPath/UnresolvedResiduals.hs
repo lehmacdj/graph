@@ -187,10 +187,14 @@ data SegResult
     -- any self-loop edge matching a non-loop step (§5.1 — empty when the
     -- resolution depends on a coincidental self-loop match)
     SegResolved (Set NID) (Set NID)
-  | -- | fwd consumed count, fwd frontier, gap steps, bwd consumed count,
-    -- and the recovered seams paired with the landings their resolved
-    -- suffix reaches (for reach pinning, §5.2)
-    SegGap Int (Set NID) [DPDirection] Int [(NID, Set NID)]
+  | -- | maximal-consumption splits, preferred first: either split's
+    -- repair suffices, so ties are alternatives (§3)
+    SegGaps [SegGap]
+
+-- | One split of a gapped run: fwd consumed count, fwd frontier, gap
+-- steps, bwd consumed count, and the recovered seams paired with the
+-- landings their resolved suffix reaches (for reach pinning, §5.2).
+data SegGap = SegGap Int (Set NID) [DPDirection] Int [(NID, Set NID)]
 
 matchTransition :: Set (Connect Text) -> DPTransition -> Set NID
 matchTransition conns = \case
@@ -240,7 +244,9 @@ frontierTrail step = go
 -- Split selection (§4.1.1): among (k forward, j backward) splits, maximize
 -- k + j; ties prefer the split whose progress does not depend on a
 -- self-loop edge matching a non-loop step (§5.1); remaining ties prefer
--- the larger k (forward wins). A gap always keeps at least one step
+-- the larger k (forward wins). Every maximal split is returned — the
+-- preferred one first, the rest as alternatives, since either split's
+-- repair suffices (§3). A gap always keeps at least one step
 -- (k + j <= length - 1); consuming every step but missing the backward
 -- frontier is not progress — the run failed as a whole.
 resolveSegment ::
@@ -253,12 +259,18 @@ resolveSegment g openBwd start steps end
             | otherwise = mempty
        in SegResolved met metClean
   | otherwise =
-      let (k, j) = lastEx (sortOn splitKey splits)
-          fF = if k == 0 then start else fwds `indexEx` (k - 1)
-          seams
-            | j == 0 = []
-            | otherwise = [(s, reachOf j s) | s <- toList (bwds `indexEx` (j - 1))]
-       in SegGap k fF (take (len - k - j) (drop k steps)) j seams
+      let maxSum = maximumEx [k + j | (k, j) <- splits]
+          maximal =
+            sortOn (\s -> (not (clean s), negate (fst s))) $
+              filter (\(k, j) -> k + j == maxSum) splits
+          gapAt (k, j) =
+            let fF = if k == 0 then start else fwds `indexEx` (k - 1)
+                seams
+                  | j == 0 = []
+                  | otherwise =
+                      [(s, reachOf j s) | s <- toList (bwds `indexEx` (j - 1))]
+             in SegGap k fF (take (len - k - j) (drop k steps)) j seams
+       in SegGaps (map gapAt maximal)
   where
     len = length steps
     fwdStep = stepForward g
@@ -285,7 +297,6 @@ resolveSegment g openBwd start steps end
     fwdsClean = frontierTrail (noSelf fwdStep) start steps
     bwdsClean = maybe [] (\s -> frontierTrail (noSelf bwdStep) s (reverse steps)) bwdSeed
     clean (k, j) = k <= length fwdsClean && j <= length bwdsClean
-    splitKey (k, j) = (k + j, clean (k, j), k)
     splits =
       [ (k, j)
       | k <- [0 .. min kAll (len - 1)],
@@ -712,7 +723,12 @@ resolveBranch g openBwd origin0 start branch endCtx =
       (PRun ds : rest) ->
         case resolveSegment g (null rest && openBwd) f ds (boundaryCtx rest) of
           SegResolved f' mc -> afterUnit (Just mc) True [] f' rest
-          SegGap k fF mid j seams -> afterGap origin k fF mid j seams rest
+          SegGaps gaps ->
+            ordNub $
+              concat
+                [ afterGap origin k fF mid j seams rest
+                | SegGap k fF mid j seams <- gaps
+                ]
       (PSplit bs : rest) -> goSplit origin f bs rest
       (PMid _ : _) -> error "goParts: branch begins with a midpoint"
 
@@ -794,19 +810,21 @@ resolveBranch g openBwd origin0 start branch endCtx =
             else case resolveSegment g True fF mid (EndAt cands) of
               SegResolved met _ ->
                 map (addProg True []) (continueTail met parts)
-              SegGap k2 fF2 mid2 j2 seams2 ->
-                let bs = singletonSet (runToBranch mid2)
-                    seamReach cs =
-                      let ls = unions (mapMaybe (tailLandingFrom parts) (toList cs))
-                       in justIfTrue (not (null ls)) ls
-                 in ordNub
-                      [ BrRes True [] (Left [Gap roots (Just s)]) reach Nothing
-                      | roots <- gapRootAlts origin k2 fF2 bs,
-                        (s, reach) <-
-                          if j2 > 0
-                            then [(s, seamReach r) | (s, r) <- seams2]
-                            else [(c, tailLandingFrom parts c) | c <- toList cands]
-                      ]
+              SegGaps gaps2 ->
+                ordNub $
+                  gaps2 >>= \(SegGap k2 fF2 mid2 j2 seams2) ->
+                    let bs = singletonSet (runToBranch mid2)
+                        seamReach cs =
+                          let ls = unions (mapMaybe (tailLandingFrom parts) (toList cs))
+                           in justIfTrue (not (null ls)) ls
+                     in ordNub
+                          [ BrRes True [] (Left [Gap roots (Just s)]) reach Nothing
+                          | roots <- gapRootAlts origin k2 fF2 bs,
+                            (s, reach) <-
+                              if j2 > 0
+                                then [(s, seamReach r) | (s, r) <- seams2]
+                                else [(c, tailLandingFrom parts c) | c <- toList cands]
+                          ]
 
     continueTail :: Set NID -> [Part] -> [BrRes]
     continueTail met = \case
@@ -1352,6 +1370,20 @@ residualRootedAlts startNid g r = ordNub do
                 case filter (not . null) cleanConstraints of
                   [] -> mempty
                   cs -> intersectAll cs `difference` exc
+              -- one branch's landing may be the odd one out (a missing
+              -- edge broke exactly it): every leave-one-out subset's meet
+              -- is a pin candidate, with the odd branch re-aimed at the
+              -- pin like a gapped one
+              leaveOneOutMeets =
+                unions
+                  [ m
+                  | (i, _) <- zip [0 :: Int ..] landings,
+                    let rest = take i landings <> drop (i + 1) landings,
+                    not (null rest),
+                    let m = intersectAll rest `difference` exc,
+                    not (null m)
+                  ]
+              disagreePins = meetClean `union` leaveOneOutMeets
               pinAt p = do
                 rerun <-
                   combineAlts
@@ -1363,7 +1395,7 @@ residualRootedAlts startNid g r = ordNub do
            in if null meet
                 then
                   pure (Nothing, map (map (demoteGapped . demote)) probe)
-                    <> (toList meetClean >>= pinAt)
+                    <> (toList disagreePins >>= pinAt)
                 else toList meet >>= pinAt
   finishRooted g r entries targetPin results
   where
@@ -1722,9 +1754,10 @@ spec_pathResidualsUnresolvedBy = do
   describe "unchanged when unmatched" do
     testResiduals [] "[a]" "[a]"
     testResiduals [edge' 2 "a" 3] "[a]>@3" "[a]>@3"
-    testResiduals [edge' 3 "b" 4, edge' 1 "a" 2] "[a/|b]>@4" "[@2<b]>@4"
+    -- the backward-recovered seam repair is a tie-split alternative
+    testResidualAlts [edge' 3 "b" 4, edge' 1 "a" 2] "[a/|b]>@4" ["[@2<b]>@4", "[a]>@3"]
     testResiduals [edge' 3 "a" 2] "[~a]>@3" "[~a]>@3"
-    testResiduals [edge' 4 "b" 3, edge' 1 "a" 2] "[a/|~b]>@4" "[@2<~b]>@4"
+    testResidualAlts [edge' 4 "b" 3, edge' 1 "a" 2] "[a/|~b]>@4" ["[@2<~b]>@4", "[a]>@3"]
     testResiduals [edge' 1 "~a" 2] "[~a]" "[~a]"
     testResiduals [edge' 1 "~a" 1] "@[~a]" "@[~a]"
     testResiduals [edge' 1 "a" 2] "[~a]" "[~a]"
@@ -1798,14 +1831,14 @@ spec_pathResidualsUnresolvedBy = do
       describe "don't meet up in middle" do
         -- For @[a/|~b]: 'a' goes @1->@2, '~b' looks for incoming 'b' at @2
         -- But @1>"b">@3, not to @2, so ~b fails - residual starts from @2
-        testResiduals
+        testResidualAlts
           [edge' 1 "a" 2, edge' 1 "b" 3]
           "@[a/|~b]"
-          "[@2<~b]>@1"
-        testResiduals
+          ["[@2<~b]>@1", "[@1<a]>@3"]
+        testResidualAlts
           [edge' 1 "a" 2, edge' 1 "b" 2, edge' 2 "c" 3]
           "@[a/|~c/|~b]"
-          "[@2<~c]>@2"
+          ["[@2<~c]>@2", "[@1<a]>@3"]
       describe "self-loop bias" do
         -- Forward can consume a then d (via the self-loop @2>"d">@2, a
         -- coincidental match of a non-loop step) with backward consuming
@@ -1813,22 +1846,22 @@ spec_pathResidualsUnresolvedBy = do
         -- with forward consuming only a: gap [d] (total 3). The tie is
         -- broken against the split that depends on the self-loop match,
         -- so the backward seam wins (see spec §4.1.1/§5.1)
-        testResiduals
+        testResidualAlts
           [edge' 1 "a" 2, edge' 2 "d" 2, edge' 1 "b" 2, edge' 2 "c" 3]
           "@[a/|d/|~c/|~b]"
-          "[@2<d]>@3"
-        testResiduals
+          ["[@2<d]>@3", "[@2<~c]>@2"]
+        testResidualAlts
           [edge' 1 "a" 2, edge' 2 "d" 2, edge' 1 "b" 2, edge' 2 "c" 3]
           "[@[a/|d/|~c/|~b]<e]"
-          "[@2<d]>@3 + [@1<e]"
-        testResiduals
+          ["[@2<d]>@3 + [@1<e]", "[@2<~c]>@2 + [@1<e]"]
+        testResidualAlts
           [edge' 1 "a" 2, edge' 2 "d" 2, edge' 1 "b" 2, edge' 2 "c" 3]
           "[@[a/|(d/|~c/|~b & f)]<e]"
-          "[@2<d]>@3 + [@2<f/@1|e]"
-        testResiduals
+          ["[@2<d]>@3 + [@2<f/@1|e]", "[@2<~c]>@2 + [@2<f/@1|e]"]
+        testResidualAlts
           [edge' 1 "a" 2, edge' 2 "d" 2, edge' 1 "b" 2, edge' 2 "c" 3]
           "[@[a/|(d/|~c/|~b & f & g)]<e]"
-          "[@2<d]>@3 + [@2<(f & g)/@1|e]"
+          ["[@2<d]>@3 + [@2<(f & g)/@1|e]", "[@2<~c]>@2 + [@2<(f & g)/@1|e]"]
       describe "flexible middle transition" do
         -- if we can resolve from both ends we can/should
         testResiduals
