@@ -5,14 +5,24 @@
 module Graph.ResolveSpec where
 
 import Graph.GraphMetadataEditing (runInMemoryGraphMetadataEditing)
-import Graph.Resolve (resolveNPath)
+import Graph.Resolve (resolveNPath, resolveNPathExists)
 import Models.Edge (Edge)
-import Models.Graph (Graph, compactGraphRepresentation)
+import Models.Graph (Graph, compactGraphRepresentation, deleteEdges)
 import Models.NormalizedPath
+import Models.NormalizedPath.Generators
+  ( genDeterministicPathLiteralOnly,
+    shallowGenConfig,
+  )
 import Models.NormalizedPath.Parse (pNormalizedPath)
+import Models.NormalizedPath.TestUtils
+  ( coveredPathFrom,
+    graphEdges,
+    graphResolvingPathFrom,
+  )
 import Models.ResolvedPath (ResolvedPath (..))
 import MyPrelude
 import Polysemy.State (evalState)
+import System.Random (mkStdGen)
 import Utils.Testing
 
 spec_resolveNPath :: Spec
@@ -25,11 +35,22 @@ spec_resolveNPath = do
           & run
           & \(resolved :: ResolvedPath) -> not (null resolved.path.union)
 
+      resolvesInFast :: Graph Text () -> NormalizedPath Anchor -> Bool
+      resolvesInFast graph path =
+        resolveNPathExists
+          (smallNID 1)
+          (leastConstrainedNormalizedPath path)
+          & runInMemoryGraphMetadataEditing
+          & evalState graph
+          & run
+
       checkResolves :: Bool -> [Edge Text] -> Text -> Spec
       checkResolves expected edges pathStr =
         it (unpack testName) do
           path <- parseForTest "normalized path" pNormalizedPath pathStr
-          resolvesIn (graphWithEdges edges) path `shouldBe` expected
+          let graph = graphWithEdges edges
+          resolvesIn graph path `shouldBe` expected
+          resolvesInFast graph path `shouldBe` expected
         where
           testName =
             pathStr
@@ -52,3 +73,36 @@ spec_resolveNPath = do
     checkResolves False [edge' 2 "a" 3] "[@2<a & @4<d]>@3"
     checkResolves False [edge' 2 "a" 3, edge' 4 "d" 5] "[@2<a & @4<d]>@3"
     checkResolves True [edge' 2 "a" 3, edge' 4 "d" 3] "[@2<a & @4<d]>@3"
+
+  describe "existence-only resolution" do
+    checkResolves True [edge' 1 "a" 2, edge' 2 "b" 1] "@[a /| b]"
+    checkResolves False [edge' 1 "a" 2, edge' 2 "b" 3] "@[a /| b]"
+    checkResolves
+      True
+      [edge' 1 "a" 2, edge' 1 "b" 2, edge' 2 "c" 3]
+      "[(a & b) /| c]>@3"
+    checkResolves
+      False
+      [edge' 1 "a" 2, edge' 1 "b" 3, edge' 2 "c" 4, edge' 3 "c" 5]
+      "[(a & b) /| c]>@"
+    checkResolves True [edge' 1 "a" 2] "[missing] + [a]"
+
+    it "matches resolveNPath on generated shallow paths" $
+      property do
+        seed <- arbitrary
+        let start = smallNID 1
+        dp <-
+          coveredPathFrom start
+            <$> genDeterministicPathLiteralOnly shallowGenConfig
+        let path = NormalizedPath (singletonSet dp)
+            full = graphResolvingPathFrom (mkStdGen seed) start path
+        pure $
+          forAll (sublistOf (graphEdges full)) \removedEdges ->
+            let partial = deleteEdges removedEdges full
+             in counterexample
+                  ( "path: "
+                      <> show path
+                      <> "\ngraph: "
+                      <> show (graphEdges partial)
+                  )
+                  (resolvesInFast partial path === resolvesIn partial path)

@@ -436,12 +436,10 @@ timeouts. The suite default stays at 100 cases for day-to-day speed.
 ## 9. Test-suite status
 
 `spec_pathResidualsUnresolvedBy` encodes the rules above and is the
-behavioral spec. As of 2026-07-11 the expectations have been updated to
-this document (meta-union comparisons, the changed shape/orientation/
-ordering expectations, new multi-root and unsatisfiable-root cases); the
-implementation still computes the old single-path behavior wrapped as a
-singleton alternative, so the changed tests are red and form the
-implementation worklist. See the implementation notes for the exact list.
+behavioral spec. As of 2026-07-13 the rewrite is implemented and the
+focused suite is green. The acceptance bar in §8 was verified with ten
+fresh runs of 1000 cases for each of the three properties, with no
+timeouts; the complete CLI suite is also green.
 
 ## 10. Acceptance examples
 

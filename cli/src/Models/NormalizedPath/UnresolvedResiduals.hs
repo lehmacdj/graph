@@ -5,7 +5,7 @@ module Models.NormalizedPath.UnresolvedResiduals
 where
 
 import Graph.GraphMetadataEditing (runInMemoryGraphMetadataEditing)
-import Graph.Resolve (resolveNPath)
+import Graph.Resolve (resolveNPathExists)
 import Models.Connect (Connect (..), matchConnect)
 import Models.Graph
 import Models.NID
@@ -14,7 +14,6 @@ import Models.NormalizedPath
 import Models.NormalizedPath.Generators
 import Models.NormalizedPath.Parse (pNormalizedPath)
 import Models.NormalizedPath.TestUtils
-import Models.ResolvedPath (ResolvedPath (..))
 import MyPrelude
 import Polysemy.State (evalState)
 import System.Random
@@ -62,21 +61,38 @@ pathResidualsUnresolvedBy startNid graph (NormalizedPath dps) =
         (a : as) -> a :| as
         [] -> error "pathResidualsUnresolvedBy: no alternatives"
 
--- | Combine per-site alternatives: the all-preferred combination first,
--- then the variations of one site at a time, holding every other site at
--- its preferred choice. A full cartesian product multiplies independent
--- ambiguity sites into combinatorially many alternatives; one-site
--- variations stay linear while keeping every site's choices reachable —
--- any combination of complete per-site repairs is a complete repair, and
--- exactness only needs the affected site to vary.
+-- | Combine per-site alternatives with the full cartesian product (§4.2).
+-- The all-preferred combination comes first, followed by combinations
+-- varying one site, then two, and so on. Within one tier, earlier sites
+-- vary first. Higher-order combinations are required when the exact repair
+-- uses non-preferred graph-derived choices at independent ambiguity sites.
+-- Enumerating by tier directly is important: sorting the full product would
+-- force every later combination before the preferred one can be consumed.
 combineAlts :: [[a]] -> [[a]]
 combineAlts xss
   | any null xss = []
   | otherwise =
-      let preferred = map headEx xss
-          varyAt i xs =
-            [take i preferred <> (x : drop (i + 1) preferred) | x <- drop 1 xs]
-       in preferred : concat (zipWith varyAt [0 :: Int ..] xss)
+      [ materialize varied
+      | variedCount <- [0 .. length xss],
+        varied <- variations variedCount 0
+      ]
+  where
+    -- Each variation is ordered by its list of (site, choice) pairs, which
+    -- is the same ordering the former sort key imposed within a tier.
+    variations 0 _ = [[]]
+    variations count firstSite = do
+      site <- [firstSite .. length xss - count]
+      (choice, value) <- drop 1 (zip [0 :: Int ..] (xss `indexEx` site))
+      rest <- variations (count - 1) (site + 1)
+      pure ((site, choice, value) : rest)
+
+    materialize varied = go 0 xss varied
+      where
+        go _ [] _ = []
+        go site (xs : rest) changes = case changes of
+          ((changedSite, _, value) : remaining)
+            | changedSite == site -> value : go (site + 1) rest remaining
+          _ -> headEx xs : go (site + 1) rest changes
 
 -- | The residual alternatives of one deterministic path; each alternative
 -- is the list of union members to create.
@@ -348,31 +364,37 @@ data BrRes = BrRes
     -- | for a resolved outcome: the subset of the landing reachable
     -- without any self-loop edge matching a non-loop step (§5.1);
     -- Nothing = the whole landing is clean
-    cleanLanding :: Maybe (Set NID)
+    cleanLanding :: Maybe (Set NID),
+    -- | Instantiating this gap toward a fresh enclosing target would lose
+    -- an internal meet with graph structure that was omitted from the
+    -- residual. Such a gap must be recreated wholesale when the enclosing
+    -- JoinPoint stays unpinned.
+    freshTargetUnsafe :: Bool
   }
   deriving stock (Eq, Ord)
 
 -- | A 'BrRes' with no terminal reach or self-loop-cleanliness information.
 brRes :: Bool -> [DeterministicPath Anchor] -> Either [Gap] (Set NID) -> BrRes
-brRes p ds o = BrRes p ds o Nothing Nothing
+brRes p ds o = BrRes p ds o Nothing Nothing False
 
 -- | Merge the fully-resolving alternatives of one site into a single
 -- first alternative and drop the gapped ones (§4.2.2): a landing union is
 -- valid resolution semantics (each landing is individually achievable),
 -- and applying this at every alternative-producing site keeps resolution
--- detection compositional under the linear 'combineAlts' enumeration.
+-- detection compositional under the lazy tiered 'combineAlts' enumeration.
 collapseResolved :: [BrRes] -> [BrRes]
 collapseResolved alts =
   case [(r, ls) | r <- alts, Right ls <- [r.outcome]] of
     [] -> alts
     [(r, _)] -> [r]
-    rights ->
+    resolved ->
       [ BrRes
-          (any ((.progress) . fst) rights)
-          (ordNub (concatMap ((.dones) . fst) rights))
-          (Right (unions (map snd rights)))
+          (any ((.progress) . fst) resolved)
+          (ordNub (concatMap ((.dones) . fst) resolved))
+          (Right (unions (map snd resolved)))
           Nothing
-          (Just (unions [fromMaybe ls r.cleanLanding | (r, ls) <- rights]))
+          (Just (unions [fromMaybe ls r.cleanLanding | (r, ls) <- resolved]))
+          (any ((.freshTargetUnsafe) . fst) resolved)
       ]
 
 -- | The terminal position a branch result got to, resolved or not.
@@ -469,6 +491,52 @@ invertPureRun :: DPBranch Anchor -> Maybe (DPBranch Anchor)
 invertPureRun b = case flattenBranch b of
   [PRun ds] -> Just (runToBranch (invertedRun ds))
   _ -> Nothing
+
+-- | Reverse a branch while preserving all of the edges it denotes. This is
+-- used for a nested Unanchored root's exact-repair alternative: rooting the
+-- reversed residual at the recovered landing avoids specializing the
+-- original Unanchored target.
+reverseBranch :: DPBranch Anchor -> DPBranch Anchor
+reverseBranch = \case
+  DPSingle direction -> DPSingle (invertDirection direction)
+  DPSequence before midpoint suffix ->
+    smartBuildSequence
+      (mapOSet reverseBranch suffix)
+      (reversePointlike midpoint)
+      (mapOSet reverseBranch before)
+  where
+    reversePointlike PointlikeDeterministicPath {..} =
+      PointlikeDeterministicPath anchor (mapOSet reverseBranch loops)
+
+-- | Reverse every pointlike-rooted member of a residual between its
+-- recovered target and concrete roots. The result creates exactly the same
+-- edges, but the Unanchored target occurrence is gone rather than pinned.
+invertResidualAt ::
+  NID -> NID -> DeterministicPath Anchor -> Maybe [DeterministicPath Anchor]
+invertResidualAt startNid landing = \case
+  Rooted RootedDeterministicPath {..} -> do
+    traverse reverseRoot (mapToList rootBranches)
+    where
+      reverseRoot (Pointlike root, branches) = do
+        rootNid <- unifyRootAnchor startNid root.anchor
+        let reversedRoot =
+              PointlikeDeterministicPath
+                (Specific landing)
+                (mapOSet reverseBranch target.loops)
+            reversedTarget =
+              PointlikeDeterministicPath
+                (Specific rootNid)
+                (mapOSet reverseBranch root.loops)
+        pure $
+          Rooted $
+            smartBuildRootedDeterministicPath
+              ( singletonMap
+                  (Pointlike reversedRoot)
+                  (mapOSet reverseBranch branches)
+              )
+              reversedTarget
+      reverseRoot (Rooted _, _) = Nothing
+  Pointlike _ -> Nothing
 
 rebuildParts :: [Part] -> ABranches
 rebuildParts = \case
@@ -722,7 +790,31 @@ resolveBranch g openBwd origin0 start branch endCtx =
       [] -> [brRes False [] (Right f)]
       (PRun ds : rest) ->
         case resolveSegment g (null rest && openBwd) f ds (boundaryCtx rest) of
-          SegResolved f' mc -> afterUnit (Just mc) True [] f' rest
+          SegResolved f' mc ->
+            let regular = afterUnit (Just mc) True [] f' rest
+                regularResolved = any (isRight . (.outcome)) regular
+                -- If none of the current arrivals completes the remaining
+                -- tail, also try the seam positions where that tail does
+                -- resolve. This recovers an arrival supplied by a missing
+                -- edge. It is also the self-loop-free interpretation when
+                -- the current boundary was reached only by a self-loop.
+                recoveredLandings
+                  | not (null rest), not regularResolved = tailLandings rest
+                  | otherwise = []
+                recovered
+                  | not (null recoveredLandings) =
+                      recoverOrChainFrom
+                        recoveredLandings
+                        origin
+                        0
+                        f
+                        ds
+                        rest
+                  | otherwise = []
+                alternatives
+                  | null mc = recovered <> regular
+                  | otherwise = regular <> recovered
+             in collapseResolved alternatives
           SegGaps gaps ->
             ordNub $
               concat
@@ -736,13 +828,19 @@ resolveBranch g openBwd origin0 start branch endCtx =
     afterUnit ::
       Maybe (Set NID) -> Bool -> [DeterministicPath Anchor] -> Set NID -> [Part] -> [BrRes]
     afterUnit clean prog ds f' = \case
-      [] -> [BrRes prog ds (Right f') Nothing clean]
+      [] -> [BrRes prog ds (Right f') Nothing clean False]
       (PMid m : rest') -> map (addProg prog ds) (stationFromArrivals f' m rest')
       rest -> map (addProg prog ds) (goParts False f' rest)
 
     addProg :: Bool -> [DeterministicPath Anchor] -> BrRes -> BrRes
     addProg prog ds r =
-      BrRes (prog || r.progress) (ds <> r.dones) r.outcome r.reach r.cleanLanding
+      BrRes
+        (prog || r.progress)
+        (ds <> r.dones)
+        r.outcome
+        r.reach
+        r.cleanLanding
+        r.freshTargetUnsafe
 
     -- root alternatives for a gap whose forward consumption stopped at fF:
     -- a fan-out followed by a gap is one alternative per frontier node (§3)
@@ -765,7 +863,7 @@ resolveBranch g openBwd origin0 start branch endCtx =
         let bs = singletonSet (runToBranch mid)
             prog = k > 0 || j > 0
          in ordNub
-              [ BrRes prog [] (Left [Gap roots e]) reach Nothing
+              [ BrRes prog [] (Left [Gap roots e]) reach Nothing False
               | roots <- gapRootAlts origin k fF bs,
                 (e, reach) <-
                   if j > 0
@@ -783,6 +881,7 @@ resolveBranch g openBwd origin0 start branch endCtx =
                       (Left (Gap roots e : either id (const []) st.outcome))
                       (resReach st)
                       Nothing
+                      st.freshTargetUnsafe
                   | roots <- gapRootAlts origin k fF bs,
                     e <-
                       if j > 0
@@ -799,7 +898,18 @@ resolveBranch g openBwd origin0 start branch endCtx =
     recoverOrChain ::
       Bool -> Int -> Set NID -> [DPDirection] -> [Part] -> [BrRes]
     recoverOrChain origin k fF mid parts =
-      let cands = tailCandidates parts
+      recoverOrChainFrom (tailLandings parts) origin k fF mid parts
+
+    recoverOrChainFrom ::
+      [(NID, Set NID)] ->
+      Bool ->
+      Int ->
+      Set NID ->
+      [DPDirection] ->
+      [Part] ->
+      [BrRes]
+    recoverOrChainFrom landings origin k fF mid parts =
+      let cands = setFromList (map fst landings)
           chained =
             [ brRes (k > 0) [] (Left [Gap roots e])
             | roots <- gapRootAlts origin k fF (rebuildParts (PRun mid : parts)),
@@ -815,15 +925,15 @@ resolveBranch g openBwd origin0 start branch endCtx =
                   gaps2 >>= \(SegGap k2 fF2 mid2 j2 seams2) ->
                     let bs = singletonSet (runToBranch mid2)
                         seamReach cs =
-                          let ls = unions (mapMaybe (tailLandingFrom parts) (toList cs))
+                          let ls = unions (mapMaybe (`lookup` landings) (toList cs))
                            in justIfTrue (not (null ls)) ls
                      in ordNub
-                          [ BrRes True [] (Left [Gap roots (Just s)]) reach Nothing
+                          [ BrRes True [] (Left [Gap roots (Just s)]) reach Nothing False
                           | roots <- gapRootAlts origin k2 fF2 bs,
                             (s, reach) <-
                               if j2 > 0
                                 then [(s, seamReach r) | (s, r) <- seams2]
-                                else [(c, tailLandingFrom parts c) | c <- toList cands]
+                                else [(c, lookup c landings) | c <- toList cands]
                           ]
 
     continueTail :: Set NID -> [Part] -> [BrRes]
@@ -831,9 +941,12 @@ resolveBranch g openBwd origin0 start branch endCtx =
       (PMid m : rest') -> stationFromArrivals met m rest'
       parts -> goParts False met parts
 
-    tailCandidates :: [Part] -> Set NID
-    tailCandidates parts =
-      setFromList [v | v <- toList (nidSet g), isJust (tailLandingFrom parts v)]
+    tailLandings :: [Part] -> [(NID, Set NID)]
+    tailLandings parts =
+      [ (v, ls)
+      | v <- toList (nidSet g),
+        Just ls <- [tailLandingFrom parts v]
+      ]
 
     -- where the tail lands when fully resolved from @v@
     tailLandingFrom :: [Part] -> NID -> Maybe (Set NID)
@@ -868,6 +981,7 @@ resolveBranch g openBwd origin0 start branch endCtx =
               (Right f')
               Nothing
               cr.cleanLanding
+              cr.freshTargetUnsafe
         _ -> do
           let contGaps = either id (const []) cr.outcome
               stationPdp =
@@ -887,6 +1001,7 @@ resolveBranch g openBwd origin0 start branch endCtx =
               (Left gaps')
               (resReach cr)
               Nothing
+              cr.freshTargetUnsafe
 
     -- a midpoint reached at several NIDs (§4.2.2): all fully-resolving
     -- arrivals merge into one alternative; otherwise each progressing
@@ -905,6 +1020,7 @@ resolveBranch g openBwd origin0 start branch endCtx =
                   (Right (unions (map snd resolveds)))
                   Nothing
                   (Just (unions [fromMaybe ls r.cleanLanding | (r, ls) <- resolveds]))
+                  (any ((.freshTargetUnsafe) . fst) resolveds)
               ]
             [] ->
               let allAlts = concat perArrival
@@ -940,12 +1056,51 @@ resolveBranch g openBwd origin0 start branch endCtx =
           anyFailed = any (isLeft . (.outcome) . snd) combo
           subDones = concatMap ((.dones) . snd) combo
           subProgress = any ((.progress) . snd) combo
+          disagreementReaches =
+            let landings = map snd landed
+                cleanConstraints =
+                  [ fromMaybe ls r.cleanLanding
+                  | (_, r) <- combo,
+                    Right ls <- [r.outcome]
+                  ]
+                meetClean = case filter (not . null) cleanConstraints of
+                  [] -> mempty
+                  cs -> intersectAll cs
+                leaveOneOutMeets =
+                  unions
+                    [ m
+                    | (i, _) <- zip [0 :: Int ..] landings,
+                      let rest' = take i landings <> drop (i + 1) landings,
+                      not (null rest'),
+                      let m = intersectAll rest',
+                      not (null m)
+                    ]
+                admitted = case subEnd of
+                  EndJoin exc ->
+                    (meetClean `union` leaveOneOutMeets) `difference` exc
+                  EndPair -> meetClean `union` leaveOneOutMeets
+                  _ -> mempty
+             in justIfTrue (not (null admitted)) admitted
       case rest of
         [] ->
           if not anyFailed
             then case combineLandings subEnd (map snd landed) of
-              Just ls -> pure (brRes subProgress subDones (Right ls))
-              Nothing -> chainAll
+              Just ls ->
+                pure $
+                  BrRes
+                    subProgress
+                    subDones
+                    (Right ls)
+                    Nothing
+                    Nothing
+                    (any ((.freshTargetUnsafe) . snd) combo)
+              Nothing ->
+                [ r
+                    { progress = subProgress,
+                      reach = disagreementReaches
+                    }
+                | r <- chainAll
+                ]
             else case subEnd of
               -- at a pair point the intersection's members must agree on
               -- one landing; failed members re-aim at the resolved
@@ -972,6 +1127,10 @@ resolveBranch g openBwd origin0 start branch endCtx =
                         (Left gaps)
                         (Just (singletonSet v))
                         Nothing
+                        ( any ((.freshTargetUnsafe) . snd) combo
+                            || any (.freshTargetUnsafe) reaimed
+                            || (not (null landed) && anyFailed)
+                        )
                 | otherwise ->
                     [ brRes subProgress subDones (Left [Gap roots Nothing])
                     | roots <- gapRootAlts origin 0 f bs
@@ -982,15 +1141,27 @@ resolveBranch g openBwd origin0 start branch endCtx =
                     subProgress
                     subDones
                     (Left failed)
-                    ( let ms = intersectAll (map snd landed)
-                       in justIfTrue (not (null landed) && not (null ms)) ms
+                    ( let knownReaches = mapMaybe (resReach . snd) combo
+                          ms = intersectAll knownReaches
+                       in justIfTrue
+                            (not (null knownReaches) && not (null ms))
+                            ms
                     )
                     Nothing
+                    ( any ((.freshTargetUnsafe) . snd) combo
+                        || (not (null landed) && anyFailed)
+                    )
         (PMid m : rest')
           | Just n <- specificMidNid m ->
               if not anyFailed && not (null landed)
                 then
-                  map (addProg subProgress subDones) (afterUnit Nothing False [] (singletonSet n) rest)
+                  [ (addProg subProgress subDones r)
+                      { freshTargetUnsafe =
+                          r.freshTargetUnsafe
+                            || any ((.freshTargetUnsafe) . snd) combo
+                      }
+                  | r <- afterUnit Nothing False [] (singletonSet n) rest
+                  ]
                 else do
                   st <- stationAt n m rest'
                   if not subProgress && not st.progress
@@ -1003,12 +1174,62 @@ resolveBranch g openBwd origin0 start branch endCtx =
                           (Left (failed <> either id (const []) st.outcome))
                           (resReach st)
                           Nothing
+                          ( any ((.freshTargetUnsafe) . snd) combo
+                              || st.freshTargetUnsafe
+                              || (not (null landed) && anyFailed)
+                          )
           | otherwise ->
               joinMidRecover origin f combo landed anyFailed subDones subProgress m rest' chainAll
         _ ->
-          let failedReaches =
-                [rs | (_, r) <- combo, isLeft r.outcome, Just rs <- [r.reach]]
-           in goSplitImplicit origin f landed failed failedReaches subDones subProgress rest chainAll
+          let runImplicit combo' =
+                let landed' =
+                      [(b, ls) | (b, res) <- combo', Right ls <- [res.outcome]]
+                    failed' =
+                      concat [gs | (_, res) <- combo', Left gs <- [res.outcome]]
+                    failedBranches' =
+                      [b | (b, res) <- combo', isLeft res.outcome]
+                    failedReaches' =
+                      [ rs
+                      | (_, res) <- combo',
+                        isLeft res.outcome,
+                        Just rs <- [res.reach]
+                      ]
+                    dones' = concatMap ((.dones) . snd) combo'
+                    progress' = any ((.progress) . snd) combo'
+                    unsafe' =
+                      any ((.freshTargetUnsafe) . snd) combo'
+                        || (not (null landed') && not (null failedBranches'))
+                 in goSplitImplicit
+                      origin
+                      f
+                      landed'
+                      failed'
+                      failedBranches'
+                      failedReaches'
+                      dones'
+                      progress'
+                      unsafe'
+                      rest
+                      chainAll
+              agreed = intersectAll (map snd landed)
+              alternatePairs =
+                fromMaybe mempty disagreementReaches `difference` agreed
+           in runImplicit combo
+                <> do
+                  p <- toList alternatePairs
+                  rerun <-
+                    combineAlts
+                      [ map (b,) $
+                          resolveBranch
+                            g
+                            False
+                            origin
+                            f
+                            b
+                            (EndAt (singletonSet p))
+                      | (b, _) <- combo
+                      ]
+                  runImplicit rerun
 
     -- an explicit join midpoint after an intersection: every branch must
     -- agree on it; when they don't, try every node the whole tail resolves
@@ -1026,30 +1247,63 @@ resolveBranch g openBwd origin0 start branch endCtx =
       [BrRes] ->
       [BrRes]
     joinMidRecover origin f combo landed anyFailed subDones subProgress m rest' chainAll =
-      let meet = intersectAll (map snd landed) `difference` excOf m
+      let landings = map snd landed
+          meet = intersectAll landings `difference` excOf m
+          cleanConstraints =
+            [ fromMaybe ls res.cleanLanding
+            | (_, res) <- combo,
+              Right ls <- [res.outcome]
+            ]
+          meetClean = case filter (not . null) cleanConstraints of
+            [] -> mempty
+            cs -> intersectAll cs `difference` excOf m
+          leaveOneOutMeets =
+            unions
+              [ m'
+              | (i, _) <- zip [0 :: Int ..] landings,
+                let rest = take i landings <> drop (i + 1) landings,
+                not (null rest),
+                let m' = intersectAll rest `difference` excOf m,
+                not (null m')
+              ]
+          alternateMeets =
+            (meetClean `union` leaveOneOutMeets) `difference` meet
+          perCand v = do
+            rs <-
+              combineAlts
+                [ resolveBranch g False origin f b (EndAt (singletonSet v))
+                | (b, _) <- combo
+                ]
+            st <- stationAt v m rest'
+            let gaps =
+                  concat [either id (const []) r.outcome | r <- rs]
+                    <> either id (const []) st.outcome
+                ds = concatMap (.dones) rs <> st.dones
+                prog = any (.progress) rs || st.progress
+            guard prog
+            pure $
+              BrRes
+                True
+                ds
+                (Left gaps)
+                (resReach st)
+                Nothing
+                ( any (.freshTargetUnsafe) rs
+                    || st.freshTargetUnsafe
+                    || (not (null landed) && anyFailed)
+                )
        in if not (null landed) && not anyFailed && not (null meet)
-            then map (addProg subProgress subDones) (stationFromArrivals meet m rest')
+            then
+              [ (addProg subProgress subDones r)
+                  { freshTargetUnsafe =
+                      r.freshTargetUnsafe
+                        || any ((.freshTargetUnsafe) . snd) combo
+                  }
+              | r <- stationFromArrivals meet m rest'
+              ]
+                <> concatMap perCand (toList alternateMeets)
             else
-              let cands =
-                    [ v
-                    | v <- toList (nidSet g),
-                      anchorAdmits m.anchor v,
-                      isJust (tailLandingFrom (PMid m : rest') v)
-                    ]
-                  perCand v = do
-                    rs <-
-                      combineAlts
-                        [ resolveBranch g False origin f b (EndAt (singletonSet v))
-                        | (b, _) <- combo
-                        ]
-                    st <- stationAt v m rest'
-                    let gaps =
-                          concat [either id (const []) r.outcome | r <- rs]
-                            <> either id (const []) st.outcome
-                        ds = concatMap (.dones) rs <> st.dones
-                        prog = any (.progress) rs || st.progress
-                    guard prog
-                    pure (BrRes True ds (Left gaps) (resReach st) Nothing)
+              let cands = map fst (tailLandings (PMid m : rest'))
                in case ordNub (concatMap perCand cands) of
                     [] -> chainAll
                     alts -> alts
@@ -1061,111 +1315,220 @@ resolveBranch g openBwd origin0 start branch endCtx =
       Set NID ->
       [(DPBranch Anchor, Set NID)] ->
       [Gap] ->
+      -- \| original members that failed before the pair point; once a
+      -- working junction is known, rerun them toward it so a surviving
+      -- suffix can be consumed backward
+      [DPBranch Anchor] ->
       -- \| terminal positions gapped members' residuals land at: their
       -- pair-continuations must exist from there too
       [Set NID] ->
+      -- \| residual members and progress inherited from the left split
       [DeterministicPath Anchor] ->
+      Bool ->
+      -- \| whether a later fresh target would invalidate reused meet structure
       Bool ->
       [Part] ->
       [BrRes] ->
       [BrRes]
-    goSplitImplicit origin f landed failed failedReaches subDones subProgress rest' chainAll = do
-      let landingSets = ordNub (map snd landed <> failedReaches)
-      contCombo <-
-        combineAlts [map (ls,) (goParts False ls rest') | ls <- landingSets]
-      let contRights = [(ls, f') | (ls, r) <- contCombo, Right f' <- [r.outcome]]
-          contProgress = any ((.progress) . snd) contCombo
-          contDones = concatMap ((.dones) . snd) contCombo
-          contGaps = concat [either id (const []) r.outcome | (_, r) <- contCombo]
-          extendBs bs' =
-            singletonSet (smartBuildSequence bs' unanchored (rebuildParts rest'))
-          extendGap gp =
-            gp
-              { roots = case gp.roots of
-                  AtStart bs' -> AtStart (extendBs bs')
-                  AtRoots rm -> AtRoots (omap extendBs rm)
-              }
-          retargetTo jn gp
-            | isNothing gp.end = gp {end = Just jn}
-            | otherwise = gp
-      if not subProgress && not contProgress
-        then chainAll
-        else case contRights of
-          ((jls, _) : _) -> do
-            -- a junction with a working continuation exists; failed
-            -- branches end at it and branches that landed where the
-            -- continuation fails are re-aimed at it
-            let jn = minimumEx (toList jls)
-                failingSets = [ls | (ls, r) <- contCombo, isLeft r.outcome]
-            reaims <-
-              combineAlts
-                [ resolveBranch g False origin f b (EndAt (singletonSet jn))
-                | (b, ls) <- landed,
-                  ls `elem` failingSets
-                ]
-            let reaimGaps = concat [either id (const []) r.outcome | r <- reaims]
-                reaimDones = concatMap (.dones) reaims
-                failedGaps = map (retargetTo jn) failed
-                -- a gapped member whose residual lands it at a reach node
-                -- still needs its pair continuation from there; the
-                -- landed members' pairs go through jn instead
-                reachContGaps =
-                  concat
-                    [ either id (const []) r.outcome
-                    | (ls, r) <- contCombo,
-                      ls `elem` failedReaches
+    goSplitImplicit
+      origin
+      f
+      landed
+      failed
+      failedBranches
+      failedReaches
+      subDones
+      subProgress
+      subUnsafe
+      rest'
+      chainAll = do
+        let agreedLandings = intersectAll (map snd landed)
+            landingSets
+              | null failed,
+                not (null landed),
+                not (null agreedLandings) =
+                  [agreedLandings]
+              | otherwise = ordNub (map snd landed <> failedReaches)
+            -- A frontier may contain several possible pair-point arrivals.
+            -- Try them independently so a continuation that resolves from
+            -- only one arrival records that actual junction, rather than an
+            -- arbitrary member of the pre-continuation frontier.
+            continuations ls =
+              let perArrival =
+                    [ (singletonSet n, r)
+                    | n <- toList ls,
+                      r <- goParts False (singletonSet n) rest'
                     ]
-            if null failedGaps && null reaimGaps && null reachContGaps
-              then case combineLandings endCtx (map snd contRights) of
-                Just ls ->
+                  resolved =
+                    [(src, r) | (src, r) <- perArrival, isRight r.outcome]
+               in case resolved of
+                    (_ : _) ->
+                      [ ( unions (map fst resolved),
+                          headEx (collapseResolved (map snd resolved))
+                        )
+                      ]
+                    [] -> case filter ((.progress) . snd) perArrival of
+                      [] -> perArrival
+                      progressing -> progressing
+        contCombo <-
+          combineAlts [continuations ls | ls <- landingSets]
+        let contRights = [(ls, f') | (ls, r) <- contCombo, Right f' <- [r.outcome]]
+            contProgress = any ((.progress) . snd) contCombo
+            contDones = concatMap ((.dones) . snd) contCombo
+            contGaps = concat [either id (const []) r.outcome | (_, r) <- contCombo]
+            extendBs bs' =
+              singletonSet (smartBuildSequence bs' unanchored (rebuildParts rest'))
+            extendGap gp =
+              gp
+                { roots = case gp.roots of
+                    AtStart bs' -> AtStart (extendBs bs')
+                    AtRoots rm -> AtRoots (omap extendBs rm)
+                }
+            retargetTo jn gp
+              | isNothing gp.end = gp {end = Just jn}
+              | otherwise = gp
+            compatibleTailJunctions finalLandings =
+              [ jn
+              | (jn, ls) <- tailLandings rest',
+                isJust (combineLandings endCtx (ls : finalLandings))
+              ]
+        if not subProgress && not contProgress
+          then chainAll
+          else case contRights of
+            ((jls, _) : _) -> do
+              -- a junction with a working continuation exists; failed
+              -- branches end at it and branches that landed where the
+              -- continuation fails are re-aimed at it
+              let junctions =
+                    ordNub
+                      ( toList jls
+                          <> if null failedBranches
+                            then []
+                            else compatibleTailJunctions (map snd contRights)
+                      )
+                  failingSets = [ls | (ls, r) <- contCombo, isLeft r.outcome]
+              jn <- junctions
+              reaims <-
+                combineAlts
+                  [ resolveBranch g False origin f b (EndAt (singletonSet jn))
+                  | (b, ls) <- landed,
+                    any (not . null . intersection ls) failingSets
+                  ]
+              failedReaims <-
+                combineAlts
+                  [ resolveBranch g False origin f b (EndAt (singletonSet jn))
+                  | b <- failedBranches
+                  ]
+              let reaimGaps = concat [either id (const []) r.outcome | r <- reaims]
+                  reaimDones = concatMap (.dones) reaims
+                  failedGaps =
+                    concat [either id (const []) r.outcome | r <- failedReaims]
+                  failedDones = concatMap (.dones) failedReaims
+                  -- a gapped member whose residual lands it at a reach node
+                  -- still needs its pair continuation from there; the
+                  -- landed members' pairs go through jn instead
+                  reachContGaps =
+                    concat
+                      [ either id (const []) r.outcome
+                      | (ls, r) <- contCombo,
+                        any (not . null . intersection ls) failedReaches
+                      ]
+              if null failedGaps && null reaimGaps && null reachContGaps
+                then case combineLandings endCtx (map snd contRights) of
+                  Just ls ->
+                    pure $
+                      BrRes
+                        (subProgress || contProgress)
+                        (subDones <> contDones <> reaimDones <> failedDones)
+                        (Right ls)
+                        Nothing
+                        Nothing
+                        ( subUnsafe
+                            || any ((.freshTargetUnsafe) . snd) contCombo
+                            || any (.freshTargetUnsafe) reaims
+                            || any (.freshTargetUnsafe) failedReaims
+                        )
+                  Nothing -> chainAll
+                else
                   pure $
-                    brRes
+                    BrRes
                       (subProgress || contProgress)
-                      (subDones <> contDones <> reaimDones)
-                      (Right ls)
-                Nothing -> chainAll
-              else
-                pure $
-                  BrRes
-                    (subProgress || contProgress)
-                    (subDones <> contDones <> reaimDones)
-                    (Left (failedGaps <> reaimGaps <> reachContGaps))
-                    (combineLandings endCtx (map snd contRights))
-                    Nothing
-          [] -> do
-            -- no continuation resolved anywhere: pin failed branches to
-            -- the junction this alternative's continuation gaps get
-            -- created from (so the failed member's pair goes through the
-            -- same node), else to a landing, else the continuation must
-            -- be minted per pair
-            let contRootNid gp = case gp.roots of
-                  AtRoots rm -> case mapToList rm of
-                    ((Pointlike pdp, _) : _)
-                      | Specific n <- pdp.anchor -> Just n
-                    _ -> Nothing
-                  AtStart _ -> Nothing
-                -- only a pair-point candidate counts: a continuation gap
-                -- rooted deeper inside the continuation (past a midpoint)
-                -- is not a node the failed member can land at
-                landingNodes = unions landingSets
-                jnFromCont =
-                  headMay
-                    [ n
-                    | n <- mapMaybe contRootNid contGaps,
-                      n `member` landingNodes
+                      (subDones <> contDones <> reaimDones <> failedDones)
+                      (Left (failedGaps <> reaimGaps <> reachContGaps))
+                      (combineLandings endCtx (map snd contRights))
+                      Nothing
+                      ( subUnsafe
+                          || any ((.freshTargetUnsafe) . snd) contCombo
+                          || any (.freshTargetUnsafe) reaims
+                          || any (.freshTargetUnsafe) failedReaims
+                      )
+            [] -> do
+              -- no continuation resolved anywhere: pin failed branches to
+              -- the junction this alternative's continuation gaps get
+              -- created from (so the failed member's pair goes through the
+              -- same node), else to a landing, else the continuation must
+              -- be minted per pair
+              let contRootNid gp = case gp.roots of
+                    AtRoots rm -> case mapToList rm of
+                      ((Pointlike pdp, _) : _)
+                        | Specific n <- pdp.anchor -> Just n
+                      _ -> Nothing
+                    AtStart _ -> Nothing
+                  -- only a pair-point candidate counts: a continuation gap
+                  -- rooted deeper inside the continuation (past a midpoint)
+                  -- is not a node the failed member can land at
+                  landingNodes = unions landingSets
+                  -- A continuation that made progress may have advanced
+                  -- beyond its pair point before it gapped. Its recorded
+                  -- source is still the junction the failed prefix must
+                  -- meet; choosing an arbitrary sibling landing mixes two
+                  -- incompatible pair alternatives.
+                  progressJunction =
+                    headMay
+                      [ n
+                      | (ls, r) <- contCombo,
+                        r.progress,
+                        n <- toList ls
+                      ]
+                  jnFromCont =
+                    headMay
+                      [ n
+                      | n <- mapMaybe contRootNid contGaps,
+                        n `member` landingNodes
+                      ]
+                  adjust gp
+                    | isNothing gp.end = case jnFromCont of
+                        Just jn -> retargetTo jn gp
+                        Nothing -> case progressJunction of
+                          Just jn -> retargetTo jn gp
+                          Nothing -> case landingSets of
+                            (ls : _) -> retargetTo (minimumEx (toList ls)) gp
+                            [] -> extendGap gp
+                    | otherwise = gp
+              let reaches =
+                    [ rs
+                    | (_, r) <- contCombo,
+                      Just rs <- [resReach r]
                     ]
-                adjust gp
-                  | isNothing gp.end = case jnFromCont of
-                      Just jn -> retargetTo jn gp
-                      Nothing -> case landingSets of
-                        (ls : _) -> retargetTo (minimumEx (toList ls)) gp
-                        [] -> extendGap gp
-                  | otherwise = gp
-            pure $
-              brRes
-                (subProgress || contProgress)
-                (subDones <> contDones)
-                (Left (map adjust failed <> contGaps))
+                  reach = combineLandings endCtx reaches
+              case endCtx of
+                -- These continuations reused suffixes ending at incompatible
+                -- nodes before a required outer pair boundary. Their gaps do
+                -- not repair that meet, so retain the connected structure.
+                EndPair
+                  | not (null reaches), isNothing reach -> chainAll
+                _ ->
+                  pure $
+                    BrRes
+                      (subProgress || contProgress)
+                      (subDones <> contDones)
+                      (Left (map adjust failed <> contGaps))
+                      reach
+                      Nothing
+                      ( subUnsafe
+                          || any ((.freshTargetUnsafe) . snd) contCombo
+                          || (not (null landed) && not (null failed))
+                      )
 
 -- * Layer 1: structural recursion over deterministic paths
 
@@ -1180,6 +1543,9 @@ data DpAlt = DpAlt
     extras :: [DeterministicPath Anchor],
     -- | the concrete node the target resolved/pinned to, if any
     pin :: Maybe NID,
+    -- | a concrete landing the enclosing path may resume from. Unlike
+    -- 'pin', this does not specialize an Unanchored target in the residual.
+    resume :: Maybe (Set NID),
     -- | whether every branch landing agrees on the landed set; False for
     -- an Unanchored target whose branches landed at disjoint positions
     -- (nested reuse is unsound then: the exploded pairs need a common
@@ -1194,17 +1560,36 @@ dpAltMembers a = maybeToList a.main <> a.extras
 residualPointlikeAlts ::
   NID -> Graph Text () -> PointlikeDeterministicPath Anchor -> [DpAlt]
 residualPointlikeAlts startNid g p = case unifyRootAnchor startNid p.anchor of
-  Nothing -> [DpAlt False Nothing Nothing [] Nothing True]
+  Nothing -> [DpAlt False Nothing Nothing [] Nothing Nothing True]
   Just n
     | null p.loops ->
         if isJust (maybeLookupNode g n)
-          then [DpAlt True (Just (singletonSet n)) Nothing [] (Just n) True]
-          else [DpAlt False Nothing Nothing [] (Just n) True]
+          then
+            [ DpAlt
+                True
+                (Just (singletonSet n))
+                Nothing
+                []
+                (Just n)
+                (Just (singletonSet n))
+                True
+            ]
+          else [DpAlt False Nothing Nothing [] (Just n) Nothing True]
     | otherwise -> ordNub do
         la <- processLoops g n p.loops
         let pdp = PointlikeDeterministicPath (pinAnchor p.anchor n) la.attached
         if la.resolved
-          then pure (DpAlt True (Just (singletonSet n)) Nothing [] (Just n) True)
+          then
+            pure
+              ( DpAlt
+                  True
+                  (Just (singletonSet n))
+                  Nothing
+                  []
+                  (Just n)
+                  (Just (singletonSet n))
+                  True
+              )
           else do
             let (main, offMembers) =
                   buildMembers pdp (Just n) (orientGaps n False la.gaps)
@@ -1217,6 +1602,7 @@ residualPointlikeAlts startNid g p = case unifyRootAnchor startNid p.anchor of
                   main,
                   extras = offMembers <> la.dones <> attachedDone,
                   pin = Just n,
+                  resume = Nothing,
                   agreed = True
                 }
 
@@ -1258,21 +1644,10 @@ resolveRootAlts startNid g = \case
           }
       | la <- processLoops g n p.loops
       ]
-  Rooted nested0 -> ordNub do
-    -- a nested root's Unanchored target unifies like a join point:
-    -- resolution's pair explosion makes every nested branch continue into
-    -- the outer branches, so the residual must either pin an agreed
-    -- landing (minimal reuse) or recreate every unresolved nested branch
-    -- toward one meet — exactly the JoinPoint machinery. (Stricter than
-    -- resolution requires — pairs may meet at distinct nodes — but
-    -- instantiation's one-NID-per-occurrence is stricter in the same way,
-    -- so this is safe.)
-    let nested = case nested0.target.anchor of
-          Unanchored ->
-            RootedDeterministicPath
-              nested0.rootBranches
-              (PointlikeDeterministicPath (JoinPoint mempty) nested0.target.loops)
-          _ -> nested0
+  Rooted nested -> ordNub do
+    -- Unanchored nested targets deliberately stay Unanchored (§5): the
+    -- outer branches resume from the concrete landings that resolution
+    -- discovered, without turning those landings into a residual pin.
     sub <- residualRootedAlts startNid g nested
     case sub.landed of
       Just ls
@@ -1291,22 +1666,66 @@ resolveRootAlts startNid g = \case
             | v <- toList (maybe ls singletonSet sub.pin)
             ]
       _ ->
-        let (form, formMustEmit, extraDones) = case (sub.main, sub.pin) of
-              (Just mn, _) -> (mn, True, sub.extras)
-              (Nothing, Just pn) -> (specificDp pn, False, sub.extras)
-              (Nothing, Nothing) -> (Rooted nested, True, [])
-         in pure
-              RootInfo
-                { frontier = singletonSet <$> sub.pin,
-                  form,
-                  formMustEmit,
-                  stationNid = Nothing,
-                  attached = mempty,
-                  loopGaps = [],
-                  extraDones,
-                  clean = False,
-                  progress = sub.progress
-                }
+        let exactUnanchored a = do
+              guard (nested.target.anchor == Unanchored)
+              landing <- toList (fromMaybe mempty a.resume)
+              aimed <-
+                residualRootedAlts
+                  startNid
+                  g
+                  nested
+                    { target =
+                        nested.target {anchor = Specific landing}
+                    }
+              guard (isNothing aimed.landed)
+              reversed <-
+                maybeToList $
+                  maybe
+                    (Just [])
+                    (invertResidualAt startNid landing)
+                    aimed.main
+              let members = reversed <> aimed.extras
+              guard (not (null members))
+              pure
+                RootInfo
+                  { frontier = Just (singletonSet landing),
+                    form = specificDp landing,
+                    formMustEmit = False,
+                    stationNid = Nothing,
+                    attached = mempty,
+                    loopGaps = [],
+                    extraDones = members,
+                    clean = False,
+                    progress = aimed.progress
+                  }
+
+            fallback a =
+              let (form, formMustEmit, extraDones, subProgress) =
+                    case nested.target.anchor of
+                      -- With no concrete target, a partial nested residual
+                      -- cannot safely feed the outer branches: instantiating
+                      -- it would mint a different target NID. Recreate the
+                      -- whole nested prefix instead, leaving its target
+                      -- Unanchored (§5).
+                      Unanchored -> (Rooted nested, True, [], False)
+                      _ -> case (a.main, a.pin) of
+                        (Just mn, _) -> (mn, True, a.extras, a.progress)
+                        (Nothing, Just pn) ->
+                          (specificDp pn, False, a.extras, a.progress)
+                        (Nothing, Nothing) ->
+                          (Rooted nested, True, [], a.progress)
+               in RootInfo
+                    { frontier = singletonSet <$> a.pin,
+                      form,
+                      formMustEmit,
+                      stationNid = Nothing,
+                      attached = mempty,
+                      loopGaps = [],
+                      extraDones,
+                      clean = False,
+                      progress = subProgress
+                    }
+         in exactUnanchored sub <> [fallback sub]
 
 branchFromFrontier ::
   Graph Text () -> EndCtx -> Maybe (Set NID) -> DPBranch Anchor -> [BrRes]
@@ -1383,7 +1802,10 @@ residualRootedAlts startNid g r = ordNub do
                     let m = intersectAll rest `difference` exc,
                     not (null m)
                   ]
-              disagreePins = meetClean `union` leaveOneOutMeets
+              disagreePins =
+                meetClean
+                  `union` leaveOneOutMeets
+                  `union` (targetLoopPins `difference` exc)
               pinAt p = do
                 rerun <-
                   combineAlts
@@ -1396,12 +1818,60 @@ residualRootedAlts startNid g r = ordNub do
                 then
                   pure (Nothing, map (map (demoteGapped . demote)) probe)
                     <> (toList disagreePins >>= pinAt)
-                else toList meet >>= pinAt
+                else
+                  (toList meet <> toList (disagreePins `difference` meet))
+                    >>= pinAt
   finishRooted g r entries targetPin results
   where
     rootPairs = mapToList r.rootBranches
     targetCtx = targetEndCtx r.target.anchor
-    rootAlts = [resolveRootAlts startNid g rk | (rk, _) <- rootPairs]
+    rootAlts =
+      [ resolveRootAlts startNid g rk <> recoveredNestedRoots rk bs
+      | (rk, bs) <- rootPairs
+      ]
+    -- A partial nested JoinPoint root may have no frontier of its own, even
+    -- though an outer branch's surviving tail identifies the missing seam.
+    -- Search only nodes from which the whole outer branch set already
+    -- resolves, then rerun the nested root toward that concrete seam.
+    recoveredNestedRoots rk bs = case rk of
+      Rooted nested
+        | JoinPoint exc <- nested.target.anchor -> do
+            n <- toList (nidSet g `difference` exc)
+            guard (outerBranchesResolve n bs)
+            aimed <-
+              residualRootedAlts
+                startNid
+                g
+                nested
+                  { target = nested.target {anchor = Specific n}
+                  }
+            guard (isNothing aimed.landed)
+            let (form, formMustEmit, extraDones) = case (aimed.main, aimed.pin) of
+                  (Just mn, _) -> (mn, True, aimed.extras)
+                  (Nothing, Just pn) ->
+                    (specificDp pn, False, aimed.extras)
+                  (Nothing, Nothing) -> (Rooted nested, True, [])
+            pure
+              RootInfo
+                { frontier = Just (singletonSet n),
+                  form,
+                  formMustEmit,
+                  stationNid = Nothing,
+                  attached = mempty,
+                  loopGaps = [],
+                  extraDones,
+                  clean = False,
+                  progress = aimed.progress
+                }
+      _ -> []
+    outerBranchesResolve n bs =
+      any (isJust . combineLandings targetCtx) $
+        combineAlts
+          [ [ls | res <- branchAt n b, Right ls <- [res.outcome]]
+          | b <- toList bs
+          ]
+    branchAt n b =
+      resolveBranch g False True (singletonSet n) b targetCtx
     -- branch resolutions are shared across root-alternative combinations
     -- and pin choices via lazily-evaluated caches: without them the same
     -- branch is re-resolved once per combination, which multiplies
@@ -1429,6 +1899,14 @@ residualRootedAlts startNid g r = ordNub do
     -- pin candidates for a join no branch landed at (§5.2): the agreed
     -- terminal of the gapped branches' resolved suffixes, plus the nodes
     -- the target's loops fully resolve at
+    targetLoopPins
+      | null r.target.loops = mempty
+      | otherwise =
+          setFromList
+            [ n
+            | n <- toList (nidSet g),
+              any (.resolved) (processLoops g n r.target.loops)
+            ]
     reachPins exc probe =
       let reaches =
             [ rs
@@ -1440,30 +1918,35 @@ residualRootedAlts startNid g r = ordNub do
           reachAgreed
             | null reaches = mempty
             | otherwise = intersectAll reaches
-          loopPins
-            | null r.target.loops = mempty
-            | otherwise =
-                setFromList
-                  [ n
-                  | n <- toList (nidSet g),
-                    any (.resolved) (processLoops g n r.target.loops)
-                  ]
-       in (reachAgreed `union` loopPins) `difference` exc
+       in (reachAgreed `union` targetLoopPins) `difference` exc
     demote (b, res) = case res.outcome of
       Right _ ->
         (b, brRes False [] (Left [Gap (AtStart (singletonSet b)) Nothing]))
       Left _ -> (b, res)
-    -- when the join stays unpinned, instantiation mints a fresh join node
-    -- all residual branches must meet at; a partially-resolved branch
-    -- residual that reuses its suffix (or resolved tail structure) lands
-    -- at a concrete existing node instead, so the safe unpinned residual
-    -- recreates every unresolved branch wholesale, running to the join.
-    -- Suffix reuse returns as the reach-pinned minimality alternative
-    -- (§5.2), where the pin makes it sound.
-    demoteGapped (b, res) = case res.outcome of
-      Right _ -> (b, res)
+    -- When the join stays unpinned, instantiation mints a fresh join node
+    -- all residual branches must meet at. A gap ending at that unpinned
+    -- join is already sound and can keep its forward progress. A gap that
+    -- reuses a suffix (or resolved tail structure) ends at a concrete
+    -- existing node instead, so its safe alternative recreates the branch
+    -- wholesale. Suffix reuse returns as the reach-pinned minimality
+    -- alternative (§5.2), where the pin makes it sound.
+    demoteGapped pair@(b, res) = case res.outcome of
+      Right _ -> pair
+      Left gaps
+        | not res.freshTargetUnsafe,
+          isNothing res.reach,
+          all (isNothing . (.end)) gaps ->
+            pair
       Left _ ->
-        (b, BrRes res.progress [] (Left [Gap (AtStart (singletonSet b)) Nothing]) res.reach Nothing)
+        ( b,
+          BrRes
+            res.progress
+            []
+            (Left [Gap (AtStart (singletonSet b)) Nothing])
+            res.reach
+            Nothing
+            False
+        )
     -- a resolved branch whose landing excludes the pin is re-aimed like a
     -- gapped one (its landing was a coincidence the pin doesn't use)
     rerunOne p info b res = case res.outcome of
@@ -1516,6 +1999,7 @@ finishRooted g r entries targetPin results = do
             main = Nothing,
             extras = [],
             pin = targetPin,
+            resume = Just finalLanding,
             agreed = landingsAgree
           }
     else do
@@ -1557,6 +2041,10 @@ finishRooted g r entries targetPin results = do
             main,
             extras = offMembers <> allDones <> attachedTargetDone,
             pin = targetPin,
+            resume = case r.target.anchor of
+              Unanchored ->
+                justIfTrue landingsAgree (intersectAll landings)
+              _ -> singletonSet <$> targetPin,
             agreed = landingsAgree
           }
 
@@ -1641,6 +2129,142 @@ spec_pathResidualsUnresolvedBy = do
   describe "sequence matches" do
     testResiduals [edge' 1 "a" 2, edge' 2 "b" 3] "[a /| b]" "%never"
     testResiduals [edge' 1 "a" 2] "[a /| b]" "[@2<b]"
+    -- A forward gap that already runs to an unpinned join stays partial;
+    -- there is no concrete suffix endpoint that would conflict with the
+    -- fresh join minted while creating the residual.
+    testResiduals [edge' 3 "e" 2] "[@2<~e /| z]>@" "[@3<z]>@"
+    -- The first c can match the self-loop, but the self-loop-free reading
+    -- recovers @2 as the join-midpoint seam from the surviving ~baz tail.
+    testResidualAlts
+      [edge' 1 "c" 1, edge' 3 "baz" 2]
+      "[@<c /@| ~baz]>@"
+      [ "[@1<c /@| ~baz]>@",
+        "[@1<c]>@2",
+        "[@1<~baz]>@3",
+        "[@1<~baz]>@"
+      ]
+    -- The missing ~foo branch must meet its resolved ~x sibling at @1.
+    -- Keeping only the terminal gap with an unpinned target would mint a
+    -- different landing and violate the residual invariant.
+    testResidualAlts
+      [edge' 1 "x" 2, edge' 2 "b" 1]
+      "[@<~b /@| (~x & ~foo)]>@"
+      ["[@1<~b /@| (~x & ~foo)]>@", "[@2<~foo]>@1"]
+    testResidualAlts
+      [edge' 1 "baz" 2, edge' 2 "x" 1, edge' 3 "e" 2]
+      "[@<(baz & ~x) /| (a & ~e)]>@"
+      ["[@1<(baz & ~x) /| (a & ~e)]>@", "[@2<a]>@3"]
+    testResidualAlts
+      [ edge' 1 "e" 1,
+        edge' 1 "e" 3,
+        edge' 2 "d" 1,
+        edge' 4 "z" 3
+      ]
+      "[@<(~d /@2| ~d & e) /| ~z]>@"
+      ["[@1<(~d /@2| ~d & e) /| ~z]>@", "[@2<~d]>@3"]
+    testResidualAlts
+      [ edge' 1 "a" 1,
+        edge' 1 "x" 1,
+        edge' 2 "a" 1,
+        edge' 2 "baz" 4
+      ]
+      "[@<(~a & x) /@| baz]>@4"
+      ["[@1<baz]>@4", "[@1<x]>@2"]
+    testResidualAlts
+      [edge' 1 "foo" 2, edge' 1 "y" 2, edge' 3 "c" 2]
+      "[@1<y /| (~foo & ~c)]>@"
+      [ "[@1<y /| (~foo & ~c)]>@",
+        "[@2<~c]>@1",
+        "[@2<~foo]>@3"
+      ]
+    testResidualAlts
+      [edge' 2 "d" 1, edge' 3 "b" 2, edge' 3 "z" 4]
+      "[~d /@2| ~b /@| ~z]>@"
+      [ "[@3<~z]>@",
+        "[~d /@2| ~b /@| ~z]>@",
+        "[@3<~z]>@3",
+        "[@2<~b]>@4"
+      ]
+    testResidualAlts
+      [ edge' 2 "z" 2,
+        edge' 2 "z" 3,
+        edge' 2 "bar" 4,
+        edge' 2 "bar" 3
+      ]
+      "[@2<(z & bar) /| x]>@"
+      ["[@3<x]>@", "[@2<(z & bar) /| x]>@"]
+    testResidualAlts
+      [edge' 2 "c" 2, edge' 3 "x" 3, edge' 3 "a" 3]
+      "[@2[c]<~c]>@[x & ~a]"
+      ["@2[x & ~a]", "[@2<~c]>@3"]
+    testResiduals
+      [edge' 2 "e" 3, edge' 4 "e" 3, edge' 3 "a" 5]
+      "[@2<(e & ~x /| ~a) /| ~e]>@4"
+      "[@2<~x]>@5"
+    testResidualAlts
+      [edge' 1 "z" 2, edge' 2 "baz" 1, edge' 3 "z" 2, edge' 4 "a" 3]
+      "[@<z /@2| (baz & ~z) /| ~a]>@4"
+      ["[@1<~a]>@4", "[@2<baz]>@3"]
+    testResidualAlts
+      [edge' 2 "b" 1, edge' 2 "x" 4, edge' 4 "z" 5, edge' 3 "z" 5]
+      "[@1<~b /@2| (bar & x) /| z]>@5"
+      ["[@2<bar]>@4", "[@2<bar]>@3"]
+    -- The baz branch's continuation progresses from @4, not from the
+    -- smaller fan-out landing @2. The failed ~y sibling must meet that
+    -- actual pair point or the two residual pieces are incompatible.
+    testResidualAlts
+      [edge' 3 "baz" 2, edge' 3 "baz" 4, edge' 4 "b" 5]
+      "[@1<~y /@2| ~baz /@| (baz & ~y) /| b /@| (~b & ~y)]>@"
+      [ "[@1<~y /@2| ~baz /@| (baz & ~y) /| b /@| (~b & ~y)]>@",
+        "[@1<~y]>@2 + [@3<~y & @5<~y]>@4"
+      ]
+    -- Per-arrival continuation tracking must map a failed singleton back to
+    -- the intersecting branch's larger fan-out set. Equality would miss it
+    -- and incorrectly report the whole path as resolved.
+    testResidualAlts
+      [ edge' 1 "foo" 1,
+        edge' 2 "baz" 3,
+        edge' 4 "foo" 1,
+        edge' 3 "z" 1
+      ]
+      "[@1<(~foo & ~z) /| ~baz]>@"
+      [ "[@1<(~foo & ~z) /| ~baz]>@",
+        "[@1<~foo]>@3",
+        "[@1<~z /@1| ~baz]>@2",
+        "[@1<~z /@4| ~baz]>@2"
+      ]
+    -- A gapped nested intersection still carries the terminal reached by
+    -- its resolved ~d sibling. The enclosing intersection must propagate
+    -- that reach so its outer join can pin the c and ~bar repairs there.
+    testResidualAlts
+      [edge' 1 "baz" 2, edge' 4 "d" 3, edge' 3 "foo" 2]
+      "[@1<baz /@2| (~foo /| (~d & c) & ~bar)]>@"
+      [ "[@1<baz /@2| (~foo /| (~d & c) & ~bar)]>@",
+        "[@3<c & @2<~bar]>@4"
+      ]
+    -- Re-aiming the failed ~x branch through @1 would make its surviving x
+    -- tail land at @5, while the working ~foo sibling's tail lands at @4.
+    -- Only @3 is a compatible pair junction for the shared y continuation.
+    testResiduals
+      [edge' 1 "x" 5, edge' 3 "foo" 2, edge' 3 "x" 4]
+      "[~foo /@2| ((~x & ~foo) /| x & baz) /| y]>@6"
+      "[~foo]>@2 + [@2<~x]>@3 + [@2<baz /@4| y]>@6"
+    -- The unpinned outer join cannot keep only the missing half of the
+    -- inner `foo & baz` meet: instantiation would aim `baz` at a fresh
+    -- node while the surviving `foo` still lands at @5. Its safe fallback
+    -- recreates the whole branch; the pinned alternatives remain minimal.
+    testResidualAlts
+      [ edge' 1 "d" 1,
+        edge' 2 "x" 3,
+        edge' 3 "a" 4,
+        edge' 4 "foo" 5,
+        edge' 5 "baz" 2
+      ]
+      "[@1<~d & @2<x /@3| (a /| (foo & baz) & a) & @2<~baz]>@"
+      [ "[@1<~d & @2<x /@3| (a /| (foo & baz) & a) & @2<~baz]>@",
+        "[@4<foo & @4<baz & @3<a & @2<~baz]>@1",
+        "[@1<~d & @4<baz & @3<a]>@5"
+      ]
     -- we want to keep the resulting expression minimally constrained; so we
     -- don't e.g. specialize "c /| d" to "c /@2| d"
     testResiduals
@@ -1692,6 +2316,32 @@ spec_pathResidualsUnresolvedBy = do
       testResiduals [edge' 1 "a" 2, edge' 3 "c" 2] "[a /@[b/|c]| d]" "[@3<~b /@2| d]"
       testResiduals [edge' 1 "a" 2] "[a /@2[b]| c]" "[@2[b]<c]"
       testResiduals [edge' 1 "a" 2] "[a /@[b & c]| d]" "[@2[b & c]<d]"
+
+    describe "with explicit join midpoints" do
+      testResidualAlts
+        [ edge' 2 "a" 3,
+          edge' 4 "b" 5,
+          edge' 4 "b" 3,
+          edge' 4 "e" 1
+        ]
+        "[@1<~e /@| b /@| (~a & ~b)]>@"
+        [ "[@1<~e /@| b /@| (~a & ~b)]>@",
+          "[@3<~b]>@2",
+          "[@3<~a]>@4",
+          "[@5<~a]>@4"
+        ]
+
+    describe "with implicit pair-point disagreements" do
+      testResidualAlts
+        [ edge' 3 "bar" 1,
+          edge' 1 "x" 1,
+          edge' 4 "bar" 5,
+          edge' 5 "e" 1
+        ]
+        "[@1<((~x & ~e) /| (~b & ~bar) & ~y) /| ~foo]>@2"
+        [ "[@3<~foo]>@2 + [@1<~b & @1<~y]>@3 + [@1<~e]>@1",
+          "[@1<~x /@5| ~b & @1<~y]>@4 + [@4<~foo]>@2"
+        ]
 
   describe "keeps deconstructed loops as deterministic as possible" do
     testResiduals
@@ -1783,6 +2433,18 @@ spec_pathResidualsUnresolvedBy = do
     testResiduals [edge' 1 "a" 2] "[a] + [b]" "[b]"
     testResiduals [edge' 1 "a" 2] "[@<a & @<b]>@ + [c]" "[@1<b]>@2 + [c]"
     testResiduals [edge' 1 "a" 2] "[@<a]>@ + [@<a & @<b]>@" "[@1<b]>@2"
+    testResidualAlts
+      [ edge' 1 "a" 2,
+        edge' 1 "a" 3,
+        edge' 1 "c" 4,
+        edge' 1 "c" 5
+      ]
+      "[a /| b] + [c /| d]"
+      [ "[@2<b] + [@4<d]",
+        "[@3<b] + [@4<d]",
+        "[@2<b] + [@5<d]",
+        "[@3<b] + [@5<d]"
+      ]
 
   describe "edge cases" do
     describe "multiple incoming sources" do
@@ -1894,6 +2556,12 @@ spec_pathResidualsUnresolvedBy = do
       testResiduals [edge' 1 "a" 2] "[a]>!{@2}" "[a]>!{@2}"
       -- @2 is not excluded, resolves fine
       testResiduals [edge' 1 "a" 2] "[a]>!{@1}" "%never"
+      -- A node excluded by the target is not a pin candidate merely
+      -- because the target's loop happens to resolve there.
+      testResiduals
+        [edge' 4 "b" 2, edge' 3 "d" 3]
+        "[@2<~b]>!{@3}[~d]"
+        "@4[~d]"
 
     describe "target anchor mismatch" do
       -- Reached @2 but target requires @3, unchanged
@@ -1935,11 +2603,15 @@ spec_pathResidualsUnresolvedBy = do
         [edge' 1 "a" 2, edge' 2 "c" 1]
         "@[(a & b) /| c]"
         "[@1<b]>@2"
-      -- Both exist but reach different nodes; c gets split with residuals from both nodes
-      testResiduals
+      -- Both exist but reach different nodes; the unanchored midpoint
+      -- explodes per branch pair, so c continues from both frontiers.
+      testResidualAlts
         [edge' 1 "a" 2, edge' 1 "b" 3]
         "@[(a & b) /| c]"
-        "[@2<c & @3<c]>@1"
+        [ "[@2<c & @3<c]>@1",
+          "[@2<~b & @2<c]>@1",
+          "[@3<~a & @3<c]>@1"
+        ]
 
       -- Intersection in bs1 of rooted path (not loop)
       testResiduals
@@ -2031,6 +2703,21 @@ spec_pathResidualsUnresolvedBy = do
         "@2[c]"
 
     describe "multi-root residuals" do
+      -- The nested JoinPoint has no forward landing after y disappears,
+      -- but the surviving outer ~x branch recovers @2 as its seam. Pinning
+      -- the nested join there exposes the exact one-edge repair.
+      testResidualAlts
+        [edge' 3 "x" 2, edge' 1 "d" 3]
+        "[[y]>@<~x & @<d]>@3"
+        ["[y /@| ~x]>@3", "[y]>@2"]
+      -- A partial nested root with an Unanchored target cannot feed an
+      -- outer branch by pinning that target. Reverse the missing segment
+      -- between its concrete seams instead, so the target stays unpinned
+      -- while the surviving outer branch can be reused.
+      testResiduals
+        [edge' 1 "x" 2, edge' 2 "d" 3]
+        "[[e & @<x]<d]>@"
+        "[@2<~e]>@1"
       -- one connected multi-root alternative: the nested root's unresolved
       -- branch b chains through the nested target @3 into the outer branch
       -- c, and the other root's branch d stays in the same deterministic
@@ -2063,11 +2750,10 @@ spec_pathResidualsUnresolvedBy = do
 
         resolvesIn :: Graph Text () -> NID -> NormalizedPath Anchor -> Bool
         resolvesIn graph startNid path =
-          resolveNPath startNid (leastConstrainedNormalizedPath path)
+          resolveNPathExists startNid (leastConstrainedNormalizedPath path)
             & runInMemoryGraphMetadataEditing
             & evalState graph
             & run
-            & \(resolved :: ResolvedPath) -> not (null resolved.path.union)
 
     -- The remaining `==>`s are guards, not filters: 'coveredPathFrom'
     -- makes the resolvesIn precondition hold by construction (up to
