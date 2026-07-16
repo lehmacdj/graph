@@ -1669,35 +1669,7 @@ resolveRootAlts startNid g = \case
         let exactUnanchored a = do
               guard (nested.target.anchor == Unanchored)
               landing <- toList (fromMaybe mempty a.resume)
-              aimed <-
-                residualRootedAlts
-                  startNid
-                  g
-                  nested
-                    { target =
-                        nested.target {anchor = Specific landing}
-                    }
-              guard (isNothing aimed.landed)
-              reversed <-
-                maybeToList $
-                  maybe
-                    (Just [])
-                    (invertResidualAt startNid landing)
-                    aimed.main
-              let members = reversed <> aimed.extras
-              guard (not (null members))
-              pure
-                RootInfo
-                  { frontier = Just (singletonSet landing),
-                    form = specificDp landing,
-                    formMustEmit = False,
-                    stationNid = Nothing,
-                    attached = mempty,
-                    loopGaps = [],
-                    extraDones = members,
-                    clean = False,
-                    progress = aimed.progress
-                  }
+              unanchoredRootRepairAt startNid g nested landing
 
             fallback a =
               let (form, formMustEmit, extraDones, subProgress) =
@@ -1726,6 +1698,42 @@ resolveRootAlts startNid g = \case
                       progress = subProgress
                     }
          in exactUnanchored sub <> [fallback sub]
+
+-- | The exact-repair alternatives for a nested root with an Unanchored
+-- target, given a concrete landing the outer structure identified: rerun
+-- the nested path toward that landing, then reverse the residual between
+-- its concrete seams ('invertResidualAt') so the Unanchored target stays
+-- unpinned in the result (§5) while the created edges still land at the
+-- recovered seam.
+unanchoredRootRepairAt ::
+  NID -> Graph Text () -> RootedDeterministicPath Anchor -> NID -> [RootInfo]
+unanchoredRootRepairAt startNid g nested landing = do
+  aimed <-
+    residualRootedAlts
+      startNid
+      g
+      nested {target = nested.target {anchor = Specific landing}}
+  guard (isNothing aimed.landed)
+  reversed <-
+    maybeToList $
+      maybe
+        (Just [])
+        (invertResidualAt startNid landing)
+        aimed.main
+  let members = reversed <> aimed.extras
+  guard (not (null members))
+  pure
+    RootInfo
+      { frontier = Just (singletonSet landing),
+        form = specificDp landing,
+        formMustEmit = False,
+        stationNid = Nothing,
+        attached = mempty,
+        loopGaps = [],
+        extraDones = members,
+        clean = False,
+        progress = aimed.progress
+      }
 
 branchFromFrontier ::
   Graph Text () -> EndCtx -> Maybe (Set NID) -> DPBranch Anchor -> [BrRes]
@@ -1829,12 +1837,18 @@ residualRootedAlts startNid g r = ordNub do
       [ resolveRootAlts startNid g rk <> recoveredNestedRoots rk bs
       | (rk, bs) <- rootPairs
       ]
-    -- A partial nested JoinPoint root may have no frontier of its own, even
-    -- though an outer branch's surviving tail identifies the missing seam.
-    -- Search only nodes from which the whole outer branch set already
-    -- resolves, then rerun the nested root toward that concrete seam.
+    -- A partial nested JoinPoint or Unanchored root may have no frontier of
+    -- its own, even though an outer branch's surviving tail identifies the
+    -- missing seam. Search only nodes from which the whole outer branch set
+    -- already resolves, then rerun the nested root toward that concrete
+    -- seam. A recovered JoinPoint target pins there (§5.2); an Unanchored
+    -- target stays unpinned via the reversed exact repair (§5).
     recoveredNestedRoots rk bs = case rk of
       Rooted nested
+        | Unanchored <- nested.target.anchor -> do
+            n <- toList (nidSet g)
+            guard (outerBranchesResolve n bs)
+            unanchoredRootRepairAt startNid g nested n
         | JoinPoint exc <- nested.target.anchor -> do
             n <- toList (nidSet g `difference` exc)
             guard (outerBranchesResolve n bs)
@@ -2718,6 +2732,15 @@ spec_pathResidualsUnresolvedBy = do
         [edge' 1 "x" 2, edge' 2 "d" 3]
         "[[e & @<x]<d]>@"
         "[@2<~e]>@1"
+      -- A nested Unanchored-target root whose branch is entirely missing:
+      -- nothing of the nested path survives, so the seam @2 is identified
+      -- only by the surviving outer branch b. The exact repair reruns the
+      -- nested root toward that seam and reverses it, keeping the
+      -- Unanchored target unpinned (regression: property 2 exactness).
+      testResiduals
+        [edge' 2 "b" 3]
+        "[[a]<b]>@3"
+        "[@2<~a]>@1"
       -- one connected multi-root alternative: the nested root's unresolved
       -- branch b chains through the nested target @3 into the outer branch
       -- c, and the other root's branch d stays in the same deterministic
