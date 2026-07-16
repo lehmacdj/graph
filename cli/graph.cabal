@@ -104,6 +104,7 @@ library
       Models.NormalizedPath.Normalize
       Models.NormalizedPath.Parse
       Models.NormalizedPath.ParseSpec
+      Models.NormalizedPath.ResidualsBench
       Models.NormalizedPath.TestUtils
       Models.NormalizedPath.TH
       Models.NormalizedPath.Traversals
@@ -213,6 +214,7 @@ library
   cpp-options: -DDEBUG
   build-depends:
       Glob
+    , QuickCheck
     , SHA
     , aeson
     , ansi-terminal
@@ -369,6 +371,160 @@ executable ge
   cpp-options: -DDEBUG
   build-depends:
       Glob
+    , QuickCheck
+    , SHA
+    , aeson
+    , ansi-terminal
+    , attoparsec
+    , base >=4.7 && <5
+    , base-orphans
+    , base64
+    , base64-bytestring
+    , bytestring
+    , classy-prelude
+    , comonad
+    , conduit
+    , conduit-extra
+    , constraints
+    , containers
+    , deepseq
+    , directory
+    , directory-tree
+    , exceptions
+    , file-io
+    , filepath
+    , foreign-store
+    , free
+    , generic-data
+    , generic-lens
+    , ghc-hs-meta
+    , graph
+    , haskeline
+    , hspec
+    , hspec-expectations
+    , html-conduit
+    , http-conduit
+    , http-types
+    , indexed-traversable
+    , ixset-typed
+    , lens
+    , lens-regex-pcre
+    , megaparsec
+    , modern-uri
+    , mono-traversable
+    , mtl
+    , optparse-applicative
+    , ordered-containers
+    , parser-combinators
+    , pcre-light
+    , polysemy
+    , polysemy-plugin
+    , polysemy-readline
+    , polysemy-zoo
+    , prettyprinter
+    , prettyprinter-ansi-terminal
+    , profunctors
+    , random
+    , random-shuffle
+    , resourcet
+    , semigroupoids
+    , tasty
+    , tasty-discover
+    , tasty-golden
+    , tasty-hspec
+    , tasty-hunit
+    , tasty-quickcheck
+    , template-haskell
+    , temporary
+    , terminal-size
+    , text
+    , time
+    , transformers
+    , type-map
+    , typed-process
+    , unix
+    , unliftio
+    , vary
+    , vector
+    , witherable
+    , wreq
+    , xdg-basedir
+    , xml-conduit
+  default-language: Haskell2010
+  if os(darwin)
+    ghc-options: -fobject-code
+    extra-libraries:
+        objc
+    frameworks:
+        Foundation
+    build-depends:
+        inline-c
+      , inline-c-objc
+  else
+    ghc-options: -fprefer-byte-code -fbyte-code-and-object-code
+
+executable residuals-bench
+  main-is: Main.hs
+  other-modules:
+      Paths_graph
+  hs-source-dirs:
+      app/residuals-bench
+  default-extensions:
+      BangPatterns
+      BlockArguments
+      CApiFFI
+      ConstraintKinds
+      DataKinds
+      DefaultSignatures
+      DeriveAnyClass
+      DeriveFoldable
+      DeriveFunctor
+      DeriveGeneric
+      DeriveLift
+      DeriveTraversable
+      DerivingStrategies
+      DerivingVia
+      DisambiguateRecordFields
+      DuplicateRecordFields
+      FlexibleContexts
+      FlexibleInstances
+      FunctionalDependencies
+      GADTs
+      GeneralizedNewtypeDeriving
+      ImportQualifiedPost
+      ImpredicativeTypes
+      LambdaCase
+      LexicalNegation
+      MultiParamTypeClasses
+      NamedFieldPuns
+      NoFieldSelectors
+      NoImplicitPrelude
+      OverloadedLabels
+      OverloadedRecordDot
+      OverloadedStrings
+      PatternSynonyms
+      PolyKinds
+      QuantifiedConstraints
+      QuasiQuotes
+      RankNTypes
+      RecordWildCards
+      RoleAnnotations
+      ScopedTypeVariables
+      StandaloneDeriving
+      StandaloneKindSignatures
+      StrictData
+      TemplateHaskellQuotes
+      TupleSections
+      TypeApplications
+      TypeFamilies
+      TypeOperators
+      TypeSynonymInstances
+      ViewPatterns
+  ghc-options: -Wall -fplugin=Polysemy.Plugin -flate-specialise -fspecialise-aggressively -threaded -rtsopts
+  cpp-options: -DDEBUG
+  build-depends:
+      Glob
+    , QuickCheck
     , SHA
     , aeson
     , ansi-terminal
@@ -522,6 +678,7 @@ test-suite graph-test
   cpp-options: -DDEBUG
   build-depends:
       Glob
+    , QuickCheck
     , SHA
     , aeson
     , ansi-terminal

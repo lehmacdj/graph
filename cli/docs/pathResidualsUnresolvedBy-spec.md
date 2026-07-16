@@ -479,3 +479,8 @@ timeouts; the complete CLI suite is also green.
   (single-word tasty patterns only; see `docs/Testing.md`). On this
   machine stack needs `--ghc-options='-framework Foundation'` (TH linker
   workaround).
+- Benchmark/profiling harness:
+  `src/Models/NormalizedPath/ResidualsBench.hs` — deterministic sweeps of
+  generated cases with per-case timing
+  (`stack exec residuals-bench -- --cases 1000`; see the module haddock,
+  and `profile-build.sh` for cost-center profiles).

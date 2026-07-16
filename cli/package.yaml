@@ -71,6 +71,7 @@ dependencies:
 - prettyprinter
 - prettyprinter-ansi-terminal
 - profunctors
+- QuickCheck
 - random
 - random-shuffle
 - resourcet
@@ -196,6 +197,15 @@ executables:
     - -threaded
     - -rtsopts
     - -with-rtsopts=-N
+    dependencies:
+    - graph
+
+  residuals-bench:
+    main:                Main.hs
+    source-dirs:         app/residuals-bench
+    ghc-options:
+    - -threaded
+    - -rtsopts
     dependencies:
     - graph
 
