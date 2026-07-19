@@ -50,7 +50,19 @@ runReadlineHaskeline ::
   HIO.InputState ->
   Eff (Readline : effs) ~> Eff effs
 runReadlineHaskeline hd = interpret \env -> \case
-  GetInputLine prompt -> liftIO $ HIO.queryInput hd (H.getInputLine prompt)
+  GetInputLine prompt -> do
+    -- While haskeline reads a line the terminal is in raw mode and ctrl-c
+    -- never raises SIGINT; it is only seen as an 'H.Interrupt' by
+    -- haskeline's own (InputT-level) @withInterrupt@. Run under it inside
+    -- the session, then rethrow in this thread so the effect-level
+    -- 'HandleInterrupt' sees a uniform 'H.Interrupt'.
+    result <-
+      liftIO . HIO.queryInput hd $
+        H.handleInterrupt (pure Nothing) $
+          H.withInterrupt (Just <$> H.getInputLine prompt)
+    case result of
+      Nothing -> liftIO $ E.throwIO H.Interrupt
+      Just line -> pure line
   OutputStr s -> liftIO $ HIO.queryInput hd (H.outputStr s)
   WithInterrupt m ->
     localSeqUnliftIO env \unlift -> withInterruptIO (unlift m)
