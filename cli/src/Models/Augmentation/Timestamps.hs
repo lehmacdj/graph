@@ -1,15 +1,15 @@
 module Models.Augmentation.Timestamps where
 
 import Graph.GraphMetadataEditing
-import Graph.Resolve
 import Graph.Paths
+import Graph.Resolve
 import Graph.SystemNodes
 import Models.Common
 import Models.Connect
-import Models.ResolvedPath
 import Models.NID
 import Models.Path.Simple
 import Models.Path.TH
+import Models.ResolvedPath
 import MyPrelude
 
 newtype Timestamps = Timestamps {timestamps :: Set UTCTime}
@@ -27,7 +27,7 @@ instance ShowableAugmentation Timestamps where
 fetchTimestamps ::
   (Members '[GraphMetadataReading] r) =>
   NID ->
-  Sem r Timestamps
+  Eff r Timestamps
 fetchTimestamps nid = do
   mp <-
     resolvePath
@@ -57,5 +57,5 @@ writeTimestamps ::
   (Members '[GraphMetadataEditing] r) =>
   NID ->
   Timestamps ->
-  Sem r ()
+  Eff r ()
 writeTimestamps _ _ = error "unimplemented"

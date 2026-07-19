@@ -64,10 +64,10 @@ dependencies:
 - ordered-containers
 - parser-combinators
 - pcre-light
-- polysemy
-- polysemy-plugin
-- polysemy-readline
-- polysemy-zoo
+- effectful
+- effectful-core
+- effectful-plugin
+- effectful-th
 - prettyprinter
 - prettyprinter-ansi-terminal
 - profunctors
@@ -154,7 +154,7 @@ default-extensions:
 
 ghc-options:
 - -Wall
-- -fplugin=Polysemy.Plugin
+- -fplugin=Effectful.Plugin
 - -flate-specialise
 - -fspecialise-aggressively
 

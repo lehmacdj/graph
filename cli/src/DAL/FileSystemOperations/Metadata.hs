@@ -5,7 +5,6 @@ module DAL.FileSystemOperations.Metadata where
 import DAL.DTO
 import DAL.DirectoryFormat
 import DAL.RawGraph
-import Error.Missing
 import Error.UserError
 import Models.NID
 import Models.Node
@@ -13,19 +12,19 @@ import MyPrelude
 import System.Directory (removeFile)
 import System.FileCoordination
 
-data GraphMetadataFilesystemOperations m a where
+data GraphMetadataFilesystemOperations :: Effect where
   ReadNodeMetadata :: NID -> GraphMetadataFilesystemOperations m (Maybe (Node Text ()))
   WriteNodeMetadata :: Node Text () -> GraphMetadataFilesystemOperations m ()
   DeleteNodeMetadata :: NID -> GraphMetadataFilesystemOperations m ()
 
-makeSem ''GraphMetadataFilesystemOperations
+makeEffect ''GraphMetadataFilesystemOperations
 
 readNodeMetadata_ ::
-  (Members [Embed IO, Error UserError] effs) =>
+  (Members [IOE, Error UserError] effs) =>
   Bool ->
   NID ->
   FilePath ->
-  Sem effs (Maybe (Node Text ()))
+  Eff effs (Maybe (Node Text ()))
 readNodeMetadata_ shouldCoordinate nid path = withEarlyReturn do
   result <- embedCatchingErrors $
     (if shouldCoordinate then coordinateReading path False defaultReadingOptions else ($ path)) $
@@ -35,11 +34,11 @@ readNodeMetadata_ shouldCoordinate nid path = withEarlyReturn do
   Just <$> decodeNode nid serialized
 
 writeNodeMetadata_ ::
-  (Members [Embed IO, Error UserError] effs) =>
+  (Members [IOE, Error UserError] effs) =>
   Bool ->
   FilePath ->
   Node Text () ->
-  Sem effs ()
+  Eff effs ()
 writeNodeMetadata_ shouldCoordinate path node = do
   let dto = nodeToDTO node
   let serialized = toStrict $ encodeJSON dto
@@ -49,10 +48,10 @@ writeNodeMetadata_ shouldCoordinate path node = do
         writeFile path' serialized
 
 deleteNodeMetadata_ ::
-  (Members [RawGraph, Embed IO, Error UserError] effs) =>
+  (Members [RawGraph, IOE, Error UserError] effs) =>
   Bool ->
   FilePath ->
-  Sem effs ()
+  Eff effs ()
 deleteNodeMetadata_ shouldCoordinate path = do
   embedCatchingErrors $
     (if shouldCoordinate then coordinateWriting path False defaultWritingOptions else ($ path)) $
@@ -60,11 +59,11 @@ deleteNodeMetadata_ shouldCoordinate path = do
         removeFile path'
 
 runGraphMetadataFilesystemOperationsIO ::
-  (Members [RawGraph, Embed IO, Error UserError] r) =>
+  (Members [RawGraph, IOE, Error UserError] r) =>
   Bool ->
-  Sem (GraphMetadataFilesystemOperations : r) a ->
-  Sem r a
-runGraphMetadataFilesystemOperationsIO useCoordination = interpret \case
+  Eff (GraphMetadataFilesystemOperations : r) a ->
+  Eff r a
+runGraphMetadataFilesystemOperationsIO useCoordination = interpret \_ -> \case
   ReadNodeMetadata nid -> do
     path <- getMetadataFile nid
     node <- readNodeMetadata_ useCoordination nid path
@@ -83,11 +82,11 @@ runGraphMetadataFilesystemOperationsIO useCoordination = interpret \case
     deleteNodeMetadata_ useCoordination =<< getMetadataFile nid
 
 runGraphMetadataFilesystemOperationsDryRun ::
-  (Members [RawGraph, Embed IO, Error UserError] r) =>
+  (Members [RawGraph, IOE, Error UserError] r) =>
   Bool ->
-  Sem (GraphMetadataFilesystemOperations : r) a ->
-  Sem r a
-runGraphMetadataFilesystemOperationsDryRun useCoordination = interpret \case
+  Eff (GraphMetadataFilesystemOperations : r) a ->
+  Eff r a
+runGraphMetadataFilesystemOperationsDryRun useCoordination = interpret \_ -> \case
   ReadNodeMetadata nid ->
     runGraphMetadataFilesystemOperationsIO useCoordination (readNodeMetadata nid)
   WriteNodeMetadata node -> say $ "Would write node: " <> tshow node

@@ -20,11 +20,11 @@ dirToLens = \case
   In -> #incoming
   Out -> #outgoing
 
-data ReportMissing t m r where
+data ReportMissing t :: Effect where
   NodeMissing :: NID -> ReportMissing t m ()
   ConnectMissing :: Direction -> NID -> Connect t -> ReportMissing t m ()
 
-makeSem ''ReportMissing
+makeEffect ''ReportMissing
 
 deriving instance (Eq t) => Eq (ReportMissing t m r)
 
@@ -53,9 +53,9 @@ instance (Show t) => Show (ReportMissing t m r) where
 
 reportToConsole ::
   forall t effs.
-  (Member Echo effs, Show t) =>
-  Sem (ReportMissing t : effs) ~> Sem effs
-reportToConsole = interpret $ \case
+  (Echo :> effs, Show t) =>
+  Eff (ReportMissing t : effs) ~> Eff effs
+reportToConsole = interpret \_ -> \case
   c@NodeMissing {} -> echo $ show c
   c@ConnectMissing {} -> echo $ show c
 
@@ -66,9 +66,9 @@ dirToCombineEdges d nid c
 
 fixErrors ::
   forall t effs.
-  (Member (WriteGraph t) effs, ValidTransition t) =>
-  Sem (ReportMissing t : effs) ~> Sem effs
-fixErrors = interpret $ \case
+  (WriteGraph t :> effs, ValidTransition t) =>
+  Eff (ReportMissing t : effs) ~> Eff effs
+fixErrors = interpret \_ -> \case
   NodeMissing nid -> touchNode @t nid
   ConnectMissing d nid c@(Connect _ nid') -> do
     touchNode @t nid
@@ -77,29 +77,29 @@ fixErrors = interpret $ \case
 
 fsck ::
   forall t effs.
-  (Member (ReportMissing t) effs, HasGraph t effs) =>
-  Sem effs ()
+  (ReportMissing t :> effs, HasGraph t effs) =>
+  Eff effs ()
 fsck = do
   ids <- nodeManifest @t
   forM_ ids $ checkNode @t
 
 reportMissingNode ::
   forall t effs.
-  (Member (ReportMissing t) effs) =>
-  Sem (Error Missing : effs) () ->
-  Sem effs ()
+  (ReportMissing t :> effs) =>
+  Eff (Error Missing : effs) () ->
+  Eff effs ()
 reportMissingNode e = handleError e $ \case
   Missing nid _ -> nodeMissing @t nid
 
 checkConnectExists ::
   forall t effs.
-  (Member (ReportMissing t) effs, HasGraph t effs) =>
+  (ReportMissing t :> effs, HasGraph t effs) =>
   Direction ->
   -- | nid of the node to check
   NID ->
   -- | connect to ensure existence of
   Connect t ->
-  Sem effs ()
+  Eff effs ()
 checkConnectExists dir nid c = reportMissingNode @t $ do
   n <- getNodeDatalessSem @t nid
   if has (dirToLens dir . folded . only c) n
@@ -111,9 +111,9 @@ swapConnect nid (Connect t nid') = (nid', Connect t nid)
 
 checkNode ::
   forall t effs.
-  (Member (ReportMissing t) effs, HasGraph t effs) =>
+  (ReportMissing t :> effs, HasGraph t effs) =>
   NID ->
-  Sem effs ()
+  Eff effs ()
 checkNode nid = reportMissingNode @t $ do
   -- every node needs to exist (error handled above)
   n <- getNodeDatalessSem @t nid

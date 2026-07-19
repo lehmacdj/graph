@@ -8,6 +8,7 @@ module Models.NormalizedPath.TestUtils
   )
 where
 
+import Effectful.State.Dynamic
 import Models.Edge
 import Models.Graph
 import Models.NID
@@ -16,7 +17,6 @@ import Models.NormalizedPath.Anchor
 import Models.NormalizedPath.Traversals
 import Models.NormalizedPath.Types
 import MyPrelude
-import Polysemy.State
 import System.Random
 
 -- | Generate a graph that fully resolves the given NormalizedPath.
@@ -50,10 +50,10 @@ graphResolvingPathFrom ::
   NormalizedPath Anchor ->
   Graph Text ()
 graphResolvingPathFrom gen startNid path =
-  let (edges, (_, pathNids)) =
-        run
-          . runState @[Edge Text] []
-          . runState gen
+  let ((pathNids, _), edges) =
+        runPureEff
+          . runStateLocal @[Edge Text] []
+          . runStateLocal gen
           $ do
             pathNids <- resolveAnchorNids startNid path
             traverseViaTransitions_ emitTransition pathNids
@@ -64,11 +64,11 @@ graphResolvingPathFrom gen startNid path =
         & insertEdges edges
   where
     emitTransition ::
-      (Member (State StdGen) r, Member (State [Edge Text]) r) =>
+      (State StdGen :> r, State [Edge Text] :> r) =>
       NID ->
       DPDirection ->
       NID ->
-      Sem r ()
+      Eff r ()
     emitTransition source direction target = do
       let emit label = modify @[Edge Text] $ case direction of
             DPOutgoing' _ -> (Edge source label target :)
@@ -84,9 +84,9 @@ graphResolvingPathFrom gen startNid path =
       DPOutgoing' t -> t
       DPIncoming' t -> t
 
-    generateLabel :: (Member (State StdGen) r) => Sem r Text
+    generateLabel :: (State StdGen :> r) => Eff r Text
     generateLabel = do
-      idx :: Int <- embedStateful $ uniformR (0, 25)
+      idx :: Int <- state $ uniformR (0, 25)
       pure $ singleton $ toEnum (fromEnum 'a' + idx)
 
 -- | Resolve every anchor of a path to a concrete NID, one NID per anchor
@@ -96,10 +96,10 @@ graphResolvingPathFrom gen startNid path =
 -- NIDs. JoinPoint exclusion sets are ignored: collisions with random NIDs
 -- are negligible.
 resolveAnchorNids ::
-  (Member (State StdGen) r) =>
+  (State StdGen :> r) =>
   NID ->
   NormalizedPath Anchor ->
-  Sem r (NormalizedPath NID)
+  Eff r (NormalizedPath NID)
 resolveAnchorNids startNid (NormalizedPath dps) =
   NormalizedPath . setFromList <$> traverse convertDp (toList dps)
   where
@@ -139,7 +139,7 @@ resolveAnchorNids startNid (NormalizedPath dps) =
       Specific nid -> pure nid
       _
         | isRoot -> pure startNid
-        | otherwise -> embedStateful uniform
+        | otherwise -> state uniform
 
 -- | Whether resolving this path requires several branches to meet at an
 -- Unanchored target. 'leastConstrainedNormalizedPath' turns a rooted path's

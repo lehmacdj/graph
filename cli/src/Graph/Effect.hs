@@ -11,6 +11,8 @@ where
 import Control.Lens hiding (transform)
 import DAL.Serialization qualified as S2
 import Data.Set qualified as Set
+import Effect.Input
+import Effectful.State.Dynamic
 import Error.UserError
 import Error.Warn
 import Models.Connect
@@ -20,19 +22,17 @@ import Models.Graph qualified as G
 import Models.NID
 import Models.Node
 import MyPrelude
-import Polysemy.Input
-import Polysemy.State
-import Utils.Polysemy
+import Utils.Effectful
 
-data ReadGraph t d m a where
+data ReadGraph t d :: Effect where
   GetNode :: NID -> ReadGraph t d m (Maybe (Node t d))
   NodeManifest :: ReadGraph t d m [NID]
 
-data ReadGraphDataless t m a where
+data ReadGraphDataless t :: Effect where
   GetNodeDataless :: NID -> ReadGraphDataless t m (Maybe (Node t (Maybe ByteString)))
 
-makeSem ''ReadGraph
-makeSem ''ReadGraphDataless
+makeEffect ''ReadGraph
+makeEffect ''ReadGraphDataless
 
 newtype IsDual = IsDual {isDual :: Bool}
   deriving (Show, Eq, Ord, Generic)
@@ -52,10 +52,10 @@ ifDualized dual f
 
 type Dualizeable = State IsDual
 
-dualize :: (Member Dualizeable effs) => Sem effs ()
+dualize :: (Dualizeable :> effs) => Eff effs ()
 dualize = modify @IsDual (omap not)
 
-data WriteGraph t m a where
+data WriteGraph t :: Effect where
   -- | make the node with that id exist
   TouchNode ::
     NID ->
@@ -77,66 +77,61 @@ data WriteGraph t m a where
     Maybe ByteString ->
     WriteGraph t m ()
 
-makeSem ''WriteGraph
+makeEffect ''WriteGraph
 
 type HasGraph t effs =
-  ( Member (ReadGraph t (Maybe ByteString)) effs,
-    Member (ReadGraphDataless t) effs,
-    Member (WriteGraph t) effs,
+  ( ReadGraph t (Maybe ByteString) :> effs,
+    ReadGraphDataless t :> effs,
+    WriteGraph t :> effs,
     ValidTransition t
   )
 
 -- | Run a graph computation in the io monad, using a directory in the
 -- serialization format to access the graph
 runReadGraphIO ::
-  ( Member (Embed IO) effs,
+  ( IOE :> effs,
     FromJSON t,
     ToJSON t,
     ValidTransition t
   ) =>
   FilePath ->
-  Sem (ReadGraph t (Maybe ByteString) ': effs) ~> Sem effs
-runReadGraphIO dir = runInputConst (IsDual False) . runReadGraphIODualizeable dir
+  Eff (ReadGraph t (Maybe ByteString) ': effs) ~> Eff effs
+runReadGraphIO dir =
+  runInputConst (IsDual False) . runReadGraphIODualizeable dir . inject
 
 -- | Run a graph computation in the io monad, using a directory in the
 -- serialization format to access the graph, while allowing for the
 -- possibility of the graph being dualized.
 runReadGraphIODualizeable ::
   forall t effs.
-  ( Member (Embed IO) effs,
+  ( IOE :> effs,
+    Input IsDual :> effs,
     FromJSON t,
     ToJSON t,
     ValidTransition t
   ) =>
   FilePath ->
-  Sem (ReadGraph t (Maybe ByteString) ': effs) ~> Sem (Input IsDual : effs)
-runReadGraphIODualizeable dir = reinterpret $ \case
+  Eff (ReadGraph t (Maybe ByteString) ': effs) ~> Eff effs
+runReadGraphIODualizeable dir = interpret \_ -> \case
   GetNode nid -> do
-    maybeN <-
-      errorToNothing $
-        -- writing type level lists in your code is not fun :(
-        -- kids: be careful when you choose haskell
-        S2.deserializeNodeF @t @(Error UserError : Input IsDual : effs) dir nid
+    maybeN <- errorToNothing $ S2.deserializeNodeF @t dir nid
     dual <- input
     pure $ maybeN <&> ifDualized dual dualizeNode
   NodeManifest -> S2.getAllNodeIds dir
 
 runReadGraphDatalessIODualizeable ::
   forall t effs.
-  ( Member (Embed IO) effs,
+  ( IOE :> effs,
+    Input IsDual :> effs,
     FromJSON t,
     ToJSON t,
     ValidTransition t
   ) =>
   FilePath ->
-  Sem (ReadGraphDataless t ': effs) ~> Sem (Input IsDual : effs)
-runReadGraphDatalessIODualizeable dir = reinterpret $ \case
+  Eff (ReadGraphDataless t ': effs) ~> Eff effs
+runReadGraphDatalessIODualizeable dir = interpret \_ -> \case
   GetNodeDataless nid -> do
-    maybeN <-
-      errorToNothing $
-        -- writing type level lists in your code is not fun :(
-        -- kids: be careful when you choose haskell
-        S2.deserializeNodeWithoutDataF @t @(Error UserError : Input IsDual : effs) dir nid
+    maybeN <- errorToNothing $ S2.deserializeNodeWithoutDataF @t dir nid
     dual <- input
     pure $ maybeN <&> ifDualized dual dualizeNode
 
@@ -144,58 +139,60 @@ runReadGraphDatalessIODualizeable dir = reinterpret $ \case
 -- dualizeable.
 runReadGraphDualizeableIO ::
   forall t effs.
-  ( Member (Embed IO) effs,
-    Member Dualizeable effs,
+  ( IOE :> effs,
+    Dualizeable :> effs,
     FromJSON t,
     ToJSON t,
     ValidTransition t
   ) =>
   FilePath ->
-  Sem (ReadGraph t (Maybe ByteString) ': effs) ~> Sem effs
+  Eff (ReadGraph t (Maybe ByteString) ': effs) ~> Eff effs
 runReadGraphDualizeableIO dir =
   runReaderAsState
     . runReadGraphIODualizeable dir
+    . inject
 
 -- | Run a graph in IO with the ambient ability for the graph to be
 -- dualizeable.
 runReadGraphDatalessDualizeableIO ::
   forall t effs.
-  ( Member (Embed IO) effs,
-    Member Dualizeable effs,
+  ( IOE :> effs,
+    Dualizeable :> effs,
     FromJSON t,
     ToJSON t,
     ValidTransition t
   ) =>
   FilePath ->
-  Sem (ReadGraphDataless t ': effs) ~> Sem effs
+  Eff (ReadGraphDataless t ': effs) ~> Eff effs
 runReadGraphDatalessDualizeableIO dir =
   runReaderAsState
     . runReadGraphDatalessIODualizeable dir
+    . inject
 
 -- run Dualizeable as a state that also flips the graph in a state to
 -- reflect its value
 -- runDualizeableState
---   :: Member (State (Graph t)) effs
---   => Sem (Dualizeable : effs) ~> Sem effs
+--   :: State (Graph t) :> effs
+--   => Eff (Dualizeable : effs) ~> Eff effs
 -- runDualizeableState = interpret $ modify dualize
 
-runDualizeable :: Sem (Dualizeable : effs) ~> Sem effs
-runDualizeable = map snd . runState (IsDual False)
+runDualizeable :: Eff (Dualizeable : effs) ~> Eff effs
+runDualizeable = map fst . runStateLocal (IsDual False)
 
 runReadGraphState ::
   forall t d effs a.
-  (Member (State (Graph t d)) effs) =>
-  Sem (ReadGraph t d ': effs) a ->
-  Sem effs a
-runReadGraphState = interpret $ \case
+  (State (Graph t d) :> effs) =>
+  Eff (ReadGraph t d ': effs) a ->
+  Eff effs a
+runReadGraphState = interpret \_ -> \case
   GetNode nid -> G.maybeLookupNode <$> get <*> pure nid
   NodeManifest -> keys . view #nodeMap <$> get @(Graph t d)
 
 runWriteGraphState ::
   forall t effs.
-  (Member (State (Graph t (Maybe ByteString))) effs, ValidTransition t) =>
-  Sem (WriteGraph t ': effs) ~> Sem effs
-runWriteGraphState = interpret $ \case
+  (State (Graph t (Maybe ByteString)) :> effs, ValidTransition t) =>
+  Eff (WriteGraph t ': effs) ~> Eff effs
+runWriteGraphState = interpret \_ -> \case
   TouchNode nid -> modify (G.insertNode (emptyNode nid) :: Graph t (Maybe ByteString) -> Graph t (Maybe ByteString))
   DeleteNode nid -> modify (G.delNode nid :: Graph t (Maybe ByteString) -> Graph t (Maybe ByteString))
   InsertEdge e -> modify (G.insertEdge e)
@@ -206,15 +203,16 @@ runWriteGraphState = interpret $ \case
 -- serialization format to access the graph
 runWriteGraphIO ::
   forall t effs.
-  ( Member (Embed IO) effs,
+  ( IOE :> effs,
     Members [Error UserError, Warn UserError] effs,
     FromJSON t,
     ToJSON t,
     ValidTransition t
   ) =>
   FilePath ->
-  Sem (WriteGraph t ': effs) ~> Sem effs
-runWriteGraphIO dir = runInputConst (IsDual False) . runWriteGraphIODualizeable dir
+  Eff (WriteGraph t ': effs) ~> Eff effs
+runWriteGraphIO dir =
+  runInputConst (IsDual False) . runWriteGraphIODualizeable dir . inject
 
 -- | Implements a graph where edges are labeled by strings via system
 -- extra strings that are generated are not cleaned up automatically by this,
@@ -229,9 +227,9 @@ runWriteStringGraph ::
       ]
       r
   ) =>
-  Sem (WriteGraph Text : r) a ->
-  Sem r a
-runWriteStringGraph = interpret $ \case
+  Eff (WriteGraph Text : r) a ->
+  Eff r a
+runWriteStringGraph = interpret \_ -> \case
   TouchNode nid -> touchNode nid
   DeleteNode nid -> deleteNode nid
   InsertEdge (Edge _i _label _o) -> do
@@ -250,16 +248,17 @@ runWriteStringGraph = interpret $ \case
 -- We obtain whether the compuation is dualized through a reader parameter
 runWriteGraphIODualizeable ::
   forall t effs.
-  ( Member (Embed IO) effs,
-    Member (Error UserError) effs,
-    Member (Warn UserError) effs,
+  ( IOE :> effs,
+    Input IsDual :> effs,
+    Error UserError :> effs,
+    Warn UserError :> effs,
     FromJSON t,
     ToJSON t,
     ValidTransition t
   ) =>
   FilePath ->
-  Sem (WriteGraph t : effs) ~> Sem (Input IsDual : effs)
-runWriteGraphIODualizeable dir = reinterpret $ \case
+  Eff (WriteGraph t : effs) ~> Eff effs
+runWriteGraphIODualizeable dir = interpret \_ -> \case
   TouchNode nid ->
     whenM (not <$> S2.doesNodeExist dir nid) $
       embedCatchingErrors $
@@ -294,12 +293,13 @@ runWriteGraphIODualizeable dir = reinterpret $ \case
 -- Dualizeable.
 runWriteGraphDualizeableIO ::
   forall t effs.
-  ( Member (Embed IO) effs,
+  ( IOE :> effs,
     Members [Dualizeable, Error UserError, Warn UserError] effs,
     FromJSON t,
     ToJSON t,
     ValidTransition t
   ) =>
   FilePath ->
-  Sem (WriteGraph t : effs) ~> Sem effs
-runWriteGraphDualizeableIO dir = runReaderAsState . runWriteGraphIODualizeable dir
+  Eff (WriteGraph t : effs) ~> Eff effs
+runWriteGraphDualizeableIO dir =
+  runReaderAsState . runWriteGraphIODualizeable dir . inject

@@ -9,7 +9,6 @@ import Models.NormalizedPath
 import Models.Path.Simple
 import Models.ResolvedPath
 import MyPrelude hiding ((\\))
-import Polysemy.State
 
 -- | Traverse a path, creating any transitions/nodes that are missing.
 --
@@ -40,5 +39,5 @@ completePath ::
   ) =>
   NID ->
   Path ->
-  Sem r ResolvedPath
+  Eff r ResolvedPath
 completePath nid path = undefined

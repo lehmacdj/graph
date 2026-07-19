@@ -7,9 +7,9 @@ import MyPrelude
 
 getNodeWith ::
   (Members '[GraphMetadataReading] r) =>
-  (NID -> Sem r a) ->
+  (NID -> Eff r a) ->
   NID ->
-  Sem r (Maybe (Node Text a))
+  Eff r (Maybe (Node Text a))
 getNodeWith fetchAugmentation nid = do
   n <- getNodeMetadata nid
   a <- fetchAugmentation nid

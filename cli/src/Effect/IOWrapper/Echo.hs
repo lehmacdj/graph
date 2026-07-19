@@ -2,18 +2,18 @@
 
 module Effect.IOWrapper.Echo where
 
+import Effect.Readline
 import MyPrelude
-import Polysemy.Readline
 
-data Echo m k where
+data Echo :: Effect where
   Echo :: String -> Echo m ()
 
-makeSem ''Echo
+makeEffect ''Echo
 
-runEchoReadline :: (Member Readline effs) => Sem (Echo : effs) ~> Sem effs
-runEchoReadline = interpret $ \case
+runEchoReadline :: (Readline :> effs) => Eff (Echo : effs) ~> Eff effs
+runEchoReadline = interpret \_ -> \case
   Echo s -> outputStrLn s
 
-runEchoIO :: (Member (Embed IO) effs) => Sem (Echo : effs) ~> Sem effs
-runEchoIO = interpret $ \case
-  Echo s -> embed $ putStrLn $ pack $ unpack s
+runEchoIO :: (IOE :> effs) => Eff (Echo : effs) ~> Eff effs
+runEchoIO = interpret \_ -> \case
+  Echo s -> liftIO $ putStrLn $ pack $ unpack s

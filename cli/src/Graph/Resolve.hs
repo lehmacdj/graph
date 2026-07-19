@@ -1,5 +1,6 @@
 module Graph.Resolve where
 
+import Effectful.State.Dynamic
 import Graph.GraphMetadataEditing
 import Models.Connect (Connect (..), matchConnect)
 import Models.Graph (Graph, emptyGraph)
@@ -10,7 +11,6 @@ import Models.NormalizedPath.Traversals
 import Models.Path.Simple
 import Models.ResolvedPath
 import MyPrelude hiding ((\\))
-import Polysemy.State
 
 resolvePath ::
   forall r.
@@ -19,7 +19,7 @@ resolvePath ::
   ) =>
   NID ->
   Path ->
-  Sem r ResolvedPath
+  Eff r ResolvedPath
 resolvePath nid path =
   resolveNPath nid (leastConstrainedNormalizedPath (normalizePath path))
 
@@ -34,7 +34,7 @@ resolveNPathExists ::
   ) =>
   NID ->
   NormalizedPath FullyAnchored ->
-  Sem r Bool
+  Eff r Bool
 resolveNPathExists firstNid normalizedPath =
   goMembers (toList normalizedPath.union)
   where
@@ -44,13 +44,13 @@ resolveNPathExists firstNid normalizedPath =
         landings <- resolveDp firstNid dp
         if null landings then goMembers rest else pure True
 
-    resolveDp :: NID -> DeterministicPath FullyAnchored -> Sem r (Set NID)
+    resolveDp :: NID -> DeterministicPath FullyAnchored -> Eff r (Set NID)
     resolveDp nid = \case
       Pointlike p -> resolvePointlike True nid p
       Rooted rooted -> resolveRooted nid rooted
 
     resolveRooted ::
-      NID -> RootedDeterministicPath FullyAnchored -> Sem r (Set NID)
+      NID -> RootedDeterministicPath FullyAnchored -> Eff r (Set NID)
     resolveRooted nid RootedDeterministicPath {..} = do
       perRoot <- forM (mapToList rootBranches) \(root, branches) -> do
         roots <- resolveDp nid root
@@ -62,7 +62,7 @@ resolveNPathExists firstNid normalizedPath =
           (toList common)
 
     resolvePointlike ::
-      Bool -> NID -> PointlikeDeterministicPath FullyAnchored -> Sem r (Set NID)
+      Bool -> NID -> PointlikeDeterministicPath FullyAnchored -> Eff r (Set NID)
     resolvePointlike isRoot nid PointlikeDeterministicPath {..} =
       case unifyFullyAnchored isRoot nid anchor of
         Nothing -> pure mempty
@@ -74,7 +74,7 @@ resolveNPathExists firstNid normalizedPath =
               else mempty
 
     resolveBranches ::
-      NID -> OSet (DPBranch FullyAnchored) -> Sem r (Set NID)
+      NID -> OSet (DPBranch FullyAnchored) -> Eff r (Set NID)
     resolveBranches nid branches
       | null branches = pure (singletonSet nid)
       | otherwise =
@@ -82,7 +82,7 @@ resolveNPathExists firstNid normalizedPath =
             <$> traverse (resolveBranch nid) (toList branches)
 
     resolveBranch ::
-      NID -> DPBranch FullyAnchored -> Sem r (Set NID)
+      NID -> DPBranch FullyAnchored -> Eff r (Set NID)
     resolveBranch nid = \case
       DPSingle direction -> followDirection nid direction
       DPSequence before midpoint after -> do
@@ -97,7 +97,7 @@ resolveNPathExists firstNid normalizedPath =
             (`resolveBranches` after)
             (toList midpointLandings)
 
-    followDirection :: NID -> DPDirection -> Sem r (Set NID)
+    followDirection :: NID -> DPDirection -> Eff r (Set NID)
     followDirection nid direction = do
       node <- getNodeMetadata nid
       pure case node of
@@ -131,7 +131,7 @@ resolveNPath ::
   -- | The node to start from
   NID ->
   NormalizedPath FullyAnchored ->
-  Sem r ResolvedPath
+  Eff r ResolvedPath
 resolveNPath firstNid normalizedPath =
   traverseViaTransitions
     firstNid
@@ -139,9 +139,9 @@ resolveNPath firstNid normalizedPath =
     traverseDirection
     normalizedPath
     & cachingReadingInState
-    & runState emptyGraph
-    & runState mempty
-    & fmap \(nonexistentNodes, (graph, path)) -> ResolvedPath {..}
+    & runStateLocal emptyGraph
+    & runStateLocal mempty
+    & fmap \((path, graph), nonexistentNodes) -> ResolvedPath {..}
   where
     traverseDirection ::
       ( Members [GraphMetadataReading, State (Graph Text IsThin), State (Set NID)] q,
@@ -151,7 +151,7 @@ resolveNPath firstNid normalizedPath =
       FullyAnchored ->
       DPDirection ->
       FullyAnchored ->
-      Sem q [(DPDirection, NID)]
+      Eff q [(DPDirection, NID)]
     traverseDirection nid _startAnchor direction _target = case direction of
       DPIncoming' t -> traverseTransition nid (.incoming) DPIncoming' t
       DPOutgoing' t -> traverseTransition nid (.outgoing) DPOutgoing' t
@@ -164,7 +164,7 @@ resolveNPath firstNid normalizedPath =
       (Node Text () -> Set (Connect Text)) ->
       (DPTransition -> DPDirection) ->
       DPTransition ->
-      Sem q [(DPDirection, NID)]
+      Eff q [(DPDirection, NID)]
     traverseTransition nid getConnections mkBranch = \case
       DPLiteral t -> withEarlyReturn do
         n <- getNodeMetadata nid `onNothingM` returnEarly []

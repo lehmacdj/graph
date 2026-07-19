@@ -4,6 +4,7 @@ module Models.NormalizedPath.UnresolvedResiduals
   )
 where
 
+import Effectful.State.Dynamic
 import Graph.GraphMetadataEditing (runInMemoryGraphMetadataEditing)
 import Graph.Resolve (resolveNPathExists)
 import Models.Connect (Connect (..), matchConnect)
@@ -15,7 +16,6 @@ import Models.NormalizedPath.Generators
 import Models.NormalizedPath.Parse (pNormalizedPath)
 import Models.NormalizedPath.TestUtils
 import MyPrelude
-import Polysemy.State (evalState)
 import System.Random
 import Utils.Testing
 
@@ -2775,8 +2775,8 @@ spec_pathResidualsUnresolvedBy = do
         resolvesIn graph startNid path =
           resolveNPathExists startNid (leastConstrainedNormalizedPath path)
             & runInMemoryGraphMetadataEditing
-            & evalState graph
-            & run
+            & evalStateLocal graph
+            & runPureEff
 
     -- The remaining `==>`s are guards, not filters: 'coveredPathFrom'
     -- makes the resolvesIn precondition hold by construction (up to

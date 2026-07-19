@@ -6,7 +6,6 @@ import DAL.DirectoryFormat
 import DAL.FileSystemOperations.Metadata
 import DAL.Interpreters
 import DAL.RawGraph
-import Error.Missing
 import Error.UserError
 import Models.Augmentation.NodeEdits
 import Models.NID
@@ -14,7 +13,7 @@ import Models.Node
 import MyPrelude
 import System.FileCoordination
 
-data GraphMetadataFilesystemOperationsWriteDiff m a where
+data GraphMetadataFilesystemOperationsWriteDiff :: Effect where
   WriteGraphDiff ::
     -- | Metadata as it was when the graph was loaded; we need to check that
     -- it is still the same before writing any changes
@@ -29,17 +28,17 @@ data GraphMetadataFilesystemOperationsWriteDiff m a where
     Map NID (Maybe (Node Text ())) ->
     GraphMetadataFilesystemOperationsWriteDiff m ()
 
-makeSem ''GraphMetadataFilesystemOperationsWriteDiff
+makeEffect ''GraphMetadataFilesystemOperationsWriteDiff
 
 writeGraphDiff_ ::
-  (Members [RawGraph, Embed IO, Error UserError] r) =>
-  (NID -> FilePath -> Sem RawGraphUserErrorIO (Maybe (Node Text ()))) ->
-  (FilePath -> Node Text () -> Sem RawGraphUserErrorIO ()) ->
-  (FilePath -> Sem RawGraphUserErrorIO ()) ->
+  (Members [RawGraph, IOE, Error UserError] r) =>
+  (NID -> FilePath -> Eff RawGraphUserErrorIO (Maybe (Node Text ()))) ->
+  (FilePath -> Node Text () -> Eff RawGraphUserErrorIO ()) ->
+  (FilePath -> Eff RawGraphUserErrorIO ()) ->
   Map NID (Maybe (Node Text ())) ->
   Map NID (NodeEdits Text) ->
   Map NID (Maybe (Node Text ())) ->
-  Sem r ()
+  Eff r ()
 writeGraphDiff_
   readNodeMetadata'
   writeNodeMetadata'
@@ -125,10 +124,10 @@ writeGraphDiff_
               pure ()
 
 runGraphMetadataFilesystemOperationsWriteDiffIO ::
-  (Members [RawGraph, Embed IO, Error UserError] effs) =>
-  Sem (GraphMetadataFilesystemOperationsWriteDiff ': effs) a ->
-  Sem effs a
-runGraphMetadataFilesystemOperationsWriteDiffIO = interpret \case
+  (Members [RawGraph, IOE, Error UserError] effs) =>
+  Eff (GraphMetadataFilesystemOperationsWriteDiff ': effs) a ->
+  Eff effs a
+runGraphMetadataFilesystemOperationsWriteDiffIO = interpret \_ -> \case
   WriteGraphDiff asLoaded changes changedNodes ->
     writeGraphDiff_
       (readNodeMetadata_ False)
@@ -139,10 +138,10 @@ runGraphMetadataFilesystemOperationsWriteDiffIO = interpret \case
       changedNodes
 
 runGraphMetadataFilesystemOperationsWriteDiffDryRun ::
-  (Members [RawGraph, Embed IO, Error UserError] effs) =>
-  Sem (GraphMetadataFilesystemOperationsWriteDiff ': effs) a ->
-  Sem effs a
-runGraphMetadataFilesystemOperationsWriteDiffDryRun = interpret \case
+  (Members [RawGraph, IOE, Error UserError] effs) =>
+  Eff (GraphMetadataFilesystemOperationsWriteDiff ': effs) a ->
+  Eff effs a
+runGraphMetadataFilesystemOperationsWriteDiffDryRun = interpret \_ -> \case
   WriteGraphDiff asLoaded changes changedNodes -> do
     writeGraphDiff_
       (readNodeMetadata_ False)

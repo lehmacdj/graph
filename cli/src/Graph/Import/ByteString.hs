@@ -20,7 +20,7 @@ importUrl ::
     HasGraph Text effs
   ) =>
   URI ->
-  Sem effs NID
+  Eff effs NID
 importUrl url = do
   d <- getHttp url
   nnid <- importData d
@@ -33,7 +33,7 @@ importUrl url = do
 importData ::
   (Members [FreshNID, Error Missing, GetTime] effs, HasGraph Text effs) =>
   ByteString ->
-  Sem effs NID
+  Eff effs NID
 importData d = do
   nnid <- fileHashesNID `transitionsVia` computeSHA d
   setData @Text nnid (Just d)

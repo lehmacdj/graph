@@ -5,6 +5,8 @@ module Graph.GraphMetadataEditing where
 import DAL.FileSystemOperations.Metadata
 import DAL.FileSystemOperations.MetadataWriteDiff
 import Data.Map.Strict qualified as Map
+import Effectful.Provider
+import Effectful.State.Dynamic
 import Error.UserError
 import Error.Warn
 import Models.Augmentation.Bundled
@@ -16,8 +18,6 @@ import Models.Graph qualified
 import Models.NID
 import Models.Node
 import MyPrelude
-import Polysemy.Scoped
-import Polysemy.State
 
 -- | Marker indicating that something promises to only read the graph metadata.
 -- I gave up on trying to enforce this at the type level because it ended up
@@ -27,7 +27,7 @@ type GraphMetadataReading' t = GraphMetadataEditing' t
 
 type GraphMetadataReading = GraphMetadataReading' Text
 
-data GraphMetadataEditing' t m a where
+data GraphMetadataEditing' t :: Effect where
   GetNodeMetadata :: NID -> GraphMetadataEditing' t m (Maybe (Node t ()))
   -- This barely needs to exist because InsertEdge can also be used to create
   -- a node if it doesn't exist. The only reason you would want to use this
@@ -47,7 +47,7 @@ data GraphMetadataEditing' t m a where
   InsertEdge :: Edge t -> GraphMetadataEditing' t m ()
   DeleteEdge :: Edge t -> GraphMetadataEditing' t m ()
 
-makeSem ''GraphMetadataEditing'
+makeEffect ''GraphMetadataEditing'
 
 type GraphMetadataEditing = GraphMetadataEditing' Text
 
@@ -55,22 +55,21 @@ type GraphMetadataEditing = GraphMetadataEditing' Text
 -- action by caching fetched nodes in memory
 cachingReadingInMemory ::
   forall t a r.
-  ( Member (GraphMetadataReading' t) r,
+  ( GraphMetadataReading' t :> r,
     ValidTransition t,
     HasCallStack
   ) =>
-  Sem (GraphMetadataReading' t : r) a ->
-  Sem r a
+  Eff (GraphMetadataReading' t : r) a ->
+  Eff r a
 cachingReadingInMemory =
-  evalState @(Set NID) mempty
-    . evalState @(Graph t IsThin) emptyGraph
+  evalStateLocal @(Set NID) mempty
+    . evalStateLocal @(Graph t IsThin) emptyGraph
     . cachingReadingInState
-    . raiseUnder @(State (Graph t IsThin))
-    . raiseUnder @(State (Set NID))
+    . inject
 
 cachingReadingInState ::
   forall t a r.
-  ( Member (GraphMetadataReading' t) r,
+  ( GraphMetadataReading' t :> r,
     Members
       [ -- the graph as it's been fetched so far
         State (Graph t IsThin),
@@ -81,9 +80,9 @@ cachingReadingInState ::
     ValidTransition t,
     HasCallStack
   ) =>
-  Sem (GraphMetadataReading' t : r) a ->
-  Sem r a
-cachingReadingInState = interpret \case
+  Eff (GraphMetadataReading' t : r) a ->
+  Eff r a
+cachingReadingInState = interpret \_ -> \case
   GetNodeMetadata nid -> withEarlyReturn do
     whenM (gets @(Set NID) (member nid)) (returnEarly Nothing)
     cached <-
@@ -103,10 +102,10 @@ cachingReadingInState = interpret \case
 
 runInMemoryGraphMetadataEditing ::
   forall t r a.
-  (Member (State (Graph t ())) r, ValidTransition t) =>
-  Sem (GraphMetadataEditing' t : r) a ->
-  Sem r a
-runInMemoryGraphMetadataEditing = interpret \case
+  (State (Graph t ()) :> r, ValidTransition t) =>
+  Eff (GraphMetadataEditing' t : r) a ->
+  Eff r a
+runInMemoryGraphMetadataEditing = interpret \_ -> \case
   GetNodeMetadata nid -> gets @(Graph t ()) $ view (at nid)
   TouchNode nid ->
     modify @(Graph t ()) $
@@ -122,10 +121,13 @@ graphFromGraphMetadataEditing ::
   ( ValidTransition t,
     HasCallStack
   ) =>
-  Sem '[GraphMetadataEditing' t] a ->
+  Eff '[GraphMetadataEditing' t] a ->
   Graph t ()
 graphFromGraphMetadataEditing =
-  run . execState emptyGraph . runInMemoryGraphMetadataEditing . raiseUnder
+  runPureEff
+    . execStateLocal emptyGraph
+    . runInMemoryGraphMetadataEditing
+    . inject
 
 -- | Warning: the operations of this effect are not atomic. You should not use
 -- this effect if other programs/threads might modify the same files at the
@@ -133,9 +135,9 @@ graphFromGraphMetadataEditing =
 runGraphMetadataEditing ::
   forall r a.
   (Members [GraphMetadataFilesystemOperations, Warn UserError] r) =>
-  Sem (GraphMetadataEditing : r) a ->
-  Sem r a
-runGraphMetadataEditing = interpret \case
+  Eff (GraphMetadataEditing : r) a ->
+  Eff r a
+runGraphMetadataEditing = interpret \_ -> \case
   GetNodeMetadata nid -> readNodeMetadata nid
   TouchNode nid -> withEarlyReturn do
     n <- readNodeMetadata nid
@@ -182,7 +184,7 @@ type GraphWithEdits = Graph Text (Bundled [NodeEdits Text, IsThin])
 
 cachingGraphMetadataEditingInState ::
   forall r a.
-  ( Member GraphMetadataFilesystemOperations r,
+  ( GraphMetadataFilesystemOperations :> r,
     Members
       [ -- the graph as it's been fetched so far (including changes we made)
         State GraphWithEdits,
@@ -197,9 +199,9 @@ cachingGraphMetadataEditingInState ::
       r,
     HasCallStack
   ) =>
-  Sem (GraphMetadataEditing' Text : r) a ->
-  Sem r a
-cachingGraphMetadataEditingInState = interpret \case
+  Eff (GraphMetadataEditing' Text : r) a ->
+  Eff r a
+cachingGraphMetadataEditingInState = interpret \_ -> \case
   GetNodeMetadata nid -> withEarlyReturn do
     -- if a node is in the deleted set, we need to treat it as non-existing
     whenM (gets @(Set NID) (member nid)) (returnEarly Nothing)
@@ -307,10 +309,10 @@ runGraphMetadataEditingTransactionally ::
       ]
       r
   ) =>
-  Sem (GraphMetadataEditing : r) a ->
-  Sem r a
+  Eff (GraphMetadataEditing : r) a ->
+  Eff r a
 runGraphMetadataEditingTransactionally action = do
-  let applyGraphDiff (nonExistent, (asLoaded, (Graph nodeMap, result))) = do
+  let applyGraphDiff (((result, Graph nodeMap), asLoaded), nonExistent) = do
         let allChanges = flip Map.mapMaybeWithKey nodeMap \nid node ->
               -- the node or Nothing if it should be deleted
               let deleted = justIfTrue (nid `notMember` nonExistent) (void node)
@@ -325,21 +327,15 @@ runGraphMetadataEditingTransactionally action = do
         writeGraphDiff asLoaded (fst <$> allChanges) (Map.mapMaybe snd allChanges)
         pure result
   action
-    & raiseUnder3
-      @(State GraphWithEdits)
-      @(State (Map NID (Maybe (Node Text ()))))
-      @(State (Set NID))
+    & inject
     -- this just exists so that we can avoid duplicating the implementation of
     -- runInMemoryGraphMetadataEditing
     & cachingGraphMetadataEditingInState
-    & runState Models.Graph.emptyGraph
-    & runState mempty
-    & runState mempty
+    & runStateLocal @GraphWithEdits Models.Graph.emptyGraph
+    & runStateLocal @(Map NID (Maybe (Node Text ()))) mempty
+    & runStateLocal @(Set NID) mempty
     & (>>= applyGraphDiff)
 
--- | If I move to Effectful there is Effectful.Provider_ that does something
--- very similar to Scoped_
--- It should be pretty easy to support this in in-other-words as well.
 runScopedGraphMetadataEditingTransactionally ::
   ( Members
       [ GraphMetadataFilesystemOperations,
@@ -347,7 +343,7 @@ runScopedGraphMetadataEditingTransactionally ::
       ]
       r
   ) =>
-  Sem (Scoped_ GraphMetadataEditing : r) a ->
-  Sem r a
+  Eff (Provider_ GraphMetadataEditing () : r) a ->
+  Eff r a
 runScopedGraphMetadataEditingTransactionally =
-  runScopedNew \() -> runGraphMetadataEditingTransactionally
+  runProvider_ \() -> runGraphMetadataEditingTransactionally

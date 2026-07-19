@@ -53,10 +53,10 @@ connectFromDTO ConnectDTO {..} = Connect {transition = t, node = n}
 
 decodeNode ::
   forall t effs.
-  (Ord t, NFData t, FromJSON t, Member (Error UserError) effs) =>
+  (Ord t, NFData t, FromJSON t, Error UserError :> effs) =>
   NID ->
   ByteString ->
-  Sem effs (Node t ())
+  Eff effs (Node t ())
 decodeNode nid input = do
   decoded <-
     throwLeft

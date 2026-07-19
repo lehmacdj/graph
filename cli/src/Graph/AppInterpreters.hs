@@ -17,6 +17,10 @@ import Effect.IOWrapper.FileSystem
 import Effect.IOWrapper.FileTypeOracle
 import Effect.IOWrapper.GetTime
 import Effect.IOWrapper.Web
+import Effect.Input
+import Effect.Readline
+import Effectful.Provider
+import Effectful.State.Dynamic
 import Error.UserError
 import Error.Warn
 import Graph.Effect
@@ -26,15 +30,9 @@ import Graph.NodeLocated
 import Models.History
 import Models.NID
 import MyPrelude
-import Polysemy.Embed
-import Polysemy.Input
-import Polysemy.Readline
-import Polysemy.Scoped
-import Polysemy.State
-import System.Console.Haskeline (InputT)
 import System.Console.Haskeline qualified as H
 import System.Random
-import Utils.Polysemy
+import Utils.Effectful
 
 data Env = Env
   { filePath :: IORef FilePath,
@@ -68,7 +66,7 @@ type GraphEditorEffects =
     ReadGraph Text (Maybe ByteString),
     ReadGraphDataless Text,
     WriteGraph Text,
-    Scoped_ GraphMetadataEditing,
+    Provider_ GraphMetadataEditing (),
     -- GraphDataEditing,
     Dualizeable,
     GetLocation,
@@ -81,20 +79,26 @@ runGraphEditorEffects ::
     Members IOWrapperEffects r,
     Members ErrorEffects r
   ) =>
-  Sem (Concat GraphEditorEffects r) ~> Sem r
+  Eff (Concat GraphEditorEffects r) ~> Eff r
 runGraphEditorEffects =
-  raiseUnder @(State StdGen)
-    >>> runFreshNIDRandom
-    >>> subsume
-    >>> raise3Under @(Input FilePath)
-    >>> applyInput2 (runReadGraphDualizeableIO @Text)
-    >>> applyInput2 (runReadGraphDatalessDualizeableIO @Text)
-    >>> applyInput2 (runWriteGraphDualizeableIO @Text)
-    >>> supplyInputVia getGraphFilePath
+  runFreshNIDRandom
+    >>> applyGraphPath (runReadGraphDualizeableIO @Text)
+    >>> applyGraphPath (runReadGraphDatalessDualizeableIO @Text)
+    >>> applyGraphPath (runWriteGraphDualizeableIO @Text)
     >>> runScopedGraphMetadataEditingTransactionally
     >>> subsume
     >>> runLocableHistoryState
     >>> subsume
+
+-- | Supply an interpreter that needs the graph's directory with the path from
+-- the ambient 'RawGraph' effect. The path is fetched once, when the
+-- computation starts.
+applyGraphPath ::
+  (RawGraph :> effs) =>
+  (FilePath -> b -> Eff effs a) ->
+  b ->
+  Eff effs a
+applyGraphPath f b = getGraphFilePath >>= flip f b
 
 type IOWrapperEffects :: [Effect]
 type IOWrapperEffects =
@@ -112,14 +116,14 @@ type IOWrapperEffects =
 
 type TimeBehavior =
   forall r.
-  (Member (Embed IO) r) =>
-  Sem (GetTime : r) ~> Sem r
+  (IOE :> r) =>
+  Eff (GetTime : r) ~> Eff r
 
 type FilesystemOperationsBehavior =
   forall r a.
-  (Members [RawGraph, Embed IO, Error UserError] r) =>
-  Sem (GraphMetadataFilesystemOperations : GraphMetadataFilesystemOperationsWriteDiff : GraphDataFilesystemOperations : r) a ->
-  Sem r a
+  (Members [RawGraph, IOE, Error UserError] r) =>
+  Eff (GraphMetadataFilesystemOperations : GraphMetadataFilesystemOperationsWriteDiff : GraphDataFilesystemOperations : r) a ->
+  Eff r a
 
 filesystemBehaviorDryRun :: FilesystemOperationsBehavior
 filesystemBehaviorDryRun =
@@ -139,7 +143,7 @@ runIOWrapperEffects ::
   ) =>
   TimeBehavior ->
   FilesystemOperationsBehavior ->
-  Sem (Concat IOWrapperEffects r) ~> Sem r
+  Eff (Concat IOWrapperEffects r) ~> Eff r
 runIOWrapperEffects timeBehavior filesystemBehavior =
   runWebIO
     >>> runFileSystemIO
@@ -158,15 +162,15 @@ type ErrorEffects =
 
 type ErrorHandlingBehavior a =
   forall r.
-  (Member (Embed IO) r) =>
-  Sem (Warn UserError : Error UserError : r) a ->
-  Sem r a
+  (IOE :> r) =>
+  Eff (Warn UserError : Error UserError : r) a ->
+  Eff r a
 
 runErrorEffects ::
   (Members PermissiveDependencyEffects r) =>
   ErrorHandlingBehavior a ->
-  Sem (Concat ErrorEffects r) a ->
-  Sem r a
+  Eff (Concat ErrorEffects r) a ->
+  Eff r a
 runErrorEffects errorHandlingBehavior = errorHandlingBehavior
 
 type PermissiveDependencyEffects :: [Effect]
@@ -174,55 +178,61 @@ type PermissiveDependencyEffects =
   [ Echo,
     Dualizeable,
     State StdGen,
-    Embed IO,
+    IOE,
     State History,
     RawGraph
   ]
 
 runPermisiveDependencyEffects ::
-  (Member (Embed IO) r) =>
+  (IOE :> r) =>
   FilePath ->
-  Sem (Concat PermissiveDependencyEffects r) ~> Sem r
+  Eff (Concat PermissiveDependencyEffects r) ~> Eff r
 runPermisiveDependencyEffects path =
   runEchoIO
-    >>> evalState (IsDual False)
-    >>> (\m -> initStdGen >>= \stdGen -> evalState stdGen m)
+    >>> evalStateLocal (IsDual False)
+    >>> (\m -> initStdGen >>= \stdGen -> evalStateLocal stdGen m)
     >>> subsume
-    >>> evalState (History [] nilNID [])
+    >>> evalStateLocal (History [] nilNID [])
     >>> runRawGraphWithPath path
 
 runPermissiveDependencyEffectsEnv ::
   (Members FinalEffects r) =>
-  Sem (Concat PermissiveDependencyEffects r) ~> Sem r
+  Eff (Concat PermissiveDependencyEffects r) ~> Eff r
 runPermissiveDependencyEffectsEnv =
   runEchoReadline
     >>> runStateInputIORefOf #isDualized
     >>> runStateInputIORefOf #randomGen
     >>> subsume
     >>> runStateInputIORefOf @History #history
-    >>> raiseUnder
-    >>> runRawGraphAsInput
-    >>> contramapInputSem @FilePath (embed @IO . readIORef . view #filePath)
+    >>> runRawGraphFromEnv
+
+-- | Interpret 'RawGraph' by reading the (mutable) graph path out of the
+-- ambient 'Env'.
+runRawGraphFromEnv ::
+  (Members [Input Env, IOE] r) =>
+  Eff (RawGraph : r) ~> Eff r
+runRawGraphFromEnv = interpret \_ -> \case
+  GetGraphFilePath -> liftIO . readIORef . view #filePath =<< input @Env
 
 type FinalEffects =
   [ Readline,
     Input Env,
-    Embed IO,
-    Embed (InputT IO),
-    Final (InputT IO)
+    IOE
   ]
 
+-- | How to interpret the 'Readline' effect; interactive sessions use
+-- 'runReadlineHaskeline', non-interactive contexts (e.g. running the app
+-- stack to compute completions) use 'runReadlineNonInteractive'.
+type ReadlineBehavior = forall r. (IOE :> r) => Eff (Readline : r) ~> Eff r
+
 runFinalEffects ::
+  ReadlineBehavior ->
   Env ->
-  Sem FinalEffects ~> IO
-runFinalEffects env =
-  runReadlineFinal
+  Eff FinalEffects ~> IO
+runFinalEffects readlineBehavior env =
+  readlineBehavior
     >>> runInputConst env
-    >>> runEmbedded liftIO
-    >>> withEffects @'[Embed (InputT IO), Final (InputT IO)]
-    >>> embedToFinal @(InputT IO)
-    >>> runFinal
-    >>> H.runInputT env.replSettings
+    >>> runEff
 
 type AppEffects :: [Effect]
 type AppEffects =
@@ -233,15 +243,16 @@ type AppEffects =
     `Concat` FinalEffects
 
 runAppEffects ::
+  ReadlineBehavior ->
   ErrorHandlingBehavior a ->
   TimeBehavior ->
   FilesystemOperationsBehavior ->
   Env ->
-  Sem AppEffects a ->
+  Eff AppEffects a ->
   IO a
-runAppEffects errorHandlingBehavior timeBehavior filesystemBehavior env =
+runAppEffects readlineBehavior errorHandlingBehavior timeBehavior filesystemBehavior env =
   runGraphEditorEffects
     >>> runIOWrapperEffects timeBehavior filesystemBehavior
     >>> runErrorEffects errorHandlingBehavior
     >>> runPermissiveDependencyEffectsEnv
-    >>> runFinalEffects env
+    >>> runFinalEffects readlineBehavior env

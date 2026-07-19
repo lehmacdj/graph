@@ -214,8 +214,8 @@ traceMaybeNode nid =
 
 traceGetNodeMetadata ::
   (CompactNodeShow n) =>
-  (NID -> Sem r (Maybe n)) ->
-  (NID -> Sem r (Maybe n))
+  (NID -> Eff r (Maybe n)) ->
+  (NID -> Eff r (Maybe n))
 traceGetNodeMetadata getNodeMetadata nid =
   traceMaybeNode nid <$> getNodeMetadata nid
 {-# WARNING traceGetNodeMetadata "Leaving traces in code" #-}

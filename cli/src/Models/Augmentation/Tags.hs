@@ -1,15 +1,15 @@
 module Models.Augmentation.Tags where
 
 import Graph.GraphMetadataEditing
-import Graph.Resolve
 import Graph.Paths
+import Graph.Resolve
 import Graph.SystemNodes
 import Models.Common
 import Models.Edge
-import Models.ResolvedPath
 import Models.NID
 import Models.Path.Simple
 import Models.Path.TH
+import Models.ResolvedPath
 import MyPrelude
 
 newtype Tags = Tags {tags :: Set Text}
@@ -22,7 +22,7 @@ instance ShowableAugmentation Tags where
 fetchTags ::
   (Members '[GraphMetadataReading] r) =>
   NID ->
-  Sem r Tags
+  Eff r Tags
 fetchTags nid = do
   mp <-
     resolvePath
@@ -35,5 +35,5 @@ writeTags ::
   (Members '[GraphMetadataEditing] r) =>
   NID ->
   Tags ->
-  Sem r ()
+  Eff r ()
 writeTags _ _ = error "unimplemented"

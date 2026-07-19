@@ -5,28 +5,28 @@ module Error.Warn where
 import Error.UserError
 import MyPrelude
 
-data Warn e m r where
+data Warn e :: Effect where
   Warn :: e -> Warn e m ()
 
-makeSem ''Warn
+makeEffect ''Warn
 
 convertError ::
-  forall e effs. (Member (Warn e) effs) => Sem (Error e : effs) () -> Sem effs ()
+  forall e effs. (Warn e :> effs) => Eff (Error e : effs) () -> Eff effs ()
 convertError = (`handleError` warn)
 
-warnString :: (Member (Warn UserError) r) => String -> Sem r ()
+warnString :: (Warn UserError :> r) => String -> Eff r ()
 warnString = warn . OtherError . pack
 
-warnText :: (Member (Warn UserError) r) => Text -> Sem r ()
+warnText :: (Warn UserError :> r) => Text -> Eff r ()
 warnText = warn . OtherError
 
 printWarnings ::
   forall e r a.
-  (Member (Embed IO) r, Show e) =>
-  Sem (Warn e : r) a ->
-  Sem r a
-printWarnings = interpret $ \case
+  (IOE :> r, Show e) =>
+  Eff (Warn e : r) a ->
+  Eff r a
+printWarnings = interpret \_ -> \case
   Warn e -> liftIO . eputStr . show $ e
 
-ignoreWarnings :: forall e r a. Sem (Warn e : r) a -> Sem r a
-ignoreWarnings = interpret $ \(Warn _) -> pure ()
+ignoreWarnings :: forall e r a. Eff (Warn e : r) a -> Eff r a
+ignoreWarnings = interpret \_ -> \case Warn _ -> pure ()

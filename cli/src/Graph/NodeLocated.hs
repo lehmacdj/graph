@@ -5,30 +5,32 @@ module Graph.NodeLocated
   )
 where
 
+import Effectful.Reader.Dynamic
+import Effectful.State.Dynamic
 import Models.History (History, pushHistory)
 import Models.NID (NID)
 import MyPrelude hiding (Reader, ask)
-import Polysemy.Output
-import Polysemy.Reader
-import Polysemy.State
-import Utils.Polysemy
+import Utils.Effectful
 
 type GetLocation = Reader NID
 
-type SetLocation = Output NID
+data SetLocation :: Effect where
+  ChangeLocation :: NID -> SetLocation m ()
 
-currentLocation :: (Member GetLocation effs) => Sem effs NID
+type instance DispatchOf SetLocation = Dynamic
+
+currentLocation :: (GetLocation :> effs) => Eff effs NID
 currentLocation = ask
 
-changeLocation :: (Member SetLocation effs) => NID -> Sem effs ()
-changeLocation = output
+changeLocation :: (SetLocation :> effs) => NID -> Eff effs ()
+changeLocation = send . ChangeLocation
 
 runLocableHistoryState ::
-  (Member (State History) effs) =>
-  Sem (GetLocation : SetLocation : effs) ~> Sem effs
+  (State History :> effs) =>
+  Eff (GetLocation : SetLocation : effs) ~> Eff effs
 runLocableHistoryState = subsumeReaderState (view #now) >>> runSetLocationHistoryState
 
 runSetLocationHistoryState ::
-  (Member (State History) r) => Sem (SetLocation : r) ~> Sem r
-runSetLocationHistoryState = interpret $ \case
-  Output nid -> modify @History (pushHistory nid)
+  (State History :> r) => Eff (SetLocation : r) ~> Eff r
+runSetLocationHistoryState = interpret \_ -> \case
+  ChangeLocation nid -> modify @History (pushHistory nid)

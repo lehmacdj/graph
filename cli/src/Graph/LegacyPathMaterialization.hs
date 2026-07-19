@@ -16,6 +16,7 @@ import Control.Lens hiding (pre, unsnoc)
 import Data.List (intersectBy)
 import Data.Set qualified as Set
 import Data.Set.Ordered qualified as OSet
+import Effectful.State.Dynamic
 import Error.Missing
 import Graph.Effect
 import Graph.FreshNID
@@ -27,7 +28,6 @@ import Models.Graph hiding (insertEdge)
 import Models.Node
 import Models.Path.Simple
 import MyPrelude
-import Polysemy.State (evalState)
 
 isFullyRelativePath :: Path -> Bool
 isFullyRelativePath = all (isNothing . fst) . setToList . listifyNewPath
@@ -42,7 +42,7 @@ resolvePathSuccesses ::
   (Members [ReadGraph Text (Maybe ByteString), Error Missing] effs) =>
   NID ->
   Path ->
-  Sem effs (Set NID)
+  Eff effs (Set NID)
 resolvePathSuccesses nid = \case
   Zero -> pure mempty
   One -> pure $ singleton nid
@@ -73,7 +73,7 @@ resolvePathSuccessesDetail' ::
   (Members [ReadGraph Text a, Error Missing] effs, ValidNode Text a) =>
   NID ->
   Path ->
-  Sem effs (OSet DPath)
+  Eff effs (OSet DPath)
 resolvePathSuccessesDetail' nid = \case
   One -> pure $ OSet.singleton (DPath nid [] nid [])
   Zero -> pure OSet.empty
@@ -122,7 +122,7 @@ resolvePathSuccessesDetail ::
   (Members [ReadGraph Text (Maybe ByteString), Error Missing] effs) =>
   NID ->
   Path ->
-  Sem effs (Set DPath)
+  Eff effs (Set DPath)
 resolvePathSuccessesDetail nid p = resolvePathSuccessesDetail' nid p <&> OSet.toSet
 
 -- | Assert that the result of listifyNewPath is relative. This should be the
@@ -143,7 +143,7 @@ mkPath ::
   ) =>
   NID ->
   Path ->
-  Sem effs (Set NID)
+  Eff effs (Set NID)
 mkPath nid p =
   fmap setFromList
     . forM (setToList (listifyNewPath p))
@@ -156,7 +156,7 @@ delPath ::
   ) =>
   NID ->
   Path ->
-  Sem effs ()
+  Eff effs ()
 delPath nid p = resolvePathSuccessesDetail nid p >>= mapM_ delDPath
   where
     delDPath (DPath _ xs@(_ : _) nid' []) = case lastEx xs of -- safe because list nonempty
@@ -171,7 +171,7 @@ mvPath ::
   NID ->
   Path ->
   NID ->
-  Sem effs ()
+  Eff effs ()
 mvPath s p target =
   resolvePathSuccessesDetail s p >>= mapM_ (mvDPathTo target)
 
@@ -182,7 +182,7 @@ mvDPathTo ::
   ) =>
   NID ->
   DPath ->
-  Sem effs ()
+  Eff effs ()
 mvDPathTo target (DPath _ xs@(_ : _) nid []) = case lastEx xs of
   FromVia nid2 t -> do
     Graph.Effect.deleteEdge (Edge nid2 t nid)
@@ -201,7 +201,7 @@ renameDPath ::
   -- | this path must either be of the form DPath _ nid [t]
   -- or of the form (splitLast -> Just (DPath _ nid _, t, _))
   Path ->
-  Sem effs ()
+  Eff effs ()
 renameDPath dpathFrom nidPathStart pathTo =
   withJust (splitLast dpathFrom) $ \(DPath _ _ oldRoot _, t, nid) -> do
     successes <- resolvePathSuccessesDetail nidPathStart pathTo
@@ -225,7 +225,7 @@ aliasDPath ::
   -- | this path must either be of the form DPath _ nid [t]
   -- or of the form (splitLast -> Just (DPath _ nid _, t, _))
   Path ->
-  Sem effs ()
+  Eff effs ()
 aliasDPath dpathFrom nidPathStart pathTo =
   withJust (splitLast dpathFrom) $ \(DPath {}, _, nid) -> do
     successes <- resolvePathSuccessesDetail nidPathStart pathTo
@@ -293,7 +293,7 @@ resolvePathInConcreteGraph ::
 resolvePathInConcreteGraph nid p g =
   resolvePathSuccessesDetail' nid p
     & runReadGraphState @Text @a
-    & evalState g
+    & evalStateLocal g
     & runError
-    & run
+    & runPureEff
     & either (const Nothing) Just

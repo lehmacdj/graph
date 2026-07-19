@@ -29,7 +29,7 @@ importDirectory ::
   ) =>
   FilePath ->
   NID ->
-  Sem effs ()
+  Eff effs ()
 importDirectory base nid = do
   fileTree <- readDirectory base
   when (anyFailed fileTree) do
@@ -44,7 +44,7 @@ addDirectories ::
   (Members [FreshNID, Error Missing, GetTime] effs, HasGraph Text effs) =>
   DirTree ByteString ->
   NID ->
-  Sem effs ()
+  Eff effs ()
 addDirectories dt' root = do
   let go dt nid = case dt of
         File fn cs -> do

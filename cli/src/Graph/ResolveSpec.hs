@@ -4,6 +4,7 @@
 -- downstream TemplateHaskell-using modules, breaking TH linking on macOS.
 module Graph.ResolveSpec where
 
+import Effectful.State.Dynamic
 import Graph.GraphMetadataEditing (runInMemoryGraphMetadataEditing)
 import Graph.Resolve (resolveNPath, resolveNPathExists)
 import Models.Edge (Edge)
@@ -21,7 +22,6 @@ import Models.NormalizedPath.TestUtils
   )
 import Models.ResolvedPath (ResolvedPath (..))
 import MyPrelude
-import Polysemy.State (evalState)
 import System.Random (mkStdGen)
 import Utils.Testing
 
@@ -31,8 +31,8 @@ spec_resolveNPath = do
       resolvesIn graph path =
         resolveNPath (smallNID 1) (leastConstrainedNormalizedPath path)
           & runInMemoryGraphMetadataEditing
-          & evalState graph
-          & run
+          & evalStateLocal graph
+          & runPureEff
           & \(resolved :: ResolvedPath) -> not (null resolved.path.union)
 
       resolvesInFast :: Graph Text () -> NormalizedPath Anchor -> Bool
@@ -41,8 +41,8 @@ spec_resolveNPath = do
           (smallNID 1)
           (leastConstrainedNormalizedPath path)
           & runInMemoryGraphMetadataEditing
-          & evalState graph
-          & run
+          & evalStateLocal graph
+          & runPureEff
 
       checkResolves :: Bool -> [Edge Text] -> Text -> Spec
       checkResolves expected edges pathStr =

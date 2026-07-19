@@ -7,19 +7,19 @@ import System.Directory
 import System.Environment
 import System.Process.Typed
 
-data Editor m r where
+data Editor :: Effect where
   InvokeEditor :: [FilePath] -> Editor m ()
 
-makeSem ''Editor
+makeEffect ''Editor
 
 -- | Makes the assumption that the graph is implemented using the filesystem
 -- structure with nid.json/nid.data for each node
 interpretEditorAsIOVim ::
-  (Member (Embed IO) effs) =>
+  (IOE :> effs) =>
   -- | interprets effect
-  Sem (Editor : effs) ~> Sem effs
-interpretEditorAsIOVim = interpret $ \case
+  Eff (Editor : effs) ~> Eff effs
+interpretEditorAsIOVim = interpret \_ -> \case
   InvokeEditor paths -> do
-    editor <- embed $ getEnv "EDITOR"
-    editorToUse <- fromMaybe "vim" <$> embed (findExecutable editor)
+    editor <- liftIO $ getEnv "EDITOR"
+    editorToUse <- fromMaybe "vim" <$> liftIO (findExecutable editor)
     runProcess_ $ proc editorToUse paths

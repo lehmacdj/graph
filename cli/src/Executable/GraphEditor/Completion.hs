@@ -5,6 +5,7 @@ import Control.Arrow
 import Control.Lens
 import DAL.Serialization (nodesWithPrefix)
 import Effect.IOWrapper.GetTime
+import Effect.Readline (runReadlineNonInteractive)
 import Error.UserError
 import Error.Warn
 import Graph.AppInterpreters
@@ -66,11 +67,11 @@ mkTransitionCompleter xs x =
       | otherwise = [show z, z]
 
 failCompletionWithOriginalInputOnErrorOrWarning ::
-  (Member (Embed IO) effs) =>
+  (IOE :> effs) =>
   -- | The original input
   String ->
-  Sem (Warn UserError : Error UserError : effs) (String, [Completion]) ->
-  Sem effs (String, [Completion])
+  Eff (Warn UserError : Error UserError : effs) (String, [Completion]) ->
+  Eff effs (String, [Completion])
 failCompletionWithOriginalInputOnErrorOrWarning i =
   printWarnings
     >>> (`handleError` const (pure (i, [])))
@@ -85,6 +86,7 @@ completePath env (i, _) = case getLegacyPartialPath (pack $ takeRelevantFromEnd 
   Just (MissingSlash _) -> pure (i, [simpleCompletion "/"])
   Just (LegacyPartialPath pp end) ->
     runAppEffects
+      runReadlineNonInteractive
       (failCompletionWithOriginalInputOnErrorOrWarning i)
       interpretTimeAsIO
       filesystemBehaviorDryRun

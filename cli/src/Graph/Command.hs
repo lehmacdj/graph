@@ -10,6 +10,9 @@ import Effect.IOWrapper.FileSystem
 import Effect.IOWrapper.FileTypeOracle
 import Effect.IOWrapper.GetTime
 import Effect.IOWrapper.Web
+import Effect.Readline
+import Effectful.Provider
+import Effectful.State.Dynamic
 import Error.Missing
 import Error.UserError
 import Error.Warn
@@ -40,9 +43,6 @@ import Models.Path.Simple (Path)
 import Models.Path.Simple qualified as Simple
 import Models.ResolvedPath
 import MyPrelude
-import Polysemy.Internal.Scoped (Scoped, scoped_)
-import Polysemy.Readline
-import Polysemy.State
 import System.Console.Terminal.Size qualified as Terminal
 import Utils.Prettyprinter qualified as PP
 import Utils.Singleton
@@ -56,17 +56,17 @@ singleErr cmd xs =
       ++ tshow (setToList xs)
 
 printTransitions ::
-  (Member Echo effs) =>
+  (Echo :> effs) =>
   Set (Connect Text) ->
-  Sem effs ()
+  Eff effs ()
 printTransitions = mapM_ (echo . dtransition)
   where
     dtransition (Connect t nid) = show t ++ " at " ++ show nid
 
 promptYesNo ::
-  (Member Readline r) =>
+  (Readline :> r) =>
   String ->
-  Sem r Bool
+  Eff r Bool
 promptYesNo prompt = do
   line <- getInputLine prompt
   let result
@@ -77,13 +77,13 @@ promptYesNo prompt = do
 
 -- | Check to make sure that the current state of the graph is not dualized
 guardDangerousDualizedOperation ::
-  (Members [Readline, Error UserError, Dualizeable] r) => Sem r ()
+  (Members [Readline, Error UserError, Dualizeable] r) => Eff r ()
 guardDangerousDualizedOperation = do
   isDual' <- view #isDual <$> get @IsDual
   when isDual' do
     outputStrLn "the graph is currently dualized"
     outputStrLn "the operation you are attempting may be dangerous in that state"
-    promptYesNo "proceed (y/n): " >>= bool (throw OperationCancelled) (pure ())
+    promptYesNo "proceed (y/n): " >>= bool (throwError OperationCancelled) (pure ())
 
 interpretDirective ::
   ( Members
@@ -102,7 +102,7 @@ interpretDirective ::
   ) =>
   SourceRange ->
   Directive 'WithDirectives ->
-  Sem effs Path
+  Eff effs Path
 interpretDirective sourceRange = \case
   LocationFromHistory i -> gets @History (Absolute . fst . backInTime i)
   Targets p -> do
@@ -116,7 +116,7 @@ interpretDirective sourceRange = \case
     guardDangerousDualizedOperation
     Absolute <$> subsumeUserError @Missing (importUrl uri)
   Splice expr ->
-    throw $
+    throwError $
       OtherError $
         "the splice directive %{"
           ++ pack expr
@@ -129,16 +129,16 @@ interpretDirective sourceRange = \case
 interpretCommand ::
   ( Members [DisplayImage, Echo, Error UserError, SetLocation, GetLocation, Dualizeable] effs,
     Members [FileSystem, Web, FreshNID, GetTime, Editor, State History] effs,
-    Members [FileTypeOracle, Readline, Warn UserError, Scoped () GraphMetadataEditing] effs,
-    -- TODO: remove this inclusion of RawGraph + Embed IO here; probably the
+    Members [FileTypeOracle, Readline, Warn UserError, Provider_ GraphMetadataEditing ()] effs,
+    -- TODO: remove this inclusion of RawGraph + IOE here; probably the
     -- best way to do this is to allow commands to be defined as @stack@
     -- scripts, and then rewrite resolve and any other commands that
     -- require this outside of
-    Members [RawGraph, Embed IO] effs,
+    Members [RawGraph, IOE] effs,
     HasGraph Text effs
   ) =>
   Command ->
-  Sem effs ()
+  Eff effs ()
 interpretCommand = \case
   ChangeNode p -> do
     nid <- currentLocation
@@ -255,7 +255,7 @@ interpretCommand = \case
     toList ps & traverse_ interpretCommand
   Preview p -> do
     nid <- currentLocation
-    scoped_ do
+    provide_ do
       p' <- handleDirectivesWith interpretDirective p
       mp <- resolvePath nid p'
       unless (null mp.nonexistentNodes) $

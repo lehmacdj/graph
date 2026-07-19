@@ -2,19 +2,21 @@
 
 module DAL.RawGraph where
 
+import Effect.Input
 import MyPrelude
-import Polysemy.Input
 
 -- | Effect for getting the filepath of the graph; useful for doing low level
 -- operations together with Graph.Serialize* modules.
-data RawGraph m a where
+data RawGraph :: Effect where
   GetGraphFilePath :: RawGraph m FilePath
 
-makeSem ''RawGraph
+makeEffect ''RawGraph
 
 runRawGraphAsInput ::
-  (Member (Input FilePath) r) => Sem (RawGraph : r) a -> Sem r a
-runRawGraphAsInput = transform @_ @(Input FilePath) (\GetGraphFilePath -> Input)
+  (Input FilePath :> r) => Eff (RawGraph : r) a -> Eff r a
+runRawGraphAsInput = interpret \_ -> \case
+  GetGraphFilePath -> input
 
-runRawGraphWithPath :: FilePath -> Sem (RawGraph : r) a -> Sem r a
-runRawGraphWithPath p = runInputConst p . runRawGraphAsInput . raiseUnder
+runRawGraphWithPath :: FilePath -> Eff (RawGraph : r) a -> Eff r a
+runRawGraphWithPath p = reinterpret (runInputConst p) \_ -> \case
+  GetGraphFilePath -> input

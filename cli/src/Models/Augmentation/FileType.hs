@@ -2,18 +2,18 @@ module Models.Augmentation.FileType where
 
 import Error.UserError
 import Graph.GraphMetadataEditing
-import Graph.Resolve
 import Graph.Paths
+import Graph.Resolve
 import Graph.SystemNodes
 import Models.Common
 import Models.Connect
 import Models.Edge
 import Models.FileTypeInfo
-import Models.ResolvedPath
 import Models.MimeType
 import Models.NID
 import Models.Path.Simple
 import Models.Path.TH
+import Models.ResolvedPath
 import MyPrelude
 
 newtype FileExtension = FileExtension
@@ -43,7 +43,7 @@ instance ShowableAugmentation FileType where
 fetchFileExtension ::
   (Members '[GraphMetadataReading, Error UserError] r) =>
   NID ->
-  Sem r FileExtension
+  Eff r FileExtension
 fetchFileExtension nid = do
   mp <-
     resolvePath
@@ -65,7 +65,7 @@ fetchFileExtension nid = do
 fetchFileType ::
   (Members '[GraphMetadataReading, Error UserError] r) =>
   NID ->
-  Sem r FileType
+  Eff r FileType
 fetchFileType nid = do
   mp <-
     resolvePath
@@ -89,5 +89,5 @@ writeTags ::
   (Members '[GraphMetadataEditing] r) =>
   NID ->
   FileType ->
-  Sem r ()
+  Eff r ()
 writeTags _ _ = error "unimplemented"

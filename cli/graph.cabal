@@ -36,6 +36,7 @@ library
       DAL.Interpreters
       DAL.RawGraph
       DAL.Serialization
+      Effect.Input
       Effect.IOWrapper.DisplayImage
       Effect.IOWrapper.Echo
       Effect.IOWrapper.Editor
@@ -43,6 +44,7 @@ library
       Effect.IOWrapper.FileTypeOracle
       Effect.IOWrapper.GetTime
       Effect.IOWrapper.Web
+      Effect.Readline
       Error.Missing
       Error.UserError
       Error.Warn
@@ -147,9 +149,9 @@ library
       System.IO.Term.Image.ITerm
       System.IO.Term.Image.ITerm.Payload
       Utils.Base62
+      Utils.Effectful
       Utils.Parsing
       Utils.Parsing.Common
-      Utils.Polysemy
       Utils.Prettyprinter
       Utils.Singleton
       Utils.Testing
@@ -210,7 +212,7 @@ library
       TypeOperators
       TypeSynonymInstances
       ViewPatterns
-  ghc-options: -Wall -fplugin=Polysemy.Plugin -flate-specialise -fspecialise-aggressively
+  ghc-options: -Wall -fplugin=Effectful.Plugin -flate-specialise -fspecialise-aggressively
   cpp-options: -DDEBUG
   build-depends:
       Glob
@@ -233,6 +235,10 @@ library
     , deepseq
     , directory
     , directory-tree
+    , effectful
+    , effectful-core
+    , effectful-plugin
+    , effectful-th
     , exceptions
     , file-io
     , filepath
@@ -259,10 +265,6 @@ library
     , ordered-containers
     , parser-combinators
     , pcre-light
-    , polysemy
-    , polysemy-plugin
-    , polysemy-readline
-    , polysemy-zoo
     , prettyprinter
     , prettyprinter-ansi-terminal
     , profunctors
@@ -367,7 +369,7 @@ executable ge
       TypeOperators
       TypeSynonymInstances
       ViewPatterns
-  ghc-options: -Wall -fplugin=Polysemy.Plugin -flate-specialise -fspecialise-aggressively -threaded -rtsopts -with-rtsopts=-N
+  ghc-options: -Wall -fplugin=Effectful.Plugin -flate-specialise -fspecialise-aggressively -threaded -rtsopts -with-rtsopts=-N
   cpp-options: -DDEBUG
   build-depends:
       Glob
@@ -390,6 +392,10 @@ executable ge
     , deepseq
     , directory
     , directory-tree
+    , effectful
+    , effectful-core
+    , effectful-plugin
+    , effectful-th
     , exceptions
     , file-io
     , filepath
@@ -417,10 +423,6 @@ executable ge
     , ordered-containers
     , parser-combinators
     , pcre-light
-    , polysemy
-    , polysemy-plugin
-    , polysemy-readline
-    , polysemy-zoo
     , prettyprinter
     , prettyprinter-ansi-terminal
     , profunctors
@@ -520,7 +522,7 @@ executable residuals-bench
       TypeOperators
       TypeSynonymInstances
       ViewPatterns
-  ghc-options: -Wall -fplugin=Polysemy.Plugin -flate-specialise -fspecialise-aggressively -threaded -rtsopts
+  ghc-options: -Wall -fplugin=Effectful.Plugin -flate-specialise -fspecialise-aggressively -threaded -rtsopts
   cpp-options: -DDEBUG
   build-depends:
       Glob
@@ -543,6 +545,10 @@ executable residuals-bench
     , deepseq
     , directory
     , directory-tree
+    , effectful
+    , effectful-core
+    , effectful-plugin
+    , effectful-th
     , exceptions
     , file-io
     , filepath
@@ -570,10 +576,6 @@ executable residuals-bench
     , ordered-containers
     , parser-combinators
     , pcre-light
-    , polysemy
-    , polysemy-plugin
-    , polysemy-readline
-    , polysemy-zoo
     , prettyprinter
     , prettyprinter-ansi-terminal
     , profunctors
@@ -674,7 +676,7 @@ test-suite graph-test
       TypeOperators
       TypeSynonymInstances
       ViewPatterns
-  ghc-options: -Wall -fplugin=Polysemy.Plugin -flate-specialise -fspecialise-aggressively -threaded -rtsopts -with-rtsopts=-N
+  ghc-options: -Wall -fplugin=Effectful.Plugin -flate-specialise -fspecialise-aggressively -threaded -rtsopts -with-rtsopts=-N
   cpp-options: -DDEBUG
   build-depends:
       Glob
@@ -697,6 +699,10 @@ test-suite graph-test
     , deepseq
     , directory
     , directory-tree
+    , effectful
+    , effectful-core
+    , effectful-plugin
+    , effectful-th
     , exceptions
     , file-io
     , filepath
@@ -724,10 +730,6 @@ test-suite graph-test
     , ordered-containers
     , parser-combinators
     , pcre-light
-    , polysemy
-    , polysemy-plugin
-    , polysemy-readline
-    , polysemy-zoo
     , prettyprinter
     , prettyprinter-ansi-terminal
     , profunctors

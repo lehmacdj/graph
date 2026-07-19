@@ -24,17 +24,17 @@ import System.FilePath (makeValid, splitFileName)
 -- a cycle. Term Heterarchy comes from neuron zettelkasten
 graphHeterarchy ::
   forall r.
-  (Members [Embed IO, RawGraph, Error UserError, FileTypeOracle] r) =>
+  (Members [IOE, RawGraph, Error UserError, FileTypeOracle] r) =>
   (String, NID) ->
-  Sem r (Tree (Maybe (FilePath, String), String))
+  Eff r (Tree (Maybe (FilePath, String), String))
 graphHeterarchy (startName, start) = do
   fp <- getGraphFilePath
-  let dataFileAndExtensionIfExists :: NID -> Sem r (Maybe (FilePath, String))
+  let dataFileAndExtensionIfExists :: NID -> Eff r (Maybe (FilePath, String))
       dataFileAndExtensionIfExists nid = do
         let ndf = legacyNodeDataFile fp nid
         fileTypeInfo <- getFileTypeInfo (Right ndf)
         pure $ fileTypeInfo <&> ((ndf,) . unpack . (.extension))
-      go :: Set NID -> NID -> Sem r [Tree (Maybe (FilePath, String), String)]
+      go :: Set NID -> NID -> Eff r [Tree (Maybe (FilePath, String), String)]
       go visited nid
         | nid `member` visited = pure []
         | otherwise = do
@@ -83,7 +83,7 @@ heterarchyToDirTree = DT.Dir "." . T.foldTree toNodes
 -- origin node.
 --
 -- TODO: It would be nice to implement more of this in terms of ReadGraph, or
--- some more principled effect than Embed IO. To be able to do that we need a
+-- some more principled effect than IOE. To be able to do that we need a
 -- few facilities:
 -- 1. we need to be able to fetch nodes without their data. Loading the file
 -- for every node every time is too expensive in general
@@ -92,10 +92,10 @@ heterarchyToDirTree = DT.Dir "." . T.foldTree toNodes
 -- as a hacky thing, but anyways we'll cross that bridge when we get there.
 exportToDirectory ::
   forall r.
-  (Members [RawGraph, Embed IO, Error UserError, FileTypeOracle, Warn UserError] r) =>
+  (Members [RawGraph, IOE, Error UserError, FileTypeOracle, Warn UserError] r) =>
   NID ->
   FilePath ->
-  Sem r ()
+  Eff r ()
 exportToDirectory nid outputFp = do
   let (dir, splitName) = splitFileName outputFp
       originName
@@ -103,7 +103,7 @@ exportToDirectory nid outputFp = do
         | otherwise = splitName
   heterarchy <- graphHeterarchy (originName, nid)
   let dt = heterarchyToDirTree heterarchy
-  _ DT.:/ results <- embed $ DT.writeDirectoryWith (flip cloneFile) (dir DT.:/ dt)
+  _ DT.:/ results <- liftIO $ DT.writeDirectoryWith (flip cloneFile) (dir DT.:/ dt)
   when (DT.anyFailed results) do
     let overallDescription =
           OtherError "some error occurred while exporting a directory tree:"

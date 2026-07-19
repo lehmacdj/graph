@@ -35,7 +35,6 @@ import Data.Text.Encoding.Error qualified as Text
 import Data.Void as X
 import Debug.Trace qualified
 import GHC.Generics as X (Generic, Rep)
-import GHC.Stack as X (HasCallStack)
 import GHC.TypeLits as X hiding (Text)
 import Generic.Data as X (Generically (..), Generically1 (..))
 import Language.Haskell.TH.Syntax as X (Lift)

@@ -12,9 +12,9 @@ import Utils.Testing
 -- | Create all the nodes/edges such that resolving the path would produce the
 -- exact same result.
 createNPath ::
-  (Member GraphMetadataEditing r) =>
+  (GraphMetadataEditing :> r) =>
   NormalizedPath NID ->
-  Sem r ()
+  Eff r ()
 createNPath =
   traverseViaTransitions_ \source direction sink -> case direction of
     DPOutgoing' (DPLiteral transition) ->
