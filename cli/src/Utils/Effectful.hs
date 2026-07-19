@@ -12,14 +12,6 @@ import Effectful.State.Dynamic
 import MyPrelude hiding (Reader, ask)
 import Utils.Testing
 
-applyInputOf ::
-  forall i env effs a.
-  (Input env :> effs) =>
-  Lens' env i ->
-  (i -> Eff effs a) ->
-  Eff effs a
-applyInputOf l f = input @env >>= f . view l
-
 applyInput2Of ::
   forall i env effs a b.
   (Input env :> effs) =>
@@ -71,12 +63,6 @@ runStateIORef ref = interpret \env -> \case
     (a, s') <- unlift (f s)
     writeIORef ref s'
     pure a
-
-runStateInputIORef ::
-  (Members [Input (IORef s), IOE] r) =>
-  Eff (State s : r) a ->
-  Eff r a
-runStateInputIORef = applyInput2 runStateIORef
 
 runStateInputIORefOf ::
   forall s env r a.

@@ -12,8 +12,8 @@ This project uses a custom prelude (`MyPrelude`) built on top of ClassyPrelude w
 MyPrelude is composed of several submodules:
 
 - **Collections**: Lens operators, ordered/unordered maps and sets, collection utilities
-- **EarlyReturn**: Polysemy effect for early returns in computations
-- **Effect**: Polysemy utilities and effect handling
+- **EarlyReturn**: effect for early returns in computations
+- **Effect**: effectful re-exports and effect utilities
 - **Function**: Function composition utilities, natural transformations (`~>`)
 - **FunctorClasses**: Re-exports of `Eq1`, `Ord1`, `Show1`
 - **IO**: Utilities for stderr output (`eputStr`, `eprint`) and error handling
@@ -84,17 +84,28 @@ Rich set of helpers for `Maybe` and `Either`:
 
 **Note**: Preferred error-handling patterns are TBD - update this section as conventions emerge.
 
-## Effects (Polysemy)
+## Effects (effectful)
 
-- MyPrelude re-exports core Polysemy modules
+- MyPrelude re-exports the core of effectful: `Eff`, `(:>)`, `IOE`,
+  `Effectful.Dispatch.Dynamic` (`interpret`, `reinterpret`, `interpose`,
+  `send`, ...), `makeEffect`, and `Effectful.Error.Static`
+- A `Members '[A, B] es` type family mirrors polysemy's `Members` for
+  constraint lists; use `A :> es` for single effects
+- `State`/`Reader` are imported per-module from `Effectful.State.Dynamic` /
+  `Effectful.Reader.Dynamic` (dynamic dispatch, so interpreters can back
+  them with IORefs etc.); `modify'` comes from MyPrelude
+- The `Input` effect (port of polysemy's) lives in `Effect.Input` and is
+  deliberately not part of MyPrelude (its `input` accessor collides with
+  common local names)
 - `EarlyReturn` effect for early returns:
   - `returnEarly`: Exit computation with a result
   - `withEarlyReturn`: Run computation with early return capability
   - `unwrap`, `unwrapM`: Unwrap `Maybe` or return early with `Nothing`
-- Effect utilities:
+- Error utilities:
+  - `runError`: like effectful's `runErrorNoCallStack` (polysemy semantics)
   - `handleError`: Handle errors without error in result type
   - `errorToLeft`, `errorToNothing`: Convert errors to values
-  - `embedStateful`: Embed stateful functions into `State` effect
+  - `fromException`, `fromExceptionVia`: catch IO exceptions into `Error`
 
 **Note**: Specific effect patterns are TBD - update this section as conventions emerge.
 

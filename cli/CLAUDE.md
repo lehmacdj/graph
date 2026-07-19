@@ -25,4 +25,7 @@ Prefer regular `Set`/`Map` over ordered `OSet`/`OMap` unless order is semantical
 - Create helper functions for readable tests (e.g., `parsesTo`, `formatsTo`)
 
 ### Effects
-MyPrelude re-exports Polysemy with utilities for early returns, error handling, and state management.
+MyPrelude re-exports effectful with utilities for early returns and error
+handling. The `Input` effect lives in `Effect.Input` (not re-exported from
+MyPrelude); dynamically dispatched `State`/`Reader` come from
+`Effectful.State.Dynamic`/`Effectful.Reader.Dynamic`.
