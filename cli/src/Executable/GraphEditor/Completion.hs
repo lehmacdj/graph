@@ -5,7 +5,7 @@ import Control.Arrow
 import Control.Lens
 import DAL.Serialization (nodesWithPrefix)
 import Effect.IOWrapper.GetTime
-import Effect.Readline (runReadlineNonInteractive)
+import Effectful.Readline (runReadlineNonInteractive)
 import Error.UserError
 import Error.Warn
 import Graph.AppInterpreters

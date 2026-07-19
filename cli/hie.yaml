@@ -4,6 +4,8 @@ cradle:
     components:
     - path: "./src"
       component: "graph:lib"
+    - path: "./effectful-readline/src"
+      component: "effectful-readline:lib"
     - path: "./app/ge"
       component: "graph:exe:ge"
     - path: "./app/node-rename"

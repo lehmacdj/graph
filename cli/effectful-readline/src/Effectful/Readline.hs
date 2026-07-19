@@ -1,10 +1,11 @@
 {-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE TypeFamilies #-}
 
--- | Readline effect over haskeline, replacing polysemy-readline. Interactive
--- interpretation goes through haskeline's "System.Console.Haskeline.IO"
--- query interface so that the rest of the program can run in 'Eff' over IO
--- instead of needing @InputT IO@ as the base monad.
-module Effect.Readline
+-- | A 'Readline' effect backed by haskeline. Interactive interpretation goes
+-- through haskeline's "System.Console.Haskeline.IO" query interface so that
+-- the rest of the program can run in 'Eff' over IO instead of needing
+-- @InputT IO@ as the base monad.
+module Effectful.Readline
   ( Readline (..),
     getInputLine,
     outputStr,
@@ -25,7 +26,9 @@ where
 
 import Control.Concurrent (myThreadId)
 import Control.Exception qualified as E
-import MyPrelude
+import Effectful
+import Effectful.Dispatch.Dynamic
+import Effectful.TH (makeEffect)
 import System.Console.Haskeline qualified as H
 import System.Console.Haskeline.IO qualified as HIO
 import System.Posix.Signals qualified as Signals
@@ -48,7 +51,8 @@ outputStrLn s = outputStr (s ++ "\n")
 runReadlineHaskeline ::
   (IOE :> effs) =>
   HIO.InputState ->
-  Eff (Readline : effs) ~> Eff effs
+  Eff (Readline : effs) a ->
+  Eff effs a
 runReadlineHaskeline hd = interpret \env -> \case
   GetInputLine prompt -> do
     -- While haskeline reads a line the terminal is in raw mode and ctrl-c
@@ -81,14 +85,14 @@ withInterruptIO act = do
       restore old = Signals.installHandler Signals.sigINT old Nothing
   E.bracket install restore (const act)
 
--- | Interpretation for non-interactive contexts (e.g. running the app stack
+-- | Interpretation for non-interactive contexts (e.g. running an app stack
 -- for tab completion): no input is available and output goes to stdout.
 runReadlineNonInteractive ::
   (IOE :> effs) =>
-  Eff (Readline : effs) ~> Eff effs
+  Eff (Readline : effs) a ->
+  Eff effs a
 runReadlineNonInteractive = interpret \env -> \case
   GetInputLine _ -> pure Nothing
-  OutputStr s -> putStr (pack s)
+  OutputStr s -> liftIO $ putStr s
   WithInterrupt m -> localSeqUnlift env \unlift -> unlift m
   HandleInterrupt _ m -> localSeqUnlift env \unlift -> unlift m
-

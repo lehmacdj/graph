@@ -44,7 +44,6 @@ library
       Effect.IOWrapper.FileTypeOracle
       Effect.IOWrapper.GetTime
       Effect.IOWrapper.Web
-      Effect.Readline
       Error.Missing
       Error.UserError
       Error.Warn
@@ -238,6 +237,7 @@ library
     , effectful
     , effectful-core
     , effectful-plugin
+    , effectful-readline
     , effectful-th
     , exceptions
     , file-io
@@ -395,6 +395,7 @@ executable ge
     , effectful
     , effectful-core
     , effectful-plugin
+    , effectful-readline
     , effectful-th
     , exceptions
     , file-io
@@ -548,6 +549,7 @@ executable residuals-bench
     , effectful
     , effectful-core
     , effectful-plugin
+    , effectful-readline
     , effectful-th
     , exceptions
     , file-io
@@ -702,6 +704,7 @@ test-suite graph-test
     , effectful
     , effectful-core
     , effectful-plugin
+    , effectful-readline
     , effectful-th
     , exceptions
     , file-io

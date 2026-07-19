@@ -2,7 +2,7 @@
 
 module Effect.IOWrapper.Echo where
 
-import Effect.Readline
+import Effectful.Readline
 import MyPrelude
 
 data Echo :: Effect where

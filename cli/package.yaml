@@ -67,6 +67,7 @@ dependencies:
 - effectful
 - effectful-core
 - effectful-plugin
+- effectful-readline
 - effectful-th
 - prettyprinter
 - prettyprinter-ansi-terminal

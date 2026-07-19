@@ -10,8 +10,8 @@ import Effect.IOWrapper.FileSystem
 import Effect.IOWrapper.FileTypeOracle
 import Effect.IOWrapper.GetTime
 import Effect.IOWrapper.Web
-import Effect.Readline
 import Effectful.Provider
+import Effectful.Readline
 import Effectful.State.Dynamic
 import Executable.GraphEditor.Completion
 import Executable.GraphEditor.Options

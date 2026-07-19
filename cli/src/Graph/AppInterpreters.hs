@@ -18,8 +18,8 @@ import Effect.IOWrapper.FileTypeOracle
 import Effect.IOWrapper.GetTime
 import Effect.IOWrapper.Web
 import Effect.Input
-import Effect.Readline
 import Effectful.Provider
+import Effectful.Readline
 import Effectful.State.Dynamic
 import Error.UserError
 import Error.Warn

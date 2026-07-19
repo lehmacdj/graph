@@ -1,0 +1,36 @@
+name:                effectful-readline
+version:             0.1.0.0
+github:              "lehmacdj/graph"
+license:             BSD3
+author:              "Devin Lehmacher"
+maintainer:          "lehmacdj@gmail.com"
+copyright:           "Copyright: (c) 2026 Devin Lehmacher"
+
+synopsis: Readline effect for effectful backed by haskeline
+category: Effect
+
+description: >
+  A dynamically dispatched @Readline@ effect for the @effectful@ ecosystem,
+  with an interactive interpreter backed by haskeline's
+  "System.Console.Haskeline.IO" query interface and a non-interactive
+  interpreter for contexts where no input is available.
+
+language: GHC2021
+
+default-extensions:
+- BlockArguments
+- DataKinds
+- LambdaCase
+
+dependencies:
+- base >= 4.7 && < 5
+- effectful-core
+- effectful-th
+- haskeline
+- unix
+
+ghc-options:
+- -Wall
+
+library:
+  source-dirs: src

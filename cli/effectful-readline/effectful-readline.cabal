@@ -1,0 +1,42 @@
+cabal-version: 1.12
+
+-- This file has been generated from package.yaml by hpack version 0.38.1.
+--
+-- see: https://github.com/sol/hpack
+
+name:           effectful-readline
+version:        0.1.0.0
+synopsis:       Readline effect for effectful backed by haskeline
+description:    A dynamically dispatched @Readline@ effect for the @effectful@ ecosystem, with an interactive interpreter backed by haskeline's "System.Console.Haskeline.IO" query interface and a non-interactive interpreter for contexts where no input is available.
+category:       Effect
+homepage:       https://github.com/lehmacdj/graph#readme
+bug-reports:    https://github.com/lehmacdj/graph/issues
+author:         Devin Lehmacher
+maintainer:     lehmacdj@gmail.com
+copyright:      Copyright: (c) 2026 Devin Lehmacher
+license:        BSD3
+build-type:     Simple
+
+source-repository head
+  type: git
+  location: https://github.com/lehmacdj/graph
+
+library
+  exposed-modules:
+      Effectful.Readline
+  other-modules:
+      Paths_effectful_readline
+  hs-source-dirs:
+      src
+  default-extensions:
+      BlockArguments
+      DataKinds
+      LambdaCase
+  ghc-options: -Wall
+  build-depends:
+      base >=4.7 && <5
+    , effectful-core
+    , effectful-th
+    , haskeline
+    , unix
+  default-language: GHC2021
