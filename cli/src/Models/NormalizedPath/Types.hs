@@ -163,7 +163,7 @@ showsNormalizedPath (NormalizedPath paths)
        in foldl' (.) id $ intersperse (showString " + ") $ map (showsPrec 1) pathList
 
 instance (Show a, Ord a) => Show (DeterministicPath a) where
-  showsPrec p dp = showsDeterministicPath p dp
+  showsPrec = showsDeterministicPath
 
 showsDeterministicPath :: (Show a, Ord a) => Int -> DeterministicPath a -> ShowS
 showsDeterministicPath p = \case
@@ -246,7 +246,7 @@ showsDPDirection = \case
   DPIncoming' t -> showString "~" . showsDPTransition t
 
 instance (Show a, Ord a) => Show (DPBranch a) where
-  showsPrec p branch = showsBranch p branch
+  showsPrec = showsBranch
 
 showsBranch :: (Show a, Ord a) => Int -> DPBranch a -> ShowS
 showsBranch _p (DPSingle dir) = showsDPDirection dir

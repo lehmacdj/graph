@@ -86,7 +86,7 @@ combineAlts xss
       rest <- variations (count - 1) (site + 1)
       pure ((site, choice, value) : rest)
 
-    materialize varied = go 0 xss varied
+    materialize = go 0 xss
       where
         go _ [] _ = []
         go site (xs : rest) changes = case changes of

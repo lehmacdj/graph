@@ -470,7 +470,7 @@ instance Arbitrary (DeterministicPath Anchor) where
     Pointlike p -> Pointlike <$> shrink p
     Rooted r ->
       -- Shrink to a simple pointlike
-      [Pointlike $ r.target]
+      [Pointlike r.target]
 
 instance Arbitrary (NormalizedPath Anchor) where
   arbitrary = genNormalizedPath defaultGenConfig
@@ -478,8 +478,8 @@ instance Arbitrary (NormalizedPath Anchor) where
     | null paths = []
     | otherwise =
         -- Shrink by removing paths or shrinking individual paths
-        [NormalizedPath mempty]
-          ++ [NormalizedPath (setFromList ps) | ps <- shrink (toList paths)]
+        NormalizedPath mempty
+          : [NormalizedPath (setFromList ps) | ps <- shrink (toList paths)]
 
 -- * Helper functions
 
