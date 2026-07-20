@@ -7,7 +7,7 @@ where
 import ClassyPrelude
 import Data.Bifoldable (Bifoldable)
 import Data.Bitraversable (Bitraversable (bitraverse))
-import Data.Either as X (isLeft, isRight)
+import Data.Either as X (fromLeft, fromRight, isLeft, isRight)
 import Data.Functor.Alt (Alt ((<!>)))
 import Data.Functor.Apply (Apply ((<.>)))
 import GHC.Stack (HasCallStack)

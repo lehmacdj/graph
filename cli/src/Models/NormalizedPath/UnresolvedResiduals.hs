@@ -401,6 +401,10 @@ collapseResolved alts =
 resReach :: BrRes -> Maybe (Set NID)
 resReach r = either (const r.reach) Just r.outcome
 
+-- | The gaps of a branch result; empty for a fully-resolved outcome.
+resGaps :: BrRes -> [Gap]
+resGaps r = fromLeft [] r.outcome
+
 -- | The landing of the first fully-resolved alternative, if any. By the
 -- collapse rule (fully-resolving alternatives merge into one, see
 -- 'stationFromArrivals') there is at most one.
@@ -743,7 +747,7 @@ processLoops g n loops =
                         True
                         False
                         mempty
-                        (map toRooted (either id (const []) r.outcome))
+                        (map toRooted (resGaps r))
                         r.dones
                     else LoopsAlt False False (singletonSet b) [] []
                 | r <- rs
@@ -878,7 +882,7 @@ resolveBranch g openBwd origin0 start branch endCtx =
                   [ BrRes
                       (prog || st.progress)
                       st.dones
-                      (Left (Gap roots e : either id (const []) st.outcome))
+                      (Left (Gap roots e : resGaps st))
                       (resReach st)
                       Nothing
                       st.freshTargetUnsafe
@@ -983,7 +987,7 @@ resolveBranch g openBwd origin0 start branch endCtx =
               cr.cleanLanding
               cr.freshTargetUnsafe
         _ -> do
-          let contGaps = either id (const []) cr.outcome
+          let contGaps = resGaps cr
               stationPdp =
                 PointlikeDeterministicPath (pinAnchor m.anchor n) la.attached
               (gaps', formDones) =
@@ -1118,7 +1122,7 @@ resolveBranch g openBwd origin0 start branch endCtx =
                         | (b, r) <- combo,
                           isLeft r.outcome
                         ]
-                    let gaps = concat [either id (const []) r.outcome | r <- reaimed]
+                    let gaps = concat [resGaps r | r <- reaimed]
                         ds = concatMap (.dones) reaimed
                     pure $
                       BrRes
@@ -1171,7 +1175,7 @@ resolveBranch g openBwd origin0 start branch endCtx =
                         BrRes
                           (subProgress || st.progress)
                           (subDones <> st.dones)
-                          (Left (failed <> either id (const []) st.outcome))
+                          (Left (failed <> resGaps st))
                           (resReach st)
                           Nothing
                           ( any ((.freshTargetUnsafe) . snd) combo
@@ -1276,8 +1280,8 @@ resolveBranch g openBwd origin0 start branch endCtx =
                 ]
             st <- stationAt v m rest'
             let gaps =
-                  concat [either id (const []) r.outcome | r <- rs]
-                    <> either id (const []) st.outcome
+                  concat [resGaps r | r <- rs]
+                    <> resGaps st
                 ds = concatMap (.dones) rs <> st.dones
                 prog = any (.progress) rs || st.progress
             guard prog
@@ -1375,7 +1379,7 @@ resolveBranch g openBwd origin0 start branch endCtx =
         let contRights = [(ls, f') | (ls, r) <- contCombo, Right f' <- [r.outcome]]
             contProgress = any ((.progress) . snd) contCombo
             contDones = concatMap ((.dones) . snd) contCombo
-            contGaps = concat [either id (const []) r.outcome | (_, r) <- contCombo]
+            contGaps = concat [resGaps r | (_, r) <- contCombo]
             extendBs bs' =
               singletonSet (smartBuildSequence bs' unanchored (rebuildParts rest'))
             extendGap gp =
@@ -1419,17 +1423,17 @@ resolveBranch g openBwd origin0 start branch endCtx =
                   [ resolveBranch g False origin f b (EndAt (singletonSet jn))
                   | b <- failedBranches
                   ]
-              let reaimGaps = concat [either id (const []) r.outcome | r <- reaims]
+              let reaimGaps = concat [resGaps r | r <- reaims]
                   reaimDones = concatMap (.dones) reaims
                   failedGaps =
-                    concat [either id (const []) r.outcome | r <- failedReaims]
+                    concat [resGaps r | r <- failedReaims]
                   failedDones = concatMap (.dones) failedReaims
                   -- a gapped member whose residual lands it at a reach node
                   -- still needs its pair continuation from there; the
                   -- landed members' pairs go through jn instead
                   reachContGaps =
                     concat
-                      [ either id (const []) r.outcome
+                      [ resGaps r
                       | (ls, r) <- contCombo,
                         any (not . null . intersection ls) failedReaches
                       ]
@@ -2029,7 +2033,7 @@ finishRooted g r entries targetPin results = do
                 info.formMustEmit
                 info.attached
                 info.loopGaps
-                (concat [either id (const []) res.outcome | (_, res) <- brs])
+                (concat [resGaps res | (_, res) <- brs])
             | ((info, _), brs) <- zip entries results
             ]
           targetGaps = case targetPin of
