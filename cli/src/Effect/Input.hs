@@ -20,6 +20,6 @@ runInputConst i = interpret \_ -> \case Input -> pure i
 -- | Run an 'Input' effect by always returning the value returned by a monadic
 -- action once. This is useful for initializing an input in terms of a State
 -- effect for example.
-runInputConstSem :: Eff effs i -> Eff (Input i : effs) a -> Eff effs a
-runInputConstSem initializationAction action =
+runInputConstM :: Eff effs i -> Eff (Input i : effs) a -> Eff effs a
+runInputConstM initializationAction action =
   initializationAction >>= \val -> runInputConst val action

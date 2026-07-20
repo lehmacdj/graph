@@ -21,14 +21,13 @@ applyInput2Of ::
   Eff effs a
 applyInput2Of l f b = input @env >>= flip f b . view l
 
--- | Utility function to interpret an Input effect as a State effect, via the
--- inclusion Reader < State.
-runReaderAsState ::
+-- | Interpret an 'Input' effect by reading an ambient 'State' effect.
+runInputAsState ::
   forall r effs a.
   (State r :> effs) =>
   Eff (Input r : effs) a ->
   Eff effs a
-runReaderAsState = interpret \_ -> \case Input -> get
+runInputAsState = interpret \_ -> \case Input -> get
 
 -- | Interpret a 'Reader' in terms of an ambient 'State' effect, reading the
 -- value through the provided getter. 'Local' is supported by tracking the
@@ -75,9 +74,9 @@ runStateInputIORefOf l = applyInput2Of l runStateIORef
 -- | even after modifying the state variable used to initialize the Input
 -- the input should be the original value; i.e. the initialization action
 -- should not be called multiple times
-unit_runInputConstSem_alwaysSame :: Assertion
-unit_runInputConstSem_alwaysSame =
-  (runPureEff . runStateLocal 0 . runInputConstSem initAction) action
+unit_runInputConstM_alwaysSame :: Assertion
+unit_runInputConstM_alwaysSame =
+  (runPureEff . runStateLocal 0 . runInputConstM initAction) action
     @=? (0, 0)
   where
     initAction :: (State Int :> r) => Eff r Int

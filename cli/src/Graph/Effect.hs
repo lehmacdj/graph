@@ -148,7 +148,7 @@ runReadGraphDualizeableIO ::
   FilePath ->
   Eff (ReadGraph t (Maybe ByteString) ': effs) ~> Eff effs
 runReadGraphDualizeableIO dir =
-  runReaderAsState
+  runInputAsState
     . runReadGraphIODualizeable dir
     . inject
 
@@ -165,7 +165,7 @@ runReadGraphDatalessDualizeableIO ::
   FilePath ->
   Eff (ReadGraphDataless t ': effs) ~> Eff effs
 runReadGraphDatalessDualizeableIO dir =
-  runReaderAsState
+  runInputAsState
     . runReadGraphDatalessIODualizeable dir
     . inject
 
@@ -302,4 +302,4 @@ runWriteGraphDualizeableIO ::
   FilePath ->
   Eff (WriteGraph t : effs) ~> Eff effs
 runWriteGraphDualizeableIO dir =
-  runReaderAsState . runWriteGraphIODualizeable dir . inject
+  runInputAsState . runWriteGraphIODualizeable dir . inject
