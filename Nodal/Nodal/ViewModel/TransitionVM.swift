@@ -38,7 +38,7 @@ enum ThumbnailValue: Equatable {
 }
 
 @MainActor
-protocol TransitionVM: Observable, Identifiable {
+protocol TransitionVM: AnyObject, Observable, Identifiable {
     var direction: Direction { get }
 
     var destinationNid: NID { get }

@@ -64,31 +64,48 @@ final class GraphRepositoryTransitionVM: TransitionVM {
     private var requireThumbnail = false
 
     /// Task that tries to fetch the thumbnail
-    /// `subscribeThumbnail` continuously restarts this task so that we can cancel from
-    /// ``fetchThumbnail()`` to respect the ``requireThumbnail`` property
-    private var subscribeThumbnailTask: Task<Void, Never>?
+    /// ``runThumbnailSubscription()`` continuously restarts this task so that we can cancel
+    /// from ``fetchThumbnail()`` to respect the ``requireThumbnail`` property
+    private var updateThumbnailTask: Task<Void, Never>?
+
+    /// The in-flight ``subscribeThumbnail()`` call, if there is one.
+    ///
+    /// SwiftUI cancels a row's `.task` and starts its replacement immediately, so a new
+    /// subscription regularly begins while the previous one is still tearing down. Waiting
+    /// for the previous one to finish (instead of returning) is what keeps the cell
+    /// subscribed: a dropped subscription leaves it with a stale thumbnail and no update
+    /// loop for ``fetchThumbnail()`` to restart, so tapping it does nothing at all until
+    /// scrolling recreates the row.
+    private var thumbnailSubscription: Task<Void, Never>?
 
     private func subscribeThumbnail() async {
-        guard subscribeThumbnailTask == nil else {
-            logWarn("duplicate subscribe call")
-            return
+        while let previous = thumbnailSubscription {
+            // `previous` clears the slot from its own `defer`, so it is nil by the time we
+            // are resumed unless another subscription got there first
+            await previous.value
+            if Task.isCancelled { return }
         }
+        let subscription = Task { await runThumbnailSubscription() }
+        thumbnailSubscription = subscription
+        await withTaskCancellationHandler {
+            await subscription.value
+        } onCancel: {
+            subscription.cancel()
+        }
+    }
+
+    private func runThumbnailSubscription() async {
         logDebug("beginning subscription")
         defer {
             logDebug("ending subscription")
-            subscribeThumbnailTask = nil
+            thumbnailSubscription = nil
         }
         while !Task.isCancelled {
             // this is trying to:
             // 1. continuously (re-)start the task if it gets cancelled but the parent task (called from SwiftUI isn't)
             // 2. respond to cancellation by stopping any processes that are continuously trying to update the VM
-            let task: Task<Void, Never>
-            if let subscribeThumbnailTask {
-                task = subscribeThumbnailTask
-            } else {
-                task = Task { await updateThumbnailLoop() }
-            }
-            subscribeThumbnailTask = task
+            let task = Task { await updateThumbnailLoop() }
+            updateThumbnailTask = task
             await withTaskCancellationHandler {
                 await task.value
             } onCancel: {
@@ -103,7 +120,7 @@ final class GraphRepositoryTransitionVM: TransitionVM {
 
     private func updateThumbnailLoop() async {
         defer {
-            subscribeThumbnailTask = nil
+            updateThumbnailTask = nil
             switch thumbnail {
             case .loading: thumbnail = .idle
             default: break
@@ -191,16 +208,23 @@ final class GraphRepositoryTransitionVM: TransitionVM {
             logWarn("can't fetch thumbnail unless it is available remotely")
             return
         }
+        // Show the spinner before doing anything else. The update loop may not be running
+        // yet, and a download requested by an earlier tap can still be in flight, so
+        // leaving the cell showing the cloud icon makes the tap look ignored until the
+        // download happens to complete.
+        thumbnail = .loaded(.thumbnail(.loading))
         guard !requireThumbnail else {
-            logWarn("trying to fetch thumbnail a second time")
+            logInfo("thumbnail fetch was already requested; waiting for it")
             return
         }
         requireThumbnail = true
-        if let subscribeThumbnailTask {
-            subscribeThumbnailTask.cancel()
-            thumbnail = .loaded(.thumbnail(.loading))
+        if let updateThumbnailTask {
+            // cancelling makes the subscription restart the loop, which then requests the
+            // data with .needDataEvenIfRemote
+            updateThumbnailTask.cancel()
         } else {
-            logWarn("no subscribe thumbnail task to cancel")
+            // requireThumbnail is sticky, so the next update loop still downloads the data
+            logWarn("no update thumbnail task to cancel")
         }
     }
 

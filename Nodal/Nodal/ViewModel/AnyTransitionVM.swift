@@ -10,10 +10,19 @@ import Foundation
 
 @Observable final class AnyTransitionVM: TransitionVM {
     init(erasing underlying: any TransitionVM) {
+        self.id = ObjectIdentifier(underlying)
         self.underlying = underlying
     }
 
     private var underlying: any TransitionVM
+
+    /// Identity has to come from the wrapped view model, not from `self`.
+    ///
+    /// `GraphRepositoryNodeVM` re-erases its (reused) transition view models on
+    /// every graph update, so the default `ObjectIdentifier(self)` identity
+    /// would change every update and make `ForEach` tear down and rebuild every
+    /// row of the list.
+    nonisolated let id: ObjectIdentifier
 
     var direction: Direction { underlying.direction }
 
