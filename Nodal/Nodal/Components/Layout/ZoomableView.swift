@@ -65,7 +65,7 @@ struct ZoomableView<Content: View>: View {
             let value = ResizeRotateGestureValue(svalue)
             state = state ?? .init(anchor: value.anchor, location: value.location)
             state?.scale ?= value.magnification
-            state?.angle ?= value.rotation.map(rotationPastThreshold)
+            state?.angle ?= value.rotation.map(thresholdedRotation)
         }
         .onEnded { svalue in
             let value = ResizeRotateGestureValue(svalue)
@@ -73,7 +73,7 @@ struct ZoomableView<Content: View>: View {
             let oldAngle = angle
             let oldScale = scale
             if let rotation = value.rotation, rotation.radians.isFinite {
-                angle += rotationPastThreshold(rotation)
+                angle += thresholdedRotation(rotation)
             }
             if let magnification = value.magnification, magnification.isFinite {
                 scale = clampedScale(scale * magnification)
@@ -91,15 +91,17 @@ struct ZoomableView<Content: View>: View {
         }
     }
 
-    /// The part of a gesture's rotation beyond `minimumRotation`.
+    /// The rotation to apply for a gesture's rotation: none until the gesture
+    /// has rotated at least `minimumRotation`, then all of it, so the content
+    /// jumps to catch up with the gesture at the threshold.
     ///
-    /// The content only starts rotating once the gesture has rotated that far,
-    /// and then rotates smoothly from zero rather than jumping to catch up.
     /// Using this both while the gesture is in progress and when it ends means
-    /// the content never snaps when the gesture is released.
-    private func rotationPastThreshold(_ rotation: Angle) -> Angle {
-        let excess = max(0, abs(rotation.radians) - minimumRotation.radians)
-        return .radians(rotation.radians < 0 ? -excess : excess)
+    /// the content never snaps when the gesture is released. This can't
+    /// remember whether the threshold was passed earlier in the gesture, since
+    /// the gesture state has already been reset by the time `onEnded` runs, so
+    /// rotating back below the threshold also jumps back to no rotation.
+    private func thresholdedRotation(_ rotation: Angle) -> Angle {
+        abs(rotation.radians) >= minimumRotation.radians ? rotation : .zero
     }
 
     /// Calculates the scroll position needed to keep an anchor point at the same viewport location
