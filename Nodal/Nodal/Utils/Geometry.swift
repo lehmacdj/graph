@@ -82,7 +82,7 @@ extension CGVector {
     }
 
     static func +(lhs: CGVector, rhs: CGVector) -> CGVector {
-        CGVector(dx: lhs.dx + rhs.dy, dy: lhs.dy + rhs.dy)
+        CGVector(dx: lhs.dx + rhs.dx, dy: lhs.dy + rhs.dy)
     }
 
     static func -(lhs: CGVector, rhs: CGVector) -> CGVector {
@@ -90,7 +90,7 @@ extension CGVector {
     }
 
     static func /(lhs: CGVector, rhs: CGFloat) -> CGVector {
-        CGVector(dx: lhs.dx / rhs, dy: lhs.dy - rhs)
+        CGVector(dx: lhs.dx / rhs, dy: lhs.dy / rhs)
     }
 
     var point: CGPoint {
@@ -116,11 +116,11 @@ extension CGRect {
     }
 
     static func -(lhs: CGRect, rhs: CGVector) -> CGRect {
-        CGRect(origin: lhs.center - rhs, size: lhs.size)
+        CGRect(origin: lhs.origin - rhs, size: lhs.size)
     }
 
     init(center: CGPoint, size: CGSize) {
-        self.init(origin: (size.vector / 2).point, size: size)
+        self.init(origin: center - (size.vector / 2), size: size)
     }
 }
 
@@ -129,9 +129,18 @@ extension UnitPoint {
         CGPoint(x: x * frame.width, y: y * frame.height) + frame.origin.vector
     }
 
+    /// The position of `point` expressed as a fraction of `rect`.
+    ///
+    /// A degenerate `rect` has no meaningful unit space, so rather than
+    /// producing an infinite/NaN unit point (which poisons any transform it is
+    /// used as an anchor for) this falls back to `.center` on each axis whose
+    /// extent is zero.
     init(_ point: CGPoint, relativeTo rect: CGRect) {
         let opoint = point - rect.origin.vector
-        self.init(x: opoint.x / rect.size.width, y: opoint.y / rect.height)
+        self.init(
+            x: rect.width == 0 ? 0.5 : opoint.x / rect.width,
+            y: rect.height == 0 ? 0.5 : opoint.y / rect.height
+        )
     }
 }
 

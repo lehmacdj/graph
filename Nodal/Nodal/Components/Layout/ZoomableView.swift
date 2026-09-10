@@ -31,10 +31,21 @@ struct ZoomableView<Content: View>: View {
         self.content = content()
     }
 
+    /// Name of the coordinate space the viewport establishes. All geometry
+    /// used for anchoring gestures and computing scroll positions is measured
+    /// in this space so that it agrees with gesture locations, which are
+    /// reported relative to the view the gesture is attached to.
+    private static var viewportSpace: String { "ZoomableView-viewport" }
+
     @State private var scale: CGFloat = 1.0
     @State private var angle: Angle = .zero
 
     let minimumRotation = Angle.radians(2 * .pi * 0.02)
+    /// `MagnifyGesture.magnification` is relative to the start of the gesture,
+    /// so the threshold to begin recognizing must not depend on the current
+    /// zoom. Scaling it by `scale` made the gesture progressively harder to
+    /// start the further you zoomed in, until pinching stopped working at all.
+    let minimumScaleDelta: CGFloat = 0.01
     struct ResizeRotateGestureState {
         var anchor: UnitPoint
         var location: CGPoint
@@ -44,7 +55,7 @@ struct ZoomableView<Content: View>: View {
     @GestureState private var resizeRotateGestureState: ResizeRotateGestureState?
     private var resizeRotateGesture: some Gesture {
         SimultaneousGesture(
-            MagnifyGesture(minimumScaleDelta: scale * 0.01),
+            MagnifyGesture(minimumScaleDelta: minimumScaleDelta),
             RotateGesture(minimumAngleDelta: minimumRotation)
         )
         .updating($resizeRotateGestureState) { svalue, state, _ in
@@ -58,11 +69,11 @@ struct ZoomableView<Content: View>: View {
 
             let oldAngle = angle
             let oldScale = scale
-            if let rotation = value.rotation {
+            if let rotation = value.rotation, rotation.radians.isFinite {
                 angle += rotation
             }
-            if let magnification = value.magnification {
-                scale *= magnification
+            if let magnification = value.magnification, magnification.isFinite {
+                scale = clampedScale(scale * magnification)
             }
 
             if let newScrollPosition = calculateScrollPosition(
@@ -149,20 +160,92 @@ struct ZoomableView<Content: View>: View {
         return newScrollPosition
     }
 
-    private func applyZoomState(zoomState: ZoomState) {
-        guard let viewportSize = viewportFrame?.size else { return }
-        guard let defaultContentSize else { return }
+    /// The scale at which the untransformed content exactly fits the viewport,
+    /// or nil while the geometry needed to compute it is unavailable.
+    private var fitScale: CGFloat? {
+        guard let viewportSize = viewportFrame?.size, let defaultContentSize else {
+            return nil
+        }
+        guard defaultContentSize.width > 0, defaultContentSize.height > 0 else {
+            // The content hasn't been laid out yet (or has no intrinsic size).
+            // Dividing here would produce an infinite scale that then poisons
+            // every subsequent transform.
+            return nil
+        }
+        return min(
+            viewportSize.width / defaultContentSize.width,
+            viewportSize.height / defaultContentSize.height
+        )
+    }
+
+    /// Largest scale we allow zooming to.
+    ///
+    /// Scaling the content up produces a correspondingly large layer for the
+    /// render server to rasterize, so without a bound a few pinches can grow
+    /// the content to a size that stalls the app.
+    private var maximumScale: CGFloat {
+        let absoluteMaximum: CGFloat = 32
+        let maximumRenderedSide: CGFloat = 16384
+        guard let defaultContentSize else { return absoluteMaximum }
+        let longestSide = max(defaultContentSize.width, defaultContentSize.height)
+        guard longestSide > 0 else { return absoluteMaximum }
+        // Never bound below the scale needed to fit, otherwise a very large
+        // image couldn't be shown in its entirety.
+        return max(fitScale ?? 0, min(absoluteMaximum, maximumRenderedSide / longestSide))
+    }
+
+    /// Smallest scale we allow zooming to; there's no point in shrinking the
+    /// content much beyond the point where it fits the viewport.
+    private var minimumScale: CGFloat {
+        min(fitScale ?? 1, 1) / 4
+    }
+
+    private func clampedScale(_ scale: CGFloat) -> CGFloat {
+        guard scale.isFinite, scale > 0 else { return self.scale }
+        return min(max(scale, minimumScale), maximumScale)
+    }
+
+    /// Applies a zoom state, returning whether it could be applied. It can't be
+    /// applied until the viewport and content have both been measured.
+    @discardableResult
+    private func applyZoomState(zoomState: ZoomState) -> Bool {
+        guard let viewportSize = viewportFrame?.size, let defaultContentSize, let fitScale else {
+            return false
+        }
         switch zoomState {
         case .fit:
-            scale = min(viewportSize.width / defaultContentSize.width,  viewportSize.height / defaultContentSize.height)
-            angle = .zero
+            scale = clampedScale(fitScale)
         case .fill:
-            scale = max(viewportSize.width / defaultContentSize.width, viewportSize.height / defaultContentSize.height)
-            angle = .zero
+            scale = clampedScale(max(
+                viewportSize.width / defaultContentSize.width,
+                viewportSize.height / defaultContentSize.height
+            ))
         case .actualSize:
-            scale = 1.0
-            angle = .zero
+            scale = clampedScale(1.0)
         }
+        angle = .zero
+        return true
+    }
+
+    /// The anchor, relative to the content, that an in-progress gesture should
+    /// scale and rotate the content about. Falls back to the center of the
+    /// content while the content hasn't been measured yet.
+    private func gestureAnchor(at location: CGPoint) -> UnitPoint {
+        guard let contentFrame else { return .center }
+        return UnitPoint(location, relativeTo: contentFrame)
+    }
+
+    /// Performs the initial zoom to fit as soon as the geometry required to do
+    /// so is available.
+    ///
+    /// This can't happen in `onAppear`: that runs before the first geometry is
+    /// reported, so the zoom would silently do nothing and the content would be
+    /// left at actual size.
+    private func applyInitialZoomStateIfPossible() {
+        guard !didInitialZoom else { return }
+        guard applyZoomState(zoomState: nextZoomState) else { return }
+        nextZoomState = nextZoomState.next
+        didInitialZoom = true
     }
 
 
@@ -191,27 +274,30 @@ struct ZoomableView<Content: View>: View {
                     content.onGeometryChange(
                         for: CGSize.self,
                         of: \.size,
-                        action: { defaultContentSize = $0 }
+                        action: {
+                            defaultContentSize = $0
+                            applyInitialZoomStateIfPossible()
+                        }
                     ),
                 scale: scale,
                 rotation: angle
             )
             .onGeometryChange(
                 for: CGRect.self,
-                of: { proxy in proxy.frame(in: .named("ZoomableView-viewport")) },
+                of: { proxy in proxy.frame(in: .named(Self.viewportSpace)) },
                 action: { contentFrame = $0 }
             )
             .modifierIfLet(resizeRotateGestureState) { state in
                 _ScaleEffect(
                     scale: CGSize(square: state.scale),
-                    anchor: UnitPoint(state.location, relativeTo: contentFrame ?? .zero)
+                    anchor: gestureAnchor(at: state.location)
                 )
                 .ignoredByLayout()
             }
             .modifierIfLet(resizeRotateGestureState) { state in
                 _RotationEffect(
                     angle: state.angle,
-                    anchor: UnitPoint(state.location, relativeTo: contentFrame ?? .zero)
+                    anchor: gestureAnchor(at: state.location)
                 )
                 .ignoredByLayout()
             }
@@ -227,8 +313,11 @@ struct ZoomableView<Content: View>: View {
         }
         .onGeometryChange(
             for: CGRect.self,
-            of: { proxy in proxy.frame(in: .named("Zoomable-viewport"))},
-            action: { viewportFrame = $0 }
+            of: { proxy in proxy.frame(in: .named(Self.viewportSpace)) },
+            action: {
+                viewportFrame = $0
+                applyInitialZoomStateIfPossible()
+            }
         )
         .onScrollGeometryChange(
             for: CGPoint.self,
@@ -243,14 +332,7 @@ struct ZoomableView<Content: View>: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .simultaneousGesture(resizeRotateGesture)
         .gesture(doubleTapGesture)
-        .id("ZoomableView-viewport")
-        .onAppear {
-            if !didInitialZoom {
-                applyZoomState(zoomState: nextZoomState)
-                nextZoomState = nextZoomState.next
-                didInitialZoom = true
-            }
-        }
+        .coordinateSpace(.named(Self.viewportSpace))
     }
 }
 
