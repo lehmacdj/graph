@@ -48,7 +48,7 @@ import Foundation
         try underlying.toggleFavorite(child: nid)
     }
 
-    func toggleWorse(child _: NID) throws {
+    func toggleWorse(child nid: NID) throws {
         try underlying.toggleWorse(child: nid)
     }
 }
