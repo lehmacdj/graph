@@ -8,13 +8,22 @@
 import SwiftUI
 
 struct PreventSleeping: ViewModifier {
+    var isActive = true
+
     func body(content: Content) -> some View {
         content
             .onAppear {
-                UIApplication.shared.isIdleTimerDisabled = true
+                if isActive {
+                    UIApplication.shared.isIdleTimerDisabled = true
+                }
+            }
+            .onChange(of: isActive) { _, isActive in
+                UIApplication.shared.isIdleTimerDisabled = isActive
             }
             .onDisappear {
-                UIApplication.shared.isIdleTimerDisabled = false
+                if isActive {
+                    UIApplication.shared.isIdleTimerDisabled = false
+                }
             }
     }
 }
@@ -24,12 +33,12 @@ extension View {
         modifier(PreventSleeping())
     }
 
-    @ViewBuilder
+    /// Prevents sleeping while `shouldPreventSleeping` is true.
+    ///
+    /// Toggling this must not add or remove the modifier conditionally: that
+    /// changes the structural identity of the view, recreating it and
+    /// discarding its state (e.g. the zoom and scroll position of an image).
     func preventSleeping(_ shouldPreventSleeping: Bool) -> some View {
-        if shouldPreventSleeping {
-            modifier(PreventSleeping())
-        } else {
-            self
-        }
+        modifier(PreventSleeping(isActive: shouldPreventSleeping))
     }
 }

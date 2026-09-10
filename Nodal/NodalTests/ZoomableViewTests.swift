@@ -89,3 +89,54 @@ extension UIImage {
     #expect(center.g > center.r && center.g > center.b,
             "expected the center of the fitted image to be visible, got \(center)")
 }
+
+@MainActor
+@Observable
+private final class Toggle {
+    var isOn = false
+}
+
+@MainActor
+private final class AppearanceCounter {
+    var count = 0
+}
+
+private struct PreventSleepingHost: View {
+    let toggle: Toggle
+    let counter: AppearanceCounter
+
+    var body: some View {
+        Color.red
+            .onAppear { counter.count += 1 }
+            .preventSleeping(toggle.isOn)
+    }
+}
+
+/// Toggling whether sleep is prevented must not change the structural identity
+/// of the content. `ImageView` toggles it whenever the navigation chrome is
+/// shown or hidden, and a change of identity recreates the `ZoomableView`,
+/// discarding its zoom and scroll position.
+@MainActor
+@Test func togglingPreventSleepingPreservesContentIdentity() async throws {
+    let toggle = Toggle()
+    let counter = AppearanceCounter()
+    let host = UIHostingController(
+        rootView: PreventSleepingHost(toggle: toggle, counter: counter)
+    )
+    let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 100, height: 100))
+    window.rootViewController = host
+    window.makeKeyAndVisible()
+    try await Task.sleep(for: .milliseconds(200))
+    #expect(counter.count == 1)
+
+    for _ in 0..<3 {
+        toggle.isOn.toggle()
+        try await Task.sleep(for: .milliseconds(100))
+    }
+    #expect(counter.count == 1, "content was recreated when toggling")
+    #expect(UIApplication.shared.isIdleTimerDisabled == true)
+
+    toggle.isOn = false
+    try await Task.sleep(for: .milliseconds(100))
+    #expect(UIApplication.shared.isIdleTimerDisabled == false)
+}
