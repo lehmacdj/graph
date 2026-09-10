@@ -40,36 +40,54 @@ struct ZoomableView<Content: View>: View {
     @State private var scale: CGFloat = 1.0
     @State private var angle: Angle = .zero
 
+    /// How far a gesture must rotate before the content starts rotating, so that
+    /// pinching doesn't rotate the content by accident.
     let minimumRotation = Angle.radians(2 * .pi * 0.02)
-    /// `MagnifyGesture.magnification` is relative to the start of the gesture,
-    /// so the threshold to begin recognizing must not depend on the current
-    /// zoom. Scaling it by `scale` made the gesture progressively harder to
-    /// start the further you zoomed in, until pinching stopped working at all.
-    let minimumScaleDelta: CGFloat = 0.01
     struct ResizeRotateGestureState {
         var anchor: UnitPoint
         var location: CGPoint
         var angle: Angle = .zero
         var scale: CGFloat = 1.0
+        /// Whether the rotation has exceeded `minimumRotation` at some point
+        /// during the gesture. Once it has, the content tracks the rotation
+        /// exactly, even back below the threshold.
+        var isRotating = false
     }
     @GestureState private var resizeRotateGestureState: ResizeRotateGestureState?
     private var resizeRotateGesture: some Gesture {
+        // Both gestures must be allowed to start immediately, with thresholds
+        // like `minimumRotation` applied by us instead. If one of the gestures
+        // in a `SimultaneousGesture` never starts, e.g. the `RotateGesture`
+        // during a pinch that doesn't rotate past its `minimumAngleDelta`, the
+        // simultaneous gesture never ends. `onEnded` isn't called, the gesture
+        // state is never reset, and the view stops receiving any further
+        // gestures or scrolls: it freezes.
         SimultaneousGesture(
-            MagnifyGesture(minimumScaleDelta: minimumScaleDelta),
-            RotateGesture(minimumAngleDelta: minimumRotation)
+            MagnifyGesture(minimumScaleDelta: 0),
+            RotateGesture(minimumAngleDelta: .zero)
         )
         .updating($resizeRotateGestureState) { svalue, state, _ in
             let value = ResizeRotateGestureValue(svalue)
             state = state ?? .init(anchor: value.anchor, location: value.location)
-            state?.angle ?= value.rotation
             state?.scale ?= value.magnification
+            if let rotation = value.rotation {
+                if abs(rotation.radians) >= minimumRotation.radians {
+                    state?.isRotating = true
+                }
+                if state?.isRotating == true {
+                    state?.angle = rotation
+                }
+            }
         }
         .onEnded { svalue in
             let value = ResizeRotateGestureValue(svalue)
 
             let oldAngle = angle
             let oldScale = scale
-            if let rotation = value.rotation, rotation.radians.isFinite {
+            // A rotation that ends below the threshold snaps back, whether or
+            // not it passed the threshold earlier in the gesture.
+            if let rotation = value.rotation, rotation.radians.isFinite,
+               abs(rotation.radians) >= minimumRotation.radians {
                 angle += rotation
             }
             if let magnification = value.magnification, magnification.isFinite {
@@ -166,10 +184,12 @@ struct ZoomableView<Content: View>: View {
         guard let viewportSize = viewportFrame?.size, let defaultContentSize else {
             return nil
         }
-        guard defaultContentSize.width > 0, defaultContentSize.height > 0 else {
-            // The content hasn't been laid out yet (or has no intrinsic size).
-            // Dividing here would produce an infinite scale that then poisons
-            // every subsequent transform.
+        guard viewportSize.width > 0, viewportSize.height > 0,
+              defaultContentSize.width > 0, defaultContentSize.height > 0
+        else {
+            // Not laid out yet: the viewport is reported as zero-sized before
+            // it gets its real size, and content may be too. Dividing here
+            // would produce a zero or infinite scale instead of the fit scale.
             return nil
         }
         return min(
@@ -229,10 +249,10 @@ struct ZoomableView<Content: View>: View {
 
     /// The anchor, relative to the content, that an in-progress gesture should
     /// scale and rotate the content about. Falls back to the center of the
-    /// content while the content hasn't been measured yet.
-    private func gestureAnchor(at location: CGPoint) -> UnitPoint {
-        guard let contentFrame else { return .center }
-        return UnitPoint(location, relativeTo: contentFrame)
+    /// content when there's no gesture or the content hasn't been measured.
+    private var gestureAnchor: UnitPoint {
+        guard let resizeRotateGestureState, let contentFrame else { return .center }
+        return UnitPoint(resizeRotateGestureState.location, relativeTo: contentFrame)
     }
 
     /// Performs the initial zoom to fit as soon as the geometry required to do
@@ -287,20 +307,24 @@ struct ZoomableView<Content: View>: View {
                 of: { proxy in proxy.frame(in: .named(Self.viewportSpace)) },
                 action: { contentFrame = $0 }
             )
-            .modifierIfLet(resizeRotateGestureState) { state in
+            // Always apply these effects, with identity values while no gesture
+            // is in progress. Applying them conditionally changes the structural
+            // identity of the content whenever a gesture starts or ends,
+            // recreating it and resetting its state mid-gesture.
+            .modifier(
                 _ScaleEffect(
-                    scale: CGSize(square: state.scale),
-                    anchor: gestureAnchor(at: state.location)
+                    scale: CGSize(square: resizeRotateGestureState?.scale ?? 1),
+                    anchor: gestureAnchor
                 )
                 .ignoredByLayout()
-            }
-            .modifierIfLet(resizeRotateGestureState) { state in
+            )
+            .modifier(
                 _RotationEffect(
-                    angle: state.angle,
-                    anchor: gestureAnchor(at: state.location)
+                    angle: resizeRotateGestureState?.angle ?? .zero,
+                    anchor: gestureAnchor
                 )
                 .ignoredByLayout()
-            }
+            )
             // Keep the content centered when it's smaller than the viewport.
             // A ScrollView pins its content to the top-leading corner, so
             // without this a fit-scaled image smaller than the screen would
