@@ -48,20 +48,15 @@ struct ZoomableView<Content: View>: View {
         var location: CGPoint
         var angle: Angle = .zero
         var scale: CGFloat = 1.0
-        /// Whether the rotation has exceeded `minimumRotation` at some point
-        /// during the gesture. Once it has, the content tracks the rotation
-        /// exactly, even back below the threshold.
-        var isRotating = false
     }
     @GestureState private var resizeRotateGestureState: ResizeRotateGestureState?
     private var resizeRotateGesture: some Gesture {
         // Both gestures must be allowed to start immediately, with thresholds
-        // like `minimumRotation` applied by us instead. If one of the gestures
-        // in a `SimultaneousGesture` never starts, e.g. the `RotateGesture`
-        // during a pinch that doesn't rotate past its `minimumAngleDelta`, the
-        // simultaneous gesture never ends. `onEnded` isn't called, the gesture
-        // state is never reset, and the view stops receiving any further
-        // gestures or scrolls: it freezes.
+        // like `minimumRotation` applied by us instead. A `RotateGesture` that
+        // never passes its `minimumAngleDelta`, e.g. during a pinch, never
+        // finishes, and the view then stops receiving any further gestures or
+        // scrolls: it freezes. This happens whether it's combined with the
+        // `MagnifyGesture` or attached separately.
         SimultaneousGesture(
             MagnifyGesture(minimumScaleDelta: 0),
             RotateGesture(minimumAngleDelta: .zero)
@@ -70,25 +65,15 @@ struct ZoomableView<Content: View>: View {
             let value = ResizeRotateGestureValue(svalue)
             state = state ?? .init(anchor: value.anchor, location: value.location)
             state?.scale ?= value.magnification
-            if let rotation = value.rotation {
-                if abs(rotation.radians) >= minimumRotation.radians {
-                    state?.isRotating = true
-                }
-                if state?.isRotating == true {
-                    state?.angle = rotation
-                }
-            }
+            state?.angle ?= value.rotation.map(rotationPastThreshold)
         }
         .onEnded { svalue in
             let value = ResizeRotateGestureValue(svalue)
 
             let oldAngle = angle
             let oldScale = scale
-            // A rotation that ends below the threshold snaps back, whether or
-            // not it passed the threshold earlier in the gesture.
-            if let rotation = value.rotation, rotation.radians.isFinite,
-               abs(rotation.radians) >= minimumRotation.radians {
-                angle += rotation
+            if let rotation = value.rotation, rotation.radians.isFinite {
+                angle += rotationPastThreshold(rotation)
             }
             if let magnification = value.magnification, magnification.isFinite {
                 scale = clampedScale(scale * magnification)
@@ -104,6 +89,17 @@ struct ZoomableView<Content: View>: View {
                 scrollPosition.scrollTo(point: newScrollPosition)
             }
         }
+    }
+
+    /// The part of a gesture's rotation beyond `minimumRotation`.
+    ///
+    /// The content only starts rotating once the gesture has rotated that far,
+    /// and then rotates smoothly from zero rather than jumping to catch up.
+    /// Using this both while the gesture is in progress and when it ends means
+    /// the content never snaps when the gesture is released.
+    private func rotationPastThreshold(_ rotation: Angle) -> Angle {
+        let excess = max(0, abs(rotation.radians) - minimumRotation.radians)
+        return .radians(rotation.radians < 0 ? -excess : excess)
     }
 
     /// Calculates the scroll position needed to keep an anchor point at the same viewport location
