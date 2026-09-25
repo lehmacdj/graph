@@ -1,7 +1,7 @@
 module Graph.Complete where
 
 import Graph.GraphMetadataEditing
-import Models.Connect (Connect (..), matchConnect)
+import Models.Connect (Connect, Connect' (..), matchConnect)
 import Models.Graph (Graph, emptyGraph)
 import Models.NID
 import Models.Node

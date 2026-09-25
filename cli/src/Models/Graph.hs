@@ -17,6 +17,8 @@ import MyPrelude
 -- * Type definition
 
 -- | A graph is a collection of nodes, each of which has a unique identifier.
+-- The type of node identifiers is a parameter; in general we only use the type
+-- alias 'Graph' that fixes it to 'NID'.
 -- - See 'checkedGraphInvariant' for details on the invariant we maintain about
 --   graphs.
 -- - Functions ending in @'@ in this module expect a node is consistent with
@@ -24,20 +26,24 @@ import MyPrelude
 --   Generally it is most likely preferrable to use the unprimed version of the
 --   function though the primed version is slightly more efficient as it is
 --   able to skip a node lookup in some cases
-newtype Graph t a = Graph
-  { nodeMap :: Map NID (Node t a)
+newtype Graph' n t a = Graph
+  { nodeMap :: Map n (Node' n t t a)
   }
   deriving stock (Eq, Ord, Generic)
   deriving anyclass (NFData)
+
+-- | A graph whose nodes are identified by 'NID'. See 'Graph'' for more
+-- information.
+type Graph t a = Graph' NID t a
 
 -- | Functions that operate on graphs maintain the invariant that any node to
 -- which there is a connection is also in the graph.
 -- i.e. if you do @insertEdge e g@, then @maybeLookupNode g e.source == Just _@
 -- regardless of whether @e.source@ was in the graph before.
 checkedGraphInvariant ::
-  (ValidNode t a) =>
-  Graph t a ->
-  Graph t a
+  (ValidNode' n t a) =>
+  Graph' n t a ->
+  Graph' n t a
 #ifdef DEBUG
 checkedGraphInvariant g = g
 #else
@@ -50,11 +56,11 @@ checkedGraphInvariant g = g
 -- generally only expected to be used internally, but it is okay to use them
 -- externally.
 nodeConsistentWithGraph ::
-  forall t a.
-  (ValidNode t a) =>
-  Graph t a ->
-  Node t a ->
-  Node t a
+  forall n t a.
+  (ValidNode' n t a) =>
+  Graph' n t a ->
+  Node' n t t a ->
+  Node' n t t a
 #ifdef DEBUG
 nodeConsistentWithGraph g n
   | lookupNodeEx g n.nid == n = n
@@ -69,28 +75,33 @@ nodeConsistentWithGraph _ n = n
 -- * Instances
 
 instance
-  (ValidNodeNCS t a, Show t) =>
-  CompactNodeShow (Graph t a)
+  (ValidNodeNCS' n t a, CompactNIDShow n, Show t) =>
+  CompactNodeShow (Graph' n t a)
   where
-  type Augmentation (Graph t a) = a
+  type Augmentation (Graph' n t a) = a
   minimumNidLength settings g =
     fromMaybe maxBound . maximumMay $ minimumNidLength settings <$> nodesOf g
   nshowSettings settings (checkedGraphInvariant -> g) =
     intercalate "\n" $ nshowSettings settings <$> nodesOf g
 
 instance
-  (Show t, ValidNodeNCS t a, ShowableAugmentation a) =>
-  Show (Graph t a)
+  (Show t, ValidNodeNCS' n t a, CompactNIDShow n, ShowableAugmentation a) =>
+  Show (Graph' n t a)
   where
   show = unpack . nshowDefault
 
-type instance Control.Lens.Index (Graph t a) = NID
+type instance Control.Lens.Index (Graph' n t a) = n
 
-type instance Control.Lens.IxValue (Graph t a) = (Node t a)
+type instance Control.Lens.IxValue (Graph' n t a) = (Node' n t t a)
 
-instance (ValidNodeNCS t a, DefaultAugmentation a) => Ixed (Graph t a)
+instance
+  (ValidNodeNCS' n t a, DefaultAugmentation a) =>
+  Ixed (Graph' n t a)
 
-instance (ValidNodeNCS t a, DefaultAugmentation a) => At (Graph t a) where
+instance
+  (ValidNodeNCS' n t a, DefaultAugmentation a) =>
+  At (Graph' n t a)
+  where
   at nid = lens (maybeNodeLookup nid) setter
     where
       setter g Nothing = delNode nid g
@@ -107,52 +118,52 @@ instance (ValidNodeNCS t a, DefaultAugmentation a) => At (Graph t a) where
             & mapGraph (getLast . (.augmentation))
 
 instance
-  (ValidNodeNCS t a, MonoidAugmentation a) =>
-  Semigroup (Graph t a)
+  (ValidNodeNCS' n t a, MonoidAugmentation a) =>
+  Semigroup (Graph' n t a)
   where
   g1 <> g2 = foldl' (flip mergeNodeInto) g1 (nodesOf g2)
 
 instance
-  (ValidNodeNCS t a, MonoidAugmentation a) =>
-  Monoid (Graph t a)
+  (ValidNodeNCS' n t a, MonoidAugmentation a) =>
+  Monoid (Graph' n t a)
   where
   mempty = emptyGraph
   mappend = (<>)
 
-type instance Element (Graph t a) = Node t a
+type instance Element (Graph' n t a) = Node' n t t a
 
-instance MonoFoldable (Graph t a) where
+instance MonoFoldable (Graph' n t a) where
   ofoldMap f = ofoldMap f . view #nodeMap
   ofoldr f z = ofoldr f z . view #nodeMap
   ofoldl' f z = ofoldl' f z . view #nodeMap
   ofoldr1Ex f = ofoldr1Ex f . view #nodeMap
   ofoldl1Ex' f = ofoldl1Ex' f . view #nodeMap
 
-instance MonoFunctor (Graph t a) where
+instance MonoFunctor (Graph' n t a) where
   omap f = over #nodeMap (omap f)
 
--- TODO: it's quite janky for Functor (Graph t) to map over augmentations but
--- MonoFunctor (Graph t a) to map over nodes, maybe we should remove the
+-- TODO: it's quite janky for Functor (Graph' n t) to map over augmentations but
+-- MonoFunctor (Graph' n t a) to map over nodes, maybe we should remove the
 -- Functor instance
-instance Functor (Graph t) where
+instance Functor (Graph' n t) where
   fmap f = Graph . fmap (fmap f) . (.nodeMap)
 
-instance MonoTraversable (Graph t a) where
+instance MonoTraversable (Graph' n t a) where
   otraverse f = fmap Graph . otraverse f . view #nodeMap
 
 -- * Traversals/Lenses
 
 nodesMatching ::
-  (Node t a -> Bool) ->
-  Traversal' (Graph t a) (Node t a)
+  (Node' n t t a -> Bool) ->
+  Traversal' (Graph' n t a) (Node' n t t a)
 nodesMatching f = #nodeMap . traversed . filtered f
 
 nodesMatchedBy ::
   (Indexable i p, Applicative f) =>
-  Getting (First i) (Node t a) i ->
-  p (Node t a) (f (Node t a)) ->
-  Graph t a ->
-  f (Graph t a)
+  Getting (First i) (Node' n t t a) i ->
+  p (Node' n t t a) (f (Node' n t t a)) ->
+  Graph' n t a ->
+  f (Graph' n t a)
 nodesMatchedBy g = #nodeMap . traversed . filteredBy g
 
 -- * Graph scale operations
@@ -160,30 +171,30 @@ nodesMatchedBy g = #nodeMap . traversed . filteredBy g
 -- map/filter functions that offer a little more flexibility than relevant type
 -- classes
 
-emptyGraph :: Graph t a
+emptyGraph :: forall t a n. (Ord n) => Graph' n t a
 emptyGraph = Graph mempty
 
-singletonGraph :: Node t a -> Graph t a
+singletonGraph :: (Ord n) => Node' n t t a -> Graph' n t a
 singletonGraph n = Graph $ singletonMap n.nid n
 
-isEmptyGraph :: Graph t a -> Bool
+isEmptyGraph :: Graph' n t a -> Bool
 isEmptyGraph = null . (.nodeMap)
 
 mapGraph ::
-  (ValidNode t a) =>
-  (Node t a -> b) ->
-  Graph t a ->
-  Graph t b
+  (ValidNode' n t a) =>
+  (Node' n t t a -> b) ->
+  Graph' n t a ->
+  Graph' n t b
 mapGraph f = Graph . fmap (extend f) . (.nodeMap) . checkedGraphInvariant
 
 -- | Semantically removes nodes from the graph which don't meet the predicate.
 -- It is guaranteed that the resulting graph doesn't contain the nodes for which
 -- the predicate returns false.
 subtractiveFilterGraph ::
-  (ValidNode t a) =>
-  (Node t a -> Bool) ->
-  Graph t a ->
-  Graph t a
+  (ValidNode' n t a) =>
+  (Node' n t t a -> Bool) ->
+  Graph' n t a ->
+  Graph' n t a
 subtractiveFilterGraph f (checkedGraphInvariant -> g) =
   foldl' maybeDelNode g g.nodeMap
   where
@@ -193,10 +204,10 @@ subtractiveFilterGraph f (checkedGraphInvariant -> g) =
 
 -- | Like subtractiveFilterGraph but also maps the nodes.
 subtractiveFilterMapGraph ::
-  (ValidNode t a, ValidNode t b) =>
-  (Node t a -> Maybe b) ->
-  Graph t a ->
-  Graph t b
+  (ValidNode' n t a, ValidNode' n t b) =>
+  (Node' n t t a -> Maybe b) ->
+  Graph' n t a ->
+  Graph' n t b
 subtractiveFilterMapGraph f =
   map (unwrapEx "all just by filter")
     . subtractiveFilterGraph (isJust . (.augmentation))
@@ -207,10 +218,10 @@ subtractiveFilterMapGraph f =
 -- the resulting graph may contain nodes that are not connected to the rest of
 -- the graph.
 additiveFilterGraph ::
-  (ValidNode t a, MonoidAugmentation a) =>
-  (Node t a -> Bool) ->
-  Graph t a ->
-  Graph t a
+  (ValidNode' n t a, MonoidAugmentation a) =>
+  (Node' n t t a -> Bool) ->
+  Graph' n t a ->
+  Graph' n t a
 additiveFilterGraph f =
   foldl' maybeInsertNode emptyGraph
   where
@@ -218,27 +229,27 @@ additiveFilterGraph f =
       | f x = insertNode x wg
       | otherwise = wg
 
-dualizeGraph :: Graph t a -> Graph t a
+dualizeGraph :: Graph' n t a -> Graph' n t a
 dualizeGraph = omap dualizeNode
 
 -- | Looking up nodes
-maybeNodeLookup :: NID -> Graph t a -> Maybe (Node t a)
+maybeNodeLookup :: (Ord n) => n -> Graph' n t a -> Maybe (Node' n t t a)
 maybeNodeLookup i = view $ #nodeMap . at i
 
-maybeLookupNode :: Graph t a -> NID -> Maybe (Node t a)
+maybeLookupNode :: (Ord n) => Graph' n t a -> n -> Maybe (Node' n t t a)
 maybeLookupNode = flip maybeNodeLookup
 
 -- | Utility function for converting lookups into actual node values with error
 -- reporting.
-assertNodeInGraph :: (HasCallStack) => NID -> Maybe a -> a
+assertNodeInGraph :: (HasCallStack, Show n) => n -> Maybe a -> a
 assertNodeInGraph _ (Just n) = n
 assertNodeInGraph i Nothing =
   error $ "expected " ++ show i ++ " to be in the graph"
 
-nodeLookupEx :: (ValidNode t a) => NID -> Graph t a -> Node t a
+nodeLookupEx :: (ValidNode' n t a) => n -> Graph' n t a -> Node' n t t a
 nodeLookupEx i = assertNodeInGraph i . maybeNodeLookup i
 
-lookupNodeEx :: (ValidNode t a) => Graph t a -> NID -> Node t a
+lookupNodeEx :: (ValidNode' n t a) => Graph' n t a -> n -> Node' n t t a
 lookupNodeEx = flip nodeLookupEx
 
 -- * Utility functions
@@ -246,29 +257,29 @@ lookupNodeEx = flip nodeLookupEx
 -- | Utility function for constructing a primed version of a function operating
 -- on ids instead of nodes
 unprimed ::
-  (ValidNode t a) =>
-  (Node t a -> Graph t a -> x) ->
-  (NID -> Graph t a -> x)
+  (ValidNode' n t a) =>
+  (Node' n t t a -> Graph' n t a -> x) ->
+  (n -> Graph' n t a -> x)
 unprimed f i ig = f (lookupNodeEx ig i) ig
 
 listify ::
   (HasCallStack) =>
-  (x -> Graph t a -> Graph t a) ->
-  ([x] -> Graph t a -> Graph t a)
+  (x -> Graph' n t a -> Graph' n t a) ->
+  ([x] -> Graph' n t a -> Graph' n t a)
 listify f nodes ig = foldl' (flip f) ig nodes
 
 unprimeds ::
-  (ValidNode t a) =>
-  ([Node t a] -> Graph t a -> x) ->
-  ([NID] -> Graph t a -> x)
+  (ValidNode' n t a) =>
+  ([Node' n t t a] -> Graph' n t a -> x) ->
+  ([n] -> Graph' n t a -> x)
 unprimeds f i ig = f (nodeLookupEx <$> i <*> pure ig) ig
 
 -- * Operations on edges
 
 containsEdge ::
-  (ValidNode t a, HasCallStack) =>
-  Graph t a ->
-  Edge t ->
+  (ValidNode' n t a, HasCallStack) =>
+  Graph' n t a ->
+  Edge' n t ->
   Bool
 (checkedGraphInvariant -> g) `containsEdge` e = withEarlyReturn_ do
   source <- unwrapReturningDefault False $ maybeLookupNode g e.source
@@ -284,10 +295,10 @@ containsEdge ::
   pure outConnectExists
 
 insertEdge ::
-  (ValidNode t a, DefaultAugmentation a) =>
-  Edge t ->
-  Graph t a ->
-  Graph t a
+  (ValidNode' n t a, DefaultAugmentation a) =>
+  Edge' n t ->
+  Graph' n t a ->
+  Graph' n t a
 insertEdge e (checkedGraphInvariant -> g) =
   g
     & #nodeMap
@@ -296,13 +307,17 @@ insertEdge e (checkedGraphInvariant -> g) =
          )
 
 insertEdges ::
-  (ValidNode t a, DefaultAugmentation a) =>
-  [Edge t] ->
-  Graph t a ->
-  Graph t a
+  (ValidNode' n t a, DefaultAugmentation a) =>
+  [Edge' n t] ->
+  Graph' n t a ->
+  Graph' n t a
 insertEdges = listify insertEdge
 
-deleteEdge :: (ValidNode t a) => Edge t -> Graph t a -> Graph t a
+deleteEdge ::
+  (ValidNode' n t a) =>
+  Edge' n t ->
+  Graph' n t a ->
+  Graph' n t a
 deleteEdge e (checkedGraphInvariant -> g) =
   g
     & #nodeMap
@@ -310,24 +325,24 @@ deleteEdge e (checkedGraphInvariant -> g) =
         . adjustMap (over #incoming (deleteSet (inConnect e))) e.sink
 
 deleteEdges ::
-  (ValidNode t a) =>
-  [Edge t] ->
-  Graph t a ->
-  Graph t a
+  (ValidNode' n t a) =>
+  [Edge' n t] ->
+  Graph' n t a ->
+  Graph' n t a
 deleteEdges = listify deleteEdge
 
 -- * Operations on nodes
 
-nodesOf :: Graph t a -> [Node t a]
+nodesOf :: Graph' n t a -> [Node' n t t a]
 nodesOf = (^.. #nodeMap . folded)
 
 -- | Add a node to the graph. The resulting graph is made consistent with the
 -- provided node. Edges are added/removed to maintain the invariant.
 insertNode ::
-  (ValidNode t a, MonoidAugmentation a) =>
-  Node t a ->
-  Graph t a ->
-  Graph t a
+  (ValidNode' n t a, MonoidAugmentation a) =>
+  Node' n t t a ->
+  Graph' n t a ->
+  Graph' n t a
 insertNode n (checkedGraphInvariant -> g) =
   g
     & #nodeMap . at n.nid %~ ensureNodeExists
@@ -339,10 +354,10 @@ insertNode n (checkedGraphInvariant -> g) =
       Just original -> Just original
 
 insertNodes ::
-  (ValidNode t a, MonoidAugmentation a) =>
-  [Node t a] ->
-  Graph t a ->
-  Graph t a
+  (ValidNode' n t a, MonoidAugmentation a) =>
+  [Node' n t t a] ->
+  Graph' n t a ->
+  Graph' n t a
 insertNodes = listify insertNode
 
 -- | Update a node in the graph so that it is consistent with the graph.
@@ -350,10 +365,10 @@ insertNodes = listify insertNode
 -- graph before but are no longer in the node.
 -- If the node is not in the graph, the input graph is returned as is.
 updateNode ::
-  (ValidNode t a, MonoidAugmentation a) =>
-  Node t a ->
-  Graph t a ->
-  Graph t a
+  (ValidNode' n t a, MonoidAugmentation a) =>
+  Node' n t t a ->
+  Graph' n t a ->
+  Graph' n t a
 updateNode n g = withEarlyReturn_ do
   let nid = n.nid
   original <- unwrapReturningDefault g $ maybeNodeLookup nid g
@@ -378,10 +393,10 @@ updateNode n g = withEarlyReturn_ do
 -- includes all edges in the graph / the provided node instead of deleting edges
 -- in the graph that aren't in the newly inserted node.
 mergeNodeInto ::
-  (ValidNode t a, HasCallStack, MonoidAugmentation a) =>
-  Node t a ->
-  Graph t a ->
-  Graph t a
+  (ValidNode' n t a, HasCallStack, MonoidAugmentation a) =>
+  Node' n t t a ->
+  Graph' n t a ->
+  Graph' n t a
 mergeNodeInto n g =
   g
     & at n.nid %~ \case
@@ -390,7 +405,11 @@ mergeNodeInto n g =
 
 -- | Remove a node from the graph; updating the cached data in the neighbors
 -- nodes as well.
-delNode' :: (ValidNode t a) => Node t a -> Graph t a -> Graph t a
+delNode' ::
+  (ValidNode' n t a) =>
+  Node' n t t a ->
+  Graph' n t a ->
+  Graph' n t a
 delNode' n g =
   withNodeMap g $
     omap deleteIncoming
@@ -403,10 +422,10 @@ delNode' n g =
     deleteOutgoing = over #outgoing del
 
 delNode ::
-  (ValidNode t a) =>
-  NID ->
-  Graph t a ->
-  Graph t a
+  (ValidNode' n t a) =>
+  n ->
+  Graph' n t a ->
+  Graph' n t a
 -- this needs special treatment because unprimeds requires the node to be in the
 -- graph
 delNode nid g = case g ^. #nodeMap . at nid of
@@ -414,28 +433,35 @@ delNode nid g = case g ^. #nodeMap . at nid of
   Nothing -> g
 
 delNodes' ::
-  (ValidNode t a) => [Node t a] -> Graph t a -> Graph t a
+  (ValidNode' n t a) => [Node' n t t a] -> Graph' n t a -> Graph' n t a
 delNodes' = listify delNode'
 
 delNodes ::
-  (ValidNode t a) =>
-  [NID] ->
-  Graph t a ->
-  Graph t a
+  (ValidNode' n t a) =>
+  [n] ->
+  Graph' n t a ->
+  Graph' n t a
 delNodes = listify delNode
 
-nidSet :: Graph t a -> Set NID
+nidSet :: (Ord n) => Graph' n t a -> Set n
 nidSet = keysSet . (.nodeMap)
 
-edgeSet :: forall t a. (ValidTransition t) => Graph t a -> Set (Edge t)
+edgeSet ::
+  forall n t a.
+  (ValidTransition t, ValidNID n) =>
+  Graph' n t a ->
+  Set (Edge' n t)
 edgeSet = foldMap getEdges . (.nodeMap)
   where
-    getEdges :: Node t a -> Set (Edge t)
+    getEdges :: Node' n t t a -> Set (Edge' n t)
     getEdges n =
       mapSet (`incomingEdge` n.nid) n.incoming
         ++ mapSet (outgoingEdge n.nid) n.outgoing
 
-compactGraphRepresentation :: (ValidTransition t) => Graph t a -> Text
+compactGraphRepresentation ::
+  (ValidTransition t, ValidNID n, CompactNIDShow n) =>
+  Graph' n t a ->
+  Text
 compactGraphRepresentation g =
   ("[" ++) . (++ "]") . intercalate "," $
     map tshow nids ++ map tshow (toList es)
@@ -449,19 +475,19 @@ compactGraphRepresentation g =
 -- | sets the data, setting to nothing is equivalent to deleting the data
 -- this is a terrible function that should probably not be used
 setData' ::
-  (ValidNode t a, Eq a) =>
+  (ValidNode' n t a, Eq a) =>
   a ->
-  Node t a ->
-  Graph t a ->
-  Graph t a
+  Node' n t t a ->
+  Graph' n t a ->
+  Graph' n t a
 setData' d n g = g & #nodeMap %~ (at n.nid ?~ n {augmentation = d})
 
 setData ::
-  (ValidNode t a) =>
+  (ValidNode' n t a) =>
   a ->
-  NID ->
-  Graph t a ->
-  Graph t a
+  n ->
+  Graph' n t a ->
+  Graph' n t a
 setData d = unprimed (setData' d)
 
 -- * Legacy utils
@@ -469,5 +495,8 @@ setData d = unprimed (setData' d)
 -- Generally these are functions that I'd prefer to avoid using but are used
 -- in sufficiently many places that it's not worth it to refactor them out.
 
-withNodeMap :: Graph t a -> (Map NID (Node t a) -> Map NID (Node t a)) -> Graph t a
+withNodeMap ::
+  Graph' n t a ->
+  (Map n (Node' n t t a) -> Map n (Node' n t t a)) ->
+  Graph' n t a
 withNodeMap = flip (over #nodeMap)

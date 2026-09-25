@@ -13,7 +13,7 @@ import Models.Augmentation.Bundled
 import Models.Augmentation.IsThin
 import Models.Augmentation.NodeEdits
 import Models.Edge
-import Models.Graph (Graph (..), emptyGraph)
+import Models.Graph (Graph, Graph' (..), emptyGraph)
 import Models.Graph qualified
 import Models.NID
 import Models.Node

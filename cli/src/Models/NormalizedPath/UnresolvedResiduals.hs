@@ -7,7 +7,7 @@ where
 import Effectful.State.Dynamic
 import Graph.GraphMetadataEditing (runInMemoryGraphMetadataEditing)
 import Graph.Resolve (resolveNPathExists)
-import Models.Connect (Connect (..), matchConnect)
+import Models.Connect (Connect, Connect' (..), matchConnect)
 import Models.Graph
 import Models.NID
 import Models.Node
@@ -104,9 +104,9 @@ residualOfDp startNid g dp
       let alts = case dp of
             Pointlike p -> residualPointlikeAlts startNid g p
             Rooted r -> residualRootedAlts startNid g r
-       in if any (isJust . (.landed)) alts
+       in if any (isJust . (. landed)) alts
             then [[]]
-            else case ordNub [dpAltMembers a | a <- alts, a.progress] of
+            else case ordNub [dpAltMembers a | a <- alts, a . progress] of
               [] -> [[dp]]
               ms -> ms
 
@@ -117,8 +117,8 @@ residualOfDp startNid g dp
 -- unchanged; their branches are not dropped.
 dpUnsatisfiable :: NID -> DeterministicPath Anchor -> Bool
 dpUnsatisfiable startNid = \case
-  Pointlike p -> rootAnchorUnsat p.anchor
-  Rooted r -> any (dpUnsatisfiable startNid) (keys r.rootBranches)
+  Pointlike p -> rootAnchorUnsat p . anchor
+  Rooted r -> any (dpUnsatisfiable startNid) (keys r . rootBranches)
   where
     rootAnchorUnsat = \case
       JoinPoint exc -> startNid `member` exc
@@ -215,16 +215,16 @@ data SegGap = SegGap Int (Set NID) [DPDirection] Int [(NID, Set NID)]
 matchTransition :: Set (Connect Text) -> DPTransition -> Set NID
 matchTransition conns = \case
   DPLiteral l -> setFromList (matchConnect l conns)
-  DPWild -> setFromList (map (.node) (toList conns))
+  DPWild -> setFromList (map (. node) (toList conns))
   DPRegex r ->
-    setFromList [c.node | c <- toList conns, has (textRegexing r) c.transition]
+    setFromList [c . node | c <- toList conns, has (textRegexing r) c . transition]
 
 stepForward :: Graph Text () -> NID -> DPDirection -> Set NID
 stepForward g nid dir = case maybeLookupNode g nid of
   Nothing -> mempty
   Just n -> case dir of
-    DPOutgoing' t -> matchTransition n.outgoing t
-    DPIncoming' t -> matchTransition n.incoming t
+    DPOutgoing' t -> matchTransition n . outgoing t
+    DPIncoming' t -> matchTransition n . incoming t
 
 -- | The exact inverse of 'stepForward' (§2 of the spec), nothing more: an
 -- edge matched in the wrong orientation would produce residuals that
@@ -233,8 +233,8 @@ stepBackward :: Graph Text () -> NID -> DPDirection -> Set NID
 stepBackward g nid dir = case maybeLookupNode g nid of
   Nothing -> mempty
   Just n -> case dir of
-    DPOutgoing' t -> matchTransition n.incoming t
-    DPIncoming' t -> matchTransition n.outgoing t
+    DPOutgoing' t -> matchTransition n . incoming t
+    DPIncoming' t -> matchTransition n . outgoing t
 
 -- | Frontiers after each consumed step, stopping before the first empty one.
 frontierTrail ::
@@ -384,40 +384,40 @@ brRes p ds o = BrRes p ds o Nothing Nothing False
 -- detection compositional under the lazy tiered 'combineAlts' enumeration.
 collapseResolved :: [BrRes] -> [BrRes]
 collapseResolved alts =
-  case [(r, ls) | r <- alts, Right ls <- [r.outcome]] of
+  case [(r, ls) | r <- alts, Right ls <- [r . outcome]] of
     [] -> alts
     [(r, _)] -> [r]
     resolved ->
       [ BrRes
-          (any ((.progress) . fst) resolved)
-          (ordNub (concatMap ((.dones) . fst) resolved))
+          (any ((. progress) . fst) resolved)
+          (ordNub (concatMap ((. dones) . fst) resolved))
           (Right (unions (map snd resolved)))
           Nothing
-          (Just (unions [fromMaybe ls r.cleanLanding | (r, ls) <- resolved]))
-          (any ((.freshTargetUnsafe) . fst) resolved)
+          (Just (unions [fromMaybe ls r . cleanLanding | (r, ls) <- resolved]))
+          (any ((. freshTargetUnsafe) . fst) resolved)
       ]
 
 -- | The terminal position a branch result got to, resolved or not.
 resReach :: BrRes -> Maybe (Set NID)
-resReach r = either (const r.reach) Just r.outcome
+resReach r = either (const r . reach) Just r . outcome
 
 -- | The gaps of a branch result; empty for a fully-resolved outcome.
 resGaps :: BrRes -> [Gap]
-resGaps r = fromLeft [] r.outcome
+resGaps r = fromLeft [] r . outcome
 
 -- | The landing of the first fully-resolved alternative, if any. By the
 -- collapse rule (fully-resolving alternatives merge into one, see
 -- 'stationFromArrivals') there is at most one.
 firstRight :: [BrRes] -> Maybe (Set NID)
-firstRight rs = headMay [ls | r <- rs, Right ls <- [r.outcome]]
+firstRight rs = headMay [ls | r <- rs, Right ls <- [r . outcome]]
 
 isAtStartGap :: Gap -> Bool
-isAtStartGap gp = case gp.roots of
+isAtStartGap gp = case gp . roots of
   AtStart _ -> True
   AtRoots _ -> False
 
 gapRootsMap :: Gap -> ARootsMap
-gapRootsMap gp = case gp.roots of
+gapRootsMap gp = case gp . roots of
   AtRoots rm -> rm
   AtStart _ -> error "gapRootsMap: unanchored gap escaped its position"
 
@@ -465,7 +465,7 @@ flattenBranch = mergeRuns . go
       [b] -> go b
       _ -> [PSplit bs]
     midPart m
-      | Unanchored <- m.anchor, null m.loops = []
+      | Unanchored <- m . anchor, null m . loops = []
       | otherwise = [PMid m]
     mergeRuns = \case
       (PRun a : PRun b : rest) -> mergeRuns (PRun (a <> b) : rest)
@@ -522,15 +522,15 @@ invertResidualAt startNid landing = \case
     traverse reverseRoot (mapToList rootBranches)
     where
       reverseRoot (Pointlike root, branches) = do
-        rootNid <- unifyRootAnchor startNid root.anchor
+        rootNid <- unifyRootAnchor startNid root . anchor
         let reversedRoot =
               PointlikeDeterministicPath
                 (Specific landing)
-                (mapOSet reverseBranch target.loops)
+                (mapOSet reverseBranch target . loops)
             reversedTarget =
               PointlikeDeterministicPath
                 (Specific rootNid)
-                (mapOSet reverseBranch root.loops)
+                (mapOSet reverseBranch root . loops)
         pure $
           Rooted $
             smartBuildRootedDeterministicPath
@@ -575,11 +575,11 @@ orientGaps n contAtN gaps
   | doInvert = map (\gp -> fromMaybe gp (invertAtN gp)) gaps
   | otherwise = gaps
   where
-    endsAtN gp = gp.end == Just n
+    endsAtN gp = gp . end == Just n
     invertAtN gp = do
       guard (not (endsAtN gp))
-      s <- gp.end
-      rm <- case gp.roots of
+      s <- gp . end
+      rm <- case gp . roots of
         AtRoots rm -> Just rm
         AtStart _ -> Nothing
       (rk, bs) <- case mapToList rm of
@@ -618,7 +618,7 @@ assembleStation mn form formEmit attached loopGaps contGaps =
         Nothing -> loopGaps
       (chainable, offGaps) = case mn of
         Just n
-          | hasAtStart -> partition ((== Just n) . (.end)) oriented
+          | hasAtStart -> partition ((== Just n) . (. end)) oriented
         _ -> ([], oriented)
       key = case (chainable, mn) of
         (_ : _, Just n) ->
@@ -626,7 +626,7 @@ assembleStation mn form formEmit attached loopGaps contGaps =
             (unionsWith (<>) (map gapRootsMap chainable))
             (PointlikeDeterministicPath (Specific n) attached)
         _ -> form
-      convert gp = case gp.roots of
+      convert gp = case gp . roots of
         AtStart bs -> gp {roots = AtRoots (singletonMap key bs)}
         AtRoots _ -> gp
       formDone = [form | not hasAtStart, formEmit || not (null attached)]
@@ -641,15 +641,15 @@ chainGaps = go
     go gaps = maybe gaps go (findChain gaps)
     findChain gaps = headMay do
       (i, gi) <- zip [0 :: Int ..] gaps
-      x <- maybeToList gi.end
-      rmi <- case gi.roots of
+      x <- maybeToList gi . end
+      rmi <- case gi . roots of
         AtRoots rm -> [rm]
         AtStart _ -> []
       -- gi must be the only gap ending at x
-      guard (length (filter ((== Just x) . (.end)) gaps) == 1)
+      guard (length (filter ((== Just x) . (. end)) gaps) == 1)
       (jIdx, gj) <- zip [0 :: Int ..] gaps
       guard (jIdx /= i)
-      rmj <- case gj.roots of
+      rmj <- case gj . roots of
         AtRoots rm -> [rm]
         AtStart _ -> []
       bs <- maybeToList (lookup (specificDp x) rmj)
@@ -659,7 +659,7 @@ chainGaps = go
             [ ()
             | (kIdx, gk) <- zip [0 :: Int ..] gaps,
               kIdx /= i,
-              AtRoots rmk <- [gk.roots],
+              AtRoots rmk <- [gk . roots],
               specificDp x `member` rmk
             ]
             == 1
@@ -688,7 +688,7 @@ buildMembers ::
   (Maybe (DeterministicPath Anchor), [DeterministicPath Anchor])
 buildMembers targetPdp targetPin gaps =
   let gaps' = chainGaps gaps
-      isMain gp = case gp.end of
+      isMain gp = case gp . end of
         Nothing -> True
         Just x -> Just x == targetPin
       (mainGaps, offGaps) = partition isMain gaps'
@@ -698,7 +698,7 @@ buildMembers targetPdp targetPin gaps =
       grouped =
         foldl'
           ( \acc gp ->
-              upsertAssoc (\a b -> unionsWith (<>) [a, b]) gp.end (gapRootsMap gp) acc
+              upsertAssoc (\a b -> unionsWith (<>) [a, b]) gp . end (gapRootsMap gp) acc
           )
           []
           offGaps
@@ -729,30 +729,31 @@ processLoops g n loops =
     emptyLoopsAlt = LoopsAlt False True mempty [] []
     merge a p =
       LoopsAlt
-        (a.progress || p.progress)
-        (a.resolved && p.resolved)
-        (a.attached <> p.attached)
-        (a.gaps <> p.gaps)
-        (a.dones <> p.dones)
+        (a . progress || p . progress)
+        (a . resolved && p . resolved)
+        (a . attached <> p . attached)
+        (a . gaps <> p . gaps)
+        (a . dones <> p . dones)
     perLoop :: DPBranch Anchor -> [LoopsAlt]
     perLoop b =
       let rs = resolveBranch g True True (singletonSet n) b (EndAt (singletonSet n))
-       in case [r | r <- rs, isRight r.outcome] of
-            (r : _) -> [LoopsAlt True True mempty [] r.dones]
+       in case [r | r <- rs, isRight r . outcome] of
+            (r : _) -> [LoopsAlt True True mempty [] r . dones]
             [] ->
               ordNub
-                [ if r.progress
+                [ if r . progress
                     then
                       LoopsAlt
                         True
                         False
                         mempty
                         (map toRooted (resGaps r))
-                        r.dones
+                        r
+                        . dones
                     else LoopsAlt False False (singletonSet b) [] []
                 | r <- rs
                 ]
-    toRooted gp = case gp.roots of
+    toRooted gp = case gp . roots of
       AtStart bs -> gp {roots = AtRoots (singletonMap (specificDp n) bs)}
       AtRoots _ -> gp
 
@@ -780,7 +781,7 @@ resolveBranch g openBwd origin0 start branch endCtx =
     boundaryCtx :: [Part] -> EndCtx
     boundaryCtx = \case
       [] -> endCtx
-      (PMid m : _) -> anchorCtx m.anchor
+      (PMid m : _) -> anchorCtx m . anchor
       _ -> EndPair
 
     finalEndAlts :: [Maybe NID]
@@ -796,7 +797,7 @@ resolveBranch g openBwd origin0 start branch endCtx =
         case resolveSegment g (null rest && openBwd) f ds (boundaryCtx rest) of
           SegResolved f' mc ->
             let regular = afterUnit (Just mc) True [] f' rest
-                regularResolved = any (isRight . (.outcome)) regular
+                regularResolved = any (isRight . (. outcome)) regular
                 -- If none of the current arrivals completes the remaining
                 -- tail, also try the seam positions where that tail does
                 -- resolve. This recovers an arrival supplied by a missing
@@ -839,12 +840,16 @@ resolveBranch g openBwd origin0 start branch endCtx =
     addProg :: Bool -> [DeterministicPath Anchor] -> BrRes -> BrRes
     addProg prog ds r =
       BrRes
-        (prog || r.progress)
-        (ds <> r.dones)
-        r.outcome
-        r.reach
-        r.cleanLanding
-        r.freshTargetUnsafe
+        (prog || r . progress)
+        (ds <> r . dones)
+        r
+        . outcome
+          r
+        . reach
+          r
+        . cleanLanding
+          r
+        . freshTargetUnsafe
 
     -- root alternatives for a gap whose forward consumption stopped at fF:
     -- a fan-out followed by a gap is one alternative per frontier node (§3)
@@ -880,12 +885,14 @@ resolveBranch g openBwd origin0 start branch endCtx =
                 prog = k > 0 || j > 0
              in ordNub
                   [ BrRes
-                      (prog || st.progress)
-                      st.dones
-                      (Left (Gap roots e : resGaps st))
-                      (resReach st)
-                      Nothing
-                      st.freshTargetUnsafe
+                      (prog || st . progress)
+                      st
+                      . dones
+                        (Left (Gap roots e : resGaps st))
+                        (resReach st)
+                        Nothing
+                        st
+                      . freshTargetUnsafe
                   | roots <- gapRootAlts origin k fF bs,
                     e <-
                       if j > 0
@@ -956,17 +963,17 @@ resolveBranch g openBwd origin0 start branch endCtx =
     tailLandingFrom :: [Part] -> NID -> Maybe (Set NID)
     tailLandingFrom parts v = case parts of
       (PMid m : rest')
-        | anchorAdmits m.anchor v -> firstRight (stationAt v m rest')
+        | anchorAdmits m . anchor v -> firstRight (stationAt v m rest')
         | otherwise -> Nothing
       _ -> firstRight (goParts False (singletonSet v) parts)
 
     specificMidNid :: PointlikeDeterministicPath Anchor -> Maybe NID
-    specificMidNid m = case m.anchor of
+    specificMidNid m = case m . anchor of
       Specific n -> Just n
       _ -> Nothing
 
     excOf :: PointlikeDeterministicPath Anchor -> Set NID
-    excOf m = case m.anchor of
+    excOf m = case m . anchor of
       JoinPoint exc -> exc
       _ -> mempty
 
@@ -974,38 +981,43 @@ resolveBranch g openBwd origin0 start branch endCtx =
     -- there and continue with the rest of the branch
     stationAt :: NID -> PointlikeDeterministicPath Anchor -> [Part] -> [BrRes]
     stationAt n m rest = collapseResolved $ ordNub do
-      la <- processLoops g n m.loops
+      la <- processLoops g n m . loops
       cr <- goParts True (singletonSet n) rest
-      case (la.resolved, cr.outcome) of
+      case (la . resolved, cr . outcome) of
         (True, Right f') ->
           pure $
             BrRes
-              (la.progress || cr.progress)
-              (la.dones <> cr.dones)
+              (la . progress || cr . progress)
+              (la . dones <> cr . dones)
               (Right f')
               Nothing
-              cr.cleanLanding
-              cr.freshTargetUnsafe
+              cr
+              . cleanLanding
+                cr
+              . freshTargetUnsafe
         _ -> do
           let contGaps = resGaps cr
               stationPdp =
-                PointlikeDeterministicPath (pinAnchor m.anchor n) la.attached
+                PointlikeDeterministicPath (pinAnchor m . anchor n) la . attached
               (gaps', formDones) =
                 assembleStation
                   (Just n)
                   (Pointlike stationPdp)
                   False
-                  la.attached
-                  la.gaps
-                  contGaps
+                  la
+                  . attached
+                    la
+                  . gaps
+                    contGaps
           pure $
             BrRes
-              (la.progress || cr.progress)
-              (la.dones <> cr.dones <> formDones)
+              (la . progress || cr . progress)
+              (la . dones <> cr . dones <> formDones)
               (Left gaps')
               (resReach cr)
               Nothing
-              cr.freshTargetUnsafe
+              cr
+              . freshTargetUnsafe
 
     -- a midpoint reached at several NIDs (§4.2.2): all fully-resolving
     -- arrivals merge into one alternative; otherwise each progressing
@@ -1015,20 +1027,20 @@ resolveBranch g openBwd origin0 start branch endCtx =
     stationFromArrivals arrivals m rest =
       let perArrival = [stationAt n m rest | n <- toList arrivals]
           resolveds =
-            [(r, ls) | rs <- perArrival, r <- rs, Right ls <- [r.outcome]]
+            [(r, ls) | rs <- perArrival, r <- rs, Right ls <- [r . outcome]]
        in case resolveds of
             (_ : _) ->
               [ BrRes
-                  (any ((.progress) . fst) resolveds)
-                  (ordNub (concatMap ((.dones) . fst) resolveds))
+                  (any ((. progress) . fst) resolveds)
+                  (ordNub (concatMap ((. dones) . fst) resolveds))
                   (Right (unions (map snd resolveds)))
                   Nothing
-                  (Just (unions [fromMaybe ls r.cleanLanding | (r, ls) <- resolveds]))
-                  (any ((.freshTargetUnsafe) . fst) resolveds)
+                  (Just (unions [fromMaybe ls r . cleanLanding | (r, ls) <- resolveds]))
+                  (any ((. freshTargetUnsafe) . fst) resolveds)
               ]
             [] ->
               let allAlts = concat perArrival
-               in ordNub case filter (.progress) allAlts of
+               in ordNub case filter (. progress) allAlts of
                     [] -> allAlts
                     ps -> ps
 
@@ -1055,17 +1067,17 @@ resolveBranch g openBwd origin0 start branch endCtx =
           [ map (b,) (resolveBranch g subOpenBwd origin f b subEnd)
           | b <- toList bs
           ]
-      let landed = [(b, ls) | (b, r) <- combo, Right ls <- [r.outcome]]
-          failed = concat [gs | (_, r) <- combo, Left gs <- [r.outcome]]
-          anyFailed = any (isLeft . (.outcome) . snd) combo
-          subDones = concatMap ((.dones) . snd) combo
-          subProgress = any ((.progress) . snd) combo
+      let landed = [(b, ls) | (b, r) <- combo, Right ls <- [r . outcome]]
+          failed = concat [gs | (_, r) <- combo, Left gs <- [r . outcome]]
+          anyFailed = any (isLeft . (. outcome) . snd) combo
+          subDones = concatMap ((. dones) . snd) combo
+          subProgress = any ((. progress) . snd) combo
           disagreementReaches =
             let landings = map snd landed
                 cleanConstraints =
-                  [ fromMaybe ls r.cleanLanding
+                  [ fromMaybe ls r . cleanLanding
                   | (_, r) <- combo,
-                    Right ls <- [r.outcome]
+                    Right ls <- [r . outcome]
                   ]
                 meetClean = case filter (not . null) cleanConstraints of
                   [] -> mempty
@@ -1097,7 +1109,7 @@ resolveBranch g openBwd origin0 start branch endCtx =
                     (Right ls)
                     Nothing
                     Nothing
-                    (any ((.freshTargetUnsafe) . snd) combo)
+                    (any ((. freshTargetUnsafe) . snd) combo)
               Nothing ->
                 [ r
                     { progress = subProgress,
@@ -1120,19 +1132,19 @@ resolveBranch g openBwd origin0 start branch endCtx =
                       combineAlts
                         [ resolveBranch g False origin f b (EndAt (singletonSet v))
                         | (b, r) <- combo,
-                          isLeft r.outcome
+                          isLeft r . outcome
                         ]
                     let gaps = concat [resGaps r | r <- reaimed]
-                        ds = concatMap (.dones) reaimed
+                        ds = concatMap (. dones) reaimed
                     pure $
                       BrRes
-                        (subProgress || any (.progress) reaimed)
+                        (subProgress || any (. progress) reaimed)
                         (subDones <> ds)
                         (Left gaps)
                         (Just (singletonSet v))
                         Nothing
-                        ( any ((.freshTargetUnsafe) . snd) combo
-                            || any (.freshTargetUnsafe) reaimed
+                        ( any ((. freshTargetUnsafe) . snd) combo
+                            || any (. freshTargetUnsafe) reaimed
                             || (not (null landed) && anyFailed)
                         )
                 | otherwise ->
@@ -1152,7 +1164,7 @@ resolveBranch g openBwd origin0 start branch endCtx =
                             ms
                     )
                     Nothing
-                    ( any ((.freshTargetUnsafe) . snd) combo
+                    ( any ((. freshTargetUnsafe) . snd) combo
                         || (not (null landed) && anyFailed)
                     )
         (PMid m : rest')
@@ -1161,25 +1173,25 @@ resolveBranch g openBwd origin0 start branch endCtx =
                 then
                   [ (addProg subProgress subDones r)
                       { freshTargetUnsafe =
-                          r.freshTargetUnsafe
-                            || any ((.freshTargetUnsafe) . snd) combo
+                          r . freshTargetUnsafe
+                            || any ((. freshTargetUnsafe) . snd) combo
                       }
                   | r <- afterUnit Nothing False [] (singletonSet n) rest
                   ]
                 else do
                   st <- stationAt n m rest'
-                  if not subProgress && not st.progress
+                  if not subProgress && not st . progress
                     then chainAll
                     else
                       pure $
                         BrRes
-                          (subProgress || st.progress)
-                          (subDones <> st.dones)
+                          (subProgress || st . progress)
+                          (subDones <> st . dones)
                           (Left (failed <> resGaps st))
                           (resReach st)
                           Nothing
-                          ( any ((.freshTargetUnsafe) . snd) combo
-                              || st.freshTargetUnsafe
+                          ( any ((. freshTargetUnsafe) . snd) combo
+                              || st . freshTargetUnsafe
                               || (not (null landed) && anyFailed)
                           )
           | otherwise ->
@@ -1187,21 +1199,21 @@ resolveBranch g openBwd origin0 start branch endCtx =
         _ ->
           let runImplicit combo' =
                 let landed' =
-                      [(b, ls) | (b, res) <- combo', Right ls <- [res.outcome]]
+                      [(b, ls) | (b, res) <- combo', Right ls <- [res . outcome]]
                     failed' =
-                      concat [gs | (_, res) <- combo', Left gs <- [res.outcome]]
+                      concat [gs | (_, res) <- combo', Left gs <- [res . outcome]]
                     failedBranches' =
-                      [b | (b, res) <- combo', isLeft res.outcome]
+                      [b | (b, res) <- combo', isLeft res . outcome]
                     failedReaches' =
                       [ rs
                       | (_, res) <- combo',
-                        isLeft res.outcome,
-                        Just rs <- [res.reach]
+                        isLeft res . outcome,
+                        Just rs <- [res . reach]
                       ]
-                    dones' = concatMap ((.dones) . snd) combo'
-                    progress' = any ((.progress) . snd) combo'
+                    dones' = concatMap ((. dones) . snd) combo'
+                    progress' = any ((. progress) . snd) combo'
                     unsafe' =
-                      any ((.freshTargetUnsafe) . snd) combo'
+                      any ((. freshTargetUnsafe) . snd) combo'
                         || (not (null landed') && not (null failedBranches'))
                  in goSplitImplicit
                       origin
@@ -1254,9 +1266,9 @@ resolveBranch g openBwd origin0 start branch endCtx =
       let landings = map snd landed
           meet = intersectAll landings `difference` excOf m
           cleanConstraints =
-            [ fromMaybe ls res.cleanLanding
+            [ fromMaybe ls res . cleanLanding
             | (_, res) <- combo,
-              Right ls <- [res.outcome]
+              Right ls <- [res . outcome]
             ]
           meetClean = case filter (not . null) cleanConstraints of
             [] -> mempty
@@ -1282,8 +1294,8 @@ resolveBranch g openBwd origin0 start branch endCtx =
             let gaps =
                   concat [resGaps r | r <- rs]
                     <> resGaps st
-                ds = concatMap (.dones) rs <> st.dones
-                prog = any (.progress) rs || st.progress
+                ds = concatMap (. dones) rs <> st . dones
+                prog = any (. progress) rs || st . progress
             guard prog
             pure $
               BrRes
@@ -1292,16 +1304,16 @@ resolveBranch g openBwd origin0 start branch endCtx =
                 (Left gaps)
                 (resReach st)
                 Nothing
-                ( any (.freshTargetUnsafe) rs
-                    || st.freshTargetUnsafe
+                ( any (. freshTargetUnsafe) rs
+                    || st . freshTargetUnsafe
                     || (not (null landed) && anyFailed)
                 )
        in if not (null landed) && not anyFailed && not (null meet)
             then
               [ (addProg subProgress subDones r)
                   { freshTargetUnsafe =
-                      r.freshTargetUnsafe
-                        || any ((.freshTargetUnsafe) . snd) combo
+                      r . freshTargetUnsafe
+                        || any ((. freshTargetUnsafe) . snd) combo
                   }
               | r <- stationFromArrivals meet m rest'
               ]
@@ -1364,32 +1376,32 @@ resolveBranch g openBwd origin0 start branch endCtx =
                       r <- goParts False (singletonSet n) rest'
                     ]
                   resolved =
-                    [(src, r) | (src, r) <- perArrival, isRight r.outcome]
+                    [(src, r) | (src, r) <- perArrival, isRight r . outcome]
                in case resolved of
                     (_ : _) ->
                       [ ( unions (map fst resolved),
                           headEx (collapseResolved (map snd resolved))
                         )
                       ]
-                    [] -> case filter ((.progress) . snd) perArrival of
+                    [] -> case filter ((. progress) . snd) perArrival of
                       [] -> perArrival
                       progressing -> progressing
         contCombo <-
           combineAlts [continuations ls | ls <- landingSets]
-        let contRights = [(ls, f') | (ls, r) <- contCombo, Right f' <- [r.outcome]]
-            contProgress = any ((.progress) . snd) contCombo
-            contDones = concatMap ((.dones) . snd) contCombo
+        let contRights = [(ls, f') | (ls, r) <- contCombo, Right f' <- [r . outcome]]
+            contProgress = any ((. progress) . snd) contCombo
+            contDones = concatMap ((. dones) . snd) contCombo
             contGaps = concat [resGaps r | (_, r) <- contCombo]
             extendBs bs' =
               singletonSet (smartBuildSequence bs' unanchored (rebuildParts rest'))
             extendGap gp =
               gp
-                { roots = case gp.roots of
+                { roots = case gp . roots of
                     AtStart bs' -> AtStart (extendBs bs')
                     AtRoots rm -> AtRoots (omap extendBs rm)
                 }
             retargetTo jn gp
-              | isNothing gp.end = gp {end = Just jn}
+              | isNothing gp . end = gp {end = Just jn}
               | otherwise = gp
             compatibleTailJunctions finalLandings =
               [ jn
@@ -1410,7 +1422,7 @@ resolveBranch g openBwd origin0 start branch endCtx =
                             then []
                             else compatibleTailJunctions (map snd contRights)
                       )
-                  failingSets = [ls | (ls, r) <- contCombo, isLeft r.outcome]
+                  failingSets = [ls | (ls, r) <- contCombo, isLeft r . outcome]
               jn <- junctions
               reaims <-
                 combineAlts
@@ -1424,10 +1436,10 @@ resolveBranch g openBwd origin0 start branch endCtx =
                   | b <- failedBranches
                   ]
               let reaimGaps = concat [resGaps r | r <- reaims]
-                  reaimDones = concatMap (.dones) reaims
+                  reaimDones = concatMap (. dones) reaims
                   failedGaps =
                     concat [resGaps r | r <- failedReaims]
-                  failedDones = concatMap (.dones) failedReaims
+                  failedDones = concatMap (. dones) failedReaims
                   -- a gapped member whose residual lands it at a reach node
                   -- still needs its pair continuation from there; the
                   -- landed members' pairs go through jn instead
@@ -1448,9 +1460,9 @@ resolveBranch g openBwd origin0 start branch endCtx =
                         Nothing
                         Nothing
                         ( subUnsafe
-                            || any ((.freshTargetUnsafe) . snd) contCombo
-                            || any (.freshTargetUnsafe) reaims
-                            || any (.freshTargetUnsafe) failedReaims
+                            || any ((. freshTargetUnsafe) . snd) contCombo
+                            || any (. freshTargetUnsafe) reaims
+                            || any (. freshTargetUnsafe) failedReaims
                         )
                   Nothing -> chainAll
                 else
@@ -1462,9 +1474,9 @@ resolveBranch g openBwd origin0 start branch endCtx =
                       (combineLandings endCtx (map snd contRights))
                       Nothing
                       ( subUnsafe
-                          || any ((.freshTargetUnsafe) . snd) contCombo
-                          || any (.freshTargetUnsafe) reaims
-                          || any (.freshTargetUnsafe) failedReaims
+                          || any ((. freshTargetUnsafe) . snd) contCombo
+                          || any (. freshTargetUnsafe) reaims
+                          || any (. freshTargetUnsafe) failedReaims
                       )
             [] -> do
               -- no continuation resolved anywhere: pin failed branches to
@@ -1472,10 +1484,10 @@ resolveBranch g openBwd origin0 start branch endCtx =
               -- created from (so the failed member's pair goes through the
               -- same node), else to a landing, else the continuation must
               -- be minted per pair
-              let contRootNid gp = case gp.roots of
+              let contRootNid gp = case gp . roots of
                     AtRoots rm -> case mapToList rm of
                       ((Pointlike pdp, _) : _)
-                        | Specific n <- pdp.anchor -> Just n
+                        | Specific n <- pdp . anchor -> Just n
                       _ -> Nothing
                     AtStart _ -> Nothing
                   -- only a pair-point candidate counts: a continuation gap
@@ -1491,7 +1503,7 @@ resolveBranch g openBwd origin0 start branch endCtx =
                     headMay
                       [ n
                       | (ls, r) <- contCombo,
-                        r.progress,
+                        r . progress,
                         n <- toList ls
                       ]
                   jnFromCont =
@@ -1501,7 +1513,7 @@ resolveBranch g openBwd origin0 start branch endCtx =
                         n `member` landingNodes
                       ]
                   adjust gp
-                    | isNothing gp.end = case jnFromCont of
+                    | isNothing gp . end = case jnFromCont of
                         Just jn -> retargetTo jn gp
                         Nothing -> case progressJunction of
                           Just jn -> retargetTo jn gp
@@ -1530,7 +1542,7 @@ resolveBranch g openBwd origin0 start branch endCtx =
                       reach
                       Nothing
                       ( subUnsafe
-                          || any ((.freshTargetUnsafe) . snd) contCombo
+                          || any ((. freshTargetUnsafe) . snd) contCombo
                           || (not (null landed) && not (null failed))
                       )
 
@@ -1559,14 +1571,14 @@ data DpAlt = DpAlt
   deriving stock (Eq, Ord)
 
 dpAltMembers :: DpAlt -> [DeterministicPath Anchor]
-dpAltMembers a = maybeToList a.main <> a.extras
+dpAltMembers a = maybeToList a . main <> a . extras
 
 residualPointlikeAlts ::
   NID -> Graph Text () -> PointlikeDeterministicPath Anchor -> [DpAlt]
-residualPointlikeAlts startNid g p = case unifyRootAnchor startNid p.anchor of
+residualPointlikeAlts startNid g p = case unifyRootAnchor startNid p . anchor of
   Nothing -> [DpAlt False Nothing Nothing [] Nothing Nothing True]
   Just n
-    | null p.loops ->
+    | null p . loops ->
         if isJust (maybeLookupNode g n)
           then
             [ DpAlt
@@ -1580,9 +1592,9 @@ residualPointlikeAlts startNid g p = case unifyRootAnchor startNid p.anchor of
             ]
           else [DpAlt False Nothing Nothing [] (Just n) Nothing True]
     | otherwise -> ordNub do
-        la <- processLoops g n p.loops
-        let pdp = PointlikeDeterministicPath (pinAnchor p.anchor n) la.attached
-        if la.resolved
+        la <- processLoops g n p . loops
+        let pdp = PointlikeDeterministicPath (pinAnchor p . anchor n) la . attached
+        if la . resolved
           then
             pure
               ( DpAlt
@@ -1596,15 +1608,15 @@ residualPointlikeAlts startNid g p = case unifyRootAnchor startNid p.anchor of
               )
           else do
             let (main, offMembers) =
-                  buildMembers pdp (Just n) (orientGaps n False la.gaps)
+                  buildMembers pdp (Just n) (orientGaps n False la . gaps)
                 attachedDone =
-                  [Pointlike pdp | isNothing main, not (null la.attached)]
+                  [Pointlike pdp | isNothing main, not (null la . attached)]
             pure
               DpAlt
-                { progress = la.progress,
+                { progress = la . progress,
                   landed = Nothing,
                   main,
-                  extras = offMembers <> la.dones <> attachedDone,
+                  extras = offMembers <> la . dones <> attachedDone,
                   pin = Just n,
                   resume = Nothing,
                   agreed = True
@@ -1631,31 +1643,31 @@ data RootInfo = RootInfo
 
 resolveRootAlts :: NID -> Graph Text () -> DeterministicPath Anchor -> [RootInfo]
 resolveRootAlts startNid g = \case
-  Pointlike p -> case unifyRootAnchor startNid p.anchor of
+  Pointlike p -> case unifyRootAnchor startNid p . anchor of
     Nothing -> error "resolveRootAlts: unsatisfiable root escaped dpUnsatisfiable"
     Just n ->
       [ RootInfo
           { frontier = Just (singletonSet n),
             form =
-              Pointlike (PointlikeDeterministicPath (pinAnchor p.anchor n) la.attached),
+              Pointlike (PointlikeDeterministicPath (pinAnchor p . anchor n) la . attached),
             formMustEmit = False,
             stationNid = Just n,
-            attached = la.attached,
-            loopGaps = la.gaps,
-            extraDones = la.dones,
-            clean = la.resolved,
-            progress = la.progress
+            attached = la . attached,
+            loopGaps = la . gaps,
+            extraDones = la . dones,
+            clean = la . resolved,
+            progress = la . progress
           }
-      | la <- processLoops g n p.loops
+      | la <- processLoops g n p . loops
       ]
   Rooted nested -> ordNub do
     -- Unanchored nested targets deliberately stay Unanchored (§5): the
     -- outer branches resume from the concrete landings that resolution
     -- discovered, without turning those landings into a residual pin.
     sub <- residualRootedAlts startNid g nested
-    case sub.landed of
+    case sub . landed of
       Just ls
-        | sub.agreed ->
+        | sub . agreed ->
             [ RootInfo
                 { frontier = Just ls,
                   form = specificDp v,
@@ -1665,33 +1677,33 @@ resolveRootAlts startNid g = \case
                   loopGaps = [],
                   extraDones = [],
                   clean = True,
-                  progress = sub.progress
+                  progress = sub . progress
                 }
-            | v <- toList (maybe ls singletonSet sub.pin)
+            | v <- toList (maybe ls singletonSet sub . pin)
             ]
       _ ->
         let exactUnanchored a = do
-              guard (nested.target.anchor == Unanchored)
-              landing <- toList (fromMaybe mempty a.resume)
+              guard (nested . target . anchor == Unanchored)
+              landing <- toList (fromMaybe mempty a . resume)
               unanchoredRootRepairAt startNid g nested landing
 
             fallback a =
               let (form, formMustEmit, extraDones, subProgress) =
-                    case nested.target.anchor of
+                    case nested . target . anchor of
                       -- With no concrete target, a partial nested residual
                       -- cannot safely feed the outer branches: instantiating
                       -- it would mint a different target NID. Recreate the
                       -- whole nested prefix instead, leaving its target
                       -- Unanchored (§5).
                       Unanchored -> (Rooted nested, True, [], False)
-                      _ -> case (a.main, a.pin) of
-                        (Just mn, _) -> (mn, True, a.extras, a.progress)
+                      _ -> case (a . main, a . pin) of
+                        (Just mn, _) -> (mn, True, a . extras, a . progress)
                         (Nothing, Just pn) ->
-                          (specificDp pn, False, a.extras, a.progress)
+                          (specificDp pn, False, a . extras, a . progress)
                         (Nothing, Nothing) ->
-                          (Rooted nested, True, [], a.progress)
+                          (Rooted nested, True, [], a . progress)
                in RootInfo
-                    { frontier = singletonSet <$> a.pin,
+                    { frontier = singletonSet <$> a . pin,
                       form,
                       formMustEmit,
                       stationNid = Nothing,
@@ -1716,15 +1728,16 @@ unanchoredRootRepairAt startNid g nested landing = do
     residualRootedAlts
       startNid
       g
-      nested {target = nested.target {anchor = Specific landing}}
-  guard (isNothing aimed.landed)
+      nested {target = nested . target {anchor = Specific landing}}
+  guard (isNothing aimed . landed)
   reversed <-
     maybeToList $
       maybe
         (Just [])
         (invertResidualAt startNid landing)
-        aimed.main
-  let members = reversed <> aimed.extras
+        aimed
+        . main
+  let members = reversed <> aimed . extras
   guard (not (null members))
   pure
     RootInfo
@@ -1736,7 +1749,7 @@ unanchoredRootRepairAt startNid g nested landing = do
         loopGaps = [],
         extraDones = members,
         clean = False,
-        progress = aimed.progress
+        progress = aimed . progress
       }
 
 branchFromFrontier ::
@@ -1755,12 +1768,12 @@ residualRootedAlts startNid g r = ordNub do
   let entries = zip infos (map snd rootPairs)
   probe <-
     combineAlts
-      [ combineAlts [map (b,) (probeFor info.frontier b) | b <- toList bs]
+      [ combineAlts [map (b,) (probeFor info . frontier b) | b <- toList bs]
       | (info, bs) <- entries
       ]
   let landings =
-        [ls | brs <- probe, (_, res) <- brs, Right ls <- [res.outcome]]
-  (targetPin, results) <- case r.target.anchor of
+        [ls | brs <- probe, (_, res) <- brs, Right ls <- [res . outcome]]
+  (targetPin, results) <- case r . target . anchor of
     Specific t -> pure (Just t, probe)
     Unanchored -> pure (Nothing, probe)
     JoinPoint exc
@@ -1792,10 +1805,10 @@ residualRootedAlts startNid g r = ordNub do
           -- coincidentally-landed branches re-aimed at the pin.
           let meet = intersectAll landings `difference` exc
               cleanConstraints =
-                [ fromMaybe ls res.cleanLanding
+                [ fromMaybe ls res . cleanLanding
                 | brs <- probe,
                   (_, res) <- brs,
-                  Right ls <- [res.outcome]
+                  Right ls <- [res . outcome]
                 ]
               meetClean =
                 case filter (not . null) cleanConstraints of
@@ -1835,8 +1848,8 @@ residualRootedAlts startNid g r = ordNub do
                     >>= pinAt
   finishRooted g r entries targetPin results
   where
-    rootPairs = mapToList r.rootBranches
-    targetCtx = targetEndCtx r.target.anchor
+    rootPairs = mapToList r . rootBranches
+    targetCtx = targetEndCtx r . target . anchor
     rootAlts =
       [ resolveRootAlts startNid g rk <> recoveredNestedRoots rk bs
       | (rk, bs) <- rootPairs
@@ -1849,11 +1862,11 @@ residualRootedAlts startNid g r = ordNub do
     -- target stays unpinned via the reversed exact repair (§5).
     recoveredNestedRoots rk bs = case rk of
       Rooted nested
-        | Unanchored <- nested.target.anchor -> do
+        | Unanchored <- nested . target . anchor -> do
             n <- toList (nidSet g)
             guard (outerBranchesResolve n bs)
             unanchoredRootRepairAt startNid g nested n
-        | JoinPoint exc <- nested.target.anchor -> do
+        | JoinPoint exc <- nested . target . anchor -> do
             n <- toList (nidSet g `difference` exc)
             guard (outerBranchesResolve n bs)
             aimed <-
@@ -1861,13 +1874,13 @@ residualRootedAlts startNid g r = ordNub do
                 startNid
                 g
                 nested
-                  { target = nested.target {anchor = Specific n}
+                  { target = nested . target {anchor = Specific n}
                   }
-            guard (isNothing aimed.landed)
-            let (form, formMustEmit, extraDones) = case (aimed.main, aimed.pin) of
-                  (Just mn, _) -> (mn, True, aimed.extras)
+            guard (isNothing aimed . landed)
+            let (form, formMustEmit, extraDones) = case (aimed . main, aimed . pin) of
+                  (Just mn, _) -> (mn, True, aimed . extras)
                   (Nothing, Just pn) ->
-                    (specificDp pn, False, aimed.extras)
+                    (specificDp pn, False, aimed . extras)
                   (Nothing, Nothing) -> (Rooted nested, True, [])
             pure
               RootInfo
@@ -1879,13 +1892,13 @@ residualRootedAlts startNid g r = ordNub do
                   loopGaps = [],
                   extraDones,
                   clean = False,
-                  progress = aimed.progress
+                  progress = aimed . progress
                 }
       _ -> []
     outerBranchesResolve n bs =
       any (isJust . combineLandings targetCtx) $
         combineAlts
-          [ [ls | res <- branchAt n b, Right ls <- [res.outcome]]
+          [ [ls | res <- branchAt n b, Right ls <- [res . outcome]]
           | b <- toList bs
           ]
     branchAt n b =
@@ -1894,7 +1907,7 @@ residualRootedAlts startNid g r = ordNub do
     -- and pin choices via lazily-evaluated caches: without them the same
     -- branch is re-resolved once per combination, which multiplies
     frontierChoices =
-      [ ordNub [info.frontier | info <- alts]
+      [ ordNub [info . frontier | info <- alts]
       | alts <- rootAlts
       ]
     probeCache =
@@ -1918,26 +1931,26 @@ residualRootedAlts startNid g r = ordNub do
     -- terminal of the gapped branches' resolved suffixes, plus the nodes
     -- the target's loops fully resolve at
     targetLoopPins
-      | null r.target.loops = mempty
+      | null r . target . loops = mempty
       | otherwise =
           setFromList
             [ n
             | n <- toList (nidSet g),
-              any (.resolved) (processLoops g n r.target.loops)
+              any (. resolved) (processLoops g n r . target . loops)
             ]
     reachPins exc probe =
       let reaches =
             [ rs
             | brs <- probe,
               (_, res) <- brs,
-              isLeft res.outcome,
-              Just rs <- [res.reach]
+              isLeft res . outcome,
+              Just rs <- [res . reach]
             ]
           reachAgreed
             | null reaches = mempty
             | otherwise = intersectAll reaches
        in (reachAgreed `union` targetLoopPins) `difference` exc
-    demote (b, res) = case res.outcome of
+    demote (b, res) = case res . outcome of
       Right _ ->
         (b, brRes False [] (Left [Gap (AtStart (singletonSet b)) Nothing]))
       Left _ -> (b, res)
@@ -1948,32 +1961,34 @@ residualRootedAlts startNid g r = ordNub do
     -- existing node instead, so its safe alternative recreates the branch
     -- wholesale. Suffix reuse returns as the reach-pinned minimality
     -- alternative (§5.2), where the pin makes it sound.
-    demoteGapped pair@(b, res) = case res.outcome of
+    demoteGapped pair@(b, res) = case res . outcome of
       Right _ -> pair
       Left gaps
-        | not res.freshTargetUnsafe,
-          isNothing res.reach,
-          all (isNothing . (.end)) gaps ->
+        | not res . freshTargetUnsafe,
+          isNothing res . reach,
+          all (isNothing . (. end)) gaps ->
             pair
       Left _ ->
         ( b,
           BrRes
-            res.progress
-            []
-            (Left [Gap (AtStart (singletonSet b)) Nothing])
-            res.reach
-            Nothing
-            False
+            res
+            . progress
+              []
+              (Left [Gap (AtStart (singletonSet b)) Nothing])
+              res
+            . reach
+              Nothing
+              False
         )
     -- a resolved branch whose landing excludes the pin is re-aimed like a
     -- gapped one (its landing was a coincidence the pin doesn't use)
-    rerunOne p info b res = case res.outcome of
+    rerunOne p info b res = case res . outcome of
       Right ls
         | p `member` ls -> [res]
       _ ->
         fromMaybe
-          (branchFromFrontier g (EndAt (singletonSet p)) info.frontier b)
-          (lookup (p, info.frontier, b) rerunCache)
+          (branchFromFrontier g (EndAt (singletonSet p)) info . frontier b)
+          (lookup (p, info . frontier, b) rerunCache)
 
 finishRooted ::
   Graph Text () ->
@@ -1984,29 +1999,29 @@ finishRooted ::
   [DpAlt]
 finishRooted g r entries targetPin results = do
   lrT <- case targetPin of
-    Just t | not (null r.target.loops) -> processLoops g t r.target.loops
-    _ -> pure (LoopsAlt False (null r.target.loops) r.target.loops [] [])
+    Just t | not (null r . target . loops) -> processLoops g t r . target . loops
+    _ -> pure (LoopsAlt False (null r . target . loops) r . target . loops [] [])
   let infos = map fst entries
       allRes = concat results
-      allBranchLanded = all (isRight . (.outcome) . snd) allRes
-      rootsClean = all (.clean) infos
-      landings = [ls | (_, res) <- allRes, Right ls <- [res.outcome]]
+      allBranchLanded = all (isRight . (. outcome) . snd) allRes
+      rootsClean = all (. clean) infos
+      landings = [ls | (_, res) <- allRes, Right ls <- [res . outcome]]
       progressTotal =
-        any (.progress) infos
-          || any ((.progress) . snd) allRes
-          || lrT.progress
-      resolvedAll = allBranchLanded && rootsClean && lrT.resolved
-      landingsAgree = case r.target.anchor of
+        any (. progress) infos
+          || any ((. progress) . snd) allRes
+          || lrT . progress
+      resolvedAll = allBranchLanded && rootsClean && lrT . resolved
+      landingsAgree = case r . target . anchor of
         Unanchored -> not (null landings) && not (null (intersectAll landings))
         _ -> True
-      baseLanding = case r.target.anchor of
+      baseLanding = case r . target . anchor of
         Specific t -> singletonSet t
         JoinPoint _ -> maybe mempty singletonSet targetPin
         Unanchored ->
           let m = intersectAll landings
            in if null m then unions landings else m
       finalLanding
-        | null r.target.loops = baseLanding
+        | null r . target . loops = baseLanding
         | otherwise = maybe baseLanding singletonSet targetPin
   if resolvedAll
     then
@@ -2021,36 +2036,41 @@ finishRooted g r entries targetPin results = do
             agreed = landingsAgree
           }
     else do
-      let targetAnchor = case r.target.anchor of
+      let targetAnchor = case r . target . anchor of
             Specific t -> Specific t
             JoinPoint exc -> maybe (JoinPoint exc) Specific targetPin
             Unanchored -> Unanchored
-          targetPdp = PointlikeDeterministicPath targetAnchor lrT.attached
+          targetPdp = PointlikeDeterministicPath targetAnchor lrT . attached
           perRoot =
             [ assembleStation
-                info.stationNid
-                info.form
-                info.formMustEmit
-                info.attached
-                info.loopGaps
-                (concat [resGaps res | (_, res) <- brs])
+                info
+                . stationNid
+                  info
+                . form
+                  info
+                . formMustEmit
+                  info
+                . attached
+                  info
+                . loopGaps
+                  (concat [resGaps res | (_, res) <- brs])
             | ((info, _), brs) <- zip entries results
             ]
           targetGaps = case targetPin of
-            Just t -> orientGaps t False lrT.gaps
-            Nothing -> lrT.gaps
+            Just t -> orientGaps t False lrT . gaps
+            Nothing -> lrT . gaps
           allGaps = concatMap fst perRoot <> targetGaps
           allDones =
-            concatMap ((.dones) . snd) allRes
-              <> concatMap (.extraDones) infos
+            concatMap ((. dones) . snd) allRes
+              <> concatMap (. extraDones) infos
               <> concatMap snd perRoot
-              <> lrT.dones
+              <> lrT . dones
           (main, offMembers) = buildMembers targetPdp targetPin allGaps
           attachedTargetDone =
             [ Pointlike targetPdp
             | isNothing main,
-              not (null lrT.attached),
-              not lrT.resolved
+              not (null lrT . attached),
+              not lrT . resolved
             ]
       pure
         DpAlt
@@ -2059,7 +2079,7 @@ finishRooted g r entries targetPin results = do
             main,
             extras = offMembers <> allDones <> attachedTargetDone,
             pin = targetPin,
-            resume = case r.target.anchor of
+            resume = case r . target . anchor of
               Unanchored ->
                 justIfTrue landingsAgree (intersectAll landings)
               _ -> singletonSet <$> targetPin,

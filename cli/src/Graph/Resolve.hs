@@ -2,7 +2,7 @@ module Graph.Resolve where
 
 import Effectful.State.Dynamic
 import Graph.GraphMetadataEditing
-import Models.Connect (Connect (..), matchConnect)
+import Models.Connect (Connect, Connect' (..), matchConnect)
 import Models.Graph (Graph, emptyGraph)
 import Models.NID
 import Models.Node
@@ -36,7 +36,7 @@ resolveNPathExists ::
   NormalizedPath FullyAnchored ->
   Eff r Bool
 resolveNPathExists firstNid normalizedPath =
-  goMembers (toList normalizedPath.union)
+  goMembers (toList normalizedPath . union)
   where
     goMembers = \case
       [] -> pure False
@@ -103,18 +103,18 @@ resolveNPathExists firstNid normalizedPath =
       pure case node of
         Nothing -> mempty
         Just n -> case direction of
-          DPIncoming' transition -> matchingNodes n.incoming transition
-          DPOutgoing' transition -> matchingNodes n.outgoing transition
+          DPIncoming' transition -> matchingNodes n . incoming transition
+          DPOutgoing' transition -> matchingNodes n . outgoing transition
 
     matchingNodes :: Set (Connect Text) -> DPTransition -> Set NID
     matchingNodes connections = \case
       DPLiteral transition -> setFromList (matchConnect transition connections)
-      DPWild -> setFromList (map (.node) (toList connections))
+      DPWild -> setFromList (map (. node) (toList connections))
       DPRegex regex ->
         setFromList
-          [ connection.node
+          [ connection . node
           | connection <- toList connections,
-            has (textRegexing regex) connection.transition
+            has (textRegexing regex) connection . transition
           ]
 
     intersectSets :: [Set NID] -> Set NID
@@ -153,8 +153,8 @@ resolveNPath firstNid normalizedPath =
       FullyAnchored ->
       Eff q [(DPDirection, NID)]
     traverseDirection nid _startAnchor direction _target = case direction of
-      DPIncoming' t -> traverseTransition nid (.incoming) DPIncoming' t
-      DPOutgoing' t -> traverseTransition nid (.outgoing) DPOutgoing' t
+      DPIncoming' t -> traverseTransition nid (. incoming) DPIncoming' t
+      DPOutgoing' t -> traverseTransition nid (. outgoing) DPOutgoing' t
 
     traverseTransition ::
       ( Members [GraphMetadataReading, State (Graph Text IsThin), State (Set NID)] q,
@@ -182,5 +182,5 @@ resolveNPath firstNid normalizedPath =
         n <- getNodeMetadata nid `onNothingM` returnEarly []
         pure $
           getConnections n
-            & toListOf (folded . filteredBy (#transition . textRegexing r))
+            & toListOf (folded . filteredBy (# transition . textRegexing r))
             & map (\Connect {..} -> (mkBranch (DPLiteral transition), node))

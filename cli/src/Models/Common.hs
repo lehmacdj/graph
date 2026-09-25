@@ -15,6 +15,27 @@ type ValidTransition t = (Eq t, Ord t, NFData t)
 type ValidTransitionNCS t = (Eq t, Ord t, NFData t)
 #endif
 
+-- | Constraints satisfied by a type that can be used to identify a node.
+-- 'Models.NID.NID' is the canonical identifier, but the connect/edge/node/graph
+-- types are polymorphic in the identifier so that other identifiers can be used
+-- with the same machinery.
+-- 'ValidNIDNCS' is the variant that doesn't impose 'HasCallStack', to be used
+-- in instances/places where we don't want to impose that.
+-- Note that in DEBUG builds these additionally require 'CompactNIDShow'
+-- because the invariant checks render the nodes they complain about.
+#ifdef DEBUG
+type ValidNID n = (ValidNIDNCS n, HasCallStack)
+type ValidNIDNCS n = (Eq n, Ord n, Show n, NFData n, CompactNIDShow n)
+#else
+type ValidNID n = (ValidNIDNCS n, HasCallStack)
+type ValidNIDNCS n = (Eq n, Ord n, Show n, NFData n)
+#endif
+
+-- | Additionally required of a node identifier to render it compactly. This is
+-- kept separate from 'ValidNID' so that in non-DEBUG builds plain graph
+-- manipulation doesn't require the identifier to be renderable.
+type CompactNIDShow n = (CompactNodeShow n, Augmentation n ~ Void)
+
 data CompactNodeShowSettings a = CompactNodeShowSettings
   { -- | Length of NIDs to show (e.g. 4 renders "000000000001" as "0001")
     nidLength :: Int,

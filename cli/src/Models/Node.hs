@@ -25,11 +25,12 @@ type ValidNode t a = (ValidTransition t, Eq a)
 -- to be used in instances/places where we don't want to impose that
 type ValidNodeNCS t a = (ValidTransitionNCS t, Eq a)
 
-type ValidNode' ti to a = (ValidTransition ti, ValidTransition to, Eq a)
+-- | Like 'ValidNode' but generalized over the type of node identifiers.
+type ValidNode' n t a = (ValidNID n, ValidTransition t, Eq a)
 
 -- | variant of ValidNode' that doesn't impose HasCallStack
 -- to be used in instances/places where we don't want to impose that
-type ValidNode'NCS ti to a = (ValidTransitionNCS ti, ValidTransitionNCS to, Eq a)
+type ValidNodeNCS' n t a = (ValidNIDNCS n, ValidTransitionNCS t, Eq a)
 
 class DefaultAugmentation a where
   defaultAugmentation :: a
@@ -53,30 +54,31 @@ instance (DefaultAugmentation a) => DefaultAugmentation (Semigroup.Last a) where
 instance (DefaultAugmentation a) => MonoidAugmentation (Semigroup.Last a)
 
 -- | A node in a graph. To allow separately mapping over the incoming and
--- outgoing edges in a type changing way, we have two type parameters.
--- In general we only use the typealias that fixes the type of the transitions
--- to be the same.
-data Node' ti to a = Node
-  { nid :: NID,
-    incoming :: Set (Connect ti),
-    outgoing :: Set (Connect to),
+-- outgoing edges in a type changing way, we have two transition type
+-- parameters. The type of node identifiers is a parameter as well.
+-- In general we only use the typealiases that fix the type of the identifiers
+-- to be 'NID' and the type of the transitions to be the same.
+data Node' n ti to a = Node
+  { nid :: n,
+    incoming :: Set (Connect' n ti),
+    outgoing :: Set (Connect' n to),
     augmentation :: a
   }
   deriving (Eq, Ord, Generic, NFData, Functor)
 
-instance Comonad (Node' ti to) where
+instance Comonad (Node' n ti to) where
   extract = (.augmentation)
   duplicate n = n {augmentation = n}
 
 -- | A node in the graph. See 'Node'' for more information.
-type Node t a = Node' t t a
+type Node t a = Node' NID t t a
 
 instance
-  forall ti to a.
-  (Show ti, Ord ti, Show to, Ord to) =>
-  CompactNodeShow (Node' ti to a)
+  forall n ti to a.
+  (Show ti, Ord ti, Show to, Ord to, Ord n, CompactNIDShow n) =>
+  CompactNodeShow (Node' n ti to a)
   where
-  type Augmentation (Node' ti to a) = a
+  type Augmentation (Node' n ti to a) = a
   minimumNidLength settings@CompactNodeShowSettings {..} n =
     maximum . ncons (getMinLen n.nid) $ toList $ incomingLens <> outgoingLens
     where
@@ -122,52 +124,63 @@ instance
 
 instance
   {-# OVERLAPPABLE #-}
-  (Show ti, Ord ti, Show to, Ord to, ShowableAugmentation a) =>
-  Show (Node' ti to a)
+  ( Show ti,
+    Ord ti,
+    Show to,
+    Ord to,
+    Ord n,
+    CompactNIDShow n,
+    ShowableAugmentation a
+  ) =>
+  Show (Node' n ti to a)
   where
   show = unpack . nshowDefault
 
 -- | We implement special @HasField@ instances for specific types of
 -- augmentation so that we can refer to them in a more intuitive way.
-instance HasField "rawData" (Node' ti to (Maybe ByteString)) (Maybe ByteString) where
+instance HasField "rawData" (Node' n ti to (Maybe ByteString)) (Maybe ByteString) where
   getField = (.augmentation)
 
-indegree :: Getter (Node t a) Int
+indegree :: Getter (Node' n ti to a) Int
 indegree = #incoming . to Set.size
 
-outdegree :: Getter (Node t a) Int
+outdegree :: Getter (Node' n ti to a) Int
 outdegree = #outgoing . to Set.size
 
 -- | Warning! It is up to the user of the graph to ensure that node ids are
 -- unique within the graph
-emptyNode :: forall a t. (Ord t, DefaultAugmentation a) => NID -> Node t a
+emptyNode ::
+  forall a t n. (Ord t, Ord n, DefaultAugmentation a) => n -> Node' n t t a
 emptyNode i = emptyNode' i defaultAugmentation
 
 -- | Warning! It is up to the user of the graph to ensure that node ids are
 -- unique within the graph
-emptyNode' :: forall a t. (Ord t) => NID -> a -> Node t a
+emptyNode' :: forall a t n. (Ord t, Ord n) => n -> a -> Node' n t t a
 emptyNode' i = Node i mempty mempty
 
-inStubNode :: (Ord t, DefaultAugmentation a) => Edge t -> Node t a
+inStubNode ::
+  (Ord t, Ord n, DefaultAugmentation a) => Edge' n t -> Node' n t t a
 inStubNode e = Node e.sink (singleton $ inConnect e) mempty defaultAugmentation
 
-inStubNode' :: (Ord t) => Edge t -> a -> Node t a
+inStubNode' :: (Ord t, Ord n) => Edge' n t -> a -> Node' n t t a
 inStubNode' e = Node e.sink (singleton $ inConnect e) mempty
 
-outStubNode :: (Ord t, DefaultAugmentation a) => Edge t -> Node t a
-outStubNode e = Node e.source mempty (singleton $ outConnect e) defaultAugmentation
+outStubNode ::
+  (Ord t, Ord n, DefaultAugmentation a) => Edge' n t -> Node' n t t a
+outStubNode e =
+  Node e.source mempty (singleton $ outConnect e) defaultAugmentation
 
-outStubNode' :: (Ord t) => Edge t -> a -> Node t a
+outStubNode' :: (Ord t, Ord n) => Edge' n t -> a -> Node' n t t a
 outStubNode' e = Node e.source mempty (singleton $ outConnect e)
 
-dualizeNode :: Node t a -> Node t a
+dualizeNode :: Node' n t t a -> Node' n t t a
 dualizeNode (Node nid i o x) = Node nid o i x
 
 mergeNodes ::
-  (Ord t, HasCallStack, Semigroup a) =>
-  Node t a ->
-  Node t a ->
-  Maybe (Node t a)
+  (Ord t, Ord n, HasCallStack, Semigroup a) =>
+  Node' n t t a ->
+  Node' n t t a ->
+  Maybe (Node' n t t a)
 mergeNodes n1 n2 =
   justIfTrue (n1.nid == n2.nid) $
     Node
@@ -178,23 +191,28 @@ mergeNodes n1 n2 =
       }
 
 mergeNodesEx ::
-  (Ord t, HasCallStack, Semigroup a) =>
-  Node t a ->
-  Node t a ->
-  Node t a
+  (Ord t, Ord n, Show n, HasCallStack, Semigroup a) =>
+  Node' n t t a ->
+  Node' n t t a ->
+  Node' n t t a
 mergeNodesEx n1 n2 =
   fromMaybe (error msg) $ mergeNodes n1 n2
   where
     msg =
       "mergeNodesEx: nodes don't match " ++ show n1.nid ++ " != " ++ show n2.nid
 
-withoutEdges :: (ValidTransition t) => Set (Edge t) -> Node t a -> Node t a
+withoutEdges ::
+  (ValidTransition t, ValidNID n) =>
+  Set (Edge' n t) ->
+  Node' n t t a ->
+  Node' n t t a
 withoutEdges deletedEdges n =
   n
     & #incoming %~ (\\ mapSet inConnect deletedEdges)
     & #outgoing %~ (\\ mapSet outConnect deletedEdges)
 
-withEdge :: (ValidTransition t) => Edge t -> Node t a -> Node t a
+withEdge ::
+  (ValidTransition t, ValidNID n) => Edge' n t -> Node' n t t a -> Node' n t t a
 withEdge e n =
   n
     & #incoming %~ maybe id insertSet (justIfTrue (e.sink == n.nid) (inConnect e))
@@ -205,7 +223,7 @@ traceNode a =
   Debug.Trace.trace (unpack (nshowWith (\x -> x {showIncoming = True}) a)) a
 {-# WARNING traceNode "Leaving traces in code" #-}
 
-traceMaybeNode :: (CompactNodeShow n) => NID -> Maybe n -> Maybe n
+traceMaybeNode :: (CompactNodeShow x, Show n) => n -> Maybe x -> Maybe x
 traceMaybeNode nid =
   maybe
     (Debug.Trace.trace (show nid <> " does not exist") Nothing)
@@ -213,15 +231,19 @@ traceMaybeNode nid =
 {-# WARNING traceMaybeNode "Leaving traces in code" #-}
 
 traceGetNodeMetadata ::
-  (CompactNodeShow n) =>
-  (NID -> Eff r (Maybe n)) ->
-  (NID -> Eff r (Maybe n))
+  (CompactNodeShow x, Show n) =>
+  (n -> Eff r (Maybe x)) ->
+  (n -> Eff r (Maybe x))
 traceGetNodeMetadata getNodeMetadata nid =
   traceMaybeNode nid <$> getNodeMetadata nid
 {-# WARNING traceGetNodeMetadata "Leaving traces in code" #-}
 
 separatedAugmentation ::
-  Iso (Node' t t' a) (Node' t t' b) (Node' t t' (), a) (Node' t t' (), b)
+  Iso
+    (Node' n t t' a)
+    (Node' n t t' b)
+    (Node' n t t' (), a)
+    (Node' n t t' (), b)
 separatedAugmentation =
   iso
     (\n -> (n {augmentation = ()}, n.augmentation))
@@ -230,15 +252,24 @@ separatedAugmentation =
 
 alongsideMetadata ::
   (Functor f) =>
-  LensLike (AlongsideRight f (Node' t t' ())) s s' a b ->
-  LensLike f (Node' t t' s) (Node' t t' s') (Node' t t' a) (Node' t t' b)
+  LensLike (AlongsideRight f (Node' n t t' ())) s s' a b ->
+  LensLike
+    f
+    (Node' n t t' s)
+    (Node' n t t' s')
+    (Node' n t t' a)
+    (Node' n t t' b)
 alongsideMetadata o =
   separatedAugmentation . alongside id o . from separatedAugmentation
 {-# INLINE alongsideMetadata #-}
 
 asideMetadata ::
-  forall f g a b t t'.
+  forall f g a b n t t'.
   APrism f g a b ->
-  Prism (Node' t t' f) (Node' t t' g) (Node' t t' a) (Node' t t' b)
+  Prism
+    (Node' n t t' f)
+    (Node' n t t' g)
+    (Node' n t t' a)
+    (Node' n t t' b)
 asideMetadata p = separatedAugmentation . aside p . from separatedAugmentation
 {-# INLINE asideMetadata #-}
