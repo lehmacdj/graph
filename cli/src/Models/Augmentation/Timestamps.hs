@@ -1,15 +1,14 @@
 module Models.Augmentation.Timestamps where
 
 import Graph.GraphMetadataEditing
+import Graph.PathPattern.Resolve
 import Graph.Paths
-import Graph.Resolve
 import Graph.SystemNodes
 import Models.Common
-import Models.Connect
 import Models.NID
 import Models.Path.Simple
 import Models.Path.TH
-import Models.ResolvedPath
+import Models.PathPattern.Match (ConcreteHop (..), ConcreteRoute (..), selectedRoutes)
 import MyPrelude
 
 newtype Timestamps = Timestamps {timestamps :: Set UTCTime}
@@ -41,13 +40,12 @@ fetchTimestamps nid = do
   let listUncurry4 f = \case
         [a, b, c, d] -> f a b c d
         _ -> error "Expected exactly four elements"
-  leftmostConnects mp.path
-    & toList
+  concatMap selectedRoutes mp.resolutions
     & mapMaybe
       ( listUncurry4 timeFromDateStrings
           . reverse
-          . map (unpack . (.transition))
-          . snd
+          . map (unpack . (.label))
+          . (.hops)
       )
     & setFromList
     & Timestamps

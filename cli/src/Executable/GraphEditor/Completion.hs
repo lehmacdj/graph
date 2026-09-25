@@ -9,9 +9,8 @@ import Effectful.Readline (runReadlineNonInteractive)
 import Error.UserError
 import Error.Warn
 import Graph.AppInterpreters
-import Graph.LegacyPathMaterialization
 import Graph.NodeLocated
-import Graph.Utils
+import Graph.PathPattern.Execution (completionTransitions)
 import Models.LegacyPartialPath
 import Models.NID (nidDigits)
 import Models.Path.Simple qualified as Simple
@@ -92,13 +91,11 @@ completePath env (i, _) = case getLegacyPartialPath (pack $ takeRelevantFromEnd 
       filesystemBehaviorDryRun
       env
       $ do
-        let p = foldr (Simple.:/) Simple.One pp
+        let p = case pp of
+              [] -> Simple.One
+              p0 : rest -> foldl' (Simple.:/) p0 rest
         nid <- currentLocation
-        ntids <- toList <$> subsumeUserError (resolvePathSuccesses nid p)
-        nts <- getNodes @Text ntids
-        let octs =
-              -- outgoing connect transitions
-              map unpack $ toListOf (folded . #outgoing . folded . #transition) nts
+        octs <- map unpack . toList <$> completionTransitions nid p
         pure (fromMaybe i (stripPrefix (reverse end) i), mkCompleter octs end)
 
 completeNID :: Env -> (String, String) -> IO (String, [Completion])

@@ -1,0 +1,24 @@
+==========graph==========
+==========input==========
+mk a/b & a/c
+==========stdout==========
+g> g> Goodbye!
+==========stderr==========
+==========graph-dump==========
+@000000000000{out=[@O8OhMSVtjevt via "a"], in=[@0daCJjMrQel8 via "origin"]}
+@0daCJjMrQel8{out=[@zsBuPkn5mh8F via "file-extensions", @AhQufiPzgyRf via "file-hashes", @3JJvxFUHGAA1 via "historical-special-nodes", @S00KkOYoVpFu via "import-dates", @a0fVkm0kR7KE via "import-urls", @927u9Xyky2pC via "mime-types", @000000000000 via "origin", @pbYxBO6fzBQV via "tags"], in=[]}
+@3JJvxFUHGAA1{out=[@VEfLhuTgZ88Z via "sequence-ids"], in=[@0daCJjMrQel8 via "historical-special-nodes"]}
+@927u9Xyky2pC{out=[], in=[@0daCJjMrQel8 via "mime-types"]}
+@AhQufiPzgyRf{out=[], in=[@0daCJjMrQel8 via "file-hashes"]}
+@DQ1KCJgauHiV{out=[], in=[@w4P7BSd8jU2v via "00:00:00.000000000000", @O8OhMSVtjevt via "c"]}
+@O8OhMSVtjevt{out=[@Pqf7kGOdKJIr via "b", @DQ1KCJgauHiV via "c"], in=[@w4P7BSd8jU2v via "00:00:00.000000000000", @000000000000 via "a"]}
+@Pqf7kGOdKJIr{out=[], in=[@w4P7BSd8jU2v via "00:00:00.000000000000", @O8OhMSVtjevt via "b"]}
+@S00KkOYoVpFu{out=[@sYumkceKpoAh via "1970"], in=[@0daCJjMrQel8 via "import-dates"]}
+@VEfLhuTgZ88Z{out=[], in=[@3JJvxFUHGAA1 via "sequence-ids"]}
+@a0fVkm0kR7KE{out=[], in=[@0daCJjMrQel8 via "import-urls"]}
+@pbYxBO6fzBQV{out=[], in=[@0daCJjMrQel8 via "tags"]}
+@sYumkceKpoAh{out=[@w4VxcgSm0Js6 via "01"], in=[@S00KkOYoVpFu via "1970"]}
+@w4P7BSd8jU2v{out=[@DQ1KCJgauHiV via "00:00:00.000000000000", @O8OhMSVtjevt via "00:00:00.000000000000", @Pqf7kGOdKJIr via "00:00:00.000000000000"], in=[@w4VxcgSm0Js6 via "01"]}
+@w4VxcgSm0Js6{out=[@w4P7BSd8jU2v via "01"], in=[@sYumkceKpoAh via "01"]}
+@zsBuPkn5mh8F{out=[], in=[@0daCJjMrQel8 via "file-extensions"]}
+==========data==========

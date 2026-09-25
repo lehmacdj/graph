@@ -67,6 +67,7 @@ library
       Graph.LegacyPathMaterialization
       Graph.LegacyPathMaterializationSpec
       Graph.NodeLocated
+      Graph.PathPattern.Execution
       Graph.PathPattern.Resolve
       Graph.Paths
       Graph.Resolve

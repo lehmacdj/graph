@@ -22,6 +22,8 @@ data Command
     Dualize
   | -- | mk
     Make Path
+  | -- | mk --allow-orphans: also create nodes not connected to the graph
+    MakeAllowingOrphans Path
   | -- | mg
     Merge Path
   | -- | t
@@ -55,8 +57,9 @@ data Command
     Move Path Path
   | -- | rn
     Rename Path Path
-  | -- | alias, cp: while cp is misleading it's similar enough to shell cp that
-    -- naming it cp is better for muscle memory + al is already taken by add link
+  | -- | cp: copy the selected edge into a destination node
+    Copy Path Path
+  | -- | cl, clone, alias: relabel without deleting the selected edge
     Alias Path Path
   | -- | vi
     Edit

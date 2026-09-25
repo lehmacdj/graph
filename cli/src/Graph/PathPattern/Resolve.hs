@@ -1,3 +1,5 @@
+{-# LANGUAGE MultiWayIf #-}
+
 -- | Resolve route patterns against the graph (docs/path-pattern-ir.md §4).
 --
 -- Resolution has an effectful load phase, which propagates candidate sets
@@ -6,6 +8,7 @@
 module Graph.PathPattern.Resolve
   ( ResolvedPath (..),
     resolveQuery,
+    resolveQueryWith,
     resolvePath,
     loadPattern,
   )
@@ -44,19 +47,27 @@ resolveQuery ::
   PathQuery ->
   Eff r ResolvedPath
 resolveQuery cur q =
-  traverse resolveOne (toList q.alternatives)
+  resolveQueryWith getNodeMetadata cur q
     & cachingReadingInState
     & runStateLocal emptyGraph
     & runStateLocal mempty
-    & fmap \((rs, graph), nonexistentNodes) ->
-      ResolvedPath
-        { resolutions = sortOn firstWitnessKey (catMaybes rs),
-          graph,
-          nonexistentNodes
-        }
+    & fmap \((resolutions, graph), nonexistentNodes) ->
+      ResolvedPath {resolutions, graph, nonexistentNodes}
+
+-- | Resolve with any way of reading nodes. Resolutions are ordered by their
+-- smallest witness.
+resolveQueryWith ::
+  (Monad m) =>
+  (NID -> m (Maybe (Node Text ()))) ->
+  NID ->
+  PathQuery ->
+  m [Resolution]
+resolveQueryWith lookupNode cur q =
+  sortOn firstWitnessKey . catMaybes
+    <$> traverse resolveOne (toList q.alternatives)
   where
     resolveOne p = do
-      loaded <- loadPattern cur p
+      loaded <- loadPattern lookupNode cur p
       pure do
         (candidates, nodes) <- loaded
         matchPatternWithin candidates (`lookup` nodes) (Just cur) p
@@ -65,11 +76,12 @@ resolveQuery cur q =
 -- reading every node that is a candidate source of an edge. 'Nothing' if
 -- some vertex has no candidate left.
 loadPattern ::
-  (GraphMetadataReading :> r) =>
+  (Monad m) =>
+  (NID -> m (Maybe (Node Text ()))) ->
   NID ->
   PatternPath ->
-  Eff r (Maybe (Map VarId (Set NID), Map NID (Node Text ())))
-loadPattern cur p = withEarlyReturn do
+  m (Maybe (Map VarId (Set NID), Map NID (Node Text ())))
+loadPattern getNode cur p = do
   let initial :: Map PVertex (Set NID)
       initial =
         mapFromList
@@ -78,10 +90,12 @@ loadPattern cur p = withEarlyReturn do
   let loop cands nodes = do
         (cands', nodes') <- forward cands nodes
         let cands'' = backward nodes' cands'
-        when (any null cands'') $ returnEarly Nothing
-        if cands'' == cands then pure (cands'', nodes') else loop cands'' nodes'
-  (cands, nodes) <- loop initial nodes0
-  pure $ Just ([(v, s) | (Var v, s) <- mapToList cands] & mapFromList, nodes)
+        if
+          | any null cands'' -> pure Nothing
+          | cands'' == cands -> pure (Just (cands'', nodes'))
+          | otherwise -> loop cands'' nodes'
+  loop initial nodes0 <&> fmap \(cands, nodes) ->
+    (mapFromList [(v, s) | (Var v, s) <- mapToList cands], nodes)
   where
     bound = \case
       Current -> Just cur
@@ -91,7 +105,7 @@ loadPattern cur p = withEarlyReturn do
     load nodes n
       | n `member` nodes = pure nodes
       | otherwise =
-          getNodeMetadata n <&> \case
+          getNode n <&> \case
             Nothing -> nodes
             Just node -> insertMap n node nodes
     forward cands0 nodes0 =

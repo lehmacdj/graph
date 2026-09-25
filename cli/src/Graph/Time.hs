@@ -15,9 +15,16 @@ tagWithTime ::
   (Members [FreshNID, Error Missing, GetTime] effs, HasGraph Text effs) =>
   NID ->
   Eff effs ()
-tagWithTime targetNID = do
+tagWithTime targetNID = tagNodesWithTime (singletonSet targetNID)
+
+-- | Tag several nodes with one instant.
+tagNodesWithTime ::
+  (Members [FreshNID, Error Missing, GetTime] effs, HasGraph Text effs) =>
+  Set NID ->
+  Eff effs ()
+tagNodesWithTime nodes = do
   timeStrings <- timeToDateStrings <$> currentTime
-  transitionsViaManyTo importDatesNID timeStrings targetNID
+  traverse_ (transitionsViaManyTo importDatesNID timeStrings) nodes
 
 -- | Intercept FreshNID effects & tag all fresh NIDs created with the date
 taggingFreshNodesWithTime ::

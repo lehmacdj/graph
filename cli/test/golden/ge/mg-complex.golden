@@ -1,5 +1,5 @@
 ==========input==========
-mk a + b
+mk a & b
 cd b
 mk c/d
 cd c/d

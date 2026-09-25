@@ -26,7 +26,10 @@ pDualize :: Parser Command
 pDualize = command "d" $> Dualize
 
 pMake :: Parser Command
-pMake = (command "mk" $> Make) <*> path
+pMake =
+  command "mk"
+    *> (try (command "--allow-orphans" $> MakeAllowingOrphans) <|> pure Make)
+    <*> path
 
 pMerge :: Parser Command
 pMerge = (command "mg" $> Merge) <*> path
@@ -79,8 +82,11 @@ pMove = (command "mv" $> Move) <*> path <*> path
 pRename :: Parser Command
 pRename = (command "rn" $> Rename) <*> path <*> path
 
+pCopy :: Parser Command
+pCopy = (command "cp" $> Copy) <*> path <*> path
+
 pAlias :: Parser Command
-pAlias = (commandFrom ["alias", "cp"] $> Alias) <*> path <*> path
+pAlias = (commandFrom ["alias", "clone", "cl"] $> Alias) <*> path <*> path
 
 pEdit :: Parser Command
 pEdit = command "vi" $> Edit
@@ -114,6 +120,7 @@ pCommandTerm =
     <|> try pFix
     <|> try pMove
     <|> try pRename
+    <|> try pCopy
     <|> try pAlias
     <|> try pEdit
     <|> try pBack
@@ -147,6 +154,11 @@ test_parseCommand =
       "at * nid; si"
         `parsesTo` Seq (twoElemList (At Wild NodeId) ShowImage []),
       "{nid}" `parsesTo` NodeId,
+      "mk a" `parsesTo` Make (Literal "a"),
+      "mk --allow-orphans a" `parsesTo` MakeAllowingOrphans (Literal "a"),
+      "cp a b" `parsesTo` Copy (Literal "a") (Literal "b"),
+      "cl a b" `parsesTo` Alias (Literal "a") (Literal "b"),
+      "clone a b" `parsesTo` Alias (Literal "a") (Literal "b"),
       "{nid; si}" `parsesTo` Seq (twoElemList NodeId ShowImage []),
       "at #foo nid" `parsesTo` At (Absolute tagsNID Simple.:/ Literal "foo") NodeId,
       -- "t #something https://example.com/resource"

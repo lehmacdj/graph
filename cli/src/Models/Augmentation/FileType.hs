@@ -2,18 +2,17 @@ module Models.Augmentation.FileType where
 
 import Error.UserError
 import Graph.GraphMetadataEditing
+import Graph.PathPattern.Resolve
 import Graph.Paths
-import Graph.Resolve
 import Graph.SystemNodes
 import Models.Common
-import Models.Connect
 import Models.Edge
 import Models.FileTypeInfo
 import Models.MimeType
 import Models.NID
 import Models.Path.Simple
 import Models.Path.TH
-import Models.ResolvedPath
+import Models.PathPattern.Match (ConcreteHop (..), ConcreteRoute (..), routeLastEdges, selectedRoutes)
 import MyPrelude
 
 newtype FileExtension = FileExtension
@@ -52,13 +51,17 @@ fetchFileExtension nid = do
         ~*/%{excludedLargeSystemNodes}
         /~*/%{Absolute fileExtensionsNID}
       |]
-  case toList (finalNonLoopEdges mp.path) of
+  let extensions =
+        ordNub
+          [ e.transition
+          | r <- mp.resolutions,
+            es <- toList (routeLastEdges r),
+            e <- toList es
+          ]
+  case extensions of
     [] -> pure $ FileExtension Nothing
-    [extension] -> pure . FileExtension . Just $ (head extension).transition
-    xs ->
-      throwText $
-        "found multiple file extensions: "
-          <> tshow (map (map (.transition) . toList) xs)
+    [extension] -> pure . FileExtension . Just $ extension
+    xs -> throwText $ "found multiple file extensions: " <> tshow xs
 
 -- | maybe this should fall back to using `file` if we don't have metadata
 -- stored in the graph
@@ -75,15 +78,16 @@ fetchFileType nid = do
         /~*/%{excludedLargeSystemNodes}
         /~*/%{Absolute mimeTypesNID}
       |]
-  case toList (leftmostConnects mp.path) of
+  -- labels from the file node towards the mime type system node
+  case map (map (.label) . (.hops)) (concatMap selectedRoutes mp.resolutions) of
     [] -> pure (FileType Nothing)
-    [(_, [Connect subtype _, Connect type' _])] -> do
+    [[_, subtype, type']] -> do
       extension <-
         ((.extension) <$> fetchFileExtension nid)
           `onNothingM` throwText "file type found but no file extension"
       let mimeType = MimeType {..}
       pure $ FileType (Just FileTypeInfo {..})
-    xs -> throwText $ "found multiple file types: " <> tshow (map snd xs)
+    xs -> throwText $ "found multiple file types: " <> tshow xs
 
 writeTags ::
   (Members '[GraphMetadataEditing] r) =>

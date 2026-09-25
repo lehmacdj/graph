@@ -23,10 +23,10 @@ import Graph.FreshNID
 import Graph.GraphMetadataEditing (GraphMetadataEditing, GraphMetadataReading)
 import Graph.Import.ByteString
 import Graph.Import.FileSystem
-import Graph.LegacyPathMaterialization
 import Graph.NodeLocated
-import Graph.Resolve
-import Graph.Time (taggingFreshNodesWithTime)
+import Graph.PathPattern.Execution qualified as Paths
+import Graph.PathPattern.Resolve (ResolvedPath (..), resolvePath)
+import Graph.Time (tagNodesWithTime, taggingFreshNodesWithTime)
 import Graph.Utils
 import Models.Augmentation.Bundled
 import Models.Augmentation.Preview
@@ -37,11 +37,10 @@ import Models.Connect
 import Models.Edge
 import Models.History
 import Models.NID
-import Models.NormalizedPath (leastConstrainedNormalizedPath, normalizePath)
 import Models.Path.ParsedPath
 import Models.Path.Simple (Path)
 import Models.Path.Simple qualified as Simple
-import Models.ResolvedPath
+import Models.PathPattern.Match (ConcreteHop (..), ConcreteRoute (..), selectedRoutes)
 import MyPrelude
 import System.Console.Terminal.Size qualified as Terminal
 import Utils.Prettyprinter qualified as PP
@@ -108,10 +107,9 @@ interpretDirective sourceRange = \case
   Targets p -> do
     currentNid <- currentLocation
     p' <- handleDirectivesWith interpretDirective p
-    let np = normalizePath p'
-    mp <- resolveNPath currentNid (leastConstrainedNormalizedPath np)
+    targets <- Paths.queryTargets currentNid p'
     -- this is a little bit inefficient of an embedding, but not too bad
-    pure $ foldl' (Simple.:+) Zero (mapSet Absolute $ getTargets mp.path)
+    pure $ foldl' (Simple.:+) Zero (mapSet Absolute targets)
   HttpResource uri -> do
     guardDangerousDualizedOperation
     Absolute <$> subsumeUserError @Missing (importUrl uri)
@@ -143,45 +141,53 @@ interpretCommand = \case
   ChangeNode p -> do
     nid <- currentLocation
     let err = singleErr "cd"
-    nid' <- the' err =<< subsumeUserError @Missing (resolvePathSuccesses nid p)
+    nid' <- the' err =<< Paths.queryTargets nid p
     changeLocation nid'
   NodeId -> currentLocation >>= echo . show
   Dualize -> dualize
   Make p -> do
     nid <- currentLocation
-    subsumeUserError . taggingFreshNodesWithTime . void $ mkPath nid p
+    newNodes <- Paths.constructPath False nid p
+    subsumeUserError @Missing (tagNodesWithTime newNodes)
+  MakeAllowingOrphans p -> do
+    nid <- currentLocation
+    newNodes <- Paths.constructPath True nid p
+    subsumeUserError @Missing (tagNodesWithTime newNodes)
   Merge p -> do
     nid <- currentLocation
-    nids <- subsumeUserError (resolvePathSuccessesDetail' nid p)
-    whenNonNull (mapMaybe successfulDPathEndpoint $ toList nids) $ \xs -> do
+    nids <- Paths.orderedQueryTargets nid p
+    whenNonNull nids $ \xs -> do
       nid' <- subsumeUserError (Graph.Utils.mergeNodes @Text xs)
       changeLocation nid'
   Remove p -> do
     nid <- currentLocation
-    subsumeUserError $ delPath nid p
+    Paths.removeSelectedEdges nid p
   RemoveNode p -> do
     nid <- currentLocation
-    nids <- subsumeUserError (resolvePathSuccesses nid p)
+    nids <- Paths.queryTargets nid p
     forM_ nids $ deleteNode @Text
   Tag p q -> do
     nid <- currentLocation
     let err = singleErr "the last argument of tag"
-    target <- the' err =<< subsumeUserError (resolvePathSuccesses nid q)
-    nnids <- (subsumeUserError . taggingFreshNodesWithTime) (mkPath nid (p Simple.:/ Literal ""))
-    _ <- subsumeUserError (Graph.Utils.mergeNodes @Text (target `ncons` toList nnids))
-    pure ()
+    target <- the' err =<< Paths.queryTargets nid q
+    newNodes <- Paths.constructTag nid p target
+    -- the target and the prefix's created nodes share one timestamp
+    subsumeUserError @Missing $ tagNodesWithTime (insertSet target newNodes)
   Text t s -> do
     nid <- currentLocation
-    vNid <- the' (error "only creating one path") =<< (subsumeUserError . taggingFreshNodesWithTime) (mkPath nid (Literal t))
+    -- text always adds a fresh data node, even if the label already exists
+    vNid <-
+      (subsumeUserError . taggingFreshNodesWithTime)
+        (transitionsFreshVia nid t)
     setData vNid (Just (encodeUtf8 s))
   Describe d -> interpretCommand (Text "description" d)
   At p c -> do
     nid <- currentLocation
-    locations <- subsumeUserError (resolvePathSuccesses nid p)
+    locations <- Paths.queryTargets nid p
     forM_ locations $ \nid' -> local @NID (const nid') $ interpretCommand c
   Dedup t -> do
     nid <- currentLocation
-    ambiguities <- subsumeUserError (resolvePathSuccesses nid (Literal t))
+    ambiguities <- Paths.queryTargets nid (Literal t)
     let noSuffix = repeat ""
         suffixes
           | length ambiguities < 2 = noSuffix
@@ -217,26 +223,19 @@ interpretCommand = \case
   Move p q -> do
     nid <- currentLocation
     let err = singleErr "the last argument of mv"
-    target <- the' err =<< subsumeUserError (resolvePathSuccesses nid q)
-    subsumeUserError (mvPath nid p target)
+    target <- the' err =<< Paths.queryTargets nid q
+    Paths.moveSelectedEdges nid target p
   Rename p q -> do
     nid <- currentLocation
-    let err xs =
-          OtherError $
-            "the first argument to rn require the path to only resolve to "
-              ++ "one node but they resolved to \n"
-              ++ (tshow . map endPoint . setToList $ xs)
-    c <- the' err =<< subsumeUserError (resolvePathSuccessesDetail nid p)
-    subsumeUserError (renameDPath c nid q)
+    Paths.relabelPath True nid p q
+  Copy p q -> do
+    nid <- currentLocation
+    target <-
+      the' (singleErr "the last argument of cp") =<< Paths.queryTargets nid q
+    Paths.copySelectedEdges nid target p
   Alias p q -> do
     nid <- currentLocation
-    let err xs =
-          OtherError $
-            "the first argument to cp require the path to only resolve to "
-              ++ "one node but they resolved to \n"
-              ++ (tshow . map endPoint . setToList $ xs)
-    c <- the' err =<< subsumeUserError (resolvePathSuccessesDetail nid p)
-    subsumeUserError (aliasDPath c nid q)
+    Paths.relabelPath False nid p q
   Edit -> do
     n <- subsumeUserError @Missing currentLocation
     path <- getGraphFilePath
@@ -257,13 +256,14 @@ interpretCommand = \case
     nid <- currentLocation
     provide_ do
       p' <- handleDirectivesWith interpretDirective p
-      mp <- resolvePath nid p'
+      -- preview joins its outputs like every other query
+      mp <- resolvePath nid (p' Simple.:/ One)
       unless (null mp.nonexistentNodes) $
         say ("nonexistent nodes: " ++ tshow mp.nonexistentNodes)
       targets <-
-        for (toList (leftmostConnects mp.path)) \(source, connects) -> do
-          let listedNid = last (source `ncons` map (.node) connects)
-              transitions = map (.transition) connects
+        for (ordNub (concatMap selectedRoutes mp.resolutions)) \route -> do
+          let listedNid = maybe route.root (.target) (lastMay route.hops)
+              transitions = map (.label) route.hops
           node <- getNodeWith (fetchTags #| fetchTimestamps) listedNid
           pure (transitions, listedNid, node)
       when (null targets) do

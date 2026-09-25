@@ -308,14 +308,35 @@ full test suite.
   that the corpus actually produces repairs, ambiguity and right evidence.
 
 ### Commit 3: commands
-- [ ] Port the branch's command policy (`/@` for queries) and the
+- [x] Port the branch's command policy (`/@` for queries) and the
       `rn`/`cl`/`cp`/`mv` diagnostics
-- [ ] Switch `Graph.Command`, `Graph.Paths`, `Graph.Complete`, the
+- [x] Switch `Graph.Command`, `Graph.Paths`, `Graph.Complete`, the
       completion executable, `Graph.Create`, `Tags`, `FileType`,
       `Timestamps`, and `Preview` to the new API
-- [ ] `mk`: residuate, ambiguity error, orphan error, and override flag
-- [ ] Golden format: inline base-graph section
-- [ ] Port the goldens and update changed existing goldens
+- [x] `mk`: residuate, ambiguity error, orphan error, and override flag
+- [x] Golden format: inline base-graph section
+- [x] Port the goldens and update changed existing goldens
+- `Graph.PathPattern.Execution` holds the command policy. Commands read
+  nodes through `ReadGraphDataless`, the same effects they write through.
+  `Graph.Paths` needed no change. `Graph.Complete` (an `undefined` stub)
+  and `Graph.Create` (which only created `NormalizedPath NID`s) are not
+  switched but deleted in commit 4, since nothing else uses them.
+- `rn`/`cl`: the destination is resolved as `destination/@endpoint` with
+  its last pattern edge dropped, and the edge recreated from the node
+  before it. *Deviation:* that last hop must be a literal (the branch
+  allowed matching existing labels for a wildcard, which picks an
+  arbitrary label).
+- The orphan override is `mk --allow-orphans`.
+- Golden format: an optional first section `==========graph==========`
+  with lines `0 -a-> 1` (edges between `smallNID`s; node 0 is the origin)
+  and `1 data "text"` (node data, a Haskell string literal). Tests with a
+  base graph also render a trailing `==========data==========` section
+  listing every node's data, since the graph dump omits data. The ported
+  scenarios live in `test/golden/ge/path/`; `spec-*.golden` cover the
+  command examples of this document.
+- The existing `mg`/`mg-complex` goldens set up with `mk a + b`, which is
+  now an ambiguity error; their input became `mk a & b`, which creates the
+  same two edges, so their expected output is unchanged.
 
 ### Commit 4: removal
 - [ ] Delete `Models.NormalizedPath*`, `Models.ResolvedPath`'s old
