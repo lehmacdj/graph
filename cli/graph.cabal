@@ -67,6 +67,7 @@ library
       Graph.LegacyPathMaterialization
       Graph.LegacyPathMaterializationSpec
       Graph.NodeLocated
+      Graph.PathPattern.Resolve
       Graph.Paths
       Graph.Resolve
       Graph.ResolveSpec
@@ -118,6 +119,13 @@ library
       Models.Path.PartialPath
       Models.Path.Simple
       Models.Path.TH
+      Models.PathPattern
+      Models.PathPattern.Compile
+      Models.PathPattern.CompileSpec
+      Models.PathPattern.Match
+      Models.PathPattern.MatchSpec
+      Models.PathPattern.TestCorpus
+      Models.PathPatternSpec
       Models.ResolvedPath
       MyPrelude
       MyPrelude.Collections

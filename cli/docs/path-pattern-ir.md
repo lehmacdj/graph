@@ -44,7 +44,10 @@ newtype PathQuery = PathQuery (Set PatternPath)  -- `+` alternatives
   so every `@n` is one vertex. `Var` is every other position. The
   compiler never produces a `Var` root today, but roots stay typed as
   `PVertex` so `%unanchored` can return (§8).
-- **Tests.** Joining two vertices takes the meet of their tests:
+- **Tests.** Only constraining tests are stored: a `Fixed n` vertex
+  implicitly tests `Exactly n` and an absent entry accepts any node
+  (`vertexTest` gives the effective test). Joining two vertices takes the
+  meet of their tests:
   `Except a ⊓ Except b = Except (a ∪ b)`; `Exactly n ⊓ Except s` is
   `Exactly n` unless `n ∈ s`; `Exactly n ⊓ Exactly m` requires `n == m`.
   A contradiction drops the alternative. Merging a `Var` with `Fixed n`
@@ -110,7 +113,9 @@ itself.
   branch's goldens.
 - The Guard special case is gone. `x/(@ & a)/@` has routes `[x, x·a]`:
   rename targets `x`, and final edges are `{x, a}`. `x/(a & @)/@` has routes
-  `[x·a, x]`, so rename targets `a`.
+  `[x·a, x]`, so rename targets `a`. The unjoined `/` copies `x` into both
+  routes (two independent `x` edges); with `x/@/(@ & a)/@` the `x` edge is
+  shared and `a` is a loop on its target.
 - `(a & b)/@ & c` has routes `C -a-> J`, `C -b-> J`, `C -c-> v`. As a query
   (`/@` appended), `v` merges into `J`.
 
@@ -136,7 +141,7 @@ data Component = Component { vars :: Set VarId, edges :: Set EdgeId }
 data Partial = Partial
   { nodes :: Map VarId NID, labels :: Map EdgeId Text }
 data Resolution = Resolution
-  { pattern    :: PatternPath
+  { patternPath :: PatternPath                -- `pattern` is a keyword
   , current    :: Maybe NID
   , components :: [(Component, [Partial])] }  -- empty list ⇒ no match
 data ResolvedPath = ResolvedPath
@@ -258,15 +263,21 @@ identifier type), in about four commits. Each commit builds and passes the
 full test suite.
 
 ### Commit 1: route patterns, compiler, matcher
-- [ ] This document, in `cli/docs/`
-- [ ] `Models.PathPattern` types, canonicalization, `Show` as helpers, and
+- [x] This document, in `cli/docs/`
+- [x] `Models.PathPattern` types, canonicalization, `Show` as helpers, and
       the test helpers
-- [ ] Derived pattern graph (`Graph' PVertex PEdge PAug`)
-- [ ] Compiler: `~`, distribution, glue, tests meet, contradictions
-- [ ] Load phase (candidate propagation over `GraphMetadataReading`)
-- [ ] Pure matcher, factoring into components, `Resolution`, and
+- [x] Derived pattern graph (`Graph' PVertex PEdge PAug`)
+- [x] Compiler: `~`, distribution, glue, tests meet, contradictions
+- [x] Load phase (candidate propagation over `GraphMetadataReading`)
+- [x] Pure matcher, factoring into components, `Resolution`, and
       projections
-- [ ] Brute-force oracle, ported corpus, and unit tests for §1–§4
+- [x] Brute-force oracle, ported corpus, and unit tests for §1–§4
+- Modules: `Models.PathPattern` (types, helpers, canonical form, derived
+  graph), `Models.PathPattern.Compile`, `Models.PathPattern.Match` (pure
+  matching and projections), `Graph.PathPattern.Resolve` (load + match).
+  Besides the brute-force matcher, `CompileSpec` checks every corpus query
+  on every corpus graph against a direct interpreter of the distributed
+  expressions, which shares no code with gluing or matching.
 
 ### Commit 2: residuation
 - [ ] Candidate enumeration: evidence rule and fresh identification
