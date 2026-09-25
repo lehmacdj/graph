@@ -194,9 +194,16 @@ no existing edges.
 3. Otherwise the variable is fresh.
 4. **Fresh identification.** Two fresh vertices may be identified iff that
    makes two pattern edges the same patch edge (same label, orientation,
-   and other endpoint). Evidence may come from either side, and this runs
-   to a fixpoint. Examples: `a & a` gives one edge; `a & b` gives two nodes;
-   `a/b & a/c` gives a shared `a` node; `a/b/@5 & c/b/@5` is ambiguous.
+   and other endpoint). Identifications from the **left** (the same hop
+   from the same vertex) are always made; identifications from the
+   **right** (the same hop into the same vertex) are alternatives, like
+   right evidence. Both run to a fixpoint. Examples: `a & a` gives one
+   edge; `a & b` gives two nodes; `a/b & a/c` gives a shared `a` node;
+   `a/b/@5 & c/b/@5` is ambiguous.
+   *Deviation:* the agreed wording ("may be identified, minimality
+   chooses") made `a/b & a/c` ambiguous, because the shared and separate
+   patches are incomparable modulo renaming; making left identification
+   mandatory matches every example and the "right is weaker" decision.
 5. **Labels.** A `*`/regex `EdgeId` whose edge must be created gets its
    label from the caller's callback only; there is no graph-wide reuse.
    `mk` supplies no labels, so it errors, naming the edge.
@@ -220,11 +227,19 @@ walk counts). Every other evidence-backed binding is right-justified.
 **`mk`.**
 - One survivor: apply it.
 - More than one: error without changing anything. List the survivors in
-  the order above, each as a **disambiguating surface path** (bind an
-  existing node with `@N`, force fresh with `!{…}`) plus its patch.
+  the order above, each as its **resolved routes** (existing nodes as
+  `@N`, created nodes as `newK`) plus its patch, and suggest pinning a
+  node with `@N` or excluding one with `!{…}` in the path.
+  *Deviation:* the agreed design printed a disambiguating surface path per
+  alternative, but surface syntax cannot name a created node shared by
+  several routes (only `/@` joins can), so a faithful surface path does not
+  always exist.
 - **Orphans.** If the patch creates a weakly-connected component with no
   edge to a pre-existing node (for example, `mk @5/a` with 5 missing),
   error, naming the component. An override flag allows it.
+- The label chooser is a function of the matcher (`Matcher -> Maybe
+  Text`); it is consulted for every edge that must be created with a
+  non-literal matcher.
 - Residuation operates lazily over `GraphMetadataReading`.
   Candidate generation is phrased as "candidates for a variable given its
   bound neighbours". The no-bound-neighbour case is an explicit
@@ -280,13 +295,17 @@ full test suite.
   expressions, which shares no code with gluing or matching.
 
 ### Commit 2: residuation
-- [ ] Candidate enumeration: evidence rule and fresh identification
-- [ ] Label callback per `EdgeId`
-- [ ] Left-justification, dominance, subset minimality modulo renaming,
+- [x] Candidate enumeration: evidence rule and fresh identification
+- [x] Label chooser for non-literal edges
+- [x] Left-justification, dominance, subset minimality modulo renaming,
       and dedup
-- [ ] Survivor ordering and disambiguating surface-path rendering
-- [ ] Orphan detection
-- [ ] Property tests and unit tests for §5
+- [x] Survivor ordering and rendering (see the deviation in §5)
+- [x] Orphan detection
+- [x] Property tests and unit tests for §5
+- Module: `Models.PathPattern.Residuate` (generic over the node lookup
+  monad; `chooseRepair` gives the command-level choice). `ResiduateSpec`
+  checks the properties for every corpus query on every corpus graph and
+  that the corpus actually produces repairs, ambiguity and right evidence.
 
 ### Commit 3: commands
 - [ ] Port the branch's command policy (`/@` for queries) and the

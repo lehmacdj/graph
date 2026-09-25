@@ -124,6 +124,8 @@ library
       Models.PathPattern.CompileSpec
       Models.PathPattern.Match
       Models.PathPattern.MatchSpec
+      Models.PathPattern.Residuate
+      Models.PathPattern.ResiduateSpec
       Models.PathPattern.TestCorpus
       Models.PathPatternSpec
       Models.ResolvedPath
