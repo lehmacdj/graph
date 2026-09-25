@@ -8,6 +8,9 @@ For setup instructions (installing Stack, running tests), see [docs/claude-code-
 
 - **[MyPrelude Usage](docs/MyPrelude.md)** - Custom prelude built on ClassyPrelude with additional utilities. Read this first to understand import rules, collections, effects, and common patterns.
 
+- **[Route patterns](docs/path-pattern-ir.md)** - How paths compile to route
+  patterns, and how resolution, residuation (`mk`) and edge selection work.
+
 - **[Testing Best Practices](docs/Testing.md)** - Guidelines for writing tests, including in-file tests, test utilities, golden tests, and avoiding cyclic imports.
 
 ## Quick Reference

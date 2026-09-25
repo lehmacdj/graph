@@ -39,7 +39,7 @@ import Utils.Parsing.Common
 --    this is very hard, consider not(a/b), which theoretically would need to
 --    include paths of any length that don't match a/b
 -- KleeneStar Path -- ^ necessary for expressing arbitrary graph traversals as paths
--- NormalizedPath -- ^ embed an already normalized path, would be useful as an optimization
+-- PathPattern -- ^ embed an already compiled pattern, would be useful as an optimization
 --
 -- WARNING: when updating this type, update the {-# COMPLETE #-} pragmas
 -- in @Models.Path.*@ submodules too so that completeness checking works as

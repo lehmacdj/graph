@@ -63,6 +63,26 @@ goldenTestShow :: (Show a) => String -> a -> TestTree
 - Uses `HasCallStack` to automatically determine file location
 - Example: test in `Models.Example` creates golden file at `test/Models/Example/<testName>`
 
+### CLI golden tests
+
+`test/golden/ge/**/*.golden` run `ge` on some input and compare its
+stdout, stderr and resulting graph (see
+`Executable.GraphEditor.GoldenSpec`). A test can start from an inline base
+graph instead of an `examples/` template:
+
+```
+==========graph==========
+0 -a-> 1
+1 data "existing text"
+==========input==========
+rn a b
+==========stdout==========
+```
+
+Nodes are `smallNID`s (node 0 is the origin). Such tests also show every
+node's data in a trailing `data` section. Regenerate expectations with
+`--ta '-p integration --accept'` and review the diff.
+
 ## Avoiding Cyclic Imports
 
 When writing tests in MyPrelude modules:

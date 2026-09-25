@@ -1,6 +1,6 @@
 # Route patterns: the path compilation target
 
-Status: design agreed, implementation in progress. This document is the spec
+Status: implemented. This document is the spec
 and the work tracker; TODOs are checked off as they land.
 
 Surface `Path`s compile to **route patterns**. A route pattern is the
@@ -339,11 +339,15 @@ full test suite.
   same two edges, so their expected output is unchanged.
 
 ### Commit 4: removal
-- [ ] Delete `Models.NormalizedPath*`, `Models.ResolvedPath`'s old
+- [x] Delete `Models.NormalizedPath*`, `Models.ResolvedPath`'s old
       projections, `Graph.Resolve`'s old resolver, `UnresolvedResiduals`,
       `ResidualsBench`, `LegacyPathMaterialization` (if unused), and
       `docs/pathResidualsUnresolvedBy-*`
-- [ ] Update `cli/CLAUDE.md` and docs references
+- [x] Update `cli/CLAUDE.md` and docs references
+- Also deleted: `Graph.Create`, `Graph.Complete`, `Models.DPath`, the
+  `residuals-bench` executable, and `Graph.LegacyPathMaterialization`
+  (unused once commands moved). `Models.LegacyPartialPath` stays: it is the
+  completion parser, not an engine.
 
 ### Review
 - [ ] An independent subagent, with a fresh context rather than a fork,

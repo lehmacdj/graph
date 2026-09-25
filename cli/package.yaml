@@ -201,15 +201,6 @@ executables:
     dependencies:
     - graph
 
-  residuals-bench:
-    main:                Main.hs
-    source-dirs:         app/residuals-bench
-    ghc-options:
-    - -threaded
-    - -rtsopts
-    dependencies:
-    - graph
-
 tests:
   graph-test:
     main:                Main.hs
