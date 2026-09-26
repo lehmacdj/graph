@@ -161,6 +161,36 @@ spec_matchExamples = describe "matching examples" do
         map (map (.target) . (.hops)) (selectedRoutes r)
           `shouldBe` [[smallNID 5, smallNID 6], [smallNID 5, smallNID 7]]
       rs -> expectationFailure ("expected one resolution: " <> show rs)
+  it "x/(@ & a)/@ has final edges x and a, route 0 selecting x" do
+    let edges = [edge' 1 "x" 2, edge' 2 "a" 2]
+    case matched edges [path| x/(@ & a)/@ |] of
+      [r] -> do
+        routeLastEdges r
+          `shouldBe` mapFromList
+            [ (0, singletonSet (edge' 1 "x" 2)),
+              (1, singletonSet (edge' 2 "a" 2))
+            ]
+        map (map (.label) . (.hops)) (selectedRoutes r) `shouldBe` [["x"]]
+      rs -> expectationFailure ("expected one resolution: " <> show rs)
+  it "x/(a & @)/@ selects a" do
+    let edges = [edge' 1 "x" 2, edge' 2 "a" 2]
+    case matched edges [path| x/(a & @)/@ |] of
+      [r] ->
+        map (map (.label) . (.hops)) (selectedRoutes r)
+          `shouldBe` [["x", "a"]]
+      rs -> expectationFailure ("expected one resolution: " <> show rs)
+  it "components follow first appearance; witnesses are component-major" do
+    let edges =
+          [edge' 1 "a" 2, edge' 1 "a" 3, edge' 1 "b" 4, edge' 1 "b" 5]
+    case matched edges [path| a & b |] of
+      [r] -> do
+        map ((.edges) . fst) r.components `shouldBe` [[EdgeId 0], [EdgeId 1]]
+        map (map (map (.target) . (.hops)) . concreteRoutes r) (witnesses r)
+          `shouldBe` [ [[smallNID x], [smallNID y]]
+                     | x <- [2, 3],
+                       y <- [4, 5]
+                     ]
+      rs -> expectationFailure ("expected one resolution: " <> show rs)
   it "a missing fixed node does not match" do
     matched [] [path| @000000000005 |] `shouldBe` []
   it "orders alternatives by their smallest witness" do

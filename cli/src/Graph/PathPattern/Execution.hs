@@ -101,10 +101,14 @@ planConstruction allowOrphans cur p = do
 
 renderResidualError :: ResidualError -> Text
 renderResidualError = \case
-  UnsupportedLabel m ->
-    "Cannot create an edge for "
+  UnsupportedLabel m routeIndex hopIndex ->
+    "Cannot create the edge for "
       <> renderMatcher m
-      <> ": give it a literal label; nothing was changed. (UnsupportedLabel)"
+      <> " (step "
+      <> tshow (hopIndex + 1)
+      <> " of route "
+      <> tshow (routeIndex + 1)
+      <> "): give it a literal label; nothing was changed. (UnsupportedLabel)"
   where
     renderMatcher = \case
       MLiteral t -> tshow t
@@ -224,7 +228,7 @@ prospectiveEdges ::
   Eff r (Set (Edge Text))
 prospectiveEdges cur destination endpoint = do
   let q = compilePath (destination P.:/ P.Absolute endpoint)
-  fmap mconcat . for (toList q.alternatives) $ \p -> do
+  perAlternative <- for (toList q.alternatives) $ \p -> do
     let r0 :| rest = p.routes
     lastHop <-
       lastMay r0.hops
@@ -244,6 +248,13 @@ prospectiveEdges cur destination endpoint = do
         [ concreteEdge (endOf rt) (ConcreteHop lastHop.direction label endpoint)
         | rt <- selectedConcreteRoutes rs
         ]
+  case ordNub (filter (not . null) perAlternative) of
+    [] -> pure mempty
+    [edges] -> pure edges
+    _ ->
+      throwError . OtherError $
+        "The destination matches through several alternatives; choose one."
+          <> " Nothing was changed."
 
 -- | Relocate the traversal parent of each selected last edge. For an
 -- incoming traversal this is the edge's target in the stored graph.
@@ -285,12 +296,19 @@ copySelectedEdges = relocateSelectedEdges False
 
 -- | Delete the last edge of every selected route.
 removeSelectedEdges ::
-  (PathReading r, WriteGraph Text :> r) => NID -> P.Path -> Eff r ()
+  (PathReading r, WriteGraph Text :> r, Error UserError :> r) =>
+  NID ->
+  P.Path ->
+  Eff r ()
 removeSelectedEdges cur p = do
   rs <- resolveCommandQuery cur p
-  traverse_
-    (deleteEdge @Text . fst)
-    (mapMaybe lastEdgeOf (selectedConcreteRoutes rs))
+  edges <- for (selectedConcreteRoutes rs) \rt -> case lastEdgeOf rt of
+    Nothing ->
+      throwError . OtherError $
+        "rm selected a zero-edge route. Put the edge branch first; "
+          <> "nothing was changed."
+    Just (original, _) -> pure original
+  traverse_ (deleteEdge @Text) edges
 
 -- | Labels that continue a query prefix to at least one match.
 completionTransitions :: (PathReading r) => NID -> P.Path -> Eff r (Set Text)

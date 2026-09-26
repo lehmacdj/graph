@@ -133,30 +133,50 @@ runGraphEditor test@GoldenTest {..} =
           dataDump = dataDump'
         }
 
--- | Write the nodes of an inline base graph.
+data BaseGraphLine
+  = BaseEdge (Edge Text)
+  | BaseData NID ByteString
+  | BaseNode NID
+
+-- | Write the nodes of an inline base graph. Lines are @0 -a-> 1@ (an edge;
+-- the label may be a quoted string such as @0 -"a b"-> 1@), @1 data "text"@
+-- (node data) or @2@ (a node without edges).
 writeBaseGraph :: FilePath -> ByteString -> IO ()
 writeBaseGraph directory text = do
-  (edges, nodeData) <-
+  items <-
     either (fail . ("invalid base graph: " <>)) pure $
-      partitionEithers <$> traverse parseLine (filter (not . null . words) (lines (decodeUtf8 text)))
-  let graph :: Graph Text ()
-      graph = insertEdges edges (insertNode (emptyNode nilNID) emptyGraph)
-      dataByNID = mapFromList nodeData :: Map NID ByteString
-      withData = foldl' (\g n -> if n `member` nidSet g then g else insertNode (emptyNode n) g) graph (keys dataByNID)
-  for_ (nodesOf withData) \n ->
+      traverse parseLine (filter (not . null . words) (lines (decodeUtf8 text)))
+  let edges = [e | BaseEdge e <- items]
+      dataByNID = mapFromList [(n, d) | BaseData n d <- items] :: Map NID ByteString
+      extraNodes = [n | BaseNode n <- items] <> keys dataByNID
+      graph :: Graph Text ()
+      graph =
+        foldl'
+          (\g n -> if n `member` nidSet g then g else insertNode (emptyNode n) g)
+          (insertEdges edges (insertNode (emptyNode nilNID) emptyGraph))
+          extraNodes
+  for_ (nodesOf graph) \n ->
     serializeNodeEx (n $> lookup n.nid dataByNID) directory
   where
-    parseLine :: Text -> Either String (Either (Edge Text) (NID, ByteString))
+    parseLine :: Text -> Either String BaseGraphLine
     parseLine line = case words line of
-      [s, arrow, t]
-        | Just label <- stripPrefix "-" arrow >>= stripSuffix "->" ->
-            (\a b -> Left (Edge a label b)) <$> nodeId s <*> nodeId t
+      [n] -> BaseNode <$> nodeId n
       (n : "data" : _) ->
-        let literal = drop 4 (snd (T.breakOn "data" line))
+        let literal = T.strip (drop 4 (snd (T.breakOn "data" line)))
          in case readMay (unpack literal) of
-              Just (str :: String) -> (\x -> Right (x, encodeUtf8 (pack str))) <$> nodeId n
+              Just (str :: String) -> (`BaseData` encodeUtf8 (pack str)) <$> nodeId n
               Nothing -> Left ("invalid data line: " <> unpack line)
-      _ -> Left ("invalid line: " <> unpack line)
+      _ -> do
+        let (source, rest) = T.breakOn " -" line
+            (labelArrow, sink) = T.breakOnEnd "-> " (drop 2 rest)
+        rawLabel <-
+          maybe (Left ("invalid line: " <> unpack line)) (Right . T.strip) $
+            stripSuffix "-> " labelArrow
+        label <-
+          if "\"" `isPrefixOf` rawLabel
+            then maybe (Left ("invalid label: " <> unpack rawLabel)) (Right . pack) (readMay (unpack rawLabel) :: Maybe String)
+            else Right rawLabel
+        (\a b -> BaseEdge (Edge a label b)) <$> nodeId (T.strip source) <*> nodeId (T.strip sink)
     nodeId t = maybe (Left ("invalid node: " <> unpack t)) (Right . smallNID) (readMay t)
 
 mkGoldenTest :: FilePath -> TestTree

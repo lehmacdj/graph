@@ -148,8 +148,46 @@ spec_residuationExamples = describe "residuation examples" do
     patches (graphWithEdges []) [path| (a & b)/c |]
       `shouldBe` [[c <> " a new1", c <> " b new3", "new1 c new2", "new3 c new4"]]
   it "a/b/@5 & c/b/@5 is ambiguous between separate and shared b sources" $
-    length (patches (graphWithEdges [edge' 5 "x" 5]) [path| a/b/@000000000005 & c/b/@000000000005 |])
-      `shouldBe` 2
+    patches (graphWithEdges [edge' 5 "x" 5]) [path| a/b/@000000000005 & c/b/@000000000005 |]
+      `shouldBe` [ [c <> " a new1", c <> " c new2", "new1 b " <> n 5, "new2 b " <> n 5],
+                   [c <> " a new1", c <> " c new1", "new1 b " <> n 5]
+                 ]
+  it "identifies hops that create the same stored edge from opposite directions" $
+    -- l and k/~l/@1 both need the stored edge 1 -l-> x
+    patches (graphWithEdges []) [path| l & k/~l/@000000000001 |]
+      `shouldBe` [[c <> " k new1", c <> " l new1"]]
+  it "a mixed pair that does not shrink the patch is an alternative" $
+    patches (graphWithEdges []) [path| l/m & k/~l/@000000000001 |]
+      `shouldBe` [ [c <> " k new3", c <> " l new1", c <> " l new3", "new1 m new2"],
+                   [c <> " k new1", c <> " l new1", "new1 m new2"]
+                 ]
+  it "an alternative lacking a label is unavailable: mk a + *" $
+    residuatePure (`maybeNodeLookup` graphWithEdges []) (const Nothing) corpusCurrent (compilePath [path| a + * |])
+      `shouldSatisfy` \case
+        Right (Repairs (r :| [])) -> map (.transition) (toList r.patch.edges) == ["a"]
+        _ -> False
+  it "a variable without a bound vertex is an internal error" $
+    evaluate
+      ( residuatePure
+          (const Nothing)
+          (const Nothing)
+          corpusCurrent
+          (query [pat [route (var 0) [out 0 "a" (var 1)]]])
+      )
+      `shouldThrow` anyErrorCall
+  it "a join bound by one route's left walk is left-justified" $
+    patches (graphWithEdges [edge' 1 "a" 2]) [path| (a & b)/@ |]
+      `shouldBe` [[c <> " b " <> n 2]]
+  it "orders right-evidence repairs by patch size after the left-only one" $
+    -- a/b/c/@5 with 6 -c-> 5 and 7 -b-> 6
+    patches (graphWithEdges [edge' 6 "c" 5, edge' 7 "b" 6]) [path| a/b/c/@000000000005 |]
+      `shouldBe` [ [c <> " a new1", "new1 b new2", "new2 c " <> n 5],
+                   [c <> " a " <> n 7],
+                   [c <> " a new1", "new1 b " <> n 6]
+                 ]
+  it "the label error names the step that needs a label" $
+    residuatePure (`maybeNodeLookup` graphWithEdges []) (const Nothing) corpusCurrent (compilePath [path| a & b/* |])
+      `shouldBe` Left (UnsupportedLabel MWild 1 1)
   it "(a & b)/@ joins the new edges" $
     patches (graphWithEdges []) [path| (a & b)/@ |]
       `shouldBe` [[c <> " a new1", c <> " b new1"]]
@@ -174,10 +212,10 @@ spec_residuationExamples = describe "residuation examples" do
           residuatePure (`maybeNodeLookup` g) (const Nothing) corpusCurrent (compilePath surface)
     it "a wildcard edge needs a label from the chooser" $
       noLabel (graphWithEdges []) [path| a/* |]
-        `shouldBe` Left (UnsupportedLabel MWild)
+        `shouldBe` Left (UnsupportedLabel MWild 0 1)
     it "an unrelated existing label is not reused" $
       noLabel (graphWithEdges [edge' 3 "foo" 4]) [path| a/* |]
-        `shouldBe` Left (UnsupportedLabel MWild)
+        `shouldBe` Left (UnsupportedLabel MWild 0 1)
     it "an existing wildcard edge satisfies the pattern" $
       noLabel (graphWithEdges [edge' 1 "a" 2, edge' 2 "foo" 3]) [path| a/* |]
         `shouldBe` Right AlreadyResolves

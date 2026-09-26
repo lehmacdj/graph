@@ -2,6 +2,7 @@ module Models.PathPatternSpec where
 
 import Models.Edge (Edge' (..))
 import Models.Graph (Graph' (..), edgeSet)
+import Models.NID (unsafeNID)
 import Models.Node (Node' (..))
 import Models.Path.TH (path)
 import Models.PathPattern
@@ -42,6 +43,20 @@ spec_pathPattern = describe "route patterns" do
                 route current [outW 1 (var 2)]
               ]
       canonicalize (canonicalize p) `shouldBe` canonicalize p
+
+  describe "Show" do
+    it "prints incoming wildcards with their helper" $
+      show (compilePath [path| ~* |])
+        `shouldBe` "query [pat [route current [inW 0 (var 0)]]]"
+    it "parenthesizes exclusions of large NIDs" $
+      show (patWith [(var 0, Except (singletonSet (unsafeNID "zzzzzzzzzzzz")))] [route current [out 0 "a" (var 0)]])
+        `shouldBe` "patWith [(var 0,Except (setFromList [unsafeNID \"zzzzzzzzzzzz\"]))] [route current [out 0 \"a\" (var 0)]]"
+    it "prints mixed small and large exclusions as NIDs" $
+      show (Except (setFromList [smallNID 5, unsafeNID "zzzzzzzzzzzz"]))
+        `shouldBe` "Except (setFromList [smallNID 5,unsafeNID \"zzzzzzzzzzzz\"])"
+    it "prints the canonical form" $
+      show (pat [route current [out 7 "a" (var 3)]])
+        `shouldBe` "pat [route current [out 0 \"a\" (var 0)]]"
 
   describe "patternGraph" do
     it "keeps parallel pattern edges distinct" $

@@ -71,6 +71,7 @@ library
       Graph.Time
       Graph.Utils
       Models.Augmentation.Bundled
+      Models.Augmentation.FetchSpec
       Models.Augmentation.FileType
       Models.Augmentation.IsThin
       Models.Augmentation.NodeEdits

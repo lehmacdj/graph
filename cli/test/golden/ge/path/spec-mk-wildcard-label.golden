@@ -4,7 +4,7 @@ mk a/*
 ==========stdout==========
 g> g> Goodbye!
 ==========stderr==========
-Cannot create an edge for *: give it a literal label; nothing was changed. (UnsupportedLabel)
+Cannot create the edge for * (step 2 of route 1): give it a literal label; nothing was changed. (UnsupportedLabel)
 ==========graph-dump==========
 @000000000000{out=[], in=[@0daCJjMrQel8 via "origin"]}
 @0daCJjMrQel8{out=[@zsBuPkn5mh8F via "file-extensions", @AhQufiPzgyRf via "file-hashes", @3JJvxFUHGAA1 via "historical-special-nodes", @S00KkOYoVpFu via "import-dates", @a0fVkm0kR7KE via "import-urls", @927u9Xyky2pC via "mime-types", @000000000000 via "origin", @pbYxBO6fzBQV via "tags"], in=[]}

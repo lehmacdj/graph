@@ -333,7 +333,16 @@ instance Show NodeTest where
           showParen (d > 10) $
             showString "except "
               . shows (mapMaybe smallNIDIndex (toList s))
-      | otherwise -> showParen (d > 10) $ showString "Except " . shows s
+      | otherwise ->
+          showParen (d > 10) $
+            showString "Except (setFromList ["
+              . foldr (.) id (intersperse (showString ",") (map element (toList s)))
+              . showString "])"
+    where
+      -- a NID as a Haskell expression of type NID
+      element n = case smallNIDIndex n of
+        Just k -> showString "smallNID " . shows k
+        Nothing -> showsNID 0 n
 
 instance Show Matcher where
   showsPrec d = \case
@@ -344,7 +353,7 @@ instance Show Matcher where
 instance Show Hop where
   showsPrec d (Hop (EdgeId e) dir m t) = showParen (d > 10) $ case m of
     MLiteral l ->
-      showString name
+      showString literalName
         . showString " "
         . shows e
         . showString " "
@@ -352,13 +361,13 @@ instance Show Hop where
         . showString " "
         . showsPrec 11 t
     MWild ->
-      showString name
+      showString prefix
         . showString "W "
         . shows e
         . showString " "
         . showsPrec 11 t
     MRegex _ ->
-      showString name
+      showString prefix
         . showString "M "
         . shows e
         . showString " "
@@ -366,17 +375,21 @@ instance Show Hop where
         . showString " "
         . showsPrec 11 t
     where
-      name = case dir of
+      literalName = case dir of
         Out -> "out"
         In -> "inc"
+      prefix = case dir of
+        Out -> "out"
+        In -> "in"
 
 instance Show Route where
   showsPrec d (Route r hs) =
     showParen (d > 10) $
       showString "route " . showsPrec 11 r . showString " " . shows hs
 
+-- | Printed after canonical renumbering.
 instance Show PatternPath where
-  showsPrec d p =
+  showsPrec d p0 =
     showParen (d > 10) $
       if null p.tests
         then showString "pat " . shows (toList p.routes)
@@ -385,6 +398,8 @@ instance Show PatternPath where
             . shows (mapToList p.tests)
             . showString " "
             . shows (toList p.routes)
+    where
+      p = canonicalize p0
 
 instance Show PathQuery where
   showsPrec d (PathQuery ps) =

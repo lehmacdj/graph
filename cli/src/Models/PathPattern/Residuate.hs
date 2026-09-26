@@ -79,8 +79,9 @@ data Residuation
   deriving stock (Eq, Show, Generic)
 
 data ResidualError
-  = -- | an edge with this matcher must be created, but no label was given
-    UnsupportedLabel Matcher
+  = -- | an edge with this matcher must be created, but no label was given;
+    -- the edge's first occurrence is at this route and hop (from 0)
+    UnsupportedLabel Matcher Int Int
   deriving stock (Eq, Show, Generic)
 
 -- | What a construction command does with a residuation.
@@ -245,6 +246,9 @@ candidatesFor ::
   m ([Candidate], [ResidualError])
 candidatesFor lookupNode chooser cur altIndex p
   | not boundTestsOk = pure ([], [])
+  | not (null unreachable) =
+      -- only %unanchored could produce these; it is not supported yet
+      error $ "residuate: variables without a bound vertex: " <> show unreachable
   | otherwise = do
       sigmas <- closure [mempty] (singletonSet mempty)
       results <- concat <$> traverse candidatesForSigma sigmas
@@ -253,6 +257,32 @@ candidatesFor lookupNode chooser cur altIndex p
     specs = patternEdges p
     order = edgeOrder p
     vars = patternVars p
+    position e =
+      fromMaybe (0, 0) $
+        headMay
+          [ (ri, hi)
+          | (ri, rt) <- zip [0 ..] (toList p.routes),
+            (hi, h) <- zip [0 ..] rt.hops,
+            h.edge == e
+          ]
+    -- variables connected to no bound vertex through pattern edges
+    unreachable = filter (`notMember` reached) vars
+      where
+        bound :: Set PVertex
+        bound = setFromList (filter (isJust . boundValue) (patternVertices p))
+        reached :: Set VarId
+        reached = setFromList [v | Var v <- toList (grow bound)]
+        grow :: Set PVertex -> Set PVertex
+        grow acc =
+          let new =
+                setFromList
+                  [ other
+                  | spec <- toList specs,
+                    (here, other) <- [(spec.source, spec.target), (spec.target, spec.source)],
+                    here `member` acc,
+                    other `notMember` acc
+                  ]
+           in if null new then acc else grow (acc <> new)
     boundValue = \case
       Current -> Just cur
       Fixed n -> Just n
@@ -371,7 +401,7 @@ candidatesFor lookupNode chooser cur altIndex p
             m ->
               chooser m <&> \case
                 Just l | matcherAccepts m l -> (e, Right (Just l))
-                _ -> (e, Left (UnsupportedLabel m))
+                _ -> (e, Left (uncurry (UnsupportedLabel m) (position e)))
       case [err | (_, Left err) <- created] of
         err : _ -> pure [Left err]
         [] -> do
@@ -449,26 +479,32 @@ mergeStates specs labels binding initial = go [(leftFix initial, False)] mempty
     go :: [(Map VarId Int, Bool)] -> Set (Map VarId Int) -> [(Map VarId Int, Bool)]
     specList = mapToList specs
     renameClass old new = map (\c -> if c == old then new else c)
-    -- pairs of fresh classes a hop from the same place makes equal
-    justified side classes =
+    -- Each hop, in stored orientation, as (which stored end is shared,
+    -- that end, the other end, whether the hop is taken from that end).
+    ends spec = case spec.direction of
+      Out -> [(True, spec.source, spec.target, True), (False, spec.target, spec.source, False)]
+      In -> [(True, spec.target, spec.source, False), (False, spec.source, spec.target, True)]
+    -- Pairs of fresh classes that identifying would make one patch edge: the
+    -- same label and stored orientation from the same end. Such a pair is
+    -- from the left when both hops are taken from the shared end.
+    justified leftSide classes =
       ordNub
         [ (min a b, max a b)
         | (e1, s1) <- specList,
           (e2, s2) <- specList,
           e1 < e2,
-          s1.direction == s2.direction,
           lookup e1 labels == lookup e2 labels,
           isJust (lookup e1 labels),
-          let (near1, far1) = side s1
-              (near2, far2) = side s2,
+          (end1, near1, far1, taken1) <- ends s1,
+          (end2, near2, far2, taken2) <- ends s2,
+          end1 == end2,
+          (taken1 && taken2) == leftSide,
           binding classes near1 == binding classes near2,
           Fresh a <- [binding classes far1],
           Fresh b <- [binding classes far2],
           a /= b
         ]
-    viaSource s = (s.source, s.target)
-    viaTarget s = (s.target, s.source)
-    leftFix classes = case justified viaSource classes of
+    leftFix classes = case justified True classes of
       (a, b) : _ -> leftFix (renameClass b a classes)
       [] -> classes
     go [] _ = []
@@ -477,7 +513,7 @@ mergeStates specs labels binding initial = go [(leftFix initial, False)] mempty
       | otherwise =
           let next =
                 [ (leftFix (renameClass b a classes), True)
-                | (a, b) <- justified viaTarget classes
+                | (a, b) <- justified False classes
                 ]
            in (classes, usedRight) : go (rest <> next) (insertSet classes seen)
 

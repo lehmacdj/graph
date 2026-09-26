@@ -61,7 +61,7 @@ docNid nid = annotate NIDStyle $ "@" <> pretty (nidRepresentation nid)
 docNodeListing ::
   TimeZone ->
   UTCTime ->
-  -- | transitions leading up to this node (see 'leftmostConnects')
+  -- | transitions leading up to this node (route 0, see 'selectedRoutes')
   [Text] ->
   -- | Node metadata + augmentations to doc
   Node Text PreviewAugmentation ->

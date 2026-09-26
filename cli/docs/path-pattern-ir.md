@@ -68,10 +68,12 @@ newtype PathQuery = PathQuery (Set PatternPath)  -- `+` alternatives
   appearance along the routes. Canonical `PatternPath`s compare as
   syntactic equality.
 - **Test syntax.** There is no quasiquoter. Small Haskell helpers
-  (`pat`, `patWith`, `route`, `current`, `fixed`, `var`, `out`, `inc`,
-  `wild`, …) build patterns. `Show` prints the same helper expression after
-  canonical renumbering, so failing output can be pasted back as an
-  expectation.
+  (`pat`, `patWith`, `route`, `current`, `fixed`, `fixedN`, `var`, `out`,
+  `inc`, `outW`, `inW`, `outM`, `inM`, `except`, `exactly`) build patterns.
+  `Show` prints the same helper expression after canonical renumbering, so
+  failing output can be pasted back as an expectation. The exception is a
+  regex matcher, which prints as `MRegex regex:"…"` and must be written with
+  `[re|…|]`.
 
 ## 2. Compilation (`Path` → `PathQuery`)
 
@@ -199,14 +201,21 @@ no existing edges.
    **right** (the same hop into the same vertex) are alternatives, like
    right evidence. Both run to a fixpoint. Examples: `a & a` gives one
    edge; `a & b` gives two nodes; `a/b & a/c` gives a shared `a` node;
-   `a/b/@5 & c/b/@5` is ambiguous.
+   `a/b/@5 & c/b/@5` is ambiguous. Edges are compared in stored
+   orientation, so `l & k/~l/@1` shares the one new node both `l` hops
+   need (`1 -l-> x`). Such a mixed pair (one hop taken from the shared
+   end, one taken into it) counts as from the right.
    *Deviation:* the agreed wording ("may be identified, minimality
    chooses") made `a/b & a/c` ambiguous, because the shared and separate
    patches are incomparable modulo renaming; making left identification
    mandatory matches every example and the "right is weaker" decision.
 5. **Labels.** A `*`/regex `EdgeId` whose edge must be created gets its
    label from the caller's callback only; there is no graph-wide reuse.
-   `mk` supplies no labels, so it errors, naming the edge.
+   `mk` supplies no labels, so it errors, naming the step (route and hop)
+   that needs one. A candidate that needs a label the chooser does not give
+   is unavailable, like an unsatisfiable alternative: `mk a + *` creates
+   `a`. The label error is reported only when no candidate survives, since
+   an available alternative is exactly the kind of repair `mk` looks for.
 
 **Left-justified.** `Current` and `Fixed` are left-justified. So is any
 variable reached from a left-justified vertex by an existing edge taken in
@@ -327,9 +336,17 @@ full test suite.
   allowed matching existing labels for a wildcard, which picks an
   arbitrary label).
 - The orphan override is `mk --allow-orphans`.
+- `rm` errors on a zero-hop route 0, like `rn`/`cl`/`mv`/`cp`.
+- A `rn`/`cl` destination that matches through several `+` alternatives
+  is an error rather than creating an edge for each.
+- `tag p q` (as on the branch) links the outputs of the first witness of
+  `p` to the target; other witnesses are not linked.
+- `mk` also creates the current node if it does not exist (it is a bound
+  vertex like `Fixed`).
 - Golden format: an optional first section `==========graph==========`
   with lines `0 -a-> 1` (edges between `smallNID`s; node 0 is the origin)
-  and `1 data "text"` (node data, a Haskell string literal). Tests with a
+  (the label may be a quoted string, `0 -"a b"-> 1`), `2` (a node without
+  edges) and `1 data "text"` (node data, a Haskell string literal). Tests with a
   base graph also render a trailing `==========data==========` section
   listing every node's data, since the graph dump omits data. The ported
   scenarios live in `test/golden/ge/path/`; `spec-*.golden` cover the
@@ -350,10 +367,16 @@ full test suite.
   completion parser, not an engine.
 
 ### Review
-- [ ] An independent subagent, with a fresh context rather than a fork,
-      reviews the finished commits against this spec for completeness and
-      test sufficiency. Findings are fixed or explicitly deferred with the
-      user's agreement.
+- [x] An independent subagent, with a fresh context rather than a fork,
+      reviewed the finished commits against this spec for completeness and
+      test sufficiency. Its eight findings (mixed-direction identification,
+      `rm` on a zero-hop route, label errors naming the step, the
+      unreachable-variable error, `Show` syntax, fetch tests, weaker tests,
+      and nits) were fixed in "Address the independent review", and a
+      second fresh reviewer confirmed the fixes; its follow-ups (mixed
+      small/large NID printing, equal union destinations, three more tests)
+      are fixed in the same commit. A mixed-direction pair that does not
+      shrink the patch stays an alternative (`l/m & k/~l/@1` is ambiguous).
 
 ## 8. Deferred and out of scope
 
