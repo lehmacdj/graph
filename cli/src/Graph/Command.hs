@@ -259,7 +259,10 @@ interpretCommand = \case
       -- preview joins its outputs like every other query
       mp <- resolvePath nid (p' Simple.:/ One)
       unless (null mp.nonexistentNodes) $
-        say ("nonexistent nodes: " ++ tshow mp.nonexistentNodes)
+        say
+          ( "nonexistent nodes: "
+              ++ intercalate ", " (map tshow (toList mp.nonexistentNodes))
+          )
       targets <-
         for (ordNub (concatMap selectedRoutes mp.resolutions)) \route -> do
           let listedNid = maybe route.root (.target) (lastMay route.hops)
