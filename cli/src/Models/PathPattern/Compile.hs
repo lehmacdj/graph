@@ -90,9 +90,13 @@ fragment = \case
   where
     one = singletonSet
     step d m = one (Step d m)
-    -- At a sequence boundary @\@@ joins the preceding outputs.
-    atBoundary One = one (Join Stay anyNode)
-    atBoundary p = fragment p
+    -- At a sequence boundary @\@@ joins the preceding outputs, also when it
+    -- is one alternative of a union. Otherwise @(\@ + a)/\@N@ would lose the
+    -- @\@@ and root its @\@N@ alternative, instead of testing the current
+    -- node like @\@/\@N@.
+    atBoundary p = flip mapSet (fragment p) \case
+      Stay -> Join Stay anyNode
+      e -> e
     combine f a b = setFromList [f x y | x <- toList a, y <- toList b]
 
 -- | Relative paths start at the current node; an @\@N@ root is that node.

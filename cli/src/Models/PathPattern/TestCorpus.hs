@@ -34,6 +34,21 @@ corpusEquivalences =
       [path| (a & b/@000000000001)/@ |]
     ),
     ([path| a + a/@ |], [path| a |]),
+    -- an @ alternative at a sequence boundary joins, like a lone @
+    ( [path| (@ + a)/@000000000002 |],
+      [path| @/@000000000002 + a/@000000000002 |]
+    ),
+    ( [path| (a + (b + @))/@000000000001 |],
+      [path| a/@000000000001 + b/@000000000001 + @/@000000000001 |]
+    ),
+    ( [path| (@ + b)/(%never + @000000000002) |],
+      [path| @/@000000000002 + b/@000000000002 |]
+    ),
+    ([path| (a & b)/(@ + a) |], [path| (a & b)/@ + (a & b)/a |]),
+    -- ...so a later continuation shares the prefix in the @ alternative
+    ( [path| a/(@ + b)/(a & b) |],
+      [path| a/@/(a & b) + a/b/(a & b) |]
+    ),
     ([path| ~(a/b) |], [path| ~b/~a |])
   ]
 

@@ -90,13 +90,25 @@ newtype PathQuery = PathQuery (Set PatternPath)  -- `+` alternatives
 4. **Glue.** Each step occurrence gets a fresh `Var` target and a fresh
    `EdgeId`. `/` identifies the left output with the right input. A join
    merges outputs (taking the meet of their tests). Relative paths are
-   rooted at `Current`, and `@N` at the root is `Fixed N`.
+   rooted at `Current`, and `@N` at the root is `Fixed N`. `@N` is a root
+   only when nothing is sequenced before it in its alternative: in `@N/a`
+   and `a & @N` it is `Fixed N`, but `@/@N` and `(@ + a)/@N` test `Current`
+   instead (see below).
 5. Drop alternatives with contradictory tests, and canonicalize.
 
 The `@` semantics follow the branch: at a sequence boundary it joins the
 outputs of the preceding expression; inside a conjunct it stays at that
 conjunct's input; a join inside one branch does not constrain outer
-siblings. `%float` and `%unanchored` are **not** supported.
+siblings. An `@` that is one alternative of a union directly at a sequence
+boundary (on either side of `/`, however unions nest within the union) is
+such a join too: it keeps its join meaning when `/` distributes over `+`.
+So `(@ + a)/@N` is `@/@N + a/@N`, which tests that the current node is `N`
+rather than jumping to `N`; `p/(@ + a)` is `p/@ + p/a`; and in
+`x/(@ + a)/(b & c)`, which is `x/@/(b & c) + x/a/(b & c)`, the `@`
+alternative shares `x` between the conjuncts. An `@` inside a conjunct,
+as in `((@ + a) & b)/@N`, is not at the boundary and stays at its input.
+This also applies to a `%targets(…)` expansion (`%never + @N + …`) that
+follows an `@` alternative, as in `(@ + b)/%targets(@N)`. `%float` and `%unanchored` are **not** supported.
 
 **Command policy (from the branch).** Query commands append `/@` before
 compiling. Construction (`mk`) does not. The engine never adds defaults

@@ -7,7 +7,14 @@ import Effectful.State.Dynamic
 import Graph.GraphMetadataEditing (runInMemoryGraphMetadataEditing)
 import Graph.PathPattern.Resolve
 import Models.Connect
-import Models.Graph (Graph, maybeNodeLookup)
+import Models.Edge (Edge' (..))
+import Models.Graph
+  ( Graph,
+    emptyGraph,
+    insertEdges,
+    insertNode,
+    maybeNodeLookup,
+  )
 import Models.NID
 import Models.Node
 import Models.Path.Simple qualified as P
@@ -85,6 +92,34 @@ spec_compileEquivalences :: Spec
 spec_compileEquivalences = describe "equivalent paths" do
   forM_ corpusEquivalences \(a, b) ->
     it (show a <> " == " <> show b) $ compilePath a `shouldBe` compilePath b
+
+-- | On nodes 1 (current) and 2 with one edge 1 -a-> 2, an @ alternative
+-- before @N tests the current node instead of jumping to N.
+spec_compileAtAlternatives :: Spec
+spec_compileAtAlternatives = describe "@ alternatives before @N" do
+  let g =
+        insertEdges
+          [Edge (smallNID 1) "a" (smallNID 2)]
+          ( insertNode (emptyNode (smallNID 2)) $
+              insertNode (emptyNode (smallNID 1)) emptyGraph
+          ) ::
+          Graph Text ()
+      reached surface =
+        foldMap targets (resolveIn g (compilePath surface)).resolutions
+  it "(@ + b)/@2 does not reach 2 without a b edge" $
+    reached [path| (@ + b)/@000000000002 |] `shouldBe` mempty
+  it "(@ + a)/@2 reaches 2 along a" $
+    reached [path| (@ + a)/@000000000002 |]
+      `shouldBe` singletonSet (smallNID 2)
+  it "(@ + b)/@1 reaches the current node" $
+    reached [path| (@ + b)/@000000000001 |]
+      `shouldBe` singletonSet (smallNID 1)
+  where
+    resolveIn g q =
+      resolveQuery corpusCurrent q
+        & runInMemoryGraphMetadataEditing
+        & evalStateLocal g
+        & runPureEff
 
 compiles :: P.Path -> [PatternPath] -> Expectation
 compiles surface expected = compilePath surface `shouldBe` query expected
@@ -173,6 +208,22 @@ spec_compileExamples = describe "compile examples" do
       `compiles` [ patWith
                      [(current, exactly 5)]
                      [route current [], route current []]
+                 ]
+  it "an @ alternative joins, so (@ + a)/@N tests current" $
+    [path| (@ + a)/@000000000005 |]
+      `compiles` [ patWith [(current, exactly 5)] [route current []],
+                   pat [route current [out 0 "a" (fixedN 5)]]
+                 ]
+  it "an @ alternative on the right joins the prefix" $
+    [path| (a & b)/(@ + c) |]
+      `compiles` [ pat
+                     [ route current [out 0 "a" v0],
+                       route current [out 1 "b" v0]
+                     ],
+                   pat
+                     [ route current [out 0 "a" v0, out 1 "c" v1],
+                       route current [out 2 "b" v2, out 3 "c" v3]
+                     ]
                  ]
   it "!{...} tests a variable" $
     [path| a/!{@000000000002} |]
