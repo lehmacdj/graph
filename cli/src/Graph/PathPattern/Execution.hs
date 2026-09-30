@@ -140,12 +140,20 @@ renderChoiceError rs =
     <> "exclude one with !{@N} to choose.\n"
     <> renderNumbered renderResidual rs
 
+-- | The first 'shownRepairs' items, numbered, and how many more there are.
 renderNumbered :: (a -> Text) -> NonEmpty a -> Text
 renderNumbered render rs =
-  unlines
+  unlines $
     [ "  " <> tshow i <> ". " <> render r
-    | (i, r) <- zip [1 :: Int ..] (toList rs)
+    | (i, r) <- zip [1 :: Int ..] (take shownRepairs (toList rs))
     ]
+      <> [ "  ... and " <> tshow hidden <> " more"
+         | let hidden = length rs - shownRepairs,
+           hidden > 0
+         ]
+
+shownRepairs :: Int
+shownRepairs = 5
 
 -- | Create the nodes and edges of a residual. Returns the binding of every
 -- created node.

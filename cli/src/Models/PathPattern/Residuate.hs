@@ -140,8 +140,11 @@ residuatePure lookupNode chooser cur q =
 -- | One candidate before selection.
 data Candidate = Candidate
   { residual :: Residual' PatchLabel,
-    -- | variables bound to existing nodes
+    -- | variables bound to existing nodes, including pins
     bound :: Map VarId NID,
+    -- | variables whose fresh vertex was identified with an existing node
+    -- (not evidence; never left-justified)
+    pins :: Map VarId NID,
     leftJustified :: Set VarId,
     alternative :: Int,
     -- | steps (route, hop) whose edge must be created but got no label
@@ -197,11 +200,12 @@ residuate lookupNode chooser cur q = do
 -- | Drop dominated and redundant candidates and order the survivors.
 select :: [Candidate] -> [Candidate]
 select candidates =
-  dedupe . sortOn key . minimal $ undominated
+  sortOn key . dedupe . sortOn fewerPins . minimal $ undominated
   where
     undominated = filter (not . dominated) candidates
     dominated c = any (dominates c) candidates
-    -- c' extends c with only left-justified extra bindings
+    -- c' extends c with only left-justified extra bindings (a pin is never
+    -- left-justified)
     dominates c c' =
       c'.alternative == c.alternative
         && Map.isSubmapOf c.bound c'.bound
@@ -215,20 +219,26 @@ select candidates =
         not $
           any
             ( \c' ->
-                patchSubsumes c'.residual.patch c.residual.patch
+                -- identifying a fresh vertex with an existing node usually
+                -- shrinks the patch to a subset, but a repair without that
+                -- identification is always offered
+                Map.isSubmapOf c'.pins c.pins
+                  && patchSubsumes c'.residual.patch c.residual.patch
                   && not (patchSubsumes c.residual.patch c'.residual.patch)
             )
             cs
       ]
+    samePatch a b =
+      patchSubsumes a.residual.patch b.residual.patch
+        && patchSubsumes b.residual.patch a.residual.patch
+    -- of equal patches, keep one bound by evidence over one bound by pins
+    fewerPins c = (length c.pins, key c)
     -- keep the first of patches equal modulo renaming
     dedupe = reverse . foldl' keep []
       where
         keep kept r
           | any (samePatch r) kept = kept
           | otherwise = r : kept
-        samePatch a b =
-          patchSubsumes a.residual.patch b.residual.patch
-            && patchSubsumes b.residual.patch a.residual.patch
     key c =
       let r = c.residual
        in ( not r.leftOnly,
@@ -241,23 +251,69 @@ patchSize p = length p.nodes + length p.edges
 
 -- | Whether the first patch is contained in the second, modulo an injective
 -- renaming of fresh nodes. Existing nodes are never renamed.
+--
+-- Cheap necessary conditions come first. The search then assigns fresh
+-- nodes along edges, taking images from the second patch's matching edges,
+-- and checks each edge as soon as both its ends are assigned.
 patchSubsumes :: (Ord l) => Patch' l -> Patch' l -> Bool
-patchSubsumes small large = go (freshOf small) mempty
+patchSubsumes small large =
+  length small.nodes <= length large.nodes
+    && length small.edges <= length large.edges
+    && all (`member` large.nodes) [b | b@(Existing _) <- toList small.nodes]
+    && all (`member` large.edges) [e | e <- smallEdges, not (touchesFresh e)]
+    && Map.isSubmapOfBy (<=) (labelCounts small) (labelCounts large)
+    && go mempty
   where
-    go :: [Int] -> Map Int Int -> Bool
-    freshOf p = [k | Fresh k <- toList p.nodes]
-    largeFresh = freshOf large
-    go [] renaming =
-      let rename = \case
-            Fresh k -> Fresh (findWithDefault k k renaming)
-            b -> b
-          renameEdge e = Edge (rename e.source) e.transition (rename e.sink)
-       in all ((`member` large.nodes) . rename) small.nodes
-            && all ((`member` large.edges) . renameEdge) small.edges
-    go (k : ks) renaming =
-      any
-        (\k' -> go ks (insertMap k k' renaming))
-        [k' | k' <- largeFresh, k' `notElem` toList renaming]
+    smallEdges = toList small.edges
+    largeEdges = toList large.edges
+    isFresh = \case
+      Fresh _ -> True
+      Existing _ -> False
+    touchesFresh e = isFresh e.source || isFresh e.sink
+    labelCounts p =
+      Map.fromListWith (+) [(e.transition, 1 :: Int) | e <- toList p.edges]
+    smallFresh = [k | Fresh k <- toList small.nodes]
+    largeFresh = [k | Fresh k <- toList large.nodes]
+    edgesAt k = [e | e <- smallEdges, Fresh k `elem` [e.source, e.sink]]
+    rename :: Map Int Int -> Binding -> Maybe Binding
+    rename r = \case
+      Fresh k -> Fresh <$> lookup k r
+      b -> Just b
+    edgeOk r e = case (rename r e.source, rename r e.sink) of
+      (Just s, Just t) -> Edge s e.transition t `member` large.edges
+      _ -> True
+    -- images for k from an edge whose other end is already assigned
+    anchored r k =
+      headMay
+        [ ordNub
+            [ k'
+            | e' <- largeEdges,
+              e'.transition == e.transition,
+              Fresh k' <- [if kIsSource then e'.source else e'.sink],
+              (if kIsSource then e'.sink else e'.source) == other
+            ]
+        | e <- edgesAt k,
+          (kIsSource, otherEnd) <-
+            [(True, e.sink) | e.source == Fresh k]
+              <> [(False, e.source) | e.sink == Fresh k],
+          otherEnd /= Fresh k,
+          Just other <- [rename r otherEnd]
+        ]
+    go :: Map Int Int -> Bool
+    go r = case filter (`notMember` r) smallFresh of
+      [] -> True
+      unassigned ->
+        let (k, images) =
+              case [(x, c) | x <- unassigned, Just c <- [anchored r x]] of
+                xc : _ -> xc
+                [] -> (headEx unassigned, largeFresh)
+            used = setFromList (toList r) :: Set Int
+         in any
+              ( \k' ->
+                  let r' = insertMap k k' r
+                   in all (edgeOk r') (edgesAt k) && go r'
+              )
+              [k' | k' <- images, k' `notMember` used]
 
 -- | Weakly connected groups of created nodes that touch no existing node.
 patchOrphans :: (Ord l) => Patch' l -> [Set Binding]
@@ -297,10 +353,34 @@ candidatesFor lookupNode chooser cur altIndex p
   | not (null unreachable) =
       -- only %unanchored could produce these; it is not supported yet
       error $ "residuate: variables without a bound vertex: " <> show unreachable
-  | otherwise = do
-      sigmas <- closure [mempty] (singletonSet mempty)
-      concat <$> traverse candidatesForSigma sigmas
+  | otherwise = explore [start] (singletonSet start) mempty
   where
+    start = (mempty, mempty)
+    -- Each seed is a binding and the pins in it. Its evidence closure gives
+    -- candidates; identifying a fresh vertex with an existing node gives a
+    -- new seed, whose closure continues from the pinned node.
+    explore ::
+      [(Map VarId NID, Map VarId NID)] ->
+      -- seeds queued so far
+      Set (Map VarId NID, Map VarId NID) ->
+      -- bindings whose candidates are made
+      Set (Map VarId NID, Map VarId NID) ->
+      m [Candidate]
+    explore [] _ _ = pure []
+    explore ((sigma0, pins) : rest) queued done = do
+      sigmas <- closure [sigma0] (singletonSet sigma0)
+      let todo = ordNub [s | s <- sigmas, (s, pins) `notMember` done]
+          done' = done <> setFromList [(s, pins) | s <- todo]
+      results <- traverse (candidatesForSigma pins) todo
+      let seeds =
+            ordNub
+              [ seed
+              | seed <- concatMap snd results,
+                seed `notMember` queued,
+                seed `notMember` done'
+              ]
+      (concatMap fst results <>)
+        <$> explore (rest <> seeds) (queued <> setFromList seeds) done'
     specs = patternEdges p
     order = edgeOrder p
     vars = patternVars p
@@ -401,12 +481,15 @@ candidatesFor lookupNode chooser cur altIndex p
         pure (headMay [l | (l, t) <- steps, t == y])
       _ -> pure Nothing
 
-    leftClosure :: Map EdgeId (Maybe Text) -> Map VarId NID -> Set VarId
-    leftClosure existing sigma = go mempty
+    -- A pin is not left-justified, but what an existing edge reaches from it
+    -- is, relative to the pin.
+    leftClosure ::
+      Map EdgeId (Maybe Text) -> Map VarId NID -> Map VarId NID -> Set VarId
+    leftClosure existing sigma pins = go mempty
       where
         go acc =
           let justified v = case v of
-                Var x -> x `member` acc
+                Var x -> x `member` acc || x `member` pins
                 _ -> True
               new =
                 setFromList
@@ -415,13 +498,19 @@ candidatesFor lookupNode chooser cur altIndex p
                     Var t <- [spec.target],
                     t `member` sigma,
                     t `notMember` acc,
+                    t `notMember` pins,
                     justified spec.source,
                     isJust (join (lookup e existing))
                   ]
            in if null new then acc else go (acc <> new)
 
-    candidatesForSigma :: Map VarId NID -> m [Candidate]
-    candidatesForSigma sigma = do
+    -- The candidates for a binding, and the seeds that pin one of its fresh
+    -- vertices.
+    candidatesForSigma ::
+      Map VarId NID ->
+      Map VarId NID ->
+      m ([Candidate], [(Map VarId NID, Map VarId NID)])
+    candidatesForSigma pins sigma = do
       existing <-
         mapFromList
           <$> traverse (\(e, spec) -> (e,) <$> existingLabel sigma spec) (mapToList specs)
@@ -458,14 +547,53 @@ candidatesFor lookupNode chooser cur altIndex p
               Just n -> Existing n
               Nothing -> Fresh (findWithDefault 0 v classes)
             v -> Existing (fromJustEx (boundValue v))
-          leftVars = leftClosure existing sigma
+          leftVars = leftClosure existing sigma pins
+          createdEdges = setFromList [e | (e, Nothing) <- mapToList existing]
+          accepts v = testAccepts (vertexTest p (Var v))
           -- number created nodes by first appearance
           compact classes =
             let order' = ordNub [k | v <- unbound, Just k <- [lookup v classes]]
                 renumber = mapFromList (zip order' [0 ..]) :: Map Int Int
              in fmap (\k -> findWithDefault k k renumber) classes
-          states = mergeStates specs labels binding initial
-      pure
+          (states, pinned) =
+            mergeStates specs labels createdEdges binding accepts initial
+          seeds =
+            [ (sigma <> new, pins <> new)
+            | (vs, nid) <- pinned,
+              let new = mapFromList [(v, nid) | v <- toList vs]
+            ]
+          -- Every pin must still make a created hop the same patch edge as
+          -- one at its node: directly, or through pins justified already.
+          -- The seed was rebuilt without the identifications that led to
+          -- the pin, so a state may have lost them.
+          pinsJustified classes = justify (keysSet pins)
+            where
+              bind = binding classes
+              links =
+                [ (v, w)
+                | (_, far1, far2) <-
+                    sharedPairs specs labels createdEdges bind,
+                  (Var v, w) <- [(far1, far2), (far2, far1)],
+                  v `member` pins,
+                  bind w == bind (Var v)
+                ]
+              justify unjustified
+                | null unjustified = True
+                | null ok = False
+                | otherwise = justify (unjustified `difference` ok)
+                where
+                  pending = \case
+                    Var x -> x `member` unjustified
+                    _ -> False
+                  ok =
+                    setFromList
+                      [ v
+                      | (v, w) <- links,
+                        v `member` unjustified,
+                        not (pending w)
+                      ] ::
+                      Set VarId
+      pure . (,seeds) $
         [ Candidate
             { residual =
                 Residual
@@ -479,11 +607,13 @@ candidatesFor lookupNode chooser cur altIndex p
                       not usedRight && all (`member` leftVars) (keys sigma)
                   },
               bound = sigma,
+              pins,
               leftJustified = leftVars,
               alternative = altIndex,
               missingLabels = missing
             }
-        | (classes, usedRight) <- map (first compact) states
+        | (classes, usedRight) <- map (first compact) states,
+          pinsJustified classes
         ]
 
     patchOf existing labels bind missingNodes =
@@ -507,59 +637,103 @@ storedEdge spec s l t = case spec.direction of
   Out -> Edge s l t
   In -> Edge t l s
 
--- | Identify fresh vertices. Identifications from the left (the same hop
--- from the same vertex) are always made; identifications from the right
--- (the same hop into the same vertex) are alternatives. Returns every
--- resulting class assignment and whether it used a right identification.
-mergeStates ::
+-- | The other ends of pairs of created hops with the same label and stored
+-- orientation from the same end (which binds equally), and whether the pair
+-- is from the left (both hops taken from the shared end). Identifying the
+-- other ends makes the two hops one patch edge.
+sharedPairs ::
   (Eq l) =>
   Map EdgeId EdgeSpec ->
   Map EdgeId l ->
-  (Map VarId Int -> PVertex -> Binding) ->
-  Map VarId Int ->
-  [(Map VarId Int, Bool)]
-mergeStates specs labels binding initial = go [(leftFix initial, False)] mempty
+  -- | edges to create
+  Set EdgeId ->
+  (PVertex -> Binding) ->
+  [(Bool, PVertex, PVertex)]
+sharedPairs specs labels created bind =
+  [ (taken1 && taken2, far1, far2)
+  | (e1, s1) <- specList,
+    (e2, s2) <- specList,
+    e1 < e2,
+    e1 `member` created,
+    e2 `member` created,
+    lookup e1 labels == lookup e2 labels,
+    isJust (lookup e1 labels),
+    (end1, near1, far1, taken1) <- ends s1,
+    (end2, near2, far2, taken2) <- ends s2,
+    end1 == end2,
+    bind near1 == bind near2
+  ]
   where
-    go :: [(Map VarId Int, Bool)] -> Set (Map VarId Int) -> [(Map VarId Int, Bool)]
     specList = mapToList specs
-    renameClass old new = map (\c -> if c == old then new else c)
     -- Each hop, in stored orientation, as (which stored end is shared,
     -- that end, the other end, whether the hop is taken from that end).
     ends spec = case spec.direction of
       Out -> [(True, spec.source, spec.target, True), (False, spec.target, spec.source, False)]
       In -> [(True, spec.target, spec.source, False), (False, spec.source, spec.target, True)]
-    -- Pairs of fresh classes that identifying would make one patch edge: the
-    -- same label and stored orientation from the same end. Such a pair is
-    -- from the left when both hops are taken from the shared end.
-    justified leftSide classes =
+
+-- | Identify fresh vertices where that makes two created pattern edges one
+-- patch edge. Identifying two fresh vertices from the left (the same hop
+-- from the same vertex) is always done; from the right (the same hop into
+-- the same vertex) it is an alternative. Returns every resulting class
+-- assignment and whether it used a right identification.
+--
+-- Identifying a fresh vertex with an existing node (a pin), from either
+-- side, is also an alternative, allowed only when the node passes the test
+-- of every variable in the fresh vertex's class. Pins are returned as the
+-- class's variables and the node, to be explored as a new binding.
+mergeStates ::
+  (Eq l) =>
+  Map EdgeId EdgeSpec ->
+  Map EdgeId l ->
+  -- | edges to create
+  Set EdgeId ->
+  (Map VarId Int -> PVertex -> Binding) ->
+  -- | whether a variable's test accepts a node
+  (VarId -> NID -> Bool) ->
+  Map VarId Int ->
+  ([(Map VarId Int, Bool)], [(Set VarId, NID)])
+mergeStates specs labels created binding accepts initial =
+  second ordNub (go [(leftFix initial, False)] mempty)
+  where
+    renameClass old new = map (\c -> if c == old then new else c)
+    classVars classes a = [v | (v, k) <- mapToList classes, k == a]
+    pairs classes =
+      [ (fromLeftSide, binding classes far1, binding classes far2)
+      | (fromLeftSide, far1, far2) <-
+          sharedPairs specs labels created (binding classes)
+      ]
+    merges leftSide classes =
       ordNub
         [ (min a b, max a b)
-        | (e1, s1) <- specList,
-          (e2, s2) <- specList,
-          e1 < e2,
-          lookup e1 labels == lookup e2 labels,
-          isJust (lookup e1 labels),
-          (end1, near1, far1, taken1) <- ends s1,
-          (end2, near2, far2, taken2) <- ends s2,
-          end1 == end2,
-          (taken1 && taken2) == leftSide,
-          binding classes near1 == binding classes near2,
-          Fresh a <- [binding classes far1],
-          Fresh b <- [binding classes far2],
+        | (leftPair, Fresh a, Fresh b) <- pairs classes,
+          leftPair == leftSide,
           a /= b
         ]
-    leftFix classes = case justified True classes of
+    pinsOf classes =
+      ordNub
+        [ (setFromList vs, nid)
+        | (_, far1, far2) <- pairs classes,
+          (Fresh a, Existing nid) <- [(far1, far2), (far2, far1)],
+          let vs = classVars classes a,
+          all (`accepts` nid) vs
+        ]
+    leftFix classes = case merges True classes of
       (a, b) : _ -> leftFix (renameClass b a classes)
       [] -> classes
-    go [] _ = []
+    go ::
+      [(Map VarId Int, Bool)] ->
+      Set (Map VarId Int) ->
+      ([(Map VarId Int, Bool)], [(Set VarId, NID)])
+    go [] _ = ([], [])
     go ((classes, usedRight) : rest) seen
       | classes `member` seen = go rest seen
       | otherwise =
           let next =
                 [ (leftFix (renameClass b a classes), True)
-                | (a, b) <- justified False classes
+                | (a, b) <- merges False classes
                 ]
-           in (classes, usedRight) : go (rest <> next) (insertSet classes seen)
+              (states, pinned) = go (rest <> next) (insertSet classes seen)
+           in ((classes, usedRight) : states, pinsOf classes <> pinned)
 
 -- * Rendering
 

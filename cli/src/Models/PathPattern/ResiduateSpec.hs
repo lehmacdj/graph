@@ -198,6 +198,143 @@ spec_residuationExamples = describe "residuation examples" do
       `shouldBe` [ [c <> " k new3", c <> " l new1", c <> " l new3", "new1 m new2"],
                    [c <> " k new1", c <> " l new1", "new1 m new2"]
                  ]
+  describe "identifying a fresh vertex with an existing node" do
+    let two = edge' 2 "x" 2
+    it "is an alternative: mk a & a/@2" $ do
+      patches (graphWithEdges [two]) [path| a & a/@000000000002 |]
+        `shouldBe` [[c <> " a " <> n 2, c <> " a new1"], [c <> " a " <> n 2]]
+      fmap chooseRepair (residuateIn (graphWithEdges [two]) [path| a & a/@000000000002 |])
+        `shouldSatisfy` \case
+          Right (Ambiguous _) -> True
+          _ -> False
+    it "also for a missing fixed node: mk a & a/@7" $
+      patches (graphWithEdges []) [path| a & a/@000000000007 |]
+        `shouldBe` [[c <> " a " <> n 7, c <> " a new1"], [c <> " a " <> n 7]]
+    it "continues from the pinned node: mk a/b & a/@2/c" $
+      patches (graphWithEdges [two]) [path| a/b & a/@000000000002/c |]
+        `shouldBe` [ [ c <> " a " <> n 2,
+                       c <> " a new1",
+                       n 2 <> " c new3",
+                       "new1 b new2"
+                     ],
+                     [c <> " a " <> n 2, n 2 <> " b new1", n 2 <> " c new2"]
+                   ]
+    it "takes left evidence from the pinned node: mk a/b & a/@2" $
+      patches (graphWithEdges [edge' 2 "b" 3]) [path| a/b & a/@000000000002 |]
+        `shouldBe` [ [c <> " a " <> n 2, c <> " a new1", "new1 b new2"],
+                     [c <> " a " <> n 2]
+                   ]
+    it "from the right, including the current node: mk a/~a" $
+      patches (graphWithEdges []) [path| a/~a |]
+        `shouldBe` [[c <> " a new1", "new2 a new1"], [c <> " a new1"]]
+    it "only when the node passes the vertex's tests: mk a/!{@2} & a/@2" $
+      patches
+        (graphWithEdges [two])
+        [path| a/!{@000000000002} & a/@000000000002 |]
+        `shouldBe` [[c <> " a " <> n 2, c <> " a new1"]]
+    it "not when the shared edge exists: that is evidence" $
+      residuateIn (graphWithEdges [edge' 1 "a" 2]) [path| a & a/@000000000002 |]
+        `shouldBe` Right AlreadyResolves
+    it "an unpinned repair from another alternative still wins" $
+      patches (graphWithEdges [two]) [path| a/@000000000002 + (a & a/@000000000002) |]
+        `shouldBe` [[c <> " a " <> n 2]]
+    it "a pin does not eliminate a superset from another alternative" $
+      length (patches (graphWithEdges [two]) [path| (a & a/@000000000002) + a/@000000000002/b |])
+        `shouldBe` 3
+    it "a pin does not eliminate left evidence: mk b/a & b/@2/a" $
+      length (patches (graphWithEdges [edge' 1 "b" 1, two]) [path| b/a & b/@000000000002/a |])
+        `shouldBe` 2
+    it "nor an unpinned repair of another alternative" $
+      length
+        ( patches
+            (graphWithEdges [two])
+            [path| (b/a & b/@000000000002/a) + (b & b/@000000000002/a) |]
+        )
+        `shouldBe` 2
+    it "a pin to the current node: mk (a & b)/@ & a" $
+      patches (graphWithEdges [edge' 1 "b" 1]) [path| (a & b)/@ & a |]
+        `shouldBe` [[c <> " a " <> c, c <> " a new1"], [c <> " a " <> c]]
+    it "other evidence does not let the pin win: mk a & b & b/@3" $
+      -- a binds to 1 or 2; either way the unpinned repair is the same
+      patches
+        (graphWithEdges [edge' 1 "a" 1, edge' 1 "a" 2, edge' 3 "x" 3])
+        [path| a & b & b/@000000000003 |]
+        `shouldBe` [[c <> " b " <> n 3, c <> " b new1"], [c <> " b " <> n 3]]
+    it "other evidence does not let the pin win: mk (a & b)/@/a/@/(a & b)" $
+      patches
+        (graphWithEdges [edge' 1 "a" 1, edge' 1 "a" 2])
+        [path| (a & b)/@/a/@/(a & b) |]
+        `shouldBe` [ [c <> " b " <> c, c <> " b new1"],
+                     [c <> " b " <> c, n 2 <> " a new1", n 2 <> " b new2"],
+                     [ c <> " b " <> n 2,
+                       n 2 <> " a new1",
+                       "new1 a new2",
+                       "new1 b new3"
+                     ],
+                     [c <> " b " <> c]
+                   ]
+    it "an equal repair is shown through evidence, not a pin" $
+      fmap
+        (\case Repairs rs -> map renderResidual (toList rs); _ -> [])
+        (residuateIn (graphWithEdges [edge' 1 "a" 2]) [path| (a & ~a/a)/@ |])
+        `shouldBe` Right
+          [ c
+              <> " -\"a\"-> "
+              <> n 2
+              <> " & "
+              <> c
+              <> " <-\"a\"- new1 -\"a\"-> "
+              <> n 2
+              <> "\n    creates: new1 -\"a\"-> "
+              <> c
+              <> ", new1 -\"a\"-> "
+              <> n 2,
+            -- the join is 2 (evidence), not 1 (a pin with the same patch)
+            c
+              <> " -\"a\"-> "
+              <> n 2
+              <> " & "
+              <> c
+              <> " <-\"a\"- "
+              <> c
+              <> " -\"a\"-> "
+              <> n 2
+              <> "\n    creates: "
+              <> c
+              <> " -\"a\"-> "
+              <> c
+          ]
+    it "every pin still shares an edge with its node" $
+      -- pinning a/c's target to 2 is justified only when the a and d nodes
+      -- are identified, so d/c/@2 is the same edge
+      patches
+        (graphWithEdges [two, edge' 3 "x" 3])
+        [path| a/b/@000000000003 & d/b/@000000000003 & a/c & d/c/@000000000002 |]
+        `shouldBe` [ [ c <> " a new1",
+                       c <> " d new2",
+                       "new1 b " <> n 3,
+                       "new1 c new3",
+                       "new2 b " <> n 3,
+                       "new2 c " <> n 2
+                     ],
+                     [c <> " a new1", c <> " d new1", "new1 b " <> n 3, "new1 c " <> n 2],
+                     [ c <> " a new1",
+                       c <> " d new1",
+                       "new1 b " <> n 3,
+                       "new1 c " <> n 2,
+                       "new1 c new2"
+                     ]
+                   ]
+    it "finishes quickly with many pins and long shared chains" do
+      let count surface = case residuateIn (graphWithEdges [two]) surface of
+            Right (Repairs rs) -> length rs
+            other -> error ("expected repairs: " <> show other)
+      result <-
+        timeout 5000000 . evaluate $
+          ( count [path| a/b/c/d/e/f/g/h & a/@000000000002/b/c/d/e/f/g/h |],
+            count [path| a/~a & b/~b & c/~c & d/~d & e/~e & f/~f |]
+          )
+      result `shouldBe` Just (2, 64)
   it "a variable without a bound vertex is an internal error" $
     evaluate
       ( residuatePure

@@ -228,7 +228,27 @@ no existing edges.
    chooses") made `a/b & a/c` ambiguous, because the shared and separate
    patches are incomparable modulo renaming; making left identification
    mandatory matches every example and the "right is weaker" decision.
-5. **Labels.** A `*`/regex `EdgeId` whose edge must be created gets its
+5. **Pins.** A fresh vertex may also be identified with an existing node
+   (the current node, a `Fixed` node, even one `mk` creates, or a
+   variable's evidence binding) iff that makes two pattern edges that must both be created
+   the same patch edge, compared as in 4. This **pin** is always an
+   alternative, from either side: the candidate without it is kept. A pin
+   is allowed only if the node passes the test of every variable in the
+   fresh vertex's class, so `a/!{@2} & a/@2` never pins. A pinned
+   variable is bound to the node; evidence (2) continues from it, and the
+   identifications in 4 are redone. A candidate is kept only if every pin
+   still makes a created hop the same patch edge as one at its node
+   (directly, or through a pin justified that way), since the
+   identifications that led to it may not be redone. If the shared edge
+   already exists, the binding is ordinary evidence instead. Examples, with node 2 existing
+   and no edges: `mk a & a/@2` is ambiguous between creating `C -a-> 2`
+   and `C -a-> new1` or only `C -a-> 2`; `mk a/b & a/@2/c` is ambiguous
+   between hanging `b` under a new `a` node or under 2; `mk a/~a` is
+   ambiguous between `C -a-> new1` with `new2 -a-> new1`, or only
+   `C -a-> new1` (pinning the second source to `C`). With `2 -b-> 3`,
+   `mk a/b & a/@2` offers creating only `C -a-> 2` (the pin, then left
+   evidence for `b`) besides the unpinned repair.
+6. **Labels.** A `*`/regex `EdgeId` whose edge must be created gets its
    label from the caller's callback only; there is no graph-wide reuse.
    `mk` supplies no labels. A label the chooser does not give (or gives
    but the matcher rejects) is **missing**. Selection runs with a missing
@@ -239,8 +259,8 @@ no existing edges.
    If the path already resolves, the result is the no-op as usual.
    Otherwise, if any **survivor** of selection uses a missing label, it is
    an error and nothing is changed: `mk` does not fall back to the other
-   survivors or alternatives. The error names the matcher and lists every
-   survivor as resolved routes, with the missing label shown as its
+   survivors or alternatives. The error names the matcher and lists the
+   survivors (at most five, as for ambiguity) as resolved routes, with the missing label shown as its
    matcher (`-*->`), and which survivors need it; with two or more
    survivors it also says that the path is ambiguous even with a label.
    So `mk a + *` and `mk * + a` error rather than create `a`, and so does
@@ -266,25 +286,43 @@ no existing edges.
 **Left-justified.** `Current` and `Fixed` are left-justified. So is any
 variable reached from a left-justified vertex by an existing edge taken in
 route traversal direction (transitively; a join bound by one route's left
-walk counts). Every other evidence-backed binding is right-justified.
+walk counts). Every other evidence-backed binding is right-justified. A pin
+is never left-justified (like right evidence), but a variable it reaches by
+an existing edge is left-justified relative to it.
 
 **Selection.**
 1. If any alternative already resolves, the result is the no-op.
 2. **Left dominance.** Drop σ if another candidate extends it and every
-   additional binding is left-justified. Right-justified bindings never
-   dominate the fresh alternative.
-3. Drop candidates whose patch is a superset of another's, modulo renaming
-   of fresh nodes. Deduplicate equal patches modulo renaming.
+   additional binding is left-justified. Right-justified bindings and pins
+   never dominate the fresh alternative.
+3. Drop candidates whose patch is a strict superset of another's, modulo
+   renaming of fresh nodes, unless the other has a pin this one lacks: a
+   pin never eliminates a repair without it. Deduplicate equal patches
+   modulo renaming. The exception is what keeps the unpinned repair: a
+   pin turns a fresh node into an existing one, usually leaving a subset
+   of the unpinned patch (`mk a & a/@2`: `{C -a-> 2}` ⊂
+   `{C -a-> 2, C -a-> new1}`). It holds whatever else differs, so other
+   evidence bindings (`mk a & b & b/@3` with `1 -a-> 1`, `1 -a-> 2`),
+   left evidence (`mk b/a & b/@2/a` with `1 -b-> 1`) and other
+   alternatives (`mk (b/a & b/@2/a) + (b & b/@2/a)`) all stay ambiguous.
+   Right evidence needs no such exception, since existing nodes are never
+   renamed. The cost is some redundancy: `mk (a & a/@2) + a/@2/b` also
+   lists `a/@2/b`, a superset of the pinned `{C -a-> 2}`. Unpinned
+   candidates eliminate as usual: `mk a/@2 + (a & a/@2)` creates only
+   `C -a-> 2`.
 4. **Order the survivors:** a left-only candidate (no right-justified
-   bindings) first; then by patch size (created nodes + created edges);
-   then a deterministic tie-break on concrete routes.
+   bindings, pins, or right identifications) first; then by patch size
+   (created nodes + created edges); then a deterministic tie-break on
+   concrete routes.
 
 **`mk`.**
 - One survivor: apply it.
 - More than one: error without changing anything. List the survivors in
   the order above, each as its **resolved routes** (existing nodes as
   `@N`, created nodes as `newK`) plus its patch, and suggest pinning a
-  node with `@N` or excluding one with `!{…}` in the path.
+  node with `@N` or excluding one with `!{…}` in the path. Only the first
+  five are listed, followed by how many more there are: independent pins
+  multiply (`mk a/~a & b/~b & c/~c` has 8 repairs).
   *Deviation:* the agreed design printed a disambiguating surface path per
   alternative, but surface syntax cannot name a created node shared by
   several routes (only `/@` joins can), so a faithful surface path does not
