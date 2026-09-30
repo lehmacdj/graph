@@ -131,8 +131,10 @@ pCommand =
   try (Seq <$> (pCommandTerm `sepBy2` symbol ";"))
     <|> pCommandTerm
 
+-- | Parse a whole command line; trailing input is an error rather than
+-- silently ignored (@rm a b@ used to run @rm a@).
 parseCommand :: Text -> Either String Command
-parseCommand = left errorBundlePretty . runParser pCommand "<interactive>"
+parseCommand = left errorBundlePretty . runParser (pCommand <* eof) "<interactive>"
 
 test_parseCommand :: TestTree
 test_parseCommand =
@@ -175,7 +177,12 @@ test_parseCommand =
       parseFails "touch hello-world",
       parseFails " t hello/world @;",
       -- @ used to be # here; not failing could cause accidental misuse
-      parseFails "t hello/world #"
+      parseFails "t hello/world #",
+      -- trailing input used to be dropped, e.g. running only @rm a@
+      parseFails "rm a b",
+      parseFails "mv a b c",
+      parseFails "ls foo~bar",
+      "ls a " `parsesTo` Preview (Literal "a")
     ]
   where
     parsesTo :: Text -> Command -> TestTree
