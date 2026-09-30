@@ -102,19 +102,35 @@ planConstruction allowOrphans cur p = do
 
 renderResidualError :: ResidualError -> Text
 renderResidualError = \case
-  UnsupportedLabel m routeIndex hopIndex ->
-    "Cannot create the edge for "
+  UnsupportedLabel m _ _ (r :| []) ->
+    "Cannot create the "
       <> renderMatcher m
-      <> " (step "
-      <> tshow (hopIndex + 1)
-      <> " of route "
-      <> tshow (routeIndex + 1)
-      <> "): give it a literal label; nothing was changed. (UnsupportedLabel)"
-  where
-    renderMatcher = \case
-      MLiteral t -> tshow t
-      MWild -> "*"
-      MRegex r -> tshow r
+      <> " edge without a label: give it a literal label. Nothing was "
+      <> "changed. (UnsupportedLabel)\n  "
+      <> renderResidualWith renderPatchLabel r
+      <> "\n"
+  UnsupportedLabel m _ _ rs ->
+    "Cannot create the "
+      <> renderMatcher m
+      <> " edge without a label ("
+      <> (if length needing > 1 then "repairs " else "repair ")
+      <> intercalate ", " (map tshow needing)
+      <> " below), and even with one this path has "
+      <> tshow (length rs)
+      <> " possible repairs. mk does not fall back to a repair that needs "
+      <> "no label; nothing was changed. Give the edge a literal label, or "
+      <> "pin a node with @N or exclude one with !{@N} to choose a repair. "
+      <> "(UnsupportedLabel)\n"
+      <> renderNumbered (renderResidualWith renderPatchLabel) rs
+    where
+      needing =
+        [ i
+        | (i, r) <- zip [1 :: Int ..] (toList rs),
+          any (isMissing . (.transition)) r.patch.edges
+        ]
+      isMissing = \case
+        Missing _ -> True
+        Known _ -> False
 
 renderChoiceError :: NonEmpty Residual -> Text
 renderChoiceError rs =
@@ -122,10 +138,14 @@ renderChoiceError rs =
     <> tshow (length rs)
     <> " possible repairs. Nothing was changed. Pin a node with @N or "
     <> "exclude one with !{@N} to choose.\n"
-    <> unlines
-      [ "  " <> tshow i <> ". " <> renderResidual r
-      | (i, r) <- zip [1 :: Int ..] (toList rs)
-      ]
+    <> renderNumbered renderResidual rs
+
+renderNumbered :: (a -> Text) -> NonEmpty a -> Text
+renderNumbered render rs =
+  unlines
+    [ "  " <> tshow i <> ". " <> render r
+    | (i, r) <- zip [1 :: Int ..] (toList rs)
+    ]
 
 -- | Create the nodes and edges of a residual. Returns the binding of every
 -- created node.

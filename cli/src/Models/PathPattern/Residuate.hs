@@ -8,8 +8,11 @@
 -- and dominated or redundant candidates are dropped.
 module Models.PathPattern.Residuate
   ( Binding (..),
-    Patch (..),
-    Residual (..),
+    Patch' (..),
+    Patch,
+    Residual' (..),
+    Residual,
+    PatchLabel (..),
     Residuation (..),
     ResidualError (..),
     NodeLookup,
@@ -23,10 +26,14 @@ module Models.PathPattern.Residuate
     patchSubsumes,
     patchOrphans,
     renderResidual,
+    renderResidualWith,
+    renderPatchLabel,
+    renderMatcher,
     renderBinding,
   )
 where
 
+import Data.List.NonEmpty (nonEmpty)
 import Data.Map.Strict qualified as Map
 import Models.Connect
 import Models.Edge
@@ -50,24 +57,35 @@ instance CompactNodeShow Binding where
     Existing n -> nshowSettings settings n
     Fresh k -> "new" <> tshow (k + 1)
 
--- | Nodes and edges to create. Created nodes are fresh nodes and fixed
--- nodes that do not exist yet.
-data Patch = Patch
+-- | Nodes and edges to create, with labels of type @l@. Created nodes are
+-- fresh nodes and fixed nodes that do not exist yet.
+data Patch' l = Patch
   { nodes :: Set Binding,
-    edges :: Set (Edge' Binding Text)
+    edges :: Set (Edge' Binding l)
   }
   deriving stock (Eq, Ord, Show, Generic)
 
-data Residual = Residual
+type Patch = Patch' Text
+
+data Residual' l = Residual
   { patternPath :: PatternPath,
     sigma :: Map PVertex Binding,
-    labels :: Map EdgeId Text,
-    patch :: Patch,
+    labels :: Map EdgeId l,
+    patch :: Patch' l,
     -- | no binding relies on right evidence and no fresh vertices were
     -- identified from the right
     leftOnly :: Bool
   }
   deriving stock (Eq, Show, Generic)
+
+type Residual = Residual' Text
+
+-- | The label of an edge to create during selection. 'Missing' stands in
+-- for a label the chooser did not give, so that selection runs as though
+-- it had given one: equal for every edge with the same matcher (a chooser
+-- that returns one fresh label per matcher) and equal to no real label.
+data PatchLabel = Known Text | Missing Matcher
+  deriving stock (Eq, Ord, Show, Generic)
 
 data Residuation
   = -- | some alternative already resolves; nothing needs to change
@@ -79,9 +97,11 @@ data Residuation
   deriving stock (Eq, Show, Generic)
 
 data ResidualError
-  = -- | an edge with this matcher must be created, but no label was given;
-    -- the edge's first occurrence is at this route and hop (from 0)
-    UnsupportedLabel Matcher Int Int
+  = -- | a surviving repair must create an edge with this matcher, but no
+    -- label was given. The step is at this route and hop (from 0) of its
+    -- alternative. The survivors are listed preferred first; each one
+    -- that needs a label shows it as 'Missing'.
+    UnsupportedLabel Matcher Int Int (NonEmpty (Residual' PatchLabel))
   deriving stock (Eq, Show, Generic)
 
 -- | What a construction command does with a residuation.
@@ -119,11 +139,14 @@ residuatePure lookupNode chooser cur q =
 
 -- | One candidate before selection.
 data Candidate = Candidate
-  { residual :: Residual,
+  { residual :: Residual' PatchLabel,
     -- | variables bound to existing nodes
     bound :: Map VarId NID,
     leftJustified :: Set VarId,
-    alternative :: Int
+    alternative :: Int,
+    -- | steps (route, hop) whose edge must be created but got no label
+    -- from the chooser, in route order; such an edge is labelled 'Missing'
+    missingLabels :: [((Int, Int), Matcher)]
   }
 
 residuate ::
@@ -139,23 +162,42 @@ residuate lookupNode chooser cur q = do
     traverse
       (uncurry (candidatesFor lookupNode chooser cur))
       (zip [0 ..] (toList q.alternatives))
-  let candidates = concatMap fst results
-      labelErrors = concatMap snd results
+  let candidates = concat results
   pure
     if any (isEmptyPatch . (.residual.patch)) candidates
       then Right AlreadyResolves
-      else case select candidates of
-        r : rs -> Right (Repairs (r :| rs))
-        [] -> case labelErrors of
-          e : _ -> Left e
-          [] -> Right Unsatisfiable
+      else case nonEmpty (select candidates) of
+        Nothing -> Right Unsatisfiable
+        Just survivors ->
+          case [miss | s <- toList survivors, miss : _ <- [s.missingLabels]] of
+            -- a survivor needs a label: report it rather than fall back to
+            -- the other survivors or to eliminated candidates
+            ((ri, hi), m) : _ ->
+              Left (UnsupportedLabel m ri hi (fmap (.residual) survivors))
+            [] -> Right (Repairs (fmap (knownResidual . (.residual)) survivors))
   where
     isEmptyPatch patch = null patch.nodes && null patch.edges
+    known = \case
+      Known l -> l
+      Missing _ -> error "residuate: a survivor without missing labels has one"
+    knownResidual r =
+      r
+        { labels = map known r.labels,
+          patch =
+            Patch
+              { nodes = r.patch.nodes,
+                edges =
+                  setFromList
+                    [ Edge e.source (known e.transition) e.sink
+                    | e <- toList r.patch.edges
+                    ]
+              }
+        }
 
 -- | Drop dominated and redundant candidates and order the survivors.
-select :: [Candidate] -> [Residual]
+select :: [Candidate] -> [Candidate]
 select candidates =
-  dedupe . sortOn key . minimal $ map (.residual) undominated
+  dedupe . sortOn key . minimal $ undominated
   where
     undominated = filter (not . dominated) candidates
     dominated c = any (dominates c) candidates
@@ -167,16 +209,16 @@ select candidates =
         && all
           (`member` c'.leftJustified)
           (keys (Map.difference c'.bound c.bound))
-    minimal rs =
-      [ r
-      | r <- rs,
+    minimal cs =
+      [ c
+      | c <- cs,
         not $
           any
-            ( \r' ->
-                patchSubsumes r'.patch r.patch
-                  && not (patchSubsumes r.patch r'.patch)
+            ( \c' ->
+                patchSubsumes c'.residual.patch c.residual.patch
+                  && not (patchSubsumes c.residual.patch c'.residual.patch)
             )
-            rs
+            cs
       ]
     -- keep the first of patches equal modulo renaming
     dedupe = reverse . foldl' keep []
@@ -185,15 +227,21 @@ select candidates =
           | any (samePatch r) kept = kept
           | otherwise = r : kept
         samePatch a b =
-          patchSubsumes a.patch b.patch && patchSubsumes b.patch a.patch
-    key r = (not r.leftOnly, patchSize r.patch, renderResidual r)
+          patchSubsumes a.residual.patch b.residual.patch
+            && patchSubsumes b.residual.patch a.residual.patch
+    key c =
+      let r = c.residual
+       in ( not r.leftOnly,
+            patchSize r.patch,
+            renderResidualWith renderPatchLabel r
+          )
 
-patchSize :: Patch -> Int
+patchSize :: (Ord l) => Patch' l -> Int
 patchSize p = length p.nodes + length p.edges
 
 -- | Whether the first patch is contained in the second, modulo an injective
 -- renaming of fresh nodes. Existing nodes are never renamed.
-patchSubsumes :: Patch -> Patch -> Bool
+patchSubsumes :: (Ord l) => Patch' l -> Patch' l -> Bool
 patchSubsumes small large = go (freshOf small) mempty
   where
     go :: [Int] -> Map Int Int -> Bool
@@ -212,7 +260,7 @@ patchSubsumes small large = go (freshOf small) mempty
         [k' | k' <- largeFresh, k' `notElem` toList renaming]
 
 -- | Weakly connected groups of created nodes that touch no existing node.
-patchOrphans :: Patch -> [Set Binding]
+patchOrphans :: (Ord l) => Patch' l -> [Set Binding]
 patchOrphans p =
   filter (all (`member` p.nodes)) (components (toList p.nodes <> endpoints))
   where
@@ -243,16 +291,15 @@ candidatesFor ::
   NID ->
   Int ->
   PatternPath ->
-  m ([Candidate], [ResidualError])
+  m [Candidate]
 candidatesFor lookupNode chooser cur altIndex p
-  | not boundTestsOk = pure ([], [])
+  | not boundTestsOk = pure []
   | not (null unreachable) =
       -- only %unanchored could produce these; it is not supported yet
       error $ "residuate: variables without a bound vertex: " <> show unreachable
   | otherwise = do
       sigmas <- closure [mempty] (singletonSet mempty)
-      results <- concat <$> traverse candidatesForSigma sigmas
-      pure (partitionEithers' results)
+      concat <$> traverse candidatesForSigma sigmas
   where
     specs = patternEdges p
     order = edgeOrder p
@@ -373,8 +420,7 @@ candidatesFor lookupNode chooser cur altIndex p
                   ]
            in if null new then acc else go (acc <> new)
 
-    candidatesForSigma ::
-      Map VarId NID -> m [Either ResidualError Candidate]
+    candidatesForSigma :: Map VarId NID -> m [Candidate]
     candidatesForSigma sigma = do
       existing <-
         mapFromList
@@ -392,54 +438,53 @@ candidatesFor lookupNode chooser cur altIndex p
                     <> toList sigma
                 )
             )
-      -- labels for edges that must be created
+      -- labels for edges that must be created; a missing one is a
+      -- placeholder, recorded so that a surviving candidate reports it
       created <-
         for (mapToList specs) \(e, spec) -> case join (lookup e existing) of
-          Just l -> pure (e, Right (Just l))
+          Just l -> pure (e, Known l)
           Nothing -> case spec.matcher of
-            MLiteral l -> pure (e, Right (Just l))
+            MLiteral l -> pure (e, Known l)
             m ->
               chooser m <&> \case
-                Just l | matcherAccepts m l -> (e, Right (Just l))
-                _ -> (e, Left (uncurry (UnsupportedLabel m) (position e)))
-      case [err | (_, Left err) <- created] of
-        err : _ -> pure [Left err]
-        [] -> do
-          let labels = mapFromList [(e, l) | (e, Right (Just l)) <- created]
-              unbound = [v | v <- vars, v `notMember` sigma]
-              initial = mapFromList (zip unbound [0 ..]) :: Map VarId Int
-              binding classes = \case
-                Var v -> case lookup v sigma of
-                  Just n -> Existing n
-                  Nothing -> Fresh (findWithDefault 0 v classes)
-                v -> Existing (fromJustEx (boundValue v))
-              leftVars = leftClosure existing sigma
-              -- number created nodes by first appearance
-              compact classes =
-                let order' = ordNub [k | v <- unbound, Just k <- [lookup v classes]]
-                    renumber = mapFromList (zip order' [0 ..]) :: Map Int Int
-                 in fmap (\k -> findWithDefault k k renumber) classes
-              states = mergeStates specs labels binding initial
-          pure
-            [ Right
-                Candidate
-                  { residual =
-                      Residual
-                        { patternPath = p,
-                          sigma =
-                            mapFromList
-                              [(v, binding classes v) | v <- patternVertices p],
-                          labels,
-                          patch = patchOf existing labels (binding classes) missingNodes,
-                          leftOnly =
-                            not usedRight && all (`member` leftVars) (keys sigma)
-                        },
-                    bound = sigma,
-                    leftJustified = leftVars,
-                    alternative = altIndex
-                  }
-            | (classes, usedRight) <- map (first compact) states
-            ]
+                Just l | matcherAccepts m l -> (e, Known l)
+                _ -> (e, Missing m)
+      let labels = mapFromList created
+          missing = sortOn fst [(position e, m) | (e, Missing m) <- created]
+          unbound = [v | v <- vars, v `notMember` sigma]
+          initial = mapFromList (zip unbound [0 ..]) :: Map VarId Int
+          binding classes = \case
+            Var v -> case lookup v sigma of
+              Just n -> Existing n
+              Nothing -> Fresh (findWithDefault 0 v classes)
+            v -> Existing (fromJustEx (boundValue v))
+          leftVars = leftClosure existing sigma
+          -- number created nodes by first appearance
+          compact classes =
+            let order' = ordNub [k | v <- unbound, Just k <- [lookup v classes]]
+                renumber = mapFromList (zip order' [0 ..]) :: Map Int Int
+             in fmap (\k -> findWithDefault k k renumber) classes
+          states = mergeStates specs labels binding initial
+      pure
+        [ Candidate
+            { residual =
+                Residual
+                  { patternPath = p,
+                    sigma =
+                      mapFromList
+                        [(v, binding classes v) | v <- patternVertices p],
+                    labels,
+                    patch = patchOf existing labels (binding classes) missingNodes,
+                    leftOnly =
+                      not usedRight && all (`member` leftVars) (keys sigma)
+                  },
+              bound = sigma,
+              leftJustified = leftVars,
+              alternative = altIndex,
+              missingLabels = missing
+            }
+        | (classes, usedRight) <- map (first compact) states
+        ]
 
     patchOf existing labels bind missingNodes =
       Patch
@@ -457,9 +502,7 @@ candidatesFor lookupNode chooser cur altIndex p
               ]
         }
 
-    partitionEithers' xs = ([c | Right c <- xs], [e | Left e <- xs])
-
-storedEdge :: EdgeSpec -> Binding -> Text -> Binding -> Edge' Binding Text
+storedEdge :: EdgeSpec -> Binding -> l -> Binding -> Edge' Binding l
 storedEdge spec s l t = case spec.direction of
   Out -> Edge s l t
   In -> Edge t l s
@@ -469,8 +512,9 @@ storedEdge spec s l t = case spec.direction of
 -- (the same hop into the same vertex) are alternatives. Returns every
 -- resulting class assignment and whether it used a right identification.
 mergeStates ::
+  (Eq l) =>
   Map EdgeId EdgeSpec ->
-  Map EdgeId Text ->
+  Map EdgeId l ->
   (Map VarId Int -> PVertex -> Binding) ->
   Map VarId Int ->
   [(Map VarId Int, Bool)]
@@ -526,7 +570,22 @@ renderBinding = \case
 
 -- | The residual's routes with every vertex resolved, and its patch.
 renderResidual :: Residual -> Text
-renderResidual r =
+renderResidual = renderResidualWith tshow
+
+-- | A known label quoted; a missing one as its matcher, e.g. @-*->@.
+renderPatchLabel :: PatchLabel -> Text
+renderPatchLabel = \case
+  Known l -> tshow l
+  Missing m -> renderMatcher m
+
+renderMatcher :: Matcher -> Text
+renderMatcher = \case
+  MLiteral t -> tshow t
+  MWild -> "*"
+  MRegex r -> tshow r
+
+renderResidualWith :: (Ord l) => (l -> Text) -> Residual' l -> Text
+renderResidualWith renderLabel r =
   intercalate " & " (map renderRoute (toList r.patternPath.routes))
     <> "\n    creates: "
     <> case toList r.patch.edges of
@@ -537,13 +596,13 @@ renderResidual r =
     renderRoute rt =
       value rt.root <> concatMap renderHop rt.hops
     renderHop h =
-      let l = findWithDefault "?" h.edge r.labels
+      let l = maybe "\"?\"" renderLabel (lookup h.edge r.labels)
        in case h.direction of
-            Out -> " -" <> tshow l <> "-> " <> value h.target
-            In -> " <-" <> tshow l <> "- " <> value h.target
+            Out -> " -" <> l <> "-> " <> value h.target
+            In -> " <-" <> l <> "- " <> value h.target
     renderEdge e =
       renderBinding e.source
         <> " -"
-        <> tshow e.transition
+        <> renderLabel e.transition
         <> "-> "
         <> renderBinding e.sink

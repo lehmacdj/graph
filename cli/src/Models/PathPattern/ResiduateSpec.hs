@@ -80,6 +80,43 @@ spec_residuationProperties = describe "residuation properties" do
               `shouldBe` (context, Right AlreadyResolves)
             (context, applyPatch r.patch g') `shouldBe` (context, g')
 
+-- | Without labels, mk does what it would do with a fresh label, or errors
+-- iff a survivor would use that label (docs/path-pattern-ir.md §5).
+spec_missingLabelsActAsFreshLabels :: Spec
+spec_missingLabelsActAsFreshLabels =
+  it "missing labels act as a fresh label over the corpus" do
+    forM_ corpusQueries \surface -> forM_ corpusGraphs \g -> do
+      let run chooser =
+            residuatePure (`maybeNodeLookup` g) chooser corpusCurrent (compilePath surface)
+          withFresh = run \m -> find (matcherAccepts m) ["fresh"]
+          context = show (surface, g)
+          usesFresh = \case
+            Right (Repairs rs) ->
+              any (any ((== "fresh") . (.transition)) . toList . (.patch.edges)) rs
+            _ -> False
+      case run (const Nothing) of
+        Right r -> (context, withFresh) `shouldBe` (context, Right r)
+        Left (UnsupportedLabel m _ _ _)
+          | matcherAccepts m "fresh" ->
+              (context, usesFresh withFresh) `shouldBe` (context, True)
+          | otherwise ->
+              (context, isLeft withFresh) `shouldBe` (context, True)
+
+infix 1 `shouldNeedLabel`
+
+-- | The matcher and step (route, hop) of a label error.
+shouldNeedLabel ::
+  (Show a) => Either ResidualError a -> (Matcher, Int, Int) -> Expectation
+shouldNeedLabel result expected = case result of
+  Left (UnsupportedLabel m ri hi _) -> (m, ri, hi) `shouldBe` expected
+  other -> expectationFailure ("expected a label error: " <> show other)
+
+-- | The survivors listed by a label error.
+labelErrorRepairs :: Either ResidualError a -> Maybe Int
+labelErrorRepairs = \case
+  Left (UnsupportedLabel _ _ _ rs) -> Just (length rs)
+  Right _ -> Nothing
+
 spec_residuationCoverage :: Spec
 spec_residuationCoverage =
   it "the corpus exercises repairs, ambiguity and right evidence" do
@@ -161,11 +198,6 @@ spec_residuationExamples = describe "residuation examples" do
       `shouldBe` [ [c <> " k new3", c <> " l new1", c <> " l new3", "new1 m new2"],
                    [c <> " k new1", c <> " l new1", "new1 m new2"]
                  ]
-  it "an alternative lacking a label is unavailable: mk a + *" $
-    residuatePure (`maybeNodeLookup` graphWithEdges []) (const Nothing) corpusCurrent (compilePath [path| a + * |])
-      `shouldSatisfy` \case
-        Right (Repairs (r :| [])) -> map (.transition) (toList r.patch.edges) == ["a"]
-        _ -> False
   it "a variable without a bound vertex is an internal error" $
     evaluate
       ( residuatePure
@@ -187,7 +219,7 @@ spec_residuationExamples = describe "residuation examples" do
                  ]
   it "the label error names the step that needs a label" $
     residuatePure (`maybeNodeLookup` graphWithEdges []) (const Nothing) corpusCurrent (compilePath [path| a & b/* |])
-      `shouldBe` Left (UnsupportedLabel MWild 1 1)
+      `shouldNeedLabel` (MWild, 1, 1)
   it "(a & b)/@ joins the new edges" $
     patches (graphWithEdges []) [path| (a & b)/@ |]
       `shouldBe` [[c <> " a new1", c <> " b new1"]]
@@ -210,15 +242,78 @@ spec_residuationExamples = describe "residuation examples" do
   describe "labels" do
     let noLabel g surface =
           residuatePure (`maybeNodeLookup` g) (const Nothing) corpusCurrent (compilePath surface)
+        repairLabels = \case
+          Repairs rs -> map (map (.transition) . toList . (.patch.edges)) (toList rs)
+          other -> error ("expected repairs: " <> show other)
     it "a wildcard edge needs a label from the chooser" $
       noLabel (graphWithEdges []) [path| a/* |]
-        `shouldBe` Left (UnsupportedLabel MWild 0 1)
+        `shouldNeedLabel` (MWild, 0, 1)
     it "an unrelated existing label is not reused" $
       noLabel (graphWithEdges [edge' 3 "foo" 4]) [path| a/* |]
-        `shouldBe` Left (UnsupportedLabel MWild 0 1)
+        `shouldNeedLabel` (MWild, 0, 1)
     it "an existing wildcard edge satisfies the pattern" $
       noLabel (graphWithEdges [edge' 1 "a" 2, edge' 2 "foo" 3]) [path| a/* |]
         `shouldBe` Right AlreadyResolves
+    it "an alternative lacking a label is an error, not dropped: mk a + *" $
+      noLabel (graphWithEdges []) [path| a + * |]
+        `shouldNeedLabel` (MWild, 0, 0)
+    it "whichever alternative comes first: mk * + a" $
+      noLabel (graphWithEdges []) [path| * + a |]
+        `shouldNeedLabel` (MWild, 0, 0)
+    it "a regex alternative lacking a label is an error: mk a + regex" $
+      noLabel (graphWithEdges []) [path| a + regex:"^x"|]
+        `shouldSatisfy` \case
+          Left (UnsupportedLabel (MRegex _) 0 0 _) -> True
+          _ -> False
+    it "a path that already resolves is a no-op: mk a + *" $ do
+      noLabel (graphWithEdges [edge' 1 "a" 2]) [path| a + * |]
+        `shouldBe` Right AlreadyResolves
+      noLabel (graphWithEdges [edge' 1 "x" 2]) [path| a + * |]
+        `shouldBe` Right AlreadyResolves
+      noLabel (graphWithEdges [edge' 1 "x" 2, edge' 2 "y" 3]) [path| b + */* |]
+        `shouldBe` Right AlreadyResolves
+    it "a label-needing superset of another repair is not needed: mk a + a/*" $
+      fmap repairLabels (noLabel (graphWithEdges []) [path| a + a/* |])
+        `shouldBe` Right [["a"]]
+    it "an existing edge for * avoids the label: mk * & a" $
+      fmap repairLabels (noLabel (graphWithEdges [edge' 1 "x" 2]) [path| * & a |])
+        `shouldBe` Right [["a"]]
+    it "a fresh * edge still needs a label: mk * & a" $
+      noLabel (graphWithEdges []) [path| * & a |]
+        `shouldNeedLabel` (MWild, 0, 0)
+    it "a surviving label-needing candidate is not dropped for another" $
+      -- 1 -a-> 2 would need 2 -*-> 5; right evidence 6 -x-> 5 needs 1 -a-> 6
+      noLabel
+        (graphWithEdges [edge' 1 "a" 2, edge' 6 "x" 5])
+        [path| a/*/@000000000005 |]
+        `shouldNeedLabel` (MWild, 0, 1)
+    it "the error lists every survivor: mk c/d + c/e + *" $ do
+      let result = noLabel (graphWithEdges []) [path| c/d + c/e + * |]
+      result `shouldNeedLabel` (MWild, 0, 0)
+      labelErrorRepairs result `shouldBe` Just 3
+    it "a plain wildcard lists only its own repair: mk a/*" $
+      labelErrorRepairs (noLabel (graphWithEdges []) [path| a/* |])
+        `shouldBe` Just 1
+    it "an equally good label-free repair is not taken: mk a/* + */b" $ do
+      let result = noLabel (graphWithEdges [edge' 1 "a" 2]) [path| a/* + */b |]
+      result `shouldNeedLabel` (MWild, 0, 1)
+      labelErrorRepairs result `shouldBe` Just 2
+    it "a missing label equals no literal: mk \"\\0MWild\" + *" $
+      labelErrorRepairs
+        (noLabel (graphWithEdges []) (P.Literal "\0MWild" P.:+ P.Wild))
+        `shouldBe` Just 2
+    it "chooser-supplied labels are unaffected: mk a + *" $ do
+      let withChooser chooser =
+            fmap
+              repairLabels
+              ( residuatePure
+                  (`maybeNodeLookup` graphWithEdges [])
+                  chooser
+                  corpusCurrent
+                  (compilePath [path| a + * |])
+              )
+      withChooser (const (Just "a")) `shouldBe` Right [["a"]]
+      withChooser (const (Just "x")) `shouldBe` Right [["a"], ["x"]]
     it "a chooser's label is used" $
       fmap
         (\case Repairs (r :| _) -> map (.transition) (toList r.patch.edges); _ -> [])

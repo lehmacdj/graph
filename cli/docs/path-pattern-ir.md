@@ -230,11 +230,38 @@ no existing edges.
    mandatory matches every example and the "right is weaker" decision.
 5. **Labels.** A `*`/regex `EdgeId` whose edge must be created gets its
    label from the caller's callback only; there is no graph-wide reuse.
-   `mk` supplies no labels, so it errors, naming the step (route and hop)
-   that needs one. A candidate that needs a label the chooser does not give
-   is unavailable, like an unsatisfiable alternative: `mk a + *` creates
-   `a`. The label error is reported only when no candidate survives, since
-   an available alternative is exactly the kind of repair `mk` looks for.
+   `mk` supplies no labels. A label the chooser does not give (or gives
+   but the matcher rejects) is **missing**. Selection runs with a missing
+   label as a stand-in, `Missing matcher`, distinct from every real label
+   and equal for every edge with the same matcher. This models a chooser
+   that returns one fresh label per matcher (the label callback itself is
+   called per edge and per binding, so it need not behave that way).
+   If the path already resolves, the result is the no-op as usual.
+   Otherwise, if any **survivor** of selection uses a missing label, it is
+   an error and nothing is changed: `mk` does not fall back to the other
+   survivors or alternatives. The error names the matcher and lists every
+   survivor as resolved routes, with the missing label shown as its
+   matcher (`-*->`), and which survivors need it; with two or more
+   survivors it also says that the path is ambiguous even with a label.
+   So `mk a + *` and `mk * + a` error rather than create `a`, and so does
+   `mk a/*/@5` when `a` leads to a node without a `*` edge to 5, rather
+   than taking right evidence.
+   A candidate that needs a missing label is still eliminated like any
+   other, and then the label never matters: `mk a + a/*` creates `a`
+   (the `a/*` patch is a strict superset), and `mk * & a` from a node with
+   an edge creates only `a` (left dominance).
+   A missing label never makes a label-free candidate lose, so label-free
+   candidates are selected exactly as with a fresh label:
+   - *Dominance.* If c' extends c, every edge c' must create, c must too:
+     an edge between vertices bound in both is the same, and an edge at a
+     vertex c leaves fresh is new in c. So if c' needs a label, so does c.
+   - *Minimality and dedupe.* A stand-in edge is in no label-free patch,
+     so a label-needing patch is never contained in, or equal to, a
+     label-free one.
+   The rule is: without labels, `mk` either does exactly what it would with
+   a fresh label, or errors when that repair would use the label. A
+   chooser that supplies labels is unaffected. The test suite checks this
+   against a fresh-label chooser over the whole corpus.
 
 **Left-justified.** `Current` and `Fixed` are left-justified. So is any
 variable reached from a left-justified vertex by an existing edge taken in
