@@ -153,3 +153,20 @@ unit_command_incomplete = testParserFails (command "tf") "t"
 unit_command_spaceTerminated :: Assertion
 unit_command_spaceTerminated =
   testParserParses (command "t" <* string "blech") "t blech" "t"
+
+test_customParseErrors :: TestTree
+test_customParseErrors =
+  testGroup
+    "custom parse errors"
+    [ testCase "illegal directive" $
+        showErrorComponent (IllegalDirective (at 4) (at 9))
+          @?= "Directives (%targets, %history, %last, URLs) only work in "
+          <> "ls/preview; remove the one at line 1, columns 4-8. "
+          <> "(IllegalDirective)",
+      testCase "incomplete NID" $
+        showErrorComponent (IncompleteFullNID (SourceRange (at 4) (at 6)) "1")
+          @?= "Incomplete NID '@1' at line 1, columns 4-5: a NID needs all 12 "
+          <> "base62 characters. (IncompleteFullNID)"
+    ]
+  where
+    at = SourcePos "<test>" (mkPos 1) . mkPos

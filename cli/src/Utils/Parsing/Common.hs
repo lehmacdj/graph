@@ -24,14 +24,31 @@ data CustomParseError
 
 instance ShowErrorComponent CustomParseError where
   showErrorComponent (IllegalDirective start end) =
-    "Illegal directive " ++ " at " ++ show start ++ "-" ++ show end
-  showErrorComponent (IncompleteFullNID pos nidStr) =
-    "Incomplete NID, was expecting full NID with "
-      <> show nidDigits
-      <> " base62 characters, but had only '@"
+    "Directives (%targets, %history, %last, URLs) only work in ls/preview; "
+      <> "remove the one at "
+      <> showSpan start end
+      <> ". (IllegalDirective)"
+  showErrorComponent (IncompleteFullNID range nidStr) =
+    "Incomplete NID '@"
       <> unpack nidStr
       <> "' at "
-      <> show pos
+      <> showSpan range.startPos range.endPos
+      <> ": a NID needs all "
+      <> show nidDigits
+      <> " base62 characters. (IncompleteFullNID)"
+
+-- | A source span for error messages, e.g. @line 1, columns 4-8@. The end
+-- position is exclusive.
+showSpan :: SourcePos -> SourcePos -> String
+showSpan start end
+  | sourceLine start == sourceLine end =
+      "line "
+        <> show (unPos (sourceLine start))
+        <> ", columns "
+        <> show (unPos (sourceColumn start))
+        <> "-"
+        <> show (max (unPos (sourceColumn start)) (unPos (sourceColumn end) - 1))
+  | otherwise = sourcePosPretty start <> " to " <> sourcePosPretty end
 
 newtype ParserOptions = ParserOptions
   { useFakeSourceRanges :: Bool
