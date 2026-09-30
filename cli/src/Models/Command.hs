@@ -55,12 +55,13 @@ data Command
     Fix
   | -- | mv
     Move Path Path
-  | -- | rn
-    Rename Path Path
+  | -- | rn [--all-parents]
+    Rename DestinationParents Path Path
   | -- | cp: copy the selected edge into a destination node
     Copy Path Path
-  | -- | cl, clone, alias: relabel without deleting the selected edge
-    Alias Path Path
+  | -- | cl, clone, alias [--all-parents]: relabel without deleting the
+    -- selected edge
+    Alias DestinationParents Path Path
   | -- | vi
     Edit
   | -- | back: Go back in history by a certain number of steps. Greater number
@@ -71,4 +72,12 @@ data Command
     Seq (TwoElemList Command)
   | -- | preview, ls
     Preview ParsedPath
+  deriving (Eq, Show, Ord, Generic)
+
+-- | How many parents a @rn@/@cl@ destination may create the edge under: the
+-- prefix before its final label must resolve to one node unless the command
+-- was given @--all-parents@.
+data DestinationParents
+  = OneParent
+  | AllParents
   deriving (Eq, Show, Ord, Generic)

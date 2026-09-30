@@ -79,14 +79,24 @@ pFix = command "fix" $> Fix
 pMove :: Parser Command
 pMove = (command "mv" $> Move) <*> path <*> path
 
+-- | @--all-parents@ lets @rn@/@cl@ create the edge under every parent the
+-- destination prefix resolves to.
+pDestinationParents :: Parser DestinationParents
+pDestinationParents =
+  try (command "--all-parents" $> AllParents) <|> pure OneParent
+
 pRename :: Parser Command
-pRename = (command "rn" $> Rename) <*> path <*> path
+pRename = (command "rn" $> Rename) <*> pDestinationParents <*> path <*> path
 
 pCopy :: Parser Command
 pCopy = (command "cp" $> Copy) <*> path <*> path
 
 pAlias :: Parser Command
-pAlias = (commandFrom ["alias", "clone", "cl"] $> Alias) <*> path <*> path
+pAlias =
+  (commandFrom ["alias", "clone", "cl"] $> Alias)
+    <*> pDestinationParents
+    <*> path
+    <*> path
 
 pEdit :: Parser Command
 pEdit = command "vi" $> Edit
@@ -159,8 +169,19 @@ test_parseCommand =
       "mk a" `parsesTo` Make (Literal "a"),
       "mk --allow-orphans a" `parsesTo` MakeAllowingOrphans (Literal "a"),
       "cp a b" `parsesTo` Copy (Literal "a") (Literal "b"),
-      "cl a b" `parsesTo` Alias (Literal "a") (Literal "b"),
-      "clone a b" `parsesTo` Alias (Literal "a") (Literal "b"),
+      "cl a b" `parsesTo` Alias OneParent (Literal "a") (Literal "b"),
+      "clone a b" `parsesTo` Alias OneParent (Literal "a") (Literal "b"),
+      "cl --all-parents a b"
+        `parsesTo` Alias AllParents (Literal "a") (Literal "b"),
+      "rn a b" `parsesTo` Rename OneParent (Literal "a") (Literal "b"),
+      "rn --all-parents a c/z"
+        `parsesTo` Rename
+          AllParents
+          (Literal "a")
+          (Literal "c" Simple.:/ Literal "z"),
+      -- the flag goes before the paths
+      parseFails "rn a c/z --all-parents",
+      parseFails "rn --all-parents a",
       "{nid; si}" `parsesTo` Seq (twoElemList NodeId ShowImage []),
       "at #foo nid" `parsesTo` At (Absolute tagsNID Simple.:/ Literal "foo") NodeId,
       -- "t #something https://example.com/resource"

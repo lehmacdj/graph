@@ -23,6 +23,7 @@ import Error.UserError
 import Graph.Effect
 import Graph.FreshNID
 import Graph.PathPattern.Resolve (resolveQueryWith)
+import Models.Command (DestinationParents (..))
 import Models.Connect (Connect' (..))
 import Models.Edge
 import Models.Node
@@ -182,15 +183,17 @@ lastEdgeOf r = case reverse r.hops of
 
 -- | Rename (or clone) the last edge of the single selected route to the
 -- destination: its prefix must exist, and its final literal label may be
--- new. Everything is planned before the original edge is deleted.
+-- new. Unless 'AllParents' is given, the prefix must resolve to one parent
+-- node. Everything is planned before the original edge is deleted.
 relabelPath ::
   (PathReading r, WriteGraph Text :> r, Error UserError :> r) =>
   Bool ->
+  DestinationParents ->
   NID ->
   P.Path ->
   P.Path ->
   Eff r ()
-relabelPath removeOriginal cur source destination = do
+relabelPath removeOriginal parents cur source destination = do
   rs <- resolveCommandQuery cur source
   let command = if removeOriginal then "rn" else "cl"
   selected <- case selectedConcreteRoutes rs of
@@ -215,17 +218,34 @@ relabelPath removeOriginal cur source destination = do
       command
         <> " destination has no matching parent or final label; nothing "
         <> "was changed."
+  when (parents == OneParent && length edges > 1) $
+    throwError . OtherError $
+      renderSeveralParents command (keys edges)
   when removeOriginal $ deleteEdge @Text original
   traverse_ (insertEdge @Text) edges
 
+renderSeveralParents :: Text -> [NID] -> Text
+renderSeveralParents command ps =
+  "The "
+    <> command
+    <> " destination's path before its final label resolves to "
+    <> tshow (length ps)
+    <> " parent nodes ("
+    <> intercalate ", " (map tshow ps)
+    <> "); nothing was changed. Pin one with /@N before the final label, "
+    <> "or use "
+    <> command
+    <> " --all-parents to create the edge under each. (SeveralParents)"
+
 -- | Resolve @destination/\@endpoint@ where the last hop of route 0 need not
--- exist yet: drop that pattern edge and connect the node before it.
+-- exist yet: drop that pattern edge and connect the node before it. Returns
+-- the edge to create keyed by that parent node.
 prospectiveEdges ::
   (PathReading r, Error UserError :> r) =>
   NID ->
   P.Path ->
   NID ->
-  Eff r (Set (Edge Text))
+  Eff r (Map NID (Edge Text))
 prospectiveEdges cur destination endpoint = do
   let q = compilePath (destination P.:/ P.Absolute endpoint)
   perAlternative <- for (toList q.alternatives) $ \p -> do
@@ -244,9 +264,12 @@ prospectiveEdges cur destination endpoint = do
         truncated = PatternPath p.tests (fmap dropLast (r0 :| rest))
     rs <- resolveQueryWith readNode cur (PathQuery (singletonSet truncated))
     pure $
-      setFromList
-        [ concreteEdge (endOf rt) (ConcreteHop lastHop.direction label endpoint)
-        | rt <- selectedConcreteRoutes rs
+      mapFromList
+        [ ( parent,
+            concreteEdge parent (ConcreteHop lastHop.direction label endpoint)
+          )
+        | rt <- selectedConcreteRoutes rs,
+          let parent = endOf rt
         ]
   case ordNub (filter (not . null) perAlternative) of
     [] -> pure mempty

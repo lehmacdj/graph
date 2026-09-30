@@ -225,17 +225,17 @@ interpretCommand = \case
     let err = singleErr "the last argument of mv"
     target <- the' err =<< Paths.queryTargets nid q
     Paths.moveSelectedEdges nid target p
-  Rename p q -> do
+  Rename parents p q -> do
     nid <- currentLocation
-    Paths.relabelPath True nid p q
+    Paths.relabelPath True parents nid p q
   Copy p q -> do
     nid <- currentLocation
     target <-
       the' (singleErr "the last argument of cp") =<< Paths.queryTargets nid q
     Paths.copySelectedEdges nid target p
-  Alias p q -> do
+  Alias parents p q -> do
     nid <- currentLocation
-    Paths.relabelPath False nid p q
+    Paths.relabelPath False parents nid p q
   Edit -> do
     n <- subsumeUserError @Missing currentLocation
     path <- getGraphFilePath

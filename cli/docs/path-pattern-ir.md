@@ -125,6 +125,13 @@ itself.
 
 - If route 0 has zero hops (`rn (@ & a) c`), it is an error, as in the
   branch's goldens.
+- The `rn`/`cl` destination creates one edge: its prefix (everything
+  before the final label) must resolve to a single parent node. With
+  `0 -c-> 3`, `0 -c-> 4`, `rn a c/z` is an error (`SeveralParents`) that
+  names the parents and changes nothing; pin one (`c/@3/z`) or pass
+  `--all-parents` (`rn --all-parents a c/z`) to create the edge under
+  each parent, deleting the original once. `mv`/`cp` likewise need a
+  destination that resolves to one node.
 - The Guard special case is gone. `x/(@ & a)/@` has routes `[x, x·a]`:
   rename targets `x`, and final edges are `{x, a}`. `x/(a & @)/@` has routes
   `[x·a, x]`, so rename targets `a`. The unjoined `/` copies `x` into both
@@ -347,6 +354,10 @@ full test suite.
   before it. *Deviation:* that last hop must be a literal (the branch
   allowed matching existing labels for a wildcard, which picks an
   arbitrary label).
+- A `rn`/`cl` destination prefix that resolves to several parent nodes is
+  an error (`SeveralParents`) unless `--all-parents` is given, in which
+  case the edge is created under every parent (the fan-out that used to be
+  the default; §3).
 - The orphan override is `mk --allow-orphans`.
 - `rm` errors on a zero-hop route 0, like `rn`/`cl`/`mv`/`cp`.
 - A `rn`/`cl` destination that matches through several `+` alternatives
