@@ -43,6 +43,7 @@ import Models.Path.Simple qualified as Simple
 import Models.PathPattern.Match (ConcreteHop (..), ConcreteRoute (..), selectedRoutes)
 import MyPrelude
 import System.Console.Terminal.Size qualified as Terminal
+import Utils.Parsing.Common (showSpan)
 import Utils.Prettyprinter qualified as PP
 import Utils.Singleton
 
@@ -116,13 +117,12 @@ interpretDirective sourceRange = \case
   Splice expr ->
     throwError $
       OtherError $
-        "the splice directive %{"
+        "The splice directive %{"
           ++ pack expr
-          ++ "} is not supported in the CLI"
-          ++ " it is only supported in the QuasiQuoter"
-          ++ "\n"
-          ++ "at "
-          ++ tshow sourceRange
+          ++ "} only works in the path quasiquoter, not the CLI; remove the"
+          ++ " one at "
+          ++ pack (showSpan sourceRange.startPos sourceRange.endPos)
+          ++ "."
 
 interpretCommand ::
   ( Members [DisplayImage, Echo, Error UserError, SetLocation, GetLocation, Dualizeable] effs,
