@@ -35,7 +35,7 @@ data GoldenTest = GoldenTest
     -- (the graph dump does not show data)
     dataDump :: Maybe ByteString
   }
-  deriving (Show)
+  deriving (Eq, Show)
 
 pathForTemplate :: ByteString -> FilePath
 pathForTemplate = ("../examples" </>) . unpack . decodeUtf8
@@ -51,31 +51,73 @@ pSectionHeader :: Parser a -> Parser a
 pSectionHeader p =
   string "==========" *> p <* string "==========\n" <?> "section header"
 
-pBody :: Parser () -> Parser ByteString
-pBody end =
-  concat
-    <$> (manyTill (takeWhileIncluding (not . nl)) end <|> pure [])
-    <?> "body"
+-- | One line including its newline; the last line of a file may lack one.
+pLine :: Parser ByteString
+pLine = takeWhileIncluding (/= 10) <|> takeWhile1 (/= 10)
+
+-- | The lines of the @section@ section up to (and consuming) @end@, named
+-- @next@ in errors. There is no fallback: a missing or misspelled @end@
+-- header is a parse error rather than an empty body. With @strict@, a line
+-- that looks like a section header is an error too.
+pBody :: Bool -> String -> String -> Parser () -> Parser ByteString
+pBody strict section next end = go []
   where
-    nl = (== 10)
+    go acc =
+      (end $> concat (reverse acc)) <|> do
+        done <- atEnd
+        when done . fail $
+          "the " <> section <> " section is not followed by " <> next
+        l <- pLine
+        when (strict && "==========" `isPrefixOf` l) . fail $
+          "unexpected header "
+            <> show (T.strip (decodeUtf8 l))
+            <> " in the "
+            <> section
+            <> " section"
+        go (l : acc)
 
 pGoldenTest :: Parser GoldenTest
 pGoldenTest =
   GoldenTest
     <$> optional
       ( pSectionHeader (void $ string "graph")
-          *> pBody (void . lookAhead $ pSectionHeader pInputHeader)
+          *> pBody
+            False
+            "graph"
+            "an input header"
+            (void . lookAhead $ pSectionHeader pInputHeader)
       )
-    <*> pSectionHeader pInputHeader
-    <*> (pBody (pSectionHeader (void $ string "stdout")) <?> "input")
-    <*> (pBody (pSectionHeader (void $ string "stderr")) <?> "stdout")
-    <*> (pBody (pSectionHeader (void $ string "graph-dump")) <?> "stderr")
-    <*> (pBody (pSectionHeader endOfInput) <?> "graph-dump")
-    <*> pure Nothing
+    <*> (pSectionHeader pInputHeader <?> "input header")
+    <*> body "input" "stdout"
+    <*> body "stdout" "stderr"
+    <*> body "stderr" "graph-dump"
+    <*> pBody
+      True
+      "graph-dump"
+      "a data header or the end of the file"
+      (lookAhead dataHeader <|> endOfInput)
+    <*> optional (dataHeader *> takeByteString)
+    <* endOfInput
     <?> "golden test"
+  where
+    dataHeader = pSectionHeader (void $ string "data")
+    body section next =
+      pBody
+        False
+        section
+        ("a " <> headerText next <> " header")
+        (pSectionHeader (void $ string (fromString next)))
+    headerText name = "==========" <> name <> "=========="
 
+-- | Parse a golden test and check that it has something to run.
 parseGoldenTest :: ByteString -> Either String GoldenTest
-parseGoldenTest = parseOnly pGoldenTest
+parseGoldenTest = parseOnly pGoldenTest >=> validateGoldenTest
+
+validateGoldenTest :: GoldenTest -> Either String GoldenTest
+validateGoldenTest golden
+  | null (words (decodeUtf8 golden.input :: Text)) =
+      Left "the golden test has no input"
+  | otherwise = Right golden
 
 sectionHeader :: ByteString -> LByteString
 sectionHeader name = "==========" <> fromStrict name <> "==========\n"
@@ -185,10 +227,87 @@ mkGoldenTest path =
    in goldenVsStringDiff testName (\ref new -> ["diff", "-u", ref, new]) path do
         (B.readFile path <&> parseGoldenTest) >>= \case
           Right golden -> runGraphEditor golden <&> renderGoldenTest
-          Left err -> error $ "failed to parse golden input:\n" <> err
+          Left err ->
+            error $ path <> ": this golden test is malformed:\n" <> err
 
 inputFiles :: IO [FilePath]
 inputFiles = globDir1 (compile "**/*.golden") "test/golden/ge"
 
 test_integration :: IO [TestTree]
 test_integration = map mkGoldenTest <$> inputFiles
+
+test_parseGoldenTest :: TestTree
+test_parseGoldenTest =
+  testGroup
+    "parseGoldenTest"
+    [ testCase "parses every section" $
+        parseGoldenTest
+          ( wellFormed
+              <> "==========graph-dump==========\ndump\n"
+              <> "==========data==========\nd\n"
+          )
+          @?= Right
+            GoldenTest
+              { baseGraph = Just "0 -a-> 1\n",
+                template = Nothing,
+                input = "rn a b\n",
+                stdOut = "out\n",
+                stdErr = "",
+                graphDump = "dump\n",
+                dataDump = Just "d\n"
+              },
+      testCase "reads an example template" $
+        (.template)
+          <$> parseGoldenTest
+            ( "==========input@example:small==========\nls\n"
+                <> "==========stdout==========\n"
+                <> "==========stderr==========\n"
+                <> "==========graph-dump==========\n"
+            )
+            @?= Right (Just "small"),
+      testCase "keeps a graph dump without a final newline" $
+        (.graphDump)
+          <$> parseGoldenTest (wellFormed <> "==========graph-dump==========\ndump")
+            @?= Right "dump",
+      testCase "round-trips a rendered golden test" do
+        let golden =
+              GoldenTest
+                { baseGraph = Nothing,
+                  template = Just "small",
+                  input = "ls\n",
+                  stdOut = "g> ok\n",
+                  stdErr = "oops\n",
+                  graphDump = "@1{}\n",
+                  dataDump = Just "1.data: \"x\"\n"
+                }
+        parseGoldenTest (toStrict (renderGoldenTest golden)) @?= Right golden,
+      rejects "a missing stdout header" $
+        "==========input==========\nrn a b\n"
+          <> "==========stderr==========\n"
+          <> "==========graph-dump==========\n",
+      rejects "a misspelled stderr header" $
+        "==========input==========\nrn a b\n"
+          <> "==========stdout==========\n"
+          <> "==========stder==========\n"
+          <> "==========graph-dump==========\n",
+      rejects "a misspelled data header" $
+        wellFormed
+          <> "==========graph-dump==========\ndump\n"
+          <> "==========dat==========\nd\n",
+      rejects "input without any later section" $
+        "==========input==========\nrn a b\n",
+      rejects "blank input" $
+        "==========input==========\n \n"
+          <> "==========stdout==========\n"
+          <> "==========stderr==========\n"
+          <> "==========graph-dump==========\n"
+    ]
+  where
+    wellFormed =
+      "==========graph==========\n0 -a-> 1\n"
+        <> "==========input==========\nrn a b\n"
+        <> "==========stdout==========\nout\n"
+        <> "==========stderr==========\n"
+    rejects name golden =
+      testCase ("rejects " <> name) $
+        isLeft (parseGoldenTest golden) @? "parseGoldenTest didn't fail"
