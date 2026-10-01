@@ -8,8 +8,10 @@ g> g> Goodbye!
 This path has 2 possible repairs. Nothing was changed. Pin a node with @N or exclude one with !{@N} to choose.
   1. @000000000000 -"a"-> new1
     creates: @000000000000 -"a"-> new1
+    use: tag a @000000000001
   2. @000000000000 -"b"-> new1
     creates: @000000000000 -"b"-> new1
+    use: tag b @000000000001
 
 ==========graph-dump==========
 @000000000000{out=[@000000000001 via "target"], in=[@0daCJjMrQel8 via "origin"]}

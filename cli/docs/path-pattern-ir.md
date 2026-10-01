@@ -371,10 +371,54 @@ an existing edge is left-justified relative to it.
   node with `@N` or excluding one with `!{…}` in the path. Only the first
   five are listed, followed by how many more there are: independent pins
   multiply (`mk a/~a & b/~b & c/~c` has 8 repairs).
-  *Deviation:* the agreed design printed a disambiguating surface path per
-  alternative, but surface syntax cannot name a created node shared by
-  several routes (only `/@` joins can), so a faithful surface path does not
-  always exist.
+- **Suggested paths.** Each listed repair is followed by `use: mk <path>`
+  (or the `tag` command) when a path that selects it is found
+  (`Models.PathPattern.Suggest`). The candidate keeps only the `+`
+  alternative the repair came from. `compileAlternatives` compiles the
+  path once more, as `compilePath` does, but keeping with each expression
+  a choice of one side of every `+` that gives it, so the choices for all
+  listed repairs come from that one compilation (stopping once they are
+  found).
+  It then rewrites each step (with `~`
+  pushed to the steps) from the repair's binding of the step's output:
+  bound to an existing node `N` (by evidence or a pin), the step becomes
+  `step/@N`; created, it becomes `step/!{@N…}` excluding the nodes other
+  repairs of the same alternative bind that output to. Rewrites that turn
+  out not to be needed are dropped one at a time, in written order.
+  Sequences are written left-associated, labels unquoted where possible,
+  `@<tags>/t` as `#t`, a regex between quotes it does not contain, and
+  NIDs in full. A candidate is
+  shown only if its text parses back to it and residuating it with the
+  same node lookup gives exactly one repair, equal to the listed one modulo
+  renaming of created nodes. Otherwise the
+  repair is listed without one. Examples: with `0 -a-> 1`, `0 -a-> 2`,
+  `mk a/b` suggests `a/@1/b` and `a/@2/b`; `mk a + b` suggests `a` and `b`;
+  with `6 -b-> 5`, `mk a/b/@5` suggests `a/!{@6}/b/@5` and `a/@6/b/@5`;
+  with node 1, `mk a & a/@1` suggests `a/!{@1} & a/@1` and `a/@1 & a/@1`.
+  The suggestion is a command to type at the prompt afterwards, so it does
+  that repair there. A repair that creates orphans is suggested as
+  `mk --allow-orphans …` (`tag` has no override, so it gets none). When the
+  command ran at another node than the prompt's (inside `at`), the
+  suggestion is prefixed with `at @N`: `at n mk a/b` suggests
+  `at @3 mk a/@1/b`. (The one exception is a block that `cd`s to the `at`
+  target itself before `mk`, since that is indistinguishable from running
+  at the prompt.)
+  There is no suggestion when the repairs differ only in identifying
+  created nodes (`mk a/b/@5 & c/b/@5`: surface syntax cannot name a created
+  node shared by several routes, nor forbid sharing one), or when
+  distribution copies a step into routes that bind its output differently
+  (`a/(a & b)`), since pinning the one surface step pins every copy. These
+  are the deviation from the agreed design, which printed a disambiguating
+  path for every repair. Over the test corpus, 4049 of 4109 listed repairs
+  get one. The cost is bounded: one compilation of the path per error,
+  which costs about as much as the one residuation did (compiling is
+  exponential in the number of written `+` choices either way), and for
+  each of the five listed repairs at most 16 residuations of paths
+  without `+` (rewrites beyond that are kept rather than tried for
+  removal). With `0 -a-> 1`, `0 -a-> 2`,
+  `mk a/b/(@1 + @2 + @)/…` with 12 such factors takes about 8s with
+  suggestions, against about 3s without (`ls` of it takes about 3s).
+  The label error (6) lists no suggestions.
 - **Orphans.** If the patch creates a weakly-connected component with no
   edge to a pre-existing node (for example, `mk @5/a` with 5 missing),
   error, naming the component. An override flag allows it.

@@ -301,12 +301,14 @@ runCommand' = \case
   Make p0 -> do
     p <- expandDirectives p0
     nid <- currentLocation
-    newNodes <- Paths.constructPath False nid p
+    prompt <- gets @History (view #now)
+    newNodes <- Paths.constructPath prompt False nid p
     subsumeUserError @Missing (tagNodesWithTime newNodes)
   MakeAllowingOrphans p0 -> do
     p <- expandDirectives p0
     nid <- currentLocation
-    newNodes <- Paths.constructPath True nid p
+    prompt <- gets @History (view #now)
+    newNodes <- Paths.constructPath prompt True nid p
     subsumeUserError @Missing (tagNodesWithTime newNodes)
   Merge p0 -> do
     p <- expandDirectives p0
@@ -330,7 +332,8 @@ runCommand' = \case
     nid <- currentLocation
     let err = singleErr "the last argument of tag"
     target <- the' err =<< Paths.queryTargets nid q
-    newNodes <- Paths.constructTag nid p target
+    prompt <- gets @History (view #now)
+    newNodes <- Paths.constructTag prompt nid p target
     -- the target and the prefix's created nodes share one timestamp
     subsumeUserError @Missing $ tagNodesWithTime (insertSet target newNodes)
   Text t s -> do

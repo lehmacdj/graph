@@ -88,6 +88,23 @@ spec_compileOracle = describe "compiled patterns agree with the interpreter" do
                      setFromList (concatMap (interpretExpr g corpusCurrent) exprs)
                    )
 
+spec_compileAlternatives :: Spec
+spec_compileAlternatives =
+  describe "each alternative with a choice of + sides" do
+    forM_ corpusQueries \surface -> it (show surface) do
+      let chosen = compileAlternatives surface
+      setFromList (map fst chosen) `shouldBe` (compilePath surface).alternatives
+      forM_ chosen \(alternative, choice) -> do
+        (show choice, hasUnion choice) `shouldBe` (show choice, False)
+        toList (compilePath choice).alternatives `shouldBe` [alternative]
+  where
+    hasUnion = \case
+      _ P.:+ _ -> True
+      l P.:/ r -> hasUnion l || hasUnion r
+      l P.:& r -> hasUnion l || hasUnion r
+      P.Backwards p -> hasUnion p
+      _ -> False
+
 spec_compileEquivalences :: Spec
 spec_compileEquivalences = describe "equivalent paths" do
   forM_ corpusEquivalences \(a, b) ->

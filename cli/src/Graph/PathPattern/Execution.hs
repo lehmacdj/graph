@@ -19,6 +19,7 @@ module Graph.PathPattern.Execution
   )
 where
 
+import Data.List.NonEmpty qualified as NE
 import Error.UserError
 import Graph.Effect
 import Graph.FreshNID
@@ -32,6 +33,7 @@ import Models.PathPattern
 import Models.PathPattern.Compile (compilePath)
 import Models.PathPattern.Match
 import Models.PathPattern.Residuate
+import Models.PathPattern.Suggest (renderSurfacePath, suggestPaths)
 import MyPrelude
 
 type PathReading r = (ReadGraphDataless Text :> r)
@@ -73,20 +75,29 @@ type Constructing r =
     Error UserError :> r
   )
 
--- | Residuate a path and choose its repair, changing nothing.
+-- | Residuate a path and choose its repair, changing nothing. If it is
+-- ambiguous, the error shows, for each listed repair that a path can select,
+-- the command that runs that path for that repair (from the first argument),
+-- if there is one.
 planConstruction ::
   (PathReading r, Error UserError :> r) =>
+  (Residual -> P.Path -> Maybe Text) ->
   Bool ->
   NID ->
   P.Path ->
   Eff r (Maybe Residual)
-planConstruction allowOrphans cur p = do
+planConstruction command allowOrphans cur p = do
   result <- residuate readNode noLabels cur (compilePath p)
   residuation <- either (throwError . OtherError . renderResidualError) pure result
   case chooseRepair residuation of
     NoChange -> pure Nothing
     Impossible -> throwError $ OtherError "This path cannot be constructed."
-    Ambiguous rs -> throwError . OtherError $ renderChoiceError rs
+    Ambiguous rs -> do
+      let shown = take shownRepairs (toList rs)
+      suggestions <-
+        zipWith (\r s -> command r =<< s) shown
+          <$> suggestPaths readNode noLabels cur p rs shown
+      throwError . OtherError $ renderChoiceError suggestions rs
     Apply r -> do
       let orphans = patchOrphans r.patch
       unless (allowOrphans || null orphans) $
@@ -132,13 +143,21 @@ renderResidualError = \case
         Missing _ -> True
         Known _ -> False
 
-renderChoiceError :: NonEmpty Residual -> Text
-renderChoiceError rs =
+-- | The survivors of an ambiguous construction, each with the command that
+-- chooses it where one was found (the suggestions are in survivor order).
+renderChoiceError :: [Maybe Text] -> NonEmpty Residual -> Text
+renderChoiceError suggestions rs =
   "This path has "
     <> tshow (length rs)
     <> " possible repairs. Nothing was changed. Pin a node with @N or "
     <> "exclude one with !{@N} to choose.\n"
-    <> renderNumbered renderResidual rs
+    <> renderNumbered render (NE.zip rs (NE.fromList padded))
+  where
+    -- one per repair; the list covers at most the shown ones
+    padded =
+      take (length rs) (suggestions <> replicate (length rs) Nothing)
+    render (r, suggestion) =
+      renderResidual r <> foldMap ("\n    use: " <>) suggestion
 
 -- | The first 'shownRepairs' items, numbered, and how many more there are.
 renderNumbered :: (a -> Text) -> NonEmpty a -> Text
@@ -176,18 +195,39 @@ applyResidual r = do
     r.patch.edges
   pure names
 
+-- | A suggested command, to be typed at the prompt's location (the first
+-- argument): when the command ran elsewhere (inside @at@), it is prefixed
+-- with @at \@N@.
+atLocation :: NID -> NID -> Text -> Text
+atLocation prompt cur command
+  | prompt == cur = command
+  | otherwise = "at " <> tshow cur <> " " <> command
+
 -- | Apply exactly the chosen repair of a path. Returns the created nodes.
-constructPath :: (Constructing r) => Bool -> NID -> P.Path -> Eff r (Set NID)
-constructPath allowOrphans cur p =
-  planConstruction allowOrphans cur p >>= \case
+-- The first argument is the prompt's location, for the commands suggested
+-- when the path is ambiguous.
+constructPath ::
+  (Constructing r) => NID -> Bool -> NID -> P.Path -> Eff r (Set NID)
+constructPath prompt allowOrphans cur p =
+  planConstruction command allowOrphans cur p >>= \case
     Nothing -> pure mempty
     Just r -> setFromList . toList <$> applyResidual r
+  where
+    command r q =
+      Just . atLocation prompt cur $
+        ( if allowOrphans || not (null (patchOrphans r.patch))
+            then "mk --allow-orphans "
+            else "mk "
+        )
+          <> renderSurfacePath q
 
 -- | Construct the prefix, then link each output of its first witness to the
--- target with an empty label. Returns the created nodes.
-constructTag :: (Constructing r) => NID -> P.Path -> NID -> Eff r (Set NID)
-constructTag cur prefix target = do
-  planned <- planConstruction False cur prefix
+-- target with an empty label. Returns the created nodes. The first argument
+-- is the prompt's location, as for 'constructPath'.
+constructTag ::
+  (Constructing r) => NID -> NID -> P.Path -> NID -> Eff r (Set NID)
+constructTag prompt cur prefix target = do
+  planned <- planConstruction command False cur prefix
   created <- maybe (pure mempty) applyResidual planned
   rs <- resolveQueryWith readNode cur (compilePath prefix)
   case rs of
@@ -196,6 +236,14 @@ constructTag cur prefix target = do
         insertEdge @Text (Edge source "" target)
     _ -> throwError $ OtherError "The tag prefix has no complete match."
   pure (setFromList (toList created))
+  where
+    -- tag cannot create orphans, so it has no command for such a repair
+    command r q
+      | not (null (patchOrphans r.patch)) = Nothing
+      | otherwise =
+          let t = renderSurfacePath q
+              grouped = if ' ' `elem` t then "(" <> t <> ")" else t
+           in Just (atLocation prompt cur ("tag " <> grouped <> " " <> tshow target))
 
 -- * Editing selected edges
 

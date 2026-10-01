@@ -10,6 +10,7 @@
 --    outputs.
 module Models.PathPattern.Compile
   ( compilePath,
+    compileAlternatives,
     Expr (..),
     pushBackwards,
     surfaceExprs,
@@ -98,6 +99,66 @@ fragment = \case
       Stay -> Join Stay anyNode
       e -> e
     combine f a b = setFromList [f x y | x <- toList a, y <- toList b]
+
+-- | Each alternative a path compiles to, with a path without @+@ (a choice
+-- of one side of each, with @~@ pushed down to the steps) that compiles to
+-- just that alternative. This follows 'fragment', keeping a representative
+-- per expression, so it costs about as much as 'compilePath'; the list is
+-- lazy, so finding some alternatives may cost less. An alternative may
+-- occur more than once.
+compileAlternatives :: Path -> [(PatternPath, Path)]
+compileAlternatives p =
+  [ (canonicalize pattern', choice)
+  | (e, choice) <- mapToList (fragmentChoices (pushBackwards p)),
+    Just pattern' <- [glueExpr (supplyRoot e)]
+  ]
+
+-- | 'fragment', with a representative choice for each expression.
+fragmentChoices :: Path -> Map Expr Path
+fragmentChoices = \case
+  p@One -> one Stay p
+  Zero -> mempty
+  p@Wild -> step Out MWild p
+  p@(Literal t) -> step Out (MLiteral t) p
+  p@(RegexMatch r) -> step Out (MRegex r) p
+  p@(Backwards Wild) -> step In MWild p
+  p@(Backwards (Literal t)) -> step In (MLiteral t) p
+  p@(Backwards (RegexMatch r)) -> step In (MRegex r) p
+  Backwards _ -> error "fragmentChoices: pushBackwards leaves ~ only on steps"
+  p@(Absolute nid) -> one (Join Stay (Exactly nid)) p
+  p@(ExcludingNIDs ns) -> one (Join Stay (Except ns)) p
+  -- left-biased, so the first choice written is kept
+  p :+ q -> fragmentChoices p <> fragmentChoices q
+  p :& q ->
+    combine
+      (\a b -> conjoin a [b])
+      (:&)
+      (fragmentChoices p)
+      (fragmentChoices q)
+  p :/ q -> combine sequenceExpr (:/) (atBoundary p) (atBoundary q)
+  where
+    one = singletonMap
+    step d m = one (Step d m)
+    atBoundary :: Path -> Map Expr Path
+    atBoundary p = flip mapKeysFirst (fragmentChoices p) \case
+      Stay -> Join Stay anyNode
+      e -> e
+    -- on a collision, the first choice is kept
+    mapKeysFirst :: (Expr -> Expr) -> Map Expr Path -> Map Expr Path
+    mapKeysFirst f m =
+      mapFromList (reverse [(f k, v) | (k, v) <- mapToList m])
+    combine ::
+      (Expr -> Expr -> Expr) ->
+      (Path -> Path -> Path) ->
+      Map Expr Path ->
+      Map Expr Path ->
+      Map Expr Path
+    combine f g a b =
+      mapFromList . reverse $
+        [ (f x y, g px py)
+        | (x, px) <- mapToList a,
+          (y, py) <- mapToList b
+        ]
 
 -- | Relative paths start at the current node; an @\@N@ root is that node.
 supplyRoot :: Expr -> Expr

@@ -9,8 +9,10 @@ g> g> Goodbye!
 This path has 2 possible repairs. Nothing was changed. Pin a node with @N or exclude one with !{@N} to choose.
   1. @000000000000 -"x"-> @000000000001
     creates: @000000000000 -"x"-> @000000000001
+    use: mk x/@000000000001
   2. @000000000000 -"x"-> @000000000002
     creates: @000000000000 -"x"-> @000000000002
+    use: mk x/@000000000002
 
 ==========graph-dump==========
 @000000000000{out=[@000000000001 via "p", @000000000002 via "p"], in=[@0daCJjMrQel8 via "origin"]}
