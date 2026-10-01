@@ -22,12 +22,13 @@ where
 import Control.Monad.State.Strict qualified as S
 import Data.List.NonEmpty qualified as NE
 import Error.UserError
-import Graph.Effect
 import Graph.FreshNID
+import Graph.GraphMetadataEditing
 import Graph.PathPattern.Resolve (resolveQueryWith)
 import Models.Command (DestinationParents (..))
 import Models.Connect (Connect' (..))
 import Models.Edge
+import Models.NID
 import Models.Node
 import Models.Path.Simple qualified as P
 import Models.PathPattern
@@ -37,10 +38,10 @@ import Models.PathPattern.Residuate
 import Models.PathPattern.Suggest (renderSurfacePath, suggestPaths)
 import MyPrelude
 
-type PathReading r = (ReadGraphDataless Text :> r)
+type PathReading r = (GraphMetadataReading :> r)
 
 readNode :: (PathReading r) => NID -> Eff r (Maybe (Node Text ()))
-readNode n = fmap void <$> getNodeDataless @Text n
+readNode = getNodeMetadata
 
 -- | Query convergence is command policy, not part of compilation.
 queryPath :: P.Path -> PathQuery
@@ -71,7 +72,7 @@ endOf r = maybe r.root (.target) (lastMay r.hops)
 
 type Constructing r =
   ( PathReading r,
-    WriteGraph Text :> r,
+    GraphMetadataEditing :> r,
     FreshNID :> r,
     Error UserError :> r
   )
@@ -207,7 +208,7 @@ shownRepairs = 5
 -- | Create the nodes and edges of a residual. Returns the binding of every
 -- created node.
 applyResidual ::
-  (WriteGraph Text :> r, FreshNID :> r) =>
+  (GraphMetadataEditing :> r, FreshNID :> r) =>
   Residual ->
   Eff r (Map Binding NID)
 applyResidual r = do
@@ -292,7 +293,7 @@ lastEdgeOf r = case reverse r.hops of
 -- new. Unless 'AllParents' is given, the prefix must resolve to one parent
 -- node. Everything is planned before the original edge is deleted.
 relabelPath ::
-  (PathReading r, WriteGraph Text :> r, Error UserError :> r) =>
+  (PathReading r, GraphMetadataEditing :> r, Error UserError :> r) =>
   Bool ->
   DestinationParents ->
   NID ->
@@ -390,7 +391,7 @@ prospectiveEdges cur destination endpoint = do
 -- Returns the selected edges: none means the source matched nothing, so
 -- nothing was done.
 relocateSelectedEdges ::
-  (PathReading r, WriteGraph Text :> r, Error UserError :> r) =>
+  (PathReading r, GraphMetadataEditing :> r, Error UserError :> r) =>
   Bool ->
   NID ->
   NID ->
@@ -417,19 +418,19 @@ relocateSelectedEdges removeOriginal cur destination source = do
   pure (map fst moves)
 
 moveSelectedEdges ::
-  (PathReading r, WriteGraph Text :> r, Error UserError :> r) =>
+  (PathReading r, GraphMetadataEditing :> r, Error UserError :> r) =>
   NID -> NID -> P.Path -> Eff r [Edge Text]
 moveSelectedEdges = relocateSelectedEdges True
 
 copySelectedEdges ::
-  (PathReading r, WriteGraph Text :> r, Error UserError :> r) =>
+  (PathReading r, GraphMetadataEditing :> r, Error UserError :> r) =>
   NID -> NID -> P.Path -> Eff r [Edge Text]
 copySelectedEdges = relocateSelectedEdges False
 
 -- | Delete the last edge of every selected route. Returns the selected
 -- edges: none means the path matched nothing, so nothing was done.
 removeSelectedEdges ::
-  (PathReading r, WriteGraph Text :> r, Error UserError :> r) =>
+  (PathReading r, GraphMetadataEditing :> r, Error UserError :> r) =>
   NID ->
   P.Path ->
   Eff r [Edge Text]

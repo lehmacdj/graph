@@ -18,14 +18,14 @@ import Effect.IOWrapper.FileTypeOracle
 import Effect.IOWrapper.GetTime
 import Effect.IOWrapper.Web
 import Effect.Input
-import Effectful.Provider
+import Effectful.Provider.List
 import Effectful.Readline
 import Effectful.State.Dynamic
 import Error.UserError
 import Error.Warn
-import Graph.Effect
+import Graph.Dualizeable
 import Graph.FreshNID
-import Graph.GraphMetadataEditing
+import Graph.GraphEditing
 import Graph.NodeLocated
 import Models.History
 import Models.NID
@@ -63,11 +63,7 @@ printingErrorsAndWarnings = printWarnings >>> printErrors
 type GraphEditorEffects :: [Effect]
 type GraphEditorEffects =
   [ FreshNID,
-    ReadGraph Text (Maybe ByteString),
-    ReadGraphDataless Text,
-    WriteGraph Text,
-    Provider_ GraphMetadataEditing (),
-    -- GraphDataEditing,
+    ProviderList_ GraphEditing (),
     Dualizeable,
     GetLocation,
     SetLocation,
@@ -82,23 +78,10 @@ runGraphEditorEffects ::
   Eff (Concat GraphEditorEffects r) ~> Eff r
 runGraphEditorEffects =
   runFreshNIDRandom
-    >>> applyGraphPath (runReadGraphDualizeableIO @Text)
-    >>> applyGraphPath (runReadGraphDatalessDualizeableIO @Text)
-    >>> applyGraphPath (runWriteGraphDualizeableIO @Text)
-    >>> runScopedGraphMetadataEditingTransactionally
+    >>> runScopedGraphEditingTransactionally
     >>> subsume
     >>> runLocableHistoryState
     >>> subsume
-
--- | Supply an interpreter that needs the graph's directory with the path from
--- the ambient 'RawGraph' effect. The path is fetched once, when the
--- computation starts.
-applyGraphPath ::
-  (RawGraph :> effs) =>
-  (FilePath -> b -> Eff effs a) ->
-  b ->
-  Eff effs a
-applyGraphPath f b = getGraphFilePath >>= flip f b
 
 type IOWrapperEffects :: [Effect]
 type IOWrapperEffects =

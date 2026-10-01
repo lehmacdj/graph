@@ -4,35 +4,45 @@ module Graph.Utils where
 
 import Control.Lens
 import Error.Missing
-import Graph.Effect
 import Graph.FreshNID
+import Graph.GraphDataEditing
+import Graph.GraphEditing (HasGraph)
+import Graph.GraphMetadataEditing
 import Graph.NodeLocated
 import Models.Connect
 import Models.Edge
+import Models.NID
 import Models.Node
 import MyPrelude
 import Witherable
 
-getNodes :: (ReadGraph t (Maybe ByteString) :> effs) => [NID] -> Eff effs [Node t (Maybe ByteString)]
-getNodes = wither getNode
+getNodes ::
+  forall t effs.
+  (GraphMetadataEditing' t :> effs) =>
+  [NID] ->
+  Eff effs [Node t ()]
+getNodes = wither (getNodeMetadata @t)
 
 getNodeSem ::
-  (Members [ReadGraph t a, Error Missing] effs) =>
+  forall t effs.
+  (Members [GraphMetadataEditing' t, Error Missing] effs) =>
   NID ->
-  Eff effs (Node t a)
+  Eff effs (Node t ())
 getNodeSem nid =
-  getNode nid >>= \case
+  getNodeMetadata @t nid >>= \case
     Nothing -> throwMissing nid
     Just n -> pure n
 
-getNodeDatalessSem ::
-  (Members [ReadGraphDataless t, Error Missing] effs) =>
+-- | Like 'getNodeSem' but also fetch the node's data
+getNodeWithDataSem ::
+  forall t effs.
+  (Members [GraphMetadataEditing' t, GraphDataEditing, Error Missing] effs) =>
   NID ->
   Eff effs (Node t (Maybe ByteString))
-getNodeDatalessSem nid =
-  getNodeDataless nid >>= \case
-    Nothing -> throwMissing nid
-    Just n -> pure n
+getNodeWithDataSem nid = do
+  n <- getNodeSem @t nid
+  d <- getRawData nid
+  pure (n $> d)
 
 -- | Make it so that the node in the graph with n ^. #nid, has supersets of
 -- in and out transitions present in n.
@@ -47,16 +57,17 @@ insertNode ::
 insertNode n = do
   let nid = n ^. #nid
   touchNode @t nid
-  setData @t nid n.rawData
+  setRawData nid n.rawData
   let esOut = toListOf (#outgoing . folded . to (outgoingEdge nid)) n
       esIn = toListOf (#incoming . folded . to (`incomingEdge` nid)) n
   forM_ esIn insertEdge
   forM_ esOut insertEdge
 
 currentNode ::
-  (Members [ReadGraph t (Maybe ByteString), GetLocation, Error Missing] effs) =>
+  forall t effs.
+  (Members [GraphMetadataEditing' t, GraphDataEditing, GetLocation, Error Missing] effs) =>
   Eff effs (Node t (Maybe ByteString))
-currentNode = currentLocation >>= getNodeSem
+currentNode = currentLocation >>= getNodeWithDataSem
 
 -- | nid `transitionsVia` t finds a node that can be transitioned to via the
 -- transition t from the node at nid. ThrowMissing if nid not in graph
@@ -140,8 +151,8 @@ mergeNode ::
 mergeNode survivor other
   | survivor == other = pure ()
   | otherwise = do
-      n1 <- getNodeSem survivor
-      n2 <- getNodeSem other
+      n1 <- getNodeWithDataSem @t survivor
+      n2 <- getNodeSem @t other
       let cin =
             #incoming
               %~ selfLoopify other survivor . (`union` view #incoming n2)
@@ -175,7 +186,7 @@ cloneNode ::
   Eff effs NID
 cloneNode nid = do
   nid' <- freshNID
-  n <- getNodeSem nid
+  n <- getNodeWithDataSem @t nid
   let i = selfLoopify nid nid' n.incoming
       o = selfLoopify nid nid' n.outgoing
   insertNode @t (Node nid' i o n.rawData)
@@ -190,7 +201,7 @@ unsafeRenumberNode ::
   (NID, NID) ->
   Eff effs ()
 unsafeRenumberNode (nid, nid') = do
-  n <- getNodeSem nid
+  n <- getNodeWithDataSem @Text nid
   let i = selfLoopify nid nid' n.incoming
       o = selfLoopify nid nid' n.outgoing
   insertNode @Text (Node nid' i o n.rawData)

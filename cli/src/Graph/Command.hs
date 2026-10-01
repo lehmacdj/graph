@@ -10,7 +10,7 @@ import Effect.IOWrapper.FileSystem
 import Effect.IOWrapper.FileTypeOracle
 import Effect.IOWrapper.GetTime
 import Effect.IOWrapper.Web
-import Effectful.Provider
+import Effectful.Provider.List
 import Effectful.Readline
 import Effectful.State.Dynamic
 import Error.Missing
@@ -18,9 +18,11 @@ import Error.UserError
 import Error.Warn
 import Graph.Augmentation
 import Graph.Check
-import Graph.Effect
+import Graph.Dualizeable
 import Graph.FreshNID
-import Graph.GraphMetadataEditing (GraphMetadataEditing, GraphMetadataReading)
+import Graph.GraphDataEditing
+import Graph.GraphEditing
+import Graph.GraphMetadataEditing
 import Graph.Import.ByteString
 import Graph.Import.FileSystem
 import Graph.NodeLocated
@@ -168,7 +170,7 @@ importUrlOnce uri = do
   ImportedUrls imported <- get
   (nid, imported') <-
     reuseOrImport
-      (fmap isJust . getNodeDataless @Text)
+      (fmap isJust . getNodeMetadata)
       do
         guardDangerousDualizedOperation
         subsumeUserError @Missing (importUrl uri)
@@ -233,7 +235,7 @@ test_reuseOrImport =
 -- a parse error never imports anything.
 expandDirectives ::
   ( Members
-      [ Provider_ GraphMetadataEditing (),
+      [ ProviderList_ GraphEditing (),
         State History,
         State ImportedUrls,
         State EmptyTargets,
@@ -245,8 +247,7 @@ expandDirectives ::
         Dualizeable,
         Readline
       ]
-      effs,
-    HasGraph Text effs
+      effs
   ) =>
   ParsedPath ->
   Eff effs Path
@@ -255,7 +256,7 @@ expandDirectives = expandDirectivesAs Relational
 -- | 'expandDirectives' for a path that is constructed: @+@ is @++@.
 expandConstruction ::
   ( Members
-      [ Provider_ GraphMetadataEditing (),
+      [ ProviderList_ GraphEditing (),
         State History,
         State ImportedUrls,
         State EmptyTargets,
@@ -267,8 +268,7 @@ expandConstruction ::
         Dualizeable,
         Readline
       ]
-      effs,
-    HasGraph Text effs
+      effs
   ) =>
   ParsedPath ->
   Eff effs Path
@@ -276,7 +276,7 @@ expandConstruction = expandDirectivesAs Shared
 
 expandDirectivesAs ::
   ( Members
-      [ Provider_ GraphMetadataEditing (),
+      [ ProviderList_ GraphEditing (),
         State History,
         State ImportedUrls,
         State EmptyTargets,
@@ -288,16 +288,23 @@ expandDirectivesAs ::
         Dualizeable,
         Readline
       ]
-      effs,
-    HasGraph Text effs
+      effs
   ) =>
   UnionKind ->
   ParsedPath ->
   Eff effs Path
 expandDirectivesAs plus p0 = do
-  p <- provide_ (handleDirectivesWith (pure plus) interpretDirective p0)
+  p <- editing (handleDirectivesWith (pure plus) interpretDirective p0)
   checkAlternativesLimit p
   pure p
+
+-- | Edit the graph as one transaction: the edits are written to the graph
+-- when the action finishes, and not at all if it fails.
+editing ::
+  (ProviderList_ GraphEditing () :> effs) =>
+  Eff (GraphMetadataEditing : GraphDataEditing : effs) a ->
+  Eff effs a
+editing = provideList_ @GraphEditing
 
 -- | Fail readably, before compiling it for real, if a path would make more
 -- alternatives than its limit allows.
@@ -328,13 +335,12 @@ checkAlternativesLimit p = case checkAlternatives p of
 type CommandEffects effs =
   ( Members [DisplayImage, Echo, Error UserError, SetLocation, GetLocation, Dualizeable] effs,
     Members [FileSystem, Web, FreshNID, GetTime, Editor, State History] effs,
-    Members [FileTypeOracle, Readline, Warn UserError, Provider_ GraphMetadataEditing ()] effs,
+    Members [FileTypeOracle, Readline, Warn UserError, ProviderList_ GraphEditing ()] effs,
     -- TODO: remove this inclusion of RawGraph + IOE here; probably the
     -- best way to do this is to allow commands to be defined as @stack@
     -- scripts, and then rewrite resolve and any other commands that
     -- require this outside of
-    Members [RawGraph, IOE] effs,
-    HasGraph Text effs
+    Members [RawGraph, IOE] effs
   )
 
 -- | Run one command line.
@@ -373,7 +379,7 @@ runCommand c = evalStateLocal (EmptyTargets []) do
 -- survives without @--keep@, and @--keep@ on another node, or merging two
 -- system nodes, is an error.
 mergeTargets ::
-  (CommandEffects effs) =>
+  (CommandEffects effs, HasGraph Text effs) =>
   [(MergeArgument, NID)] ->
   Eff effs NID
 mergeTargets targets = do
@@ -394,7 +400,7 @@ mergeTargets targets = do
       ++ intercalate ", " (map tshow nids)
   datas <-
     subsumeUserError @Missing $
-      mapM (fmap (view #augmentation) . getNodeSem @Text) nids
+      mapM (fmap (view #augmentation) . getNodeWithDataSem @Text) nids
   -- empty data counts as no data
   let withData = [n | (n, Just d) <- zip nids datas, not (null d)]
       dataOf n = join (lookup n (zip nids datas))
@@ -437,7 +443,7 @@ mergeTargets targets = do
       let s = fromMaybe (headEx nids) systemSurvivor
       case withData of
         [] -> pure ()
-        [d] -> setData @Text s (dataOf d)
+        [d] -> setRawData s (dataOf d)
         _ ->
           throwError . OtherError $
             "mg would discard data: more than one of the nodes has data\n"
@@ -488,7 +494,7 @@ runCommand' = \case
     p <- expandDirectives p0
     nid <- currentLocation
     let err = singleErr "cd"
-    nid' <- the' err =<< Paths.queryTargets nid p
+    nid' <- the' err =<< editing (Paths.queryTargets nid p)
     changeLocation nid'
   NodeId -> currentLocation >>= echo . show
   Dualize -> dualize
@@ -496,14 +502,16 @@ runCommand' = \case
     p <- expandConstruction p0
     nid <- currentLocation
     prompt <- gets @History (view #now)
-    newNodes <- Paths.constructPath prompt False nid p
-    subsumeUserError @Missing (tagNodesWithTime newNodes)
+    editing do
+      newNodes <- Paths.constructPath prompt False nid p
+      subsumeUserError @Missing (tagNodesWithTime newNodes)
   MakeAllowingOrphans p0 -> do
     p <- expandConstruction p0
     nid <- currentLocation
     prompt <- gets @History (view #now)
-    newNodes <- Paths.constructPath prompt True nid p
-    subsumeUserError @Missing (tagNodesWithTime newNodes)
+    editing do
+      newNodes <- Paths.constructPath prompt True nid p
+      subsumeUserError @Missing (tagNodesWithTime newNodes)
   Merge args -> do
     nid <- currentLocation
     targets <- forM (zip [1 :: Int ..] (toList args)) $ \(i, arg) -> do
@@ -512,42 +520,46 @@ runCommand' = \case
             singleErr $
               "argument " ++ tshow i ++ " of mg (" ++ tshow p0 ++ ")"
       p <- expandDirectives p0
-      target <- the' err =<< Paths.queryTargets nid p
+      target <- the' err =<< editing (Paths.queryTargets nid p)
       pure (arg, target)
-    survivor <- mergeTargets targets
+    survivor <- editing (mergeTargets targets)
     changeLocation survivor
   Remove p0 -> do
     p <- expandDirectives p0
     nid <- currentLocation
-    selected <- Paths.removeSelectedEdges nid p
-    when (null selected) $ noticeNoMatch "the path of rm" p0 nid
+    editing do
+      selected <- Paths.removeSelectedEdges nid p
+      when (null selected) $ noticeNoMatch "the path of rm" p0 nid
   RemoveNode p0 -> do
     p <- expandDirectives p0
     nid <- currentLocation
-    nids <- Paths.queryTargets nid p
-    forM_ nids $ deleteNode @Text
+    editing do
+      nids <- Paths.queryTargets nid p
+      forM_ nids $ deleteNode @Text
   Tag p0 q0 -> do
     p <- expandConstruction p0
     q <- expandDirectives q0
     nid <- currentLocation
     let err = singleErr "the last argument of tag"
-    target <- the' err =<< Paths.queryTargets nid q
     prompt <- gets @History (view #now)
-    newNodes <- Paths.constructTag prompt nid p target
-    -- the target and the prefix's created nodes share one timestamp
-    subsumeUserError @Missing $ tagNodesWithTime (insertSet target newNodes)
+    editing do
+      target <- the' err =<< Paths.queryTargets nid q
+      newNodes <- Paths.constructTag prompt nid p target
+      -- the target and the prefix's created nodes share one timestamp
+      subsumeUserError @Missing $ tagNodesWithTime (insertSet target newNodes)
   Text t s -> do
     nid <- currentLocation
     -- text always adds a fresh data node, even if the label already exists
-    vNid <-
-      (subsumeUserError . taggingFreshNodesWithTime)
-        (transitionsFreshVia nid t)
-    setData vNid (Just (encodeUtf8 s))
+    editing do
+      vNid <-
+        (subsumeUserError . taggingFreshNodesWithTime)
+          (transitionsFreshVia nid t)
+      writeRawData vNid (encodeUtf8 s)
   Describe d -> runCommand' (Text "description" d)
   At p0 c -> do
     p <- expandDirectives p0
     nid <- currentLocation
-    locations <- Paths.queryTargets nid p
+    locations <- editing (Paths.queryTargets nid p)
     -- c's directives are expanded per target, relative to that target,
     -- and each target starts from the same history; at leaves the history
     -- (and so the location) as it found it
@@ -558,62 +570,65 @@ runCommand' = \case
       either (throwError . snd) pure result
   Dedup t -> do
     nid <- currentLocation
-    ambiguities <- Paths.queryTargets nid (Literal t)
-    let noSuffix = repeat ""
+    editing do
+      ambiguities <- Paths.queryTargets nid (Literal t)
+      let noSuffix = repeat ""
+          suffixes
+            | length ambiguities < 2 = noSuffix
+            | otherwise = show <$> ([1 ..] :: [Int])
+      forM_ ambiguities $ \amb -> deleteEdge (Edge nid t amb)
+      zipWithM_
+        (\a s -> insertEdge (Edge nid (t <> pack s) a))
+        (toList ambiguities)
         suffixes
-          | length ambiguities < 2 = noSuffix
-          | otherwise = show <$> ([1 ..] :: [Int])
-    forM_ ambiguities $ \amb -> deleteEdge (Edge nid t amb)
-    zipWithM_
-      (\a s -> insertEdge (Edge nid (t <> pack s) a))
-      (toList ambiguities)
-      suffixes
   ShowImage -> do
-    n <- subsumeUserError (currentNode @Text)
+    n <- editing $ subsumeUserError (currentNode @Text)
     forM_ n.rawData $ subsumeUserError @Missing . displayImage . fromStrict
   -- it probably would make sense to factor these commands out into separate
   -- layers of commands that can be handled at different levels
   Import fp -> do
     guardDangerousDualizedOperation
     fp' <- subsumeUserError @IOError . untry $ canonicalizePath fp
-    subsumeUserError $ importDirectory fp' nilNID
+    editing . subsumeUserError $ importDirectory fp' nilNID
     changeLocation nilNID
-  ImportUrl uri -> importUrlOnce uri >>= changeLocation
+  ImportUrl uri -> editing (importUrlOnce uri) >>= changeLocation
   Debug -> do
     echo "current node:"
     currentLocation
-      >>= subsumeUserError . getNodeSem
+      >>= editing . subsumeUserError . getNodeSem @Text
       >>= echo . unpack . nshowWith (\x -> x {showAugmentation = Nothing})
     echo "history:"
     get @History >>= echo . show
-  Check -> reportToConsole @Text (fsck @Text)
-  Fix -> fixErrors @Text (fsck @Text)
+  Check -> editing $ reportToConsole @Text (fsck @Text)
+  Fix -> editing $ fixErrors @Text (fsck @Text)
   Move p0 q0 -> do
     p <- expandDirectives p0
     q <- expandDirectives q0
     nid <- currentLocation
     let err = singleErr "the last argument of mv"
-    target <- the' err =<< Paths.queryTargets nid q
-    selected <- Paths.moveSelectedEdges nid target p
-    when (null selected) $ noticeNoMatch "the first argument of mv" p0 nid
+    editing do
+      target <- the' err =<< Paths.queryTargets nid q
+      selected <- Paths.moveSelectedEdges nid target p
+      when (null selected) $ noticeNoMatch "the first argument of mv" p0 nid
   Rename parents p0 q0 -> do
     p <- expandDirectives p0
     q <- expandDirectives q0
     nid <- currentLocation
-    Paths.relabelPath True parents nid p q
+    editing (Paths.relabelPath True parents nid p q)
   Copy p0 q0 -> do
     p <- expandDirectives p0
     q <- expandDirectives q0
     nid <- currentLocation
-    target <-
-      the' (singleErr "the last argument of cp") =<< Paths.queryTargets nid q
-    selected <- Paths.copySelectedEdges nid target p
-    when (null selected) $ noticeNoMatch "the first argument of cp" p0 nid
+    editing do
+      target <-
+        the' (singleErr "the last argument of cp") =<< Paths.queryTargets nid q
+      selected <- Paths.copySelectedEdges nid target p
+      when (null selected) $ noticeNoMatch "the first argument of cp" p0 nid
   Alias parents p0 q0 -> do
     p <- expandDirectives p0
     q <- expandDirectives q0
     nid <- currentLocation
-    Paths.relabelPath False parents nid p q
+    editing (Paths.relabelPath False parents nid p q)
   Edit -> do
     n <- subsumeUserError @Missing currentLocation
     path <- getGraphFilePath
@@ -633,7 +648,7 @@ runCommand' = \case
   Preview p -> do
     nid <- currentLocation
     p' <- expandDirectives p
-    provide_ do
+    editing do
       -- preview joins its outputs like every other query
       mp <- resolvePath nid (p' Simple.:/ One)
       unless (null mp.nonexistentNodes) $

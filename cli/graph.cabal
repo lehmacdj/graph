@@ -56,7 +56,6 @@ library
       Graph.Check
       Graph.Command
       Graph.Dualizeable
-      Graph.Effect
       Graph.Export.FileSystem
       Graph.FreshNID
       Graph.GraphDataEditing

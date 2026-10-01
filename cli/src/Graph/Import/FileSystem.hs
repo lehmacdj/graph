@@ -11,12 +11,14 @@ import Effect.IOWrapper.Echo
 import Effect.IOWrapper.FileSystem
 import Effect.IOWrapper.GetTime
 import Error.Missing
-import Graph.Effect
 import Graph.FreshNID
+import Graph.GraphEditing (HasGraph)
+import Graph.GraphMetadataEditing
 import Graph.Import.ByteString
 import Graph.Time (taggingFreshNodesWithTime)
 import Graph.Utils
 import Models.Edge
+import Models.NID
 import MyPrelude
 import System.Directory.Tree hiding (readDirectory)
 

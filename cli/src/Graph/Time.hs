@@ -4,10 +4,11 @@ import Data.Set qualified as Set
 import Effect.IOWrapper.GetTime
 import Effectful.State.Dynamic
 import Error.Missing
-import Graph.Effect
 import Graph.FreshNID
+import Graph.GraphEditing (HasGraph)
 import Graph.SystemNodes
 import Graph.Utils
+import Models.NID
 import MyPrelude
 
 -- | Tag the current node with a path to it that represents the current time

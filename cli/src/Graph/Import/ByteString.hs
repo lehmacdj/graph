@@ -5,12 +5,15 @@ import Effect.IOWrapper.GetTime
 import Effect.IOWrapper.Web
 import Error.Missing
 import Error.UserError (UserError)
-import Graph.Effect
 import Graph.FreshNID
+import Graph.GraphDataEditing
+import Graph.GraphEditing (HasGraph)
+import Graph.GraphMetadataEditing
 import Graph.SystemNodes
 import Graph.Time
 import Graph.Utils
 import Models.Edge (Edge, Edge' (..))
+import Models.NID
 import MyPrelude
 
 computeSHA :: ByteString -> Text
@@ -37,6 +40,6 @@ importData ::
   Eff effs NID
 importData d = do
   nnid <- fileHashesNID `transitionsVia` computeSHA d
-  setData @Text nnid (Just d)
+  writeRawData nnid d
   tagWithTime nnid
   pure nnid

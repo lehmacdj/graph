@@ -5,7 +5,6 @@ module Graph.GraphMetadataEditing where
 import DAL.FileSystemOperations.Metadata
 import DAL.FileSystemOperations.MetadataWriteDiff
 import Data.Map.Strict qualified as Map
-import Effectful.Provider
 import Effectful.State.Dynamic
 import Error.UserError
 import Error.Warn
@@ -372,15 +371,3 @@ runGraphMetadataEditingTransactionally action = do
     & runStateLocal @(Map NID (Maybe (Node Text ()))) mempty
     & runStateLocal @(Set NID) mempty
     & (>>= applyGraphDiff)
-
-runScopedGraphMetadataEditingTransactionally ::
-  ( Members
-      [ GraphMetadataFilesystemOperations,
-        GraphMetadataFilesystemOperationsWriteDiff
-      ]
-      r
-  ) =>
-  Eff (Provider_ GraphMetadataEditing () : r) a ->
-  Eff r a
-runScopedGraphMetadataEditingTransactionally =
-  runProvider_ \() -> runGraphMetadataEditingTransactionally

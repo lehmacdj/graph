@@ -6,10 +6,12 @@ module Graph.Check where
 import Control.Lens
 import Effect.IOWrapper.Echo
 import Error.Missing
-import Graph.Effect
+import Graph.GraphMetadataEditing
 import Graph.Utils
 import Models.Connect
 import Models.Edge
+import Models.NID
+import Models.Node
 import MyPrelude
 
 data Direction = In | Out
@@ -66,7 +68,7 @@ dirToCombineEdges d nid c
 
 fixErrors ::
   forall t effs.
-  (WriteGraph t :> effs, ValidTransition t) =>
+  (GraphMetadataEditing' t :> effs, ValidTransition t) =>
   Eff (ReportMissing t : effs) ~> Eff effs
 fixErrors = interpret \_ -> \case
   NodeMissing nid -> touchNode @t nid
@@ -77,10 +79,10 @@ fixErrors = interpret \_ -> \case
 
 fsck ::
   forall t effs.
-  (ReportMissing t :> effs, HasGraph t effs) =>
+  (ReportMissing t :> effs, GraphMetadataEditing' t :> effs, ValidTransition t) =>
   Eff effs ()
 fsck = do
-  ids <- nodeManifest @t
+  ids <- toList <$> listNodes @t
   forM_ ids $ checkNode @t
 
 reportMissingNode ::
@@ -93,7 +95,7 @@ reportMissingNode e = handleError e $ \case
 
 checkConnectExists ::
   forall t effs.
-  (ReportMissing t :> effs, HasGraph t effs) =>
+  (ReportMissing t :> effs, GraphMetadataEditing' t :> effs, ValidTransition t) =>
   Direction ->
   -- | nid of the node to check
   NID ->
@@ -101,7 +103,7 @@ checkConnectExists ::
   Connect t ->
   Eff effs ()
 checkConnectExists dir nid c = reportMissingNode @t $ do
-  n <- getNodeDatalessSem @t nid
+  n <- getNodeSem @t nid
   if has (dirToLens dir . folded . only c) n
     then pure ()
     else connectMissing dir nid c
@@ -111,12 +113,12 @@ swapConnect nid (Connect t nid') = (nid', Connect t nid)
 
 checkNode ::
   forall t effs.
-  (ReportMissing t :> effs, HasGraph t effs) =>
+  (ReportMissing t :> effs, GraphMetadataEditing' t :> effs, ValidTransition t) =>
   NID ->
   Eff effs ()
 checkNode nid = reportMissingNode @t $ do
   -- every node needs to exist (error handled above)
-  n <- getNodeDatalessSem @t nid
+  n <- getNodeSem @t nid
   -- every outgoing edge needs to be present in the corresponding node as incoming
   traverseOf_
     (#outgoing . folded . to (swapConnect nid))

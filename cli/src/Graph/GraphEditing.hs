@@ -1,6 +1,7 @@
 -- | Editing both the metadata and the data of a graph together.
 module Graph.GraphEditing
   ( GraphEditing,
+    HasGraph,
     deletingDataWithNodes,
     runGraphEditingTransactionally,
     runScopedGraphEditingTransactionally,
@@ -14,10 +15,18 @@ import Effectful.Provider.List
 import Graph.Dualizeable
 import Graph.GraphDataEditing
 import Graph.GraphMetadataEditing
+import Models.Node (ValidTransition)
 import MyPrelude
 
 type GraphEditing :: [Effect]
 type GraphEditing = '[GraphMetadataEditing, GraphDataEditing]
+
+-- | Editing a graph with transitions of type @t@: its metadata and its data
+type HasGraph t effs =
+  ( GraphMetadataEditing' t :> effs,
+    GraphDataEditing :> effs,
+    ValidTransition t
+  )
 
 -- | A node's data belongs to the node, so deleting the node deletes its data
 -- too.

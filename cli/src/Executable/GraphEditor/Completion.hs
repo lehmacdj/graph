@@ -5,10 +5,12 @@ import Control.Arrow
 import Control.Lens
 import DAL.Serialization (nodesWithPrefix)
 import Effect.IOWrapper.GetTime
+import Effectful.Provider.List
 import Effectful.Readline (runReadlineNonInteractive)
 import Error.UserError
 import Error.Warn
 import Graph.AppInterpreters
+import Graph.GraphEditing
 import Graph.NodeLocated
 import Graph.PathPattern.Execution (completionTransitions)
 import Models.LegacyPartialPath
@@ -100,7 +102,9 @@ completePath env (i, _) = case getLegacyPartialPath (pack $ takeRelevantFromEnd 
         -- rather than hanging on TAB
         octs <- case checkAlternatives p of
           Left _ -> pure []
-          Right () -> map unpack . toList <$> completionTransitions nid p
+          Right () ->
+            map unpack . toList
+              <$> provideList_ @GraphEditing (completionTransitions nid p)
         pure (fromMaybe i (stripPrefix (reverse end) i), mkCompleter octs end)
 
 completeNID :: Env -> (String, String) -> IO (String, [Completion])

@@ -11,9 +11,9 @@ import Data.Tree qualified as T
 import Effect.IOWrapper.FileTypeOracle
 import Error.UserError
 import Error.Warn
-import Graph.Effect
 import Models.Connect
 import Models.FileTypeInfo
+import Models.NID
 import Models.Node
 import MyPrelude
 import System.Directory.Clone (cloneFile)

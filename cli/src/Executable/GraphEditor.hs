@@ -10,16 +10,16 @@ import Effect.IOWrapper.FileSystem
 import Effect.IOWrapper.FileTypeOracle
 import Effect.IOWrapper.GetTime
 import Effect.IOWrapper.Web
-import Effectful.Provider
+import Effectful.Provider.List
 import Effectful.Readline
 import Effectful.State.Dynamic
 import Executable.GraphEditor.Completion
 import Executable.GraphEditor.Options
 import Graph.AppInterpreters
 import Graph.Command
-import Graph.Effect
+import Graph.Dualizeable
 import Graph.FreshNID
-import Graph.GraphMetadataEditing (GraphMetadataEditing)
+import Graph.GraphEditing
 import Graph.NodeLocated
 import Graph.SystemNodes.Init (createSystemNodes)
 import Models.Command.Parse
@@ -60,8 +60,7 @@ withDefaultQuitParser p s
 repl ::
   ( Members [Echo, DisplayImage, SetLocation, GetLocation, Dualizeable, Readline, IOE] effs,
     Members [FileSystem, Web, FreshNID, GetTime, Editor, State History] effs,
-    Members '[FileTypeOracle, Provider_ GraphMetadataEditing ()] effs,
-    HasGraph Text effs,
+    Members '[FileTypeOracle, ProviderList_ GraphEditing ()] effs,
     -- TODO: these effects are bad and shouldn't be exposed; need to rewrite
     -- commands using them as plugins once plugins are available. See also
     -- lengthier comment at interpretCommand
@@ -132,5 +131,5 @@ geMain = withOptions $ \options -> do
       filesystemBehavior
       env
       do
-        provide_ createSystemNodes
+        provideList_ @GraphEditing createSystemNodes
         maybe repl interpretCommand options.executeExpression
