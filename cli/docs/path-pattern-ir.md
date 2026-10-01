@@ -77,7 +77,7 @@ newtype PathQuery = PathQuery (Set PatternPath)  -- `+` alternatives
 
 ## 2. Compilation (`Path` → `PathQuery`)
 
-1. Handle directives as today (`handleDirectivesWith`).
+1. Expand directives (`handleDirectivesWith`; see *Directives* below).
 2. Apply `~` on the surface, using `main`'s semantics (a true inverse):
    `~(p/q) = ~q/~p`, `~(p & q) = ~p & ~q`, `~(p + q) = ~p + ~q`; node
    specs are unchanged and each step's direction flips.
@@ -113,6 +113,54 @@ follows an `@` alternative, as in `(@ + b)/%targets(@N)`. `%float` and `%unancho
 **Command policy (from the branch).** Query commands append `/@` before
 compiling. Construction (`mk`) does not. The engine never adds defaults
 itself.
+
+**Directives.** Every command that takes a path (`cd`, `ls`, `mk`,
+`mk --allow-orphans`, `mg`, both arguments of `tag`/`t`, `rm`, `rmnf`,
+`at`, `mv`, `cp`, `rn`/`cl` with or without `--all-parents`) accepts
+directives. `dd`, `text` and `desc` take a label, not a path. A command
+keeps its paths unexpanded until it runs, then expands each one
+(`Graph.Command.expandDirectives`), left to right, before it does anything
+else:
+
+- `%history(n)` / `%last` become `@N` for the location `n` steps back in the
+  history *at that moment*, so in `cd a; cd %last` (one line) the `%last`
+  is the location before `cd a`.
+- `%targets(p)` becomes `%never + @N1 + @N2 + …` for the current targets of
+  `p`, queried from the current location. It is a union, so in `mk` each
+  target is one alternative: with `0 -p-> 1`, `mk x/%targets(p)` creates
+  `0 -x-> 1`, but with `0 -p-> 1` and `0 -p-> 2` it is ambiguous (two
+  repairs, nothing changed). `mk #t/""/%targets(q)` and
+  `tag #t %targets(q)` tag `q`'s target. Likewise, as an `rn`/`cl`
+  destination prefix, `%targets(p)` with several targets is a `+` union,
+  so `rn a %targets(p)/z` reports several alternatives rather than
+  `SeveralParents`. When `p` has no targets the expansion is just
+  `%never`; if the command then fails, its error ends with a note naming
+  the empty `%targets(…)` and its position.
+- A URL (`https://…`) imports the resource and becomes its `@N`. The import
+  happens while the command's paths are expanded, so it stays even if the
+  command then fails (e.g. an ambiguous `mk`). Each distinct URL is fetched
+  at most once per command line, however many times it is expanded (in
+  `at`, repeated across `;`, or by `wget`); later uses reuse the first
+  import's `@N` while that node still exists (`mk x/URL ; rmnf x ;
+  mk y/URL` imports it again). A URL extends to the next space, so one
+  followed by `;` (or `)`) needs a space before it: `mk x/URL ; ls`.
+  A command line that fails to parse never runs, so it never imports
+  anything.
+- `%{…}` splices only work in the path quasiquoter. A command line
+  containing one is rejected when it is parsed (`SpliceInCommand`, naming
+  the splice and its position), so nothing on it runs: `mk z; mk q/%{foo}`
+  does not create `z`.
+
+`at p cmd` expands `p` once, then runs `cmd` at each target with the
+location set to that target, so `cmd`'s directives are expanded per
+target: `at * mk z/%targets(@)` adds a `z` loop on every child. The
+history is not changed by `at`: it does not record the targets, so
+`%history(0)` inside `at` is the outer location, not the target, and
+`%last` is the location before it. Each target starts from the history
+`at` was given, and `at` restores it afterwards, so a `cd` inside
+`at (a + b) {cd k; mk y/%last}` neither affects the other target's `%last`
+nor the location after `at`. Only completion (`Models.LegacyPartialPath`) still rejects
+directives at parse time (`IllegalDirective`).
 
 ## 3. Selection
 

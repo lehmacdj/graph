@@ -46,6 +46,7 @@ import System.Console.Terminal.Size qualified as Terminal
 import Utils.Parsing.Common (showSpan)
 import Utils.Prettyprinter qualified as PP
 import Utils.Singleton
+import Utils.Testing hiding (node)
 
 singleErr :: Text -> Set NID -> UserError
 singleErr cmd xs =
@@ -85,10 +86,21 @@ guardDangerousDualizedOperation = do
     outputStrLn "the operation you are attempting may be dangerous in that state"
     promptYesNo "proceed (y/n): " >>= bool (throwError OperationCancelled) (pure ())
 
+-- | URLs already imported by the current command line, so that a URL
+-- (e.g. inside @at@ or repeated in a @;@ sequence) is fetched at most once
+-- per command line.
+newtype ImportedUrls = ImportedUrls (Map URI NID)
+
+-- | The @%targets(…)@ directives the current command expanded to nothing,
+-- rendered with their position (newest first); mentioned if it fails.
+newtype EmptyTargets = EmptyTargets [Text]
+
 interpretDirective ::
   ( Members
       [ GraphMetadataReading,
         State History,
+        State ImportedUrls,
+        State EmptyTargets,
         GetLocation,
         Error UserError,
         GetTime,
@@ -109,11 +121,16 @@ interpretDirective sourceRange = \case
     currentNid <- currentLocation
     p' <- handleDirectivesWith interpretDirective p
     targets <- Paths.queryTargets currentNid p'
+    when (null targets) $
+      let shown =
+            "%targets("
+              ++ tshow p
+              ++ ") at "
+              ++ pack (showSpan sourceRange.startPos sourceRange.endPos)
+       in modify \(EmptyTargets xs) -> EmptyTargets (shown : xs)
     -- this is a little bit inefficient of an embedding, but not too bad
     pure $ foldl' (Simple.:+) Zero (mapSet Absolute targets)
-  HttpResource uri -> do
-    guardDangerousDualizedOperation
-    Absolute <$> subsumeUserError @Missing (importUrl uri)
+  HttpResource uri -> Absolute <$> importUrlOnce uri
   Splice expr ->
     throwError $
       OtherError $
@@ -124,7 +141,112 @@ interpretDirective sourceRange = \case
           ++ pack (showSpan sourceRange.startPos sourceRange.endPos)
           ++ "."
 
-interpretCommand ::
+-- | Import a URL unless this command line already imported it (and that
+-- node still exists: @mk x/URL ; rmnf x ; mk y/URL@ imports it again).
+importUrlOnce ::
+  ( Members
+      [ State ImportedUrls,
+        Error UserError,
+        GetTime,
+        Web,
+        FreshNID,
+        Dualizeable,
+        Readline
+      ]
+      effs,
+    HasGraph Text effs
+  ) =>
+  URI ->
+  Eff effs NID
+importUrlOnce uri = do
+  ImportedUrls imported <- get
+  (nid, imported') <-
+    reuseOrImport
+      (fmap isJust . getNodeDataless @Text)
+      do
+        guardDangerousDualizedOperation
+        subsumeUserError @Missing (importUrl uri)
+      uri
+      imported
+  put (ImportedUrls imported')
+  pure nid
+
+-- | The cache logic of 'importUrlOnce': reuse a cached node if it still
+-- exists, otherwise import (again) and cache the result.
+reuseOrImport ::
+  (Monad m) =>
+  -- | does the node still exist?
+  (NID -> m Bool) ->
+  -- | import the URL
+  m NID ->
+  URI ->
+  Map URI NID ->
+  m (NID, Map URI NID)
+reuseOrImport exists importIt uri cache = do
+  reusable <- case lookup uri cache of
+    Just nid -> bool Nothing (Just nid) <$> exists nid
+    Nothing -> pure Nothing
+  case reusable of
+    Just nid -> pure (nid, cache)
+    Nothing -> do
+      nid <- importIt
+      pure (nid, insertMap uri nid cache)
+
+test_reuseOrImport :: TestTree
+test_reuseOrImport =
+  testGroup
+    "reuseOrImport"
+    [ testCase "imports an uncached URL" $
+        run (const True) mempty @?= ((fresh, singletonMap uri fresh), 1),
+      testCase "reuses a cached node that exists" $
+        run (const True) (singletonMap uri cached)
+          @?= ((cached, singletonMap uri cached), 0),
+      testCase "imports again when the cached node was deleted" $
+        run (const False) (singletonMap uri cached)
+          @?= ((fresh, singletonMap uri fresh), 1)
+    ]
+  where
+    uri = [quri|https://example.com/x|]
+    cached = smallNID 1
+    fresh = smallNID 2
+    -- counts the imports
+    run exists cache =
+      runPureEff . runStateLocal (0 :: Int) $
+        reuseOrImport
+          (pure . exists)
+          (modify (+ 1) $> fresh)
+          uri
+          cache
+
+-- | Expand a command path's directives when the command runs: relative to
+-- the current location (so inside @at p cmd@ they are relative to each of
+-- @p@'s targets) and the history at that moment. A URL is imported here,
+-- before the command does anything else, so the import stays even if the
+-- command then fails (e.g. an ambiguous @mk@). Each URL is imported at
+-- most once per command line. Parsing finishes before any command runs, so
+-- a parse error never imports anything.
+expandDirectives ::
+  ( Members
+      [ Provider_ GraphMetadataEditing (),
+        State History,
+        State ImportedUrls,
+        State EmptyTargets,
+        GetLocation,
+        Error UserError,
+        GetTime,
+        Web,
+        FreshNID,
+        Dualizeable,
+        Readline
+      ]
+      effs,
+    HasGraph Text effs
+  ) =>
+  ParsedPath ->
+  Eff effs Path
+expandDirectives p = provide_ (handleDirectivesWith interpretDirective p)
+
+type CommandEffects effs =
   ( Members [DisplayImage, Echo, Error UserError, SetLocation, GetLocation, Dualizeable] effs,
     Members [FileSystem, Web, FreshNID, GetTime, Editor, State History] effs,
     Members [FileTypeOracle, Readline, Warn UserError, Provider_ GraphMetadataEditing ()] effs,
@@ -134,39 +256,77 @@ interpretCommand ::
     -- require this outside of
     Members [RawGraph, IOE] effs,
     HasGraph Text effs
+  )
+
+-- | Run one command line.
+interpretCommand :: (CommandEffects effs) => Command -> Eff effs ()
+interpretCommand = evalStateLocal (ImportedUrls mempty) . runCommand
+
+-- | Run a command, noting in its error any @%targets(…)@ that it expanded
+-- to nothing (it then means @%never@, which is easy to miss).
+runCommand ::
+  (CommandEffects effs, State ImportedUrls :> effs) =>
+  Command ->
+  Eff effs ()
+runCommand c = evalStateLocal (EmptyTargets []) do
+  result <- tryError @UserError (runCommand' c)
+  EmptyTargets empties <- get
+  case result of
+    Right () -> pure ()
+    Left (_, e)
+      | null empties -> throwError e
+      | otherwise ->
+          throwError . (e <>) . OtherError $
+            "Note: "
+              ++ intercalate ", " (reverse empties)
+              ++ " matched no nodes, so "
+              ++ (if length empties == 1 then "it" else "they")
+              ++ " expanded to %never."
+
+runCommand' ::
+  ( CommandEffects effs,
+    Members [State ImportedUrls, State EmptyTargets] effs
   ) =>
   Command ->
   Eff effs ()
-interpretCommand = \case
-  ChangeNode p -> do
+runCommand' = \case
+  ChangeNode p0 -> do
+    p <- expandDirectives p0
     nid <- currentLocation
     let err = singleErr "cd"
     nid' <- the' err =<< Paths.queryTargets nid p
     changeLocation nid'
   NodeId -> currentLocation >>= echo . show
   Dualize -> dualize
-  Make p -> do
+  Make p0 -> do
+    p <- expandDirectives p0
     nid <- currentLocation
     newNodes <- Paths.constructPath False nid p
     subsumeUserError @Missing (tagNodesWithTime newNodes)
-  MakeAllowingOrphans p -> do
+  MakeAllowingOrphans p0 -> do
+    p <- expandDirectives p0
     nid <- currentLocation
     newNodes <- Paths.constructPath True nid p
     subsumeUserError @Missing (tagNodesWithTime newNodes)
-  Merge p -> do
+  Merge p0 -> do
+    p <- expandDirectives p0
     nid <- currentLocation
     nids <- Paths.orderedQueryTargets nid p
     whenNonNull nids $ \xs -> do
       nid' <- subsumeUserError (Graph.Utils.mergeNodes @Text xs)
       changeLocation nid'
-  Remove p -> do
+  Remove p0 -> do
+    p <- expandDirectives p0
     nid <- currentLocation
     Paths.removeSelectedEdges nid p
-  RemoveNode p -> do
+  RemoveNode p0 -> do
+    p <- expandDirectives p0
     nid <- currentLocation
     nids <- Paths.queryTargets nid p
     forM_ nids $ deleteNode @Text
-  Tag p q -> do
+  Tag p0 q0 -> do
+    p <- expandDirectives p0
+    q <- expandDirectives q0
     nid <- currentLocation
     let err = singleErr "the last argument of tag"
     target <- the' err =<< Paths.queryTargets nid q
@@ -180,11 +340,19 @@ interpretCommand = \case
       (subsumeUserError . taggingFreshNodesWithTime)
         (transitionsFreshVia nid t)
     setData vNid (Just (encodeUtf8 s))
-  Describe d -> interpretCommand (Text "description" d)
-  At p c -> do
+  Describe d -> runCommand' (Text "description" d)
+  At p0 c -> do
+    p <- expandDirectives p0
     nid <- currentLocation
     locations <- Paths.queryTargets nid p
-    forM_ locations $ \nid' -> local @NID (const nid') $ interpretCommand c
+    -- c's directives are expanded per target, relative to that target,
+    -- and each target starts from the same history; at leaves the history
+    -- (and so the location) as it found it
+    history <- get @History
+    forM_ locations $ \nid' -> do
+      result <- tryError @UserError $ local @NID (const nid') (runCommand c)
+      put history
+      either (throwError . snd) pure result
   Dedup t -> do
     nid <- currentLocation
     ambiguities <- Paths.queryTargets nid (Literal t)
@@ -220,20 +388,28 @@ interpretCommand = \case
     get @History >>= echo . show
   Check -> reportToConsole @Text (fsck @Text)
   Fix -> fixErrors @Text (fsck @Text)
-  Move p q -> do
+  Move p0 q0 -> do
+    p <- expandDirectives p0
+    q <- expandDirectives q0
     nid <- currentLocation
     let err = singleErr "the last argument of mv"
     target <- the' err =<< Paths.queryTargets nid q
     Paths.moveSelectedEdges nid target p
-  Rename parents p q -> do
+  Rename parents p0 q0 -> do
+    p <- expandDirectives p0
+    q <- expandDirectives q0
     nid <- currentLocation
     Paths.relabelPath True parents nid p q
-  Copy p q -> do
+  Copy p0 q0 -> do
+    p <- expandDirectives p0
+    q <- expandDirectives q0
     nid <- currentLocation
     target <-
       the' (singleErr "the last argument of cp") =<< Paths.queryTargets nid q
     Paths.copySelectedEdges nid target p
-  Alias parents p q -> do
+  Alias parents p0 q0 -> do
+    p <- expandDirectives p0
+    q <- expandDirectives q0
     nid <- currentLocation
     Paths.relabelPath False parents nid p q
   Edit -> do
@@ -251,11 +427,11 @@ interpretCommand = \case
     -- adding duplicates to the history
     put @History history'
   Seq ps -> do
-    toList ps & traverse_ interpretCommand
+    toList ps & traverse_ runCommand
   Preview p -> do
     nid <- currentLocation
+    p' <- expandDirectives p
     provide_ do
-      p' <- handleDirectivesWith interpretDirective p
       -- preview joins its outputs like every other query
       mp <- resolvePath nid (p' Simple.:/ One)
       unless (null mp.nonexistentNodes) $

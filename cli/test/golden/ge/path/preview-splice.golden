@@ -3,9 +3,14 @@
 ==========input==========
 ls %{foo}
 ==========stdout==========
-g> g> Goodbye!
+g> <interactive>:1:10:
+  |
+1 | ls %{foo}
+  |          ^
+The splice directive %{foo} only works in the path quasiquoter, not the CLI; remove the one at line 1, columns 4-9. (SpliceInCommand)
+
+g> Goodbye!
 ==========stderr==========
-The splice directive %{foo} only works in the path quasiquoter, not the CLI; remove the one at line 1, columns 4-9.
 ==========graph-dump==========
 @000000000000{out=[@000000000001 via "a"], in=[@0daCJjMrQel8 via "origin"]}
 @000000000001{out=[], in=[@000000000000 via "a"]}

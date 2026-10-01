@@ -1,0 +1,38 @@
+==========graph==========
+0 -a-> 1
+0 -b-> 2
+1 -k-> 4
+2 -k-> 5
+==========input==========
+at (a + b) {cd k; mk y/%last}
+nid
+ls */y
+at (a + b) mk h/%history(0)
+ls */h
+cd %last
+nid
+==========stdout==========
+g> g> @000000000000
+g> [0ma/[0;1my[0m[0m [0;34m@000000000000[0m [0m[0m
+[0mb/[0;1my[0m[0m [0;34m@000000000000[0m [0m[0m
+g> g> [0ma/[0;1mh[0m[0m [0;34m@000000000000[0m [0m[0m
+[0mb/[0;1mh[0m[0m [0;34m@000000000000[0m [0m[0m
+g> g> @000000000000
+g> Goodbye!
+==========stderr==========
+==========graph-dump==========
+@000000000000{out=[@000000000001 via "a", @000000000002 via "b"], in=[@000000000001 via "h", @000000000002 via "h", @0daCJjMrQel8 via "origin", @000000000001 via "y", @000000000002 via "y"]}
+@000000000001{out=[@000000000000 via "h", @000000000004 via "k", @000000000000 via "y"], in=[@000000000000 via "a"]}
+@000000000002{out=[@000000000000 via "h", @000000000005 via "k", @000000000000 via "y"], in=[@000000000000 via "b"]}
+@000000000004{out=[], in=[@000000000001 via "k"]}
+@000000000005{out=[], in=[@000000000002 via "k"]}
+@0daCJjMrQel8{out=[@zsBuPkn5mh8F via "file-extensions", @AhQufiPzgyRf via "file-hashes", @3JJvxFUHGAA1 via "historical-special-nodes", @S00KkOYoVpFu via "import-dates", @a0fVkm0kR7KE via "import-urls", @927u9Xyky2pC via "mime-types", @000000000000 via "origin", @pbYxBO6fzBQV via "tags"], in=[]}
+@3JJvxFUHGAA1{out=[@VEfLhuTgZ88Z via "sequence-ids"], in=[@0daCJjMrQel8 via "historical-special-nodes"]}
+@927u9Xyky2pC{out=[], in=[@0daCJjMrQel8 via "mime-types"]}
+@AhQufiPzgyRf{out=[], in=[@0daCJjMrQel8 via "file-hashes"]}
+@S00KkOYoVpFu{out=[], in=[@0daCJjMrQel8 via "import-dates"]}
+@VEfLhuTgZ88Z{out=[], in=[@3JJvxFUHGAA1 via "sequence-ids"]}
+@a0fVkm0kR7KE{out=[], in=[@0daCJjMrQel8 via "import-urls"]}
+@pbYxBO6fzBQV{out=[], in=[@0daCJjMrQel8 via "tags"]}
+@zsBuPkn5mh8F{out=[], in=[@0daCJjMrQel8 via "file-extensions"]}
+==========data==========

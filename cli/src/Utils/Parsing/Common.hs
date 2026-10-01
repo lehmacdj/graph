@@ -12,7 +12,10 @@ import Text.Megaparsec as X hiding (getOffset, getSourcePos, runParser, runParse
 import Text.Megaparsec.State as X (initialPosState)
 
 data CustomParseError
-  = IllegalDirective
+  = -- | A directive where only a plain path is allowed. Commands accept
+    -- directives (expanded when they run); this is for parsers that need a
+    -- plain path, such as completion's 'Models.LegacyPartialPath'.
+    IllegalDirective
       { startPos :: SourcePos,
         endPos :: SourcePos
       }
@@ -20,11 +23,17 @@ data CustomParseError
       { sourceRange :: SourceRange,
         base62Chars :: Text
       }
+  | -- | A @%{…}@ splice in a command: splices only work in the path
+    -- quasiquoter, so the CLI rejects them before running anything.
+    SpliceInCommand
+      { sourceRange :: SourceRange,
+        spliceExpr :: String
+      }
   deriving (Eq, Ord, Show)
 
 instance ShowErrorComponent CustomParseError where
   showErrorComponent (IllegalDirective start end) =
-    "Directives (%targets, %history, %last, URLs) only work in ls/preview; "
+    "Directives (%targets, %history, %last, URLs) are not allowed here; "
       <> "remove the one at "
       <> showSpan start end
       <> ". (IllegalDirective)"
@@ -36,6 +45,12 @@ instance ShowErrorComponent CustomParseError where
       <> ": a NID needs all "
       <> show nidDigits
       <> " base62 characters. (IncompleteFullNID)"
+  showErrorComponent (SpliceInCommand range expr) =
+    "The splice directive %{"
+      <> expr
+      <> "} only works in the path quasiquoter, not the CLI; remove the one at "
+      <> showSpan range.startPos range.endPos
+      <> ". (SpliceInCommand)"
 
 -- | A source span for error messages, e.g. @line 1, columns 4-8@. The end
 -- position is exclusive.

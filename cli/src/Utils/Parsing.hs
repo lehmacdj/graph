@@ -160,8 +160,8 @@ test_customParseErrors =
     "custom parse errors"
     [ testCase "illegal directive" $
         showErrorComponent (IllegalDirective (at 4) (at 9))
-          @?= "Directives (%targets, %history, %last, URLs) only work in "
-          <> "ls/preview; remove the one at line 1, columns 4-8. "
+          @?= "Directives (%targets, %history, %last, URLs) are not allowed "
+          <> "here; remove the one at line 1, columns 4-8. "
           <> "(IllegalDirective)",
       testCase "incomplete NID" $
         showErrorComponent (IncompleteFullNID (SourceRange (at 4) (at 6)) "1")

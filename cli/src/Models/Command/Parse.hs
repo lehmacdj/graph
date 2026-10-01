@@ -9,15 +9,63 @@ import Graph.SystemNodes (tagsNID)
 import Models.Command
 import Models.Path.Parse
 import Models.Path.ParsedPath
-import Models.Path.Simple (Path)
-import Models.Path.Simple qualified as Simple
 import MyPrelude hiding (some, try)
 import Text.Megaparsec (try)
 import Utils.Parsing
 import Utils.Testing
 
-path :: Parser Path
-path = convertDirectivesToErrors pPath
+-- | Every command's path keeps its directives; they are expanded when the
+-- command runs (see 'Graph.Command.expandDirectives').
+path :: Parser ParsedPath
+path = pPath
+
+-- | Splices can never work in the CLI, so a command line containing one is
+-- rejected as a whole, before anything runs (checked after parsing so that
+-- the error isn't lost when @;@ backtracks).
+rejectSplices :: Command -> Parser Command
+rejectSplices c = case concatMap splices (commandPaths c) of
+  [] -> pure c
+  (range, expr) : _ -> customFailure (SpliceInCommand range expr)
+  where
+    splices = \case
+      Backwards q -> splices q
+      l :/ r -> splices l ++ splices r
+      l :+ r -> splices l ++ splices r
+      l :& r -> splices l ++ splices r
+      Directive range (Splice expr) -> [(range, expr)]
+      Directive _ (Targets q) -> splices q
+      _ -> []
+
+-- | Every path a command (and the commands it contains) takes.
+commandPaths :: Command -> [ParsedPath]
+commandPaths = \case
+  ChangeNode p -> [p]
+  Make p -> [p]
+  MakeAllowingOrphans p -> [p]
+  Merge p -> [p]
+  Tag p q -> [p, q]
+  Remove p -> [p]
+  RemoveNode p -> [p]
+  At p c -> p : commandPaths c
+  Move p q -> [p, q]
+  Rename _ p q -> [p, q]
+  Copy p q -> [p, q]
+  Alias _ p q -> [p, q]
+  Seq cs -> concatMap commandPaths (toList cs)
+  Preview p -> [p]
+  Dualize -> []
+  Text _ _ -> []
+  Describe _ -> []
+  Dedup _ -> []
+  NodeId -> []
+  Debug -> []
+  ShowImage -> []
+  Import _ -> []
+  ImportUrl _ -> []
+  Check -> []
+  Fix -> []
+  Edit -> []
+  Back _ -> []
 
 pChangeNode :: Parser Command
 pChangeNode = (command "cd" $> ChangeNode) <*> path
@@ -105,7 +153,7 @@ pBack :: Parser Command
 pBack = (command "back" $> Back) <*> number
 
 pPreview :: Parser Command
-pPreview = (commandFrom ["preview", "ls"] $> Preview) <*> option Wild pPath
+pPreview = (commandFrom ["preview", "ls"] $> Preview) <*> option Wild path
 
 pCommandTerm :: Parser Command
 pCommandTerm =
@@ -144,14 +192,16 @@ pCommand =
 -- | Parse a whole command line; trailing input is an error rather than
 -- silently ignored (@rm a b@ used to run @rm a@).
 parseCommand :: Text -> Either String Command
-parseCommand = left errorBundlePretty . runParser (pCommand <* eof) "<interactive>"
+parseCommand =
+  left errorBundlePretty
+    . runParser (pCommand <* eof >>= rejectSplices) "<interactive>"
 
 test_parseCommand :: TestTree
 test_parseCommand =
   testGroup
     "parseCommand"
     [ "t hello/world @"
-        `parsesTo` Tag (Literal "hello" Simple.:/ Literal "world") One,
+        `parsesTo` Tag (Literal "hello" :/ Literal "world") One,
       "tag \"hello/world\" @"
         `parsesTo` Tag (Literal "hello/world") One,
       "tag hello-world @; tag foo-bar @"
@@ -178,21 +228,20 @@ test_parseCommand =
         `parsesTo` Rename
           AllParents
           (Literal "a")
-          (Literal "c" Simple.:/ Literal "z"),
+          (Literal "c" :/ Literal "z"),
       -- the flag goes before the paths
       parseFails "rn a c/z --all-parents",
       parseFails "rn --all-parents a",
       "{nid; si}" `parsesTo` Seq (twoElemList NodeId ShowImage []),
-      "at #foo nid" `parsesTo` At (Absolute tagsNID Simple.:/ Literal "foo") NodeId,
-      -- "t #something https://example.com/resource"
-      --   `parsesTo` Tag
-      --     (mkAbsolute tagsNID :/ Literal "something")
-      --     (HttpResource [quri|https://example.com/resource|]),
-      -- "t https://example.com/resource #something"
-      --   `parsesTo` ( Tag
-      --                  (mkAbsolute tagsNID :/ Literal "something")
-      --                  (HttpResource [quri|https://example.com/resource|])
-      --              ),
+      "at #foo nid" `parsesTo` At (Absolute tagsNID :/ Literal "foo") NodeId,
+      "t #something https://example.com/resource"
+        `parsesTo` Tag
+          (Absolute tagsNID :/ Literal "something")
+          (directive (HttpResource [quri|https://example.com/resource|])),
+      "t https://example.com/resource #something"
+        `parsesTo` Tag
+          (directive (HttpResource [quri|https://example.com/resource|]))
+          (Absolute tagsNID :/ Literal "something"),
       -- regression test: this used to parse to t ouch hello-world; incorrectly
       -- not requiring a space between t and ouch
       parseFails "touch hello-world",
@@ -203,14 +252,73 @@ test_parseCommand =
       parseFails "rm a b",
       parseFails "mv a b c",
       parseFails "ls foo~bar",
-      "ls a " `parsesTo` Preview (Literal "a")
+      "ls a " `parsesTo` Preview (Literal "a"),
+      -- directives are kept in every command's paths
+      "mk a/%targets(b)"
+        `parsesTo` Make (Literal "a" :/ directive (Targets (Literal "b"))),
+      "t %last %history(2)"
+        `parsesTo` Tag
+          (directive (LocationFromHistory 1))
+          (directive (LocationFromHistory 2)),
+      "rm %targets(a)" `parsesTo` Remove (directive (Targets (Literal "a"))),
+      "cd %last" `parsesTo` ChangeNode (directive (LocationFromHistory 1)),
+      "at %targets(a) mk b/%last"
+        `parsesTo` At
+          (directive (Targets (Literal "a")))
+          (Make (Literal "b" :/ directive (LocationFromHistory 1))),
+      "mv %last %history(2)"
+        `parsesTo` Move
+          (directive (LocationFromHistory 1))
+          (directive (LocationFromHistory 2)),
+      "rn --all-parents a %targets(b)/c"
+        `parsesTo` Rename
+          AllParents
+          (Literal "a")
+          (directive (Targets (Literal "b")) :/ Literal "c"),
+      "mk https://example.com/x"
+        `parsesTo` Make
+          (directive (HttpResource [quri|https://example.com/x|])),
+      -- splices can never work in the CLI: rejected before anything runs
+      "mk %{foo}" `failsWith` "SpliceInCommand",
+      "mk z; mk q/%{foo}" `failsWith` "SpliceInCommand",
+      "ls a/%targets(b/%{foo})" `failsWith` "SpliceInCommand",
+      "t #t %{foo}" `failsWith` "SpliceInCommand",
+      "mk --allow-orphans %last/x"
+        `parsesTo` MakeAllowingOrphans
+          (directive (LocationFromHistory 1) :/ Literal "x"),
+      "mg %targets(a)" `parsesTo` Merge (directive (Targets (Literal "a"))),
+      "rmnf %last" `parsesTo` RemoveNode (directive (LocationFromHistory 1)),
+      "cp %last/x %targets(a)"
+        `parsesTo` Copy
+          (directive (LocationFromHistory 1) :/ Literal "x")
+          (directive (Targets (Literal "a"))),
+      "cl --all-parents %last/x %targets(a)/y"
+        `parsesTo` Alias
+          AllParents
+          (directive (LocationFromHistory 1) :/ Literal "x")
+          (directive (Targets (Literal "a")) :/ Literal "y")
     ]
   where
+    directive = Directive testRange
+    -- a directive's source range is ignored by comparing the 'show'n
+    -- commands (which print the surface syntax) when there are directives
     parsesTo :: Text -> Command -> TestTree
     parsesTo input expected =
       testCase ("parse: " ++ show input) $
-        Right expected
-          @=? parseCommand input
+        let actual = parseCommand input
+         in if hasDirectives expected
+              then Right (show expected) @=? map show actual
+              else Right expected @=? actual
+    hasDirectives c = any (`isInfixOf` show c) ["%", "://"]
+    failsWith :: Text -> String -> TestTree
+    failsWith input code =
+      testCase ("doesn't parse: " ++ show input) $
+        case parseCommand input of
+          Right c -> assertFailure ("parsed to " ++ show c)
+          Left err ->
+            code
+              `isInfixOf` err
+              @? ("expected " ++ code ++ " in:\n" ++ err)
     parseFails :: Text -> TestTree
     parseFails input =
       testCase ("doesn't parse: " ++ show input) $

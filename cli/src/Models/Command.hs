@@ -9,34 +9,38 @@
 -- current node
 -- Commands that act on nodes should also act on at least deterministic
 -- paths and if possible nondeterministic paths too
+--
+-- Every path argument is a 'ParsedPath': its directives (@%targets(…)@,
+-- @%last@, @%history(n)@, URLs) are expanded when the command runs,
+-- relative to the location and history at that moment (see
+-- 'Graph.Command.expandDirectives').
 module Models.Command where
 
 import Models.Path.ParsedPath
-import Models.Path.Simple (Path)
 import MyPrelude
 
 data Command
   = -- | cd
-    ChangeNode Path
+    ChangeNode ParsedPath
   | -- | d
     Dualize
   | -- | mk
-    Make Path
+    Make ParsedPath
   | -- | mk --allow-orphans: also create nodes not connected to the graph
-    MakeAllowingOrphans Path
+    MakeAllowingOrphans ParsedPath
   | -- | mg
-    Merge Path
+    Merge ParsedPath
   | -- | t
-    Tag Path Path
+    Tag ParsedPath ParsedPath
   | Text Text Text
   | -- | desc
     Describe Text
   | -- | rm
-    Remove Path
+    Remove ParsedPath
   | -- | rmnf
-    RemoveNode Path
+    RemoveNode ParsedPath
   | -- | at
-    At Path Command
+    At ParsedPath Command
   | -- | dd
     Dedup Text
   | -- | nid
@@ -54,14 +58,14 @@ data Command
   | -- | fix
     Fix
   | -- | mv
-    Move Path Path
+    Move ParsedPath ParsedPath
   | -- | rn [--all-parents]
-    Rename DestinationParents Path Path
+    Rename DestinationParents ParsedPath ParsedPath
   | -- | cp: copy the selected edge into a destination node
-    Copy Path Path
+    Copy ParsedPath ParsedPath
   | -- | cl, clone, alias [--all-parents]: relabel without deleting the
     -- selected edge
-    Alias DestinationParents Path Path
+    Alias DestinationParents ParsedPath ParsedPath
   | -- | vi
     Edit
   | -- | back: Go back in history by a certain number of steps. Greater number
