@@ -78,6 +78,36 @@ spec_runGraphEditingTransactionally = do
       _ <- runOnDisk dir $ deleteNode n1
       doesFileExist (legacyNodeDataFile dir n1) `shouldReturn` False
       runOnDisk dir listNodes `shouldReturn` singletonSet nilNID
+  it "removes a deleted node's edges from its neighbors" do
+    withEmptyTempGraph \dir -> do
+      runOnDisk dir $ insertEdge (Edge n1 "x" n2)
+      runOnDisk dir $ deleteNode n2
+      fmap (.outgoing)
+        <$> runOnDisk dir (getNodeMetadata n1)
+          `shouldReturn` Just mempty
+  it "creates a node again after deleting it" do
+    withEmptyTempGraph \dir -> do
+      runOnDisk dir $ insertEdge (Edge n1 "x" n2)
+      runOnDisk dir do
+        deleteNode n1
+        insertEdge (Edge n2 "y" n1)
+      node1 <- runOnDisk dir $ getNodeMetadata n1
+      fmap (.incoming) node1 `shouldBe` Just (singletonSet (Connect "y" n2))
+      fmap (.outgoing) node1 `shouldBe` Just mempty
+  it "deletes an edge between nodes it hasn't read" do
+    withEmptyTempGraph \dir -> do
+      runOnDisk dir $ insertEdge (Edge n1 "x" n2)
+      runOnDisk dir $ deleteEdge (Edge n1 "x" n2)
+      result <- runOnDisk dir $ traverse getNodeMetadata [n1, n2]
+      map (fmap (\n -> (n.incoming, n.outgoing))) result
+        `shouldBe` [Just (mempty, mempty), Just (mempty, mempty)]
+  it "doesn't create a node by deleting one of its edges" do
+    withEmptyTempGraph \dir -> do
+      result <- runOnDisk dir do
+        deleteEdge (Edge n1 "x" n2)
+        (,) <$> listNodes <*> getNodeMetadata n1
+      result `shouldBe` (singletonSet nilNID, Nothing)
+      runOnDisk dir listNodes `shouldReturn` singletonSet nilNID
   it "writes nothing if the action fails" do
     withEmptyTempGraph \dir -> do
       _ <- runOnDiskEither dir do

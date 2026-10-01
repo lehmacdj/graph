@@ -35,13 +35,39 @@ instance (Show t) => ShowableAugmentation (NodeEdits t) where
 instance DefaultAugmentation (NodeEdits t) where
   defaultAugmentation = NodeEdits mempty
 
+-- | Apply edits to a node that may not exist: 'Touch' and inserting an edge
+-- create it (with the given augmentation), 'Delete' deletes it, and deleting
+-- an edge of a node that doesn't exist does nothing. A node can be deleted
+-- and then created again.
+applyEditsFrom ::
+  forall t a.
+  (ValidTransition t) =>
+  NID ->
+  -- | Augmentation for a created node
+  a ->
+  Seq (NodeEdit t) ->
+  Maybe (Node t a) ->
+  Maybe (Node t a)
+applyEditsFrom nid a edits m_node = foldl' (flip applyEdit) m_node edits
+  where
+    created = Just . fromMaybe (emptyNode' nid a)
+    applyEdit :: NodeEdit t -> Maybe (Node t a) -> Maybe (Node t a)
+    applyEdit = \case
+      Touch -> created
+      Delete -> const Nothing
+      DeleteIncoming c -> fmap (#incoming %~ deleteSet c)
+      DeleteOutgoing c -> fmap (#outgoing %~ deleteSet c)
+      InsertIncoming c -> fmap (#incoming %~ insertSet c) . created
+      InsertOutgoing c -> fmap (#outgoing %~ insertSet c) . created
+
 applyEdits ::
   forall t a.
-  (ValidTransition t, DefaultAugmentation a) =>
+  (ValidTransition t) =>
   Seq (NodeEdit t) ->
   Node t a ->
   Maybe (Node t a)
-applyEdits edits node = foldM (flip applyEdit) node edits
+applyEdits edits node =
+  applyEditsFrom node.nid node.augmentation edits (Just node)
 
 applyEditsCreatingNonExistent ::
   forall t a.
@@ -50,12 +76,12 @@ applyEditsCreatingNonExistent ::
   NID ->
   Maybe (Node t a) ->
   Maybe (Node t a)
-applyEditsCreatingNonExistent edits nid m_node =
-  applyEdits edits (fromMaybe (emptyNode' nid defaultAugmentation) m_node)
+applyEditsCreatingNonExistent edits nid =
+  applyEditsFrom nid defaultAugmentation edits
 
 applyEditsPreservingDeleted ::
   forall t a.
-  (ValidTransition t, DefaultAugmentation a) =>
+  (ValidTransition t) =>
   Seq (NodeEdit t) ->
   Node t a ->
   Node t a
@@ -63,16 +89,3 @@ applyEditsPreservingDeleted edits node =
   fromMaybe
     (emptyNode' node.nid node.augmentation)
     (applyEdits edits node)
-
-applyEdit ::
-  forall a t.
-  (DefaultAugmentation a, ValidTransition t) =>
-  NodeEdit t ->
-  Node t a ->
-  Maybe (Node t a)
-applyEdit Touch = Just
-applyEdit Delete = const Nothing
-applyEdit (DeleteIncoming c) = Just . (#incoming %~ deleteSet c)
-applyEdit (DeleteOutgoing c) = Just . (#outgoing %~ deleteSet c)
-applyEdit (InsertIncoming c) = Just . (#incoming %~ insertSet c)
-applyEdit (InsertOutgoing c) = Just . (#outgoing %~ insertSet c)

@@ -219,10 +219,19 @@ cachingGraphMetadataEditingInState = interpret \_ -> \case
     n <- readNodeMetadata nid
     modify' @(Map NID (Maybe (Node Text ()))) $ at nid ?~ n
     let cached' = fromMaybe (emptyNode nid) cached
-        n' =
-          n
-            <&> applyEditsPreservingDeleted cached'.augmentation.edits
-              . ($> (cached'.augmentation & lensA @IsThin .~ Fetched))
+        markFetched = lensA @IsThin .~ Fetched
+        n' = case n of
+          Just onDisk ->
+            Just . applyEditsPreservingDeleted cached'.augmentation.edits $
+              onDisk $> markFetched cached'.augmentation
+          -- a node that is not on disk exists only if we created it earlier
+          -- in this transaction
+          Nothing ->
+            applyEditsFrom
+              nid
+              (markFetched cached'.augmentation)
+              cached'.augmentation.edits
+              Nothing
     modify' @GraphWithEdits $ at nid .~ n'
     pure $! void <$> n'
   TouchNode nid -> do
@@ -238,10 +247,11 @@ cachingGraphMetadataEditingInState = interpret \_ -> \case
   DeleteNode nid -> do
     -- ensure node has been loaded if it exists so we know which edges to delete
     n <- cachingGraphMetadataEditingInState (getNodeMetadata nid)
+    -- delete the edges as edits so the neighbors lose them too
     forOf_ (_Just . #outgoing . folded) n $ \n' ->
-      modify' @GraphWithEdits (Models.Graph.deleteEdge (nid `outgoingEdge` n'))
+      cachingGraphMetadataEditingInState (deleteEdge (nid `outgoingEdge` n'))
     forOf_ (_Just . #incoming . folded) n $ \n' ->
-      modify' @GraphWithEdits (Models.Graph.deleteEdge (n' `incomingEdge` nid))
+      cachingGraphMetadataEditingInState (deleteEdge (n' `incomingEdge` nid))
     modify' @(Set NID) $ insertSet nid
     modify' @GraphWithEdits $
       at nid . _Just
@@ -283,30 +293,43 @@ cachingGraphMetadataEditingInState = interpret \_ -> \case
                         (appendEdit (InsertIncoming (inConnect edge)))
           )
   DeleteEdge edge -> do
+    -- an endpoint we haven't loaded gets a thin stub recording the edit, which
+    -- is applied once the node is loaded or written
+    let stub nid edit =
+          emptyNode @() nid
+            $> injDefaultA @(NodeEdits Text) (NodeEdits (singleton edit))
+        deleteOutgoing = DeleteOutgoing (outConnect edge)
+        deleteIncoming = DeleteIncoming (inConnect edge)
     modify' @GraphWithEdits $
       id @_ @GraphWithEdits
-        . ( ix edge.source
-              %~ ( (#outgoing %~ deleteSet (outConnect edge))
-                     . ( #augmentation
-                           %~ updateA @(NodeEdits Text)
-                             (appendEdit (DeleteOutgoing (outConnect edge)))
-                       )
-                 )
+        . ( at edge.source
+              %~ Just . \case
+                Nothing -> stub edge.source deleteOutgoing
+                Just n ->
+                  n
+                    & #outgoing %~ deleteSet (outConnect edge)
+                    & #augmentation
+                      %~ updateA @(NodeEdits Text) (appendEdit deleteOutgoing)
           )
-        . ( ix edge.sink
-              %~ ( (#incoming %~ deleteSet (inConnect edge))
-                     . ( #augmentation
-                           %~ updateA @(NodeEdits Text)
-                             (appendEdit (DeleteIncoming (inConnect edge)))
-                       )
-                 )
+        . ( at edge.sink
+              %~ Just . \case
+                Nothing -> stub edge.sink deleteIncoming
+                Just n ->
+                  n
+                    & #incoming %~ deleteSet (inConnect edge)
+                    & #augmentation
+                      %~ updateA @(NodeEdits Text) (appendEdit deleteIncoming)
           )
   ListNodes -> do
     onDisk <- listNodeMetadata
     -- nodes we created exist even though they haven't been written yet
-    edited <- gets @GraphWithEdits $ keysSet . view #nodeMap
+    Graph nodeMap <- get @GraphWithEdits
+    let created =
+          keysSet . flip Map.filterWithKey nodeMap $ \nid node ->
+            isJust $
+              applyEditsFrom @Text nid () node.augmentation.edits Nothing
     nonExistent <- get @(Set NID)
-    pure $ (onDisk <> edited) `difference` nonExistent
+    pure $ (onDisk <> created) `difference` nonExistent
 
 -- | Update a graph transactionally by first building up a diff of all changes
 -- in memory and then writing them to the disk using
@@ -336,7 +359,9 @@ runGraphMetadataEditingTransactionally action = do
                     ( node ^. #augmentation . lensA @(NodeEdits Text),
                       justIfTrue (has (ix nid) asLoaded) deleted
                     )
-        writeGraphDiff asLoaded (fst <$> allChanges) (Map.mapMaybe snd allChanges)
+        -- a transaction that only read the graph has nothing to write
+        unless (null allChanges) $
+          writeGraphDiff asLoaded (fst <$> allChanges) (Map.mapMaybe snd allChanges)
         pure result
   action
     & inject
