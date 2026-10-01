@@ -26,6 +26,7 @@ import Graph.Import.FileSystem
 import Graph.NodeLocated
 import Graph.PathPattern.Execution qualified as Paths
 import Graph.PathPattern.Resolve (ResolvedPath (..), resolvePath)
+import Graph.SystemNodes (systemNodeNIDs)
 import Graph.Time (tagNodesWithTime, taggingFreshNodesWithTime)
 import Graph.Utils
 import Models.Augmentation.Bundled
@@ -283,6 +284,100 @@ runCommand c = evalStateLocal (EmptyTargets []) do
               ++ (if length empties == 1 then "it" else "they")
               ++ " expanded to %never."
 
+-- | Merge the nodes of @mg@'s arguments (paired with the node each
+-- resolved to) and return the survivor. Arguments resolving to the same node
+-- count once; fewer than two distinct nodes is an error. The @--keep@ node
+-- survives with its NID and data, and the others' data is discarded with a
+-- warning. Without @--keep@ the first argument's node survives, and at most
+-- one node may have data, which the survivor then takes; otherwise nothing
+-- changes and the error asks for @--keep@. Empty data counts as no data. A
+-- system node ('systemNodeNIDs', e.g. the origin) is never merged away: it
+-- survives without @--keep@, and @--keep@ on another node, or merging two
+-- system nodes, is an error.
+mergeTargets ::
+  (CommandEffects effs) =>
+  [(MergeArgument, NID)] ->
+  Eff effs NID
+mergeTargets targets = do
+  let nids = ordNub (map snd targets)
+      describeNode n =
+        tshow n
+          ++ " ("
+          ++ intercalate
+            ", "
+            [ tshow (mergeArgumentPath a)
+            | (a, n') <- targets,
+              n' == n
+            ]
+          ++ ")"
+  when (length nids < 2) . throwError . OtherError $
+    "mg needs at least two distinct nodes to merge\n"
+      ++ "but its arguments all resolved to "
+      ++ intercalate ", " (map tshow nids)
+  datas <-
+    subsumeUserError @Missing $
+      mapM (fmap (view #augmentation) . getNodeSem @Text) nids
+  -- empty data counts as no data
+  let withData = [n | (n, Just d) <- zip nids datas, not (null d)]
+      dataOf n = join (lookup n (zip nids datas))
+      -- the arguments again, keeping the first node with data
+      suggestion =
+        unwords . ("mg" :) $
+          zipWith
+            ( \i (a, _) ->
+                (if Just i == firstWithData then "--keep " else "")
+                  ++ tshow (mergeArgumentPath a)
+            )
+            [0 :: Int ..]
+            targets
+      firstWithData =
+        fst <$> find ((`elem` withData) . snd . snd) (zip [0 ..] targets)
+      kept = snd <$> find (isKept . fst) targets
+      systemNodes = filter (`member` systemNodeNIDs) nids
+      systemError why =
+        throwError . OtherError $
+          "mg cannot merge a system node away (the origin and the special "
+            ++ "nodes such as tags must keep their NIDs)\n"
+            ++ why
+  -- a system node (the origin, tags, …) must survive the merge
+  systemSurvivor <- case systemNodes of
+    [] -> pure Nothing
+    [n]
+      | maybe True (== n) kept -> pure (Just n)
+      | otherwise ->
+          systemError $
+            "--keep would merge away the system node "
+              ++ describeNode n
+              ++ "; keep it instead"
+    _ ->
+      systemError $
+        "more than one system node: "
+          ++ intercalate ", " (map describeNode systemNodes)
+  (survivor, dropped) <- case kept of
+    Just k -> pure (k, filter (/= k) withData)
+    Nothing -> do
+      let s = fromMaybe (headEx nids) systemSurvivor
+      case withData of
+        [] -> pure ()
+        [d] -> setData @Text s (dataOf d)
+        _ ->
+          throwError . OtherError $
+            "mg would discard data: more than one of the nodes has data\n"
+              ++ "nodes with data: "
+              ++ intercalate ", " (map describeNode withData)
+              ++ "\nmark the node to keep (with its data) with --keep, e.g. "
+              ++ suggestion
+              ++ "\n(the others' data is discarded)"
+      pure (s, [])
+  subsumeUserError @Missing $
+    mergeNodes @Text survivor (filter (/= survivor) nids)
+  unless (null dropped) . warnText $
+    "mg --keep "
+      ++ tshow survivor
+      ++ " discarded the data of "
+      ++ intercalate ", " (map describeNode dropped)
+  pure survivor
+
 runCommand' ::
   ( CommandEffects effs,
     Members [State ImportedUrls, State EmptyTargets] effs
@@ -310,13 +405,18 @@ runCommand' = \case
     prompt <- gets @History (view #now)
     newNodes <- Paths.constructPath prompt True nid p
     subsumeUserError @Missing (tagNodesWithTime newNodes)
-  Merge p0 -> do
-    p <- expandDirectives p0
+  Merge args -> do
     nid <- currentLocation
-    nids <- Paths.orderedQueryTargets nid p
-    whenNonNull nids $ \xs -> do
-      nid' <- subsumeUserError (Graph.Utils.mergeNodes @Text xs)
-      changeLocation nid'
+    targets <- forM (zip [1 :: Int ..] (toList args)) $ \(i, arg) -> do
+      let p0 = mergeArgumentPath arg
+          err =
+            singleErr $
+              "argument " ++ tshow i ++ " of mg (" ++ tshow p0 ++ ")"
+      p <- expandDirectives p0
+      target <- the' err =<< Paths.queryTargets nid p
+      pure (arg, target)
+    survivor <- mergeTargets targets
+    changeLocation survivor
   Remove p0 -> do
     p <- expandDirectives p0
     nid <- currentLocation

@@ -28,8 +28,9 @@ data Command
     Make ParsedPath
   | -- | mk --allow-orphans: also create nodes not connected to the graph
     MakeAllowingOrphans ParsedPath
-  | -- | mg
-    Merge ParsedPath
+  | -- | mg [--keep] p1 [--keep] p2 …: merge the nodes, one per argument,
+    -- into one; at most one argument is marked @--keep@ (see 'MergeArgument')
+    Merge (TwoElemList MergeArgument)
   | -- | t
     Tag ParsedPath ParsedPath
   | Text Text Text
@@ -77,6 +78,23 @@ data Command
   | -- | preview, ls
     Preview ParsedPath
   deriving (Eq, Show, Ord, Generic)
+
+-- | An argument of @mg@: a path that must resolve to a single node. The
+-- 'Kept' node survives the merge, keeping its NID and data.
+data MergeArgument
+  = Merged ParsedPath
+  | Kept ParsedPath
+  deriving (Eq, Show, Ord, Generic)
+
+mergeArgumentPath :: MergeArgument -> ParsedPath
+mergeArgumentPath = \case
+  Merged p -> p
+  Kept p -> p
+
+isKept :: MergeArgument -> Bool
+isKept = \case
+  Kept _ -> True
+  Merged _ -> False
 
 -- | How many parents a @rn@/@cl@ destination may create the edge under: the
 -- prefix before its final label must resolve to one node unless the command

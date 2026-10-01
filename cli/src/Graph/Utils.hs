@@ -3,7 +3,6 @@
 module Graph.Utils where
 
 import Control.Lens
-import Data.Monoid (First (First))
 import Error.Missing
 import Graph.Effect
 import Graph.FreshNID
@@ -128,38 +127,44 @@ transitionsViaManyTo s transitions t = do
   secondToLast <- transitionsViaMany s (toList (init transitions))
   insertEdge (Edge secondToLast (last transitions) t)
 
--- | Create one node that has all of the connects of the two nodes combined.
+-- | Merge @other@ into @survivor@: @survivor@ keeps its NID and its data
+-- and gains all of @other@'s edges (edges between the two become self
+-- loops); @other@ and its data are deleted. Merging a node into itself does
+-- nothing.
 mergeNode ::
   forall t effs.
   (Members [FreshNID, Error Missing] effs, HasGraph t effs) =>
   NID ->
   NID ->
-  Eff effs NID
-mergeNode nid1 nid2 = do
-  n1 <- getNodeSem nid1
-  n2 <- getNodeSem nid2
-  let cin = #incoming %~ selfLoopify nid2 nid1 . (`union` view #incoming n2)
-      cout = #outgoing %~ selfLoopify nid2 nid1 . (`union` n2.outgoing)
-      -- take n2's data first so it is easier to overwrite data if desireable
-      cdata = #augmentation .~ alaf First foldMap (view #augmentation) [n2, n1]
-      nNew = cdata . cin . cout $ n1
-  deleteNode @t nid1
-  deleteNode @t nid2
-  insertNode @t nNew
-  pure (nNew ^. #nid)
+  Eff effs ()
+mergeNode survivor other
+  | survivor == other = pure ()
+  | otherwise = do
+      n1 <- getNodeSem survivor
+      n2 <- getNodeSem other
+      let cin =
+            #incoming
+              %~ selfLoopify other survivor . (`union` view #incoming n2)
+          cout =
+            #outgoing %~ selfLoopify other survivor . (`union` n2.outgoing)
+          nNew = cin . cout $ n1
+      deleteNode @t survivor
+      deleteNode @t other
+      insertNode @t nNew
 
--- | Create one node that unions together all of the connects of all of the
--- other nodes
+-- | Merge each of @others@ into @survivor@ (see 'mergeNode'): it keeps its
+-- NID and its data, and the data of the others is discarded.
 mergeNodes ::
   forall t effs mono.
   ( Members [FreshNID, Error Missing] effs,
     HasGraph t effs,
-    IsSequence mono,
+    MonoFoldable mono,
     Element mono ~ NID
   ) =>
-  NonNull mono ->
-  Eff effs NID
-mergeNodes = foldlM1 (mergeNode @t)
+  NID ->
+  mono ->
+  Eff effs ()
+mergeNodes survivor = mapM_ (mergeNode @t survivor)
 
 -- | Create a node with the same transitions as the original node.
 -- Self loops are preserved as self loops on the new node.

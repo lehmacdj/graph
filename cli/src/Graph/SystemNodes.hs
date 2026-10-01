@@ -12,6 +12,7 @@ module Graph.SystemNodes
     sequenceIDsNID,
     fileExtensionsNID,
     mimeTypesNID,
+    systemNodeNIDs,
 
     -- * Full info for special nodes
     SystemNodeInfo (..),
@@ -60,6 +61,22 @@ fileExtensionsNID = unsafeNID "zsBuPkn5mh8F"
 
 mimeTypesNID :: NID
 mimeTypesNID = unsafeNID "927u9Xyky2pC"
+
+-- | Every special node, including the origin.
+systemNodeNIDs :: Set NID
+systemNodeNIDs =
+  setFromList
+    [ originNID,
+      systemNodeNID,
+      tagsNID,
+      importUrlsNID,
+      importDatesNID,
+      fileHashesNID,
+      historicalSystemNodesNID,
+      sequenceIDsNID,
+      fileExtensionsNID,
+      mimeTypesNID
+    ]
 
 data SystemNodeInfo = SystemNodeInfo
   { specialNodeNID :: NID,

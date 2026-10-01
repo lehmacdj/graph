@@ -115,12 +115,12 @@ compiling. Construction (`mk`) does not. The engine never adds defaults
 itself.
 
 **Directives.** Every command that takes a path (`cd`, `ls`, `mk`,
-`mk --allow-orphans`, `mg`, both arguments of `tag`/`t`, `rm`, `rmnf`,
-`at`, `mv`, `cp`, `rn`/`cl` with or without `--all-parents`) accepts
-directives. `dd`, `text` and `desc` take a label, not a path. A command
-keeps its paths unexpanded until it runs, then expands each one
-(`Graph.Command.expandDirectives`), left to right, before it does anything
-else:
+`mk --allow-orphans`, every argument of `mg`, both arguments of
+`tag`/`t`, `rm`, `rmnf`, `at`, `mv`, `cp`, `rn`/`cl` with or without
+`--all-parents`) accepts directives. `dd`, `text` and `desc` take a
+label, not a path. A command keeps its paths unexpanded until it runs,
+then expands each one (`Graph.Command.expandDirectives`), left to right,
+before it does anything else:
 
 - `%history(n)` / `%last` become `@N` for the location `n` steps back in the
   history *at that moment*, so in `cd a; cd %last` (one line) the `%last`
@@ -180,6 +180,23 @@ directives at parse time (`IllegalDirective`).
   `--all-parents` (`rn --all-parents a c/z`) to create the edge under
   each parent, deleting the original once. `mv`/`cp` likewise need a
   destination that resolves to one node.
+- `mg p1 p2 …` merges nodes, one per argument: each argument's targets
+  must be exactly one node (otherwise an error naming the argument, like
+  `cd`'s). `--keep` before at most one argument (`mg a --keep b c`; a
+  second `--keep` is a parse error) marks the survivor, which keeps its
+  NID and its data; the others' edges are moved onto it (edges between
+  merged nodes become self loops) and their data is discarded with a
+  warning naming those nodes. Without `--keep` the first argument's node
+  survives, and at most one of the nodes may have data, which the
+  survivor takes; if several have data nothing changes and the error
+  lists them and suggests `--keep`. Empty data counts as no data. A
+  system node (the origin, the system root, `tags`, …) is never merged
+  away: without `--keep` it is the survivor, and `--keep` on another node
+  or merging two system nodes is an error that changes nothing. Arguments
+  that resolve to the same node count once; fewer than two distinct nodes
+  is an error. Afterwards
+  the location is the survivor. (`mg` used to take one path and merge all
+  its targets, silently keeping the last node's data.)
 - The Guard special case is gone. `x/(@ & a)/@` has routes `[x, x·a]`:
   rename targets `x`, and final edges are `{x, a}`. `x/(a & @)/@` has routes
   `[x·a, x]`, so rename targets `a`. The unjoined `/` copies `x` into both
@@ -533,7 +550,9 @@ full test suite.
   command examples of this document.
 - The existing `mg`/`mg-complex` goldens set up with `mk a + b`, which is
   now an ambiguity error; their input became `mk a & b`, which creates the
-  same two edges, so their expected output is unchanged.
+  same two edges, so their expected output is unchanged. (Since `mg`
+  takes one node per argument, §3, they use `mg a b`; `mg.golden` merges
+  two separately made nodes, and `test/golden/ge/mg/` covers the rest.)
 
 ### Commit 4: removal
 - [x] Delete `Models.NormalizedPath*`, `Models.ResolvedPath`'s old

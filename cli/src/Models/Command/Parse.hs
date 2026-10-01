@@ -42,7 +42,7 @@ commandPaths = \case
   ChangeNode p -> [p]
   Make p -> [p]
   MakeAllowingOrphans p -> [p]
-  Merge p -> [p]
+  Merge args -> map mergeArgumentPath (toList args)
   Tag p q -> [p, q]
   Remove p -> [p]
   RemoveNode p -> [p]
@@ -79,8 +79,23 @@ pMake =
     *> (try (command "--allow-orphans" $> MakeAllowingOrphans) <|> pure Make)
     <*> path
 
+-- | @mg p1 p2 …@: at least two paths; @--keep@ before at most one of them
+-- marks the node that survives.
 pMerge :: Parser Command
-pMerge = (command "mg" $> Merge) <*> path
+pMerge = do
+  args <-
+    command "mg"
+      *> ( twoElemList
+             <$> pMergeArgument
+             <*> pMergeArgument
+             <*> MyPrelude.many pMergeArgument
+         )
+  when (length (filter isKept (toList args)) > 1) $
+    fail "mg takes --keep before at most one of its arguments"
+  pure (Merge args)
+  where
+    pMergeArgument =
+      (try (command "--keep" $> Kept) <*> path) <|> (Merged <$> path)
 
 pTag :: Parser Command
 pTag = (commandFrom ["tag", "t"] $> Tag) <*> path <*> path
@@ -286,7 +301,50 @@ test_parseCommand =
       "mk --allow-orphans %last/x"
         `parsesTo` MakeAllowingOrphans
           (directive (LocationFromHistory 1) :/ Literal "x"),
-      "mg %targets(a)" `parsesTo` Merge (directive (Targets (Literal "a"))),
+      "mg %targets(a) %last"
+        `parsesTo` Merge
+          ( twoElemList
+              (Merged (directive (Targets (Literal "a"))))
+              (Merged (directive (LocationFromHistory 1)))
+              []
+          ),
+      "mg a b c"
+        `parsesTo` Merge
+          ( twoElemList
+              (Merged (Literal "a"))
+              (Merged (Literal "b"))
+              [Merged (Literal "c")]
+          ),
+      "mg --keep a b"
+        `parsesTo` Merge
+          (twoElemList (Kept (Literal "a")) (Merged (Literal "b")) []),
+      "mg a --keep b c"
+        `parsesTo` Merge
+          ( twoElemList
+              (Merged (Literal "a"))
+              (Kept (Literal "b"))
+              [Merged (Literal "c")]
+          ),
+      "mg a b --keep c/d"
+        `parsesTo` Merge
+          ( twoElemList
+              (Merged (Literal "a"))
+              (Merged (Literal "b"))
+              [Kept (Literal "c" :/ Literal "d")]
+          ),
+      "mg --keep %last a"
+        `parsesTo` Merge
+          ( twoElemList
+              (Kept (directive (LocationFromHistory 1)))
+              (Merged (Literal "a"))
+              []
+          ),
+      -- each argument is one node: a single path is not enough
+      parseFails "mg a",
+      parseFails "mg --keep a",
+      parseFails "mg a --keep",
+      "mg --keep a --keep b" `failsWith` "at most one",
+      "mg --keep a b --keep c" `failsWith` "at most one",
       "rmnf %last" `parsesTo` RemoveNode (directive (LocationFromHistory 1)),
       "cp %last/x %targets(a)"
         `parsesTo` Copy
