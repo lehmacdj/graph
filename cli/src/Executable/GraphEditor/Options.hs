@@ -15,7 +15,7 @@ data Options = Options
     createNew :: Bool,
     testOnlyNidGenerationSeed :: Maybe Int,
     testOnlyMonotonicIncreasingDeterministicTime :: Bool,
-    noDryRunWriting :: Bool
+    dryRun :: Bool
   }
   deriving (Show, Generic)
 
@@ -51,8 +51,8 @@ optionsP =
           <> internal
       )
     <*> switch
-      ( long "no-dry-run-writing"
-          <> help "actually write to the filesystem instead of dry-run mode"
+      ( long "dry-run"
+          <> help "print the changes to the graph instead of writing them"
       )
 
 optionsPI :: ParserInfo Options

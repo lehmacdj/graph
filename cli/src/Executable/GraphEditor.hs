@@ -121,9 +121,9 @@ geMain = withOptions $ \options -> do
         | otherwise = interpretTimeAsIO
   let filesystemBehavior :: FilesystemOperationsBehavior
       filesystemBehavior =
-        if options.noDryRunWriting
-          then filesystemBehaviorIO
-          else filesystemBehaviorDryRun
+        if options.dryRun
+          then filesystemBehaviorDryRun
+          else filesystemBehaviorIO
   bracket (initializeInput env.replSettings) cancelInput \inputState ->
     runAppEffects
       (runReadlineHaskeline inputState)
