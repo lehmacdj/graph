@@ -3,6 +3,7 @@
 
 module Graph.Effect
   ( module Graph.Effect,
+    module Graph.Dualizeable,
     NID,
     Node,
   )
@@ -15,6 +16,7 @@ import Effect.Input
 import Effectful.State.Dynamic
 import Error.UserError
 import Error.Warn
+import Graph.Dualizeable
 import Models.Connect
 import Models.Edge
 import Models.Graph (Graph)
@@ -33,27 +35,6 @@ data ReadGraphDataless t :: Effect where
 
 makeEffect ''ReadGraph
 makeEffect ''ReadGraphDataless
-
-newtype IsDual = IsDual {isDual :: Bool}
-  deriving (Show, Eq, Ord, Generic)
-
-type instance Element IsDual = Bool
-
-instance MonoFunctor IsDual where
-  omap f (IsDual x) = IsDual (f x)
-
--- | Intended for use in view patters to process edges when the might be
--- dualized. Also acts generally on edges to process them relative to a
--- dualization parameter.
-ifDualized :: IsDual -> (a -> a) -> a -> a
-ifDualized dual f
-  | dual ^. #isDual = f
-  | otherwise = id
-
-type Dualizeable = State IsDual
-
-dualize :: (Dualizeable :> effs) => Eff effs ()
-dualize = modify @IsDual (omap not)
 
 data WriteGraph t :: Effect where
   -- | make the node with that id exist
@@ -168,16 +149,6 @@ runReadGraphDatalessDualizeableIO dir =
   runInputAsState
     . runReadGraphDatalessIODualizeable dir
     . inject
-
--- run Dualizeable as a state that also flips the graph in a state to
--- reflect its value
--- runDualizeableState
---   :: State (Graph t) :> effs
---   => Eff (Dualizeable : effs) ~> Eff effs
--- runDualizeableState = interpret $ modify dualize
-
-runDualizeable :: Eff (Dualizeable : effs) ~> Eff effs
-runDualizeable = map fst . runStateLocal (IsDual False)
 
 runReadGraphState ::
   forall t d effs a.

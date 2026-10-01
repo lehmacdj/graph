@@ -53,8 +53,16 @@ deleteNodeData_ ::
   Eff effs ()
 deleteNodeData_ nid extension = do
   path <- getNodeDataFile nid extension
+  -- a node without data has nothing to delete
+  let removeIfPresent path' =
+        removeFile path' `catch` \e ->
+          unless (isDoesNotExistError e) (throwIO e)
   embedCatchingErrors $
-    coordinateWriting path False defaultWritingOptions removeFile
+    coordinateWriting
+      path
+      False
+      defaultWritingOptions {forDeleting = True}
+      removeIfPresent
 
 runGraphDataFilesystemOperationsIO ::
   (Members [RawGraph, IOE, Error UserError] r) =>

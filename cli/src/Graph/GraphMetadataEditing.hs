@@ -46,6 +46,9 @@ data GraphMetadataEditing' t :: Effect where
   DeleteNode :: NID -> GraphMetadataEditing' t m ()
   InsertEdge :: Edge t -> GraphMetadataEditing' t m ()
   DeleteEdge :: Edge t -> GraphMetadataEditing' t m ()
+  -- | Every node in the graph. This is expensive for large graphs; it is
+  -- meant for whole-graph operations like consistency checks.
+  ListNodes :: GraphMetadataEditing' t m (Set NID)
 
 makeEffect ''GraphMetadataEditing'
 
@@ -99,6 +102,7 @@ cachingReadingInState = interpret \_ -> \case
   DeleteNode _ -> error "DeleteNode is unsafe while caching reading"
   InsertEdge _ -> error "InsertEdge is unsafe while caching reading"
   DeleteEdge _ -> error "DeleteEdge is unsafe while caching reading"
+  ListNodes -> listNodes @t
 
 runInMemoryGraphMetadataEditing ::
   forall t r a.
@@ -115,6 +119,7 @@ runInMemoryGraphMetadataEditing = interpret \_ -> \case
   DeleteNode nid -> modify @(Graph t ()) $ at nid .~ Nothing
   InsertEdge edge -> modify $ Models.Graph.insertEdge edge
   DeleteEdge edge -> modify $ Models.Graph.deleteEdge edge
+  ListNodes -> gets @(Graph t ()) $ keysSet . view #nodeMap
 
 graphFromGraphMetadataEditing ::
   forall t a.
@@ -179,6 +184,7 @@ runGraphMetadataEditing = interpret \_ -> \case
       writeNodeMetadata (source' & #outgoing %~ deleteSet (outConnect edge))
     withJust sink \sink' ->
       writeNodeMetadata (sink' & #incoming %~ deleteSet (inConnect edge))
+  ListNodes -> listNodeMetadata
 
 type GraphWithEdits = Graph Text (Bundled [NodeEdits Text, IsThin])
 
@@ -295,6 +301,12 @@ cachingGraphMetadataEditingInState = interpret \_ -> \case
                        )
                  )
           )
+  ListNodes -> do
+    onDisk <- listNodeMetadata
+    -- nodes we created exist even though they haven't been written yet
+    edited <- gets @GraphWithEdits $ keysSet . view #nodeMap
+    nonExistent <- get @(Set NID)
+    pure $ (onDisk <> edited) `difference` nonExistent
 
 -- | Update a graph transactionally by first building up a diff of all changes
 -- in memory and then writing them to the disk using

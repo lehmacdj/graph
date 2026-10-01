@@ -55,10 +55,13 @@ library
       Graph.Augmentation
       Graph.Check
       Graph.Command
+      Graph.Dualizeable
       Graph.Effect
       Graph.Export.FileSystem
       Graph.FreshNID
       Graph.GraphDataEditing
+      Graph.GraphEditing
+      Graph.GraphEditingSpec
       Graph.GraphMetadataEditing
       Graph.Import.ByteString
       Graph.Import.FileSystem

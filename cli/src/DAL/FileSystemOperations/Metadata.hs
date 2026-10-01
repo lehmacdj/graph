@@ -5,6 +5,7 @@ module DAL.FileSystemOperations.Metadata where
 import DAL.DTO
 import DAL.DirectoryFormat
 import DAL.RawGraph
+import DAL.Serialization (getAllNodeIds)
 import Error.UserError
 import Models.NID
 import Models.Node
@@ -16,6 +17,8 @@ data GraphMetadataFilesystemOperations :: Effect where
   ReadNodeMetadata :: NID -> GraphMetadataFilesystemOperations m (Maybe (Node Text ()))
   WriteNodeMetadata :: Node Text () -> GraphMetadataFilesystemOperations m ()
   DeleteNodeMetadata :: NID -> GraphMetadataFilesystemOperations m ()
+  -- | Every node that has metadata stored in the graph
+  ListNodeMetadata :: GraphMetadataFilesystemOperations m (Set NID)
 
 makeEffect ''GraphMetadataFilesystemOperations
 
@@ -80,6 +83,7 @@ runGraphMetadataFilesystemOperationsIO useCoordination = interpret \_ -> \case
     writeNodeMetadata_ useCoordination f node
   DeleteNodeMetadata nid ->
     deleteNodeMetadata_ useCoordination =<< getMetadataFile nid
+  ListNodeMetadata -> setFromList <$> (getAllNodeIds =<< getGraphFilePath)
 
 runGraphMetadataFilesystemOperationsDryRun ::
   (Members [RawGraph, IOE, Error UserError] r) =>
@@ -91,3 +95,5 @@ runGraphMetadataFilesystemOperationsDryRun useCoordination = interpret \_ -> \ca
     runGraphMetadataFilesystemOperationsIO useCoordination (readNodeMetadata nid)
   WriteNodeMetadata node -> say $ "Would write node: " <> tshow node
   DeleteNodeMetadata nid -> say $ "Would delete node with NID: " <> tshow nid
+  ListNodeMetadata ->
+    runGraphMetadataFilesystemOperationsIO useCoordination listNodeMetadata
