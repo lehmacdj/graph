@@ -54,10 +54,12 @@ packNSString nsString = do
   cString <- [C.exp| const char *{ [$(NSString *nsString) UTF8String] } |]
   decodeUtf8 <$> ByteString.unsafePackCString cString
 
-nsArray_arrayWithObjects :: Ptr C.Id -> CUInt -> IO (Ptr NSArray)
-nsArray_arrayWithObjects objects count =
+-- | Returns an owned (+1) array; the caller must release it.
+nsArray_initWithObjects :: Ptr C.Id -> CUInt -> IO (Ptr NSArray)
+nsArray_initWithObjects objects count =
   [C.exp| NSArray *{
-    [NSArray arrayWithObjects: $(id *objects) count: $(unsigned int count)]
+    [[NSArray alloc]
+      initWithObjects: $(id *objects) count: $(unsigned int count)]
   }
   |]
 

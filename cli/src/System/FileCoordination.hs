@@ -141,11 +141,10 @@ allocateNSURL path isDirectory = allocate
 allocateNSArray :: Objc a => [Ptr a] -> ResourceT IO (ReleaseKey, Ptr NSArray)
 allocateNSArray objects =
   allocate
-    -- I'm pretty sure nsArray_arrayWithObjects copies the array so we don't
-    -- need to worry about the array being deallocated before the NSArray is
-    -- used
+    -- the NSArray copies the C array, so it may be freed once the NSArray is
+    -- created
     (withArrayLen objects $ \len objectsPtr ->
-      nsArray_arrayWithObjects (castPtr objectsPtr) (fromIntegral len))
+      nsArray_initWithObjects (castPtr objectsPtr) (fromIntegral len))
     m_release
 
 -- * Relatively raw darwin wrappers
