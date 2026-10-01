@@ -375,10 +375,7 @@ runCommand' = \case
     fp' <- subsumeUserError @IOError . untry $ canonicalizePath fp
     subsumeUserError $ importDirectory fp' nilNID
     changeLocation nilNID
-  ImportUrl uri -> do
-    guardDangerousDualizedOperation
-    nid <- subsumeUserError (importUrl uri)
-    changeLocation nid
+  ImportUrl uri -> importUrlOnce uri >>= changeLocation
   Debug -> do
     echo "current node:"
     currentLocation

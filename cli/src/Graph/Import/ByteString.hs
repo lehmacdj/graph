@@ -4,6 +4,7 @@ import Data.Digest.Pure.SHA
 import Effect.IOWrapper.GetTime
 import Effect.IOWrapper.Web
 import Error.Missing
+import Error.UserError (UserError)
 import Graph.Effect
 import Graph.FreshNID
 import Graph.SystemNodes
@@ -16,7 +17,7 @@ computeSHA :: ByteString -> Text
 computeSHA = pack . showDigest . sha512 . fromStrict
 
 importUrl ::
-  ( Members [Web, FreshNID, Error Missing, GetTime] effs,
+  ( Members [Web, FreshNID, Error Missing, Error UserError, GetTime] effs,
     HasGraph Text effs
   ) =>
   URI ->
