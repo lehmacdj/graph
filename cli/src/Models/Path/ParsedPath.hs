@@ -3,6 +3,8 @@ module Models.Path.ParsedPath
     pattern Backwards,
     pattern (:/),
     pattern (:+),
+    pattern (:||),
+    pattern (:++),
     pattern (:&),
     module X,
     spec_showPath,
@@ -27,9 +29,21 @@ pattern l :/ r = l ::/ r
 infixl 7 :/
 
 pattern (:+) :: ParsedPath -> ParsedPath -> ParsedPath
-pattern l :+ r = l ::+ r
+pattern l :+ r = DefaultUnion () l r
 
 infixl 5 :+
+
+-- | @l | r@, a relational union
+pattern (:||) :: ParsedPath -> ParsedPath -> ParsedPath
+pattern l :|| r = Union Relational l r
+
+infixl 5 :||
+
+-- | @l ++ r@, a shared union
+pattern (:++) :: ParsedPath -> ParsedPath -> ParsedPath
+pattern l :++ r = Union Shared l r
+
+infixl 5 :++
 
 pattern (:&) :: ParsedPath -> ParsedPath -> ParsedPath
 pattern l :& r = l ::& r
@@ -46,7 +60,25 @@ infixl 6 :&
   ExcludingNIDs,
   Backwards,
   (:/),
-  (:+),
+  Union,
+  DefaultUnion,
+  (:&),
+  Directive
+  #-}
+
+{-# COMPLETE
+  One,
+  Zero,
+  Wild,
+  Literal,
+  RegexMatch,
+  Absolute,
+  ExcludingNIDs,
+  Backwards,
+  (:/),
+  (:||),
+  (:++),
+  DefaultUnion,
   (:&),
   Directive
   #-}

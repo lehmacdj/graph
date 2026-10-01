@@ -97,7 +97,9 @@ via1 p sep = do
 convertDirectivesToErrors ::
   Parser (Path' 'WithDirectives) ->
   Parser (Path' 'Prenormal)
-convertDirectivesToErrors p = handleDirectivesWith interpretDirective =<< p
+convertDirectivesToErrors p =
+  -- completion only looks paths up, so + is a query's union
+  handleDirectivesWith (pure Relational) interpretDirective =<< p
   where
     interpretDirective SourceRange {..} _ = do
       customFailure (IllegalDirective startPos endPos)

@@ -22,8 +22,15 @@ pathExp :: String -> Q Exp
 pathExp s = case runParser (whitespace *> pPath <* eof) "" (pack s) of
   Left err ->
     fail $ "Parse error in path quasi-quoter: " ++ errorBundlePretty err
-  Right result -> handleDirectivesQ interpretSplice result
+  Right result -> handleDirectivesQ rejectPlus interpretSplice result
   where
+    -- which union @+@ means depends on the command, and a quasiquoted path
+    -- has none, so it must say which one it means
+    rejectPlus =
+      fail
+        "+ is not allowed in the path quasi-quoter, because its meaning \
+        \depends on the command; write | (each copy chooses its own side) \
+        \or ++ (one side for the whole path) instead"
     -- Interpret Splice directives as TH expressions
     interpretSplice :: SourceRange -> Directive 'WithDirectives -> Q Exp
     interpretSplice _ = \case

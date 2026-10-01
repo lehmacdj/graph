@@ -2,7 +2,8 @@ module Models.Path.Simple
   ( Path,
     pattern Backwards,
     pattern (:/),
-    pattern (:+),
+    pattern (:||),
+    pattern (:++),
     pattern (:&),
     module X,
   )
@@ -21,10 +22,17 @@ pattern l :/ r = l ::/ r
 
 infixl 7 :/
 
-pattern (:+) :: Path -> Path -> Path
-pattern l :+ r = l ::+ r
+-- | @l | r@, a relational union
+pattern (:||) :: Path -> Path -> Path
+pattern l :|| r = Union Relational l r
 
-infixl 5 :+
+infixl 5 :||
+
+-- | @l ++ r@, a shared union
+pattern (:++) :: Path -> Path -> Path
+pattern l :++ r = Union Shared l r
+
+infixl 5 :++
 
 pattern (:&) :: Path -> Path -> Path
 pattern l :& r = l ::& r
@@ -41,6 +49,23 @@ infixl 6 :&
   ExcludingNIDs,
   Backwards,
   (:/),
-  (:+),
+  Union,
+  WithMaxAlternatives,
+  (:&)
+  #-}
+
+{-# COMPLETE
+  One,
+  Zero,
+  Wild,
+  Literal,
+  RegexMatch,
+  Absolute,
+  ExcludingNIDs,
+  Backwards,
+  (:/),
+  (:||),
+  (:++),
+  WithMaxAlternatives,
   (:&)
   #-}

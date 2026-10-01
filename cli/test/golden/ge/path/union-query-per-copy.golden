@@ -1,0 +1,36 @@
+==========graph==========
+0 -photos-> 1
+1 -y2024-> 3
+0 -pictures-> 2
+2 -vacation-> 3
+3 -beach-> 4
+==========input==========
+ls (photos + pictures)/(y2024 & vacation)
+ls (photos | pictures)/(y2024 & vacation)
+ls (photos ++ pictures)/(y2024 & vacation)
+ls %override({plus = shared}, (photos + pictures)/(y2024 & vacation))
+ls (photos/y2024 & pictures/vacation)/beach
+==========stdout==========
+g> [0mphotos/[0;1my2024[0m[0m [0;34m@000000000003[0m [0m[0m
+g> [0mphotos/[0;1my2024[0m[0m [0;34m@000000000003[0m [0m[0m
+g> no targets
+g> no targets
+g> [0mphotos/y2024/[0;1mbeach[0m[0m [0;34m@000000000004[0m [0m[0m
+g> Goodbye!
+==========stderr==========
+==========graph-dump==========
+@000000000000{out=[@000000000001 via "photos", @000000000002 via "pictures"], in=[@0daCJjMrQel8 via "origin"]}
+@000000000001{out=[@000000000003 via "y2024"], in=[@000000000000 via "photos"]}
+@000000000002{out=[@000000000003 via "vacation"], in=[@000000000000 via "pictures"]}
+@000000000003{out=[@000000000004 via "beach"], in=[@000000000002 via "vacation", @000000000001 via "y2024"]}
+@000000000004{out=[], in=[@000000000003 via "beach"]}
+@0daCJjMrQel8{out=[@zsBuPkn5mh8F via "file-extensions", @AhQufiPzgyRf via "file-hashes", @3JJvxFUHGAA1 via "historical-special-nodes", @S00KkOYoVpFu via "import-dates", @a0fVkm0kR7KE via "import-urls", @927u9Xyky2pC via "mime-types", @000000000000 via "origin", @pbYxBO6fzBQV via "tags"], in=[]}
+@3JJvxFUHGAA1{out=[@VEfLhuTgZ88Z via "sequence-ids"], in=[@0daCJjMrQel8 via "historical-special-nodes"]}
+@927u9Xyky2pC{out=[], in=[@0daCJjMrQel8 via "mime-types"]}
+@AhQufiPzgyRf{out=[], in=[@0daCJjMrQel8 via "file-hashes"]}
+@S00KkOYoVpFu{out=[], in=[@0daCJjMrQel8 via "import-dates"]}
+@VEfLhuTgZ88Z{out=[], in=[@3JJvxFUHGAA1 via "sequence-ids"]}
+@a0fVkm0kR7KE{out=[], in=[@0daCJjMrQel8 via "import-urls"]}
+@pbYxBO6fzBQV{out=[], in=[@0daCJjMrQel8 via "tags"]}
+@zsBuPkn5mh8F{out=[], in=[@0daCJjMrQel8 via "file-extensions"]}
+==========data==========

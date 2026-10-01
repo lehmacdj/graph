@@ -2,6 +2,9 @@
 
 module Models.Path
   ( Path' (..),
+    UnionKind (..),
+    AlternativesLimit (..),
+    OverrideSettings (..),
     PathPhase (..),
     SourceRange (..),
     Directive (..),
@@ -9,6 +12,8 @@ module Models.Path
     IncompleteNID (..),
     HoleVal,
     DirectiveVal,
+    DefaultUnionVal,
+    WithMaxAlternativesVal,
     Path'Constraints,
     handleDirectivesWith,
     handleDirectivesQ,
@@ -71,8 +76,17 @@ data Path' (p :: PathPhase)
     Backwards' (Path' p)
   | -- | sequence
     Path' p ::/ Path' p
-  | -- | union
-    Path' p ::+ Path' p
+  | -- | A union: @l | r@ ('Relational') or @l ++ r@ ('Shared').
+    Union UnionKind (Path' p) (Path' p)
+  | -- | @l + r@, a union whose kind depends on the command: like a
+    -- directive it is lowered by 'handleDirectivesWith', which is told the
+    -- kind. It does not exist in the Prenormal phase.
+    DefaultUnion (DefaultUnionVal p) (Path' p) (Path' p)
+  | -- | The path inside @%override({max-alternatives = …}, p)@, after
+    -- directives are expanded: compilation allows the relational unions in
+    -- it to make this many alternatives. It only exists in the Prenormal
+    -- phase.
+    WithMaxAlternatives (WithMaxAlternativesVal p) AlternativesLimit (Path' p)
   | -- | intersection
     Path' p ::& Path' p
   | -- | Directives are command like things that may appear in paths.
@@ -87,9 +101,28 @@ data Path' (p :: PathPhase)
 
 infixl 7 ::/
 
-infixl 5 ::+
-
 infixl 6 ::&
+
+-- | How a union chooses when distribution copies it.
+data UnionKind
+  = -- | @|@: every copy chooses a side independently
+    Relational
+  | -- | @++@: one side is chosen for the whole path, and copies share it
+    Shared
+  deriving (Eq, Ord, Show, Generic, Lift)
+
+-- | How many alternatives compiling a path may make.
+data AlternativesLimit = AtMostAlternatives Int | UnlimitedAlternatives
+  deriving (Eq, Ord, Show, Generic, Lift)
+
+-- | Settings an @%override@ changes; 'Nothing' keeps the outer one.
+data OverrideSettings = OverrideSettings
+  { -- | the union @+@ is lowered to
+    plus :: Maybe UnionKind,
+    -- | how many alternatives the relational unions inside may make
+    maxAlternatives :: Maybe AlternativesLimit
+  }
+  deriving (Eq, Ord, Show, Generic, Lift)
 
 -- * Trees that grow machinery
 
@@ -120,6 +153,18 @@ data IncompleteNID = IncompleteNID
   }
   deriving (Generic, Eq, Ord, Show, Lift)
 
+-- | @+@ only exists before directives are expanded.
+type family DefaultUnionVal (p :: PathPhase) :: Type where
+  DefaultUnionVal 'Partial = ()
+  DefaultUnionVal 'WithDirectives = ()
+  DefaultUnionVal 'Prenormal = Void
+
+-- | 'WithMaxAlternatives' only exists after directives are expanded.
+type family WithMaxAlternativesVal (p :: PathPhase) :: Type where
+  WithMaxAlternativesVal 'Partial = Void
+  WithMaxAlternativesVal 'WithDirectives = Void
+  WithMaxAlternativesVal 'Prenormal = ()
+
 type family NIDVal (p :: PathPhase) :: Type where
   NIDVal 'Partial = Either IncompleteNID NID
   NIDVal 'WithDirectives = NID
@@ -147,6 +192,9 @@ data Directive (p :: PathPhase)
   | -- | Triggers the import of a URI to the graph, resolving to the NID of
     -- the imported resource
     HttpResource URI
+  | -- | @%override({plus = shared}, p)@: expand @p@ with these settings
+    -- changed; an inner override wins
+    Override OverrideSettings (Path' p)
   deriving (Generic)
 
 deriving instance
@@ -170,6 +218,27 @@ showsDirective = \case
   LocationFromHistory i -> showString "%history(" . shows i . showString ")"
   Targets p -> showString "%targets(" . shows p . showString ")"
   Splice expr -> showString "%{" . showString expr . showString "}"
+  Override settings p ->
+    showString "%override({"
+      . showString (intercalate ", " (overrideSettingsList settings))
+      . showString "}, "
+      . shows p
+      . showString ")"
+  where
+    overrideSettingsList OverrideSettings {plus, maxAlternatives} =
+      [ "plus = " <> case k of
+          Shared -> "shared"
+          Relational -> "relational"
+      | Just k <- [plus]
+      ]
+        ++ [ "max-alternatives = " <> showLimit l
+           | Just l <- [maxAlternatives]
+           ]
+
+showLimit :: AlternativesLimit -> String
+showLimit = \case
+  AtMostAlternatives n -> show n
+  UnlimitedAlternatives -> "unlimited"
 
 instance
   (Path'Constraints Show p) =>
@@ -182,12 +251,16 @@ type family DirectiveVal (p :: PathPhase) :: Type where
   DirectiveVal 'WithDirectives = Directive 'WithDirectives
   DirectiveVal 'Prenormal = Void
 
+-- | Expand directives, then lower each @+@ to a union kind: the one given
+-- (or fail in @g@), or the one the innermost @%override@ around it sets. A directive expands to a path that may
+-- contain @+@ (e.g. @%targets@), which is lowered like any other.
 handleDirectivesWith ::
-  (Applicative g) =>
-  (SourceRange -> Directive 'WithDirectives -> g (Path' 'Prenormal)) ->
+  (Monad g) =>
+  g UnionKind ->
+  (SourceRange -> Directive 'WithDirectives -> g (Path' 'WithDirectives)) ->
   Path' 'WithDirectives ->
   g (Path' 'Prenormal)
-handleDirectivesWith interpretDirective = \case
+handleDirectivesWith plus interpretDirective = \case
   One -> pure One
   Zero -> pure Zero
   Wild -> pure Wild
@@ -195,28 +268,29 @@ handleDirectivesWith interpretDirective = \case
   Literal x -> pure (Literal x)
   Absolute nid -> pure (Absolute nid)
   ExcludingNIDs nids -> pure (ExcludingNIDs nids)
-  Backwards' p ->
-    Backwards' <$> handleDirectivesWith interpretDirective p
-  l ::/ r ->
-    (::/)
-      <$> handleDirectivesWith interpretDirective l
-      <*> handleDirectivesWith interpretDirective r
-  l ::+ r ->
-    (::+)
-      <$> handleDirectivesWith interpretDirective l
-      <*> handleDirectivesWith interpretDirective r
-  l ::& r ->
-    (::&)
-      <$> handleDirectivesWith interpretDirective l
-      <*> handleDirectivesWith interpretDirective r
-  Directive ann directive -> interpretDirective ann directive
+  Backwards' p -> Backwards' <$> go p
+  l ::/ r -> (::/) <$> go l <*> go r
+  Union k l r -> Union k <$> go l <*> go r
+  DefaultUnion () l r -> Union <$> plus <*> go l <*> go r
+  l ::& r -> (::&) <$> go l <*> go r
+  Directive _ (Override settings p) ->
+    maybe id (WithMaxAlternatives ()) settings.maxAlternatives
+      <$> handleDirectivesWith
+        (maybe plus pure settings.plus)
+        interpretDirective
+        p
+  Directive ann directive -> go =<< interpretDirective ann directive
+  where
+    go = handleDirectivesWith plus interpretDirective
 
 handleDirectivesQ ::
+  -- | the kind of each @+@
+  Q UnionKind ->
   -- | function returning a TH expression that has type @Path 'Prenormal@
   (SourceRange -> Directive 'WithDirectives -> Q Exp) ->
   Path' 'WithDirectives ->
   Q Exp
-handleDirectivesQ interpretDirective = \case
+handleDirectivesQ plus interpretDirective = \case
   One -> [|One|]
   Zero -> [|Zero|]
   Wild -> [|Wild|]
@@ -224,24 +298,25 @@ handleDirectivesQ interpretDirective = \case
   Literal x -> [|Literal x|]
   Absolute nid -> [|Absolute nid|]
   ExcludingNIDs nids -> [|ExcludingNIDs nids|]
-  Backwards' p ->
-    [|Backwards' $(handleDirectivesQ interpretDirective p)|]
-  l ::/ r ->
-    [|
-      $(handleDirectivesQ interpretDirective l)
-        ::/ $(handleDirectivesQ interpretDirective r)
-      |]
-  l ::+ r ->
-    [|
-      $(handleDirectivesQ interpretDirective l)
-        ::+ $(handleDirectivesQ interpretDirective r)
-      |]
-  l ::& r ->
-    [|
-      $(handleDirectivesQ interpretDirective l)
-        ::& $(handleDirectivesQ interpretDirective r)
-      |]
+  Backwards' p -> [|Backwards' $(go p)|]
+  l ::/ r -> [|$(go l) ::/ $(go r)|]
+  Union k l r -> [|Union k $(go l) $(go r)|]
+  DefaultUnion () l r -> do
+    k <- plus
+    [|Union k $(go l) $(go r)|]
+  l ::& r -> [|$(go l) ::& $(go r)|]
+  Directive _ (Override settings p) ->
+    let inner =
+          handleDirectivesQ
+            (maybe plus pure settings.plus)
+            interpretDirective
+            p
+     in case settings.maxAlternatives of
+          Nothing -> inner
+          Just l -> [|WithMaxAlternatives () l $inner|]
   Directive ann directive -> interpretDirective ann directive
+  where
+    go = handleDirectivesQ plus interpretDirective
 
 -- | Convert a PartialPath to a ParsedPath, collecting all parse errors.
 -- Returns either a list of all errors found, or a successfully parsed path.
@@ -263,7 +338,8 @@ parsedFromPartial = (.either) . go
       ExcludingNIDs nids -> ExcludingNIDs <$> traverseSetInOrder goNID nids
       Backwards' p -> Backwards' <$> go p
       l ::/ r -> (::/) <$> go l <*> go r
-      l ::+ r -> (::+) <$> go l <*> go r
+      Union k l r -> Union k <$> go l <*> go r
+      DefaultUnion () l r -> DefaultUnion () <$> go l <*> go r
       l ::& r -> (::&) <$> go l <*> go r
       Directive ann directive -> Directive ann <$> goDirective directive
       Hole err -> Validation (Left (singletonNN err))
@@ -280,11 +356,18 @@ parsedFromPartial = (.either) . go
       LocationFromHistory i -> pure (LocationFromHistory i)
       Targets p -> Targets <$> go p
       Splice s -> pure (Splice s)
+      Override settings p -> Override settings <$> go p
 
 -- | helper for producing the necessary constraints for a Path'
 type Path'Constraints ::
   (Type -> Constraint) -> PathPhase -> Constraint
-type Path'Constraints c p = (c (DirectiveVal p), c (HoleVal p), c (NIDVal p))
+type Path'Constraints c p =
+  ( c (DirectiveVal p),
+    c (HoleVal p),
+    c (NIDVal p),
+    c (DefaultUnionVal p),
+    c (WithMaxAlternativesVal p)
+  )
 
 -- * Instances
 
@@ -313,7 +396,19 @@ showsPath d (l ::/ r) =
 showsPath d (l ::& r) =
   showParen (d > 6) $
     showsPrec 7 l . showString " & " . showsPrec 7 r
-showsPath d (l ::+ r) =
+showsPath d (Union k l r) =
+  showParen (d > 5) $
+    showsPrec 6 l . showString (unionSymbol k) . showsPrec 6 r
+  where
+    unionSymbol Relational = " | "
+    unionSymbol Shared = " ++ "
+showsPath _ (WithMaxAlternatives _ l p) =
+  showString "%override({max-alternatives = "
+    . showString (showLimit l)
+    . showString "}, "
+    . shows p
+    . showString ")"
+showsPath d (DefaultUnion _ l r) =
   showParen (d > 5) $
     showsPrec 6 l . showString " + " . showsPrec 6 r
 showsPath _ (Directive _ d) = shows d

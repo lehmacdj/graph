@@ -87,7 +87,7 @@ test_pLegacyPartialPath =
     "pLegacyPartialPath"
     [ "#" `parsesTo` LegacyPartialPath [Absolute tagsNID] "",
       "#foo" `parsesTo` LegacyPartialPath [Absolute tagsNID] "foo",
-      "(a + b)" `parsesTo` MissingSlash [Literal "a" :+ Literal "b"],
+      "(a + b)" `parsesTo` MissingSlash [Literal "a" :|| Literal "b"],
       "a/b/" `parsesTo` LegacyPartialPath [Literal "a", Literal "b"] "",
       "a/b" `parsesTo` LegacyPartialPath [Literal "a"] "b"
     ]

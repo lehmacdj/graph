@@ -1,0 +1,125 @@
+==========graph==========
+0 -c1-> 1
+0 -c2-> 2
+0 -c3-> 3
+0 -c4-> 4
+0 -c5-> 5
+0 -c6-> 6
+0 -c7-> 7
+0 -c8-> 8
+0 -c9-> 9
+0 -c10-> 10
+0 -c11-> 11
+0 -c12-> 12
+0 -c13-> 13
+0 -c14-> 14
+0 -c15-> 15
+0 -c16-> 16
+0 -c17-> 17
+0 -c18-> 18
+0 -c19-> 19
+0 -c20-> 20
+0 -c21-> 21
+0 -c22-> 22
+0 -c23-> 23
+0 -c24-> 24
+0 -c25-> 25
+0 -c26-> 26
+0 -c27-> 27
+0 -c28-> 28
+0 -c29-> 29
+0 -c30-> 30
+0 -c31-> 31
+0 -c32-> 32
+0 -c33-> 33
+0 -c34-> 34
+0 -c35-> 35
+0 -c36-> 62
+0 -c37-> 63
+0 -c38-> 64
+0 -c39-> 65
+0 -c40-> 66
+0 -x-> 70
+7 -a-> 70
+0 -q-> 71
+23 -a-> 71
+5 -a-> 72
+5 -b-> 72
+9 -a-> 73
+12 -b-> 73
+==========input==========
+ls x & %targets(*)/a
+ls %override({max-alternatives = unlimited}, x & %targets(*)/a)
+ls %targets(*)/(a & b)
+ls %override({plus = shared}, %targets(*)/(a & b))
+ls %override({max-alternatives = 2000}, %targets(*)/(a & b))
+rm q & %targets(*)/a
+ls q
+ls c23/a
+==========stdout==========
+g> [0m[0;1mx[0m[0m [0;34m@000000000018[0m [0m[0m
+g> [0m[0;1mx[0m[0m [0;34m@000000000018[0m [0m[0m
+g> g> [0m[0;1ma[0m[0m [0;34m@00000000001A[0m [0m[0m
+g> [0m[0;1ma[0m[0m [0;34m@00000000001A[0m [0m[0m
+[0m[0;1ma[0m[0m [0;34m@00000000001B[0m [0m[0m
+g> g> no targets
+g> [0mc23/[0;1ma[0m[0m [0;34m@000000000019[0m [0m[0m
+g> Goodbye!
+==========stderr==========
+This path would make more than 1000 alternatives, since each copy distribution makes of a | union chooses its side. Write ++ for a union whose side every copy shares, wrap the path in %override({plus = shared}, …), narrow it, or raise the limit with %override({max-alternatives = …}, …). (TooManyAlternatives)
+==========graph-dump==========
+@000000000000{out=[@000000000001 via "c1", @00000000000A via "c10", @00000000000B via "c11", @00000000000C via "c12", @00000000000D via "c13", @00000000000E via "c14", @00000000000F via "c15", @00000000000G via "c16", @00000000000H via "c17", @00000000000I via "c18", @00000000000J via "c19", @000000000002 via "c2", @00000000000K via "c20", @00000000000L via "c21", @00000000000M via "c22", @00000000000N via "c23", @00000000000O via "c24", @00000000000P via "c25", @00000000000Q via "c26", @00000000000R via "c27", @00000000000S via "c28", @00000000000T via "c29", @000000000003 via "c3", @00000000000U via "c30", @00000000000V via "c31", @00000000000W via "c32", @00000000000X via "c33", @00000000000Y via "c34", @00000000000Z via "c35", @000000000010 via "c36", @000000000011 via "c37", @000000000012 via "c38", @000000000013 via "c39", @000000000004 via "c4", @000000000014 via "c40", @000000000005 via "c5", @000000000006 via "c6", @000000000007 via "c7", @000000000008 via "c8", @000000000009 via "c9", @000000000018 via "x"], in=[@0daCJjMrQel8 via "origin"]}
+@000000000001{out=[], in=[@000000000000 via "c1"]}
+@000000000002{out=[], in=[@000000000000 via "c2"]}
+@000000000003{out=[], in=[@000000000000 via "c3"]}
+@000000000004{out=[], in=[@000000000000 via "c4"]}
+@000000000005{out=[@00000000001A via "a", @00000000001A via "b"], in=[@000000000000 via "c5"]}
+@000000000006{out=[], in=[@000000000000 via "c6"]}
+@000000000007{out=[@000000000018 via "a"], in=[@000000000000 via "c7"]}
+@000000000008{out=[], in=[@000000000000 via "c8"]}
+@000000000009{out=[@00000000001B via "a"], in=[@000000000000 via "c9"]}
+@00000000000A{out=[], in=[@000000000000 via "c10"]}
+@00000000000B{out=[], in=[@000000000000 via "c11"]}
+@00000000000C{out=[@00000000001B via "b"], in=[@000000000000 via "c12"]}
+@00000000000D{out=[], in=[@000000000000 via "c13"]}
+@00000000000E{out=[], in=[@000000000000 via "c14"]}
+@00000000000F{out=[], in=[@000000000000 via "c15"]}
+@00000000000G{out=[], in=[@000000000000 via "c16"]}
+@00000000000H{out=[], in=[@000000000000 via "c17"]}
+@00000000000I{out=[], in=[@000000000000 via "c18"]}
+@00000000000J{out=[], in=[@000000000000 via "c19"]}
+@00000000000K{out=[], in=[@000000000000 via "c20"]}
+@00000000000L{out=[], in=[@000000000000 via "c21"]}
+@00000000000M{out=[], in=[@000000000000 via "c22"]}
+@00000000000N{out=[@000000000019 via "a"], in=[@000000000000 via "c23"]}
+@00000000000O{out=[], in=[@000000000000 via "c24"]}
+@00000000000P{out=[], in=[@000000000000 via "c25"]}
+@00000000000Q{out=[], in=[@000000000000 via "c26"]}
+@00000000000R{out=[], in=[@000000000000 via "c27"]}
+@00000000000S{out=[], in=[@000000000000 via "c28"]}
+@00000000000T{out=[], in=[@000000000000 via "c29"]}
+@00000000000U{out=[], in=[@000000000000 via "c30"]}
+@00000000000V{out=[], in=[@000000000000 via "c31"]}
+@00000000000W{out=[], in=[@000000000000 via "c32"]}
+@00000000000X{out=[], in=[@000000000000 via "c33"]}
+@00000000000Y{out=[], in=[@000000000000 via "c34"]}
+@00000000000Z{out=[], in=[@000000000000 via "c35"]}
+@000000000010{out=[], in=[@000000000000 via "c36"]}
+@000000000011{out=[], in=[@000000000000 via "c37"]}
+@000000000012{out=[], in=[@000000000000 via "c38"]}
+@000000000013{out=[], in=[@000000000000 via "c39"]}
+@000000000014{out=[], in=[@000000000000 via "c40"]}
+@000000000018{out=[], in=[@000000000007 via "a", @000000000000 via "x"]}
+@000000000019{out=[], in=[@00000000000N via "a"]}
+@00000000001A{out=[], in=[@000000000005 via "a", @000000000005 via "b"]}
+@00000000001B{out=[], in=[@000000000009 via "a", @00000000000C via "b"]}
+@0daCJjMrQel8{out=[@zsBuPkn5mh8F via "file-extensions", @AhQufiPzgyRf via "file-hashes", @3JJvxFUHGAA1 via "historical-special-nodes", @S00KkOYoVpFu via "import-dates", @a0fVkm0kR7KE via "import-urls", @927u9Xyky2pC via "mime-types", @000000000000 via "origin", @pbYxBO6fzBQV via "tags"], in=[]}
+@3JJvxFUHGAA1{out=[@VEfLhuTgZ88Z via "sequence-ids"], in=[@0daCJjMrQel8 via "historical-special-nodes"]}
+@927u9Xyky2pC{out=[], in=[@0daCJjMrQel8 via "mime-types"]}
+@AhQufiPzgyRf{out=[], in=[@0daCJjMrQel8 via "file-hashes"]}
+@S00KkOYoVpFu{out=[], in=[@0daCJjMrQel8 via "import-dates"]}
+@VEfLhuTgZ88Z{out=[], in=[@3JJvxFUHGAA1 via "sequence-ids"]}
+@a0fVkm0kR7KE{out=[], in=[@0daCJjMrQel8 via "import-urls"]}
+@pbYxBO6fzBQV{out=[], in=[@0daCJjMrQel8 via "tags"]}
+@zsBuPkn5mh8F{out=[], in=[@0daCJjMrQel8 via "file-extensions"]}
+==========data==========

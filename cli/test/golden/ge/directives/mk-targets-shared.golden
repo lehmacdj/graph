@@ -1,0 +1,45 @@
+==========graph==========
+0 -p-> 1
+0 -p-> 2
+==========input==========
+mk a/%targets(p)/(x & y)
+mk %override({plus = relational}, a/%targets(p)/(x & y))
+==========stdout==========
+g> g> g> Goodbye!
+==========stderr==========
+This path has 2 possible repairs. Nothing was changed. Pin a node with @N or exclude one with !{@N} to choose.
+  1. @000000000000 -"a"-> @000000000001 -"x"-> new1 & @000000000000 -"a"-> @000000000001 -"y"-> new2
+    creates: @000000000000 -"a"-> @000000000001, @000000000001 -"x"-> new1, @000000000001 -"y"-> new2
+    use: mk a/@000000000001/(x & y)
+  2. @000000000000 -"a"-> @000000000002 -"x"-> new1 & @000000000000 -"a"-> @000000000002 -"y"-> new2
+    creates: @000000000000 -"a"-> @000000000002, @000000000002 -"x"-> new1, @000000000002 -"y"-> new2
+    use: mk a/@000000000002/(x & y)
+
+This path has 4 possible repairs. Nothing was changed. Pin a node with @N or exclude one with !{@N} to choose.
+  1. @000000000000 -"a"-> @000000000001 -"x"-> new1 & @000000000000 -"a"-> @000000000001 -"y"-> new2
+    creates: @000000000000 -"a"-> @000000000001, @000000000001 -"x"-> new1, @000000000001 -"y"-> new2
+    use: mk a/@000000000001/(x & y)
+  2. @000000000000 -"a"-> @000000000002 -"x"-> new1 & @000000000000 -"a"-> @000000000002 -"y"-> new2
+    creates: @000000000000 -"a"-> @000000000002, @000000000002 -"x"-> new1, @000000000002 -"y"-> new2
+    use: mk a/@000000000002/(x & y)
+  3. @000000000000 -"a"-> @000000000001 -"x"-> new1 & @000000000000 -"a"-> @000000000002 -"y"-> new2
+    creates: @000000000000 -"a"-> @000000000001, @000000000000 -"a"-> @000000000002, @000000000001 -"x"-> new1, @000000000002 -"y"-> new2
+    use: mk a/@000000000001/x & a/@000000000002/y
+  4. @000000000000 -"a"-> @000000000002 -"x"-> new1 & @000000000000 -"a"-> @000000000001 -"y"-> new2
+    creates: @000000000000 -"a"-> @000000000001, @000000000000 -"a"-> @000000000002, @000000000001 -"y"-> new2, @000000000002 -"x"-> new1
+    use: mk a/@000000000002/x & a/@000000000001/y
+
+==========graph-dump==========
+@000000000000{out=[@000000000001 via "p", @000000000002 via "p"], in=[@0daCJjMrQel8 via "origin"]}
+@000000000001{out=[], in=[@000000000000 via "p"]}
+@000000000002{out=[], in=[@000000000000 via "p"]}
+@0daCJjMrQel8{out=[@zsBuPkn5mh8F via "file-extensions", @AhQufiPzgyRf via "file-hashes", @3JJvxFUHGAA1 via "historical-special-nodes", @S00KkOYoVpFu via "import-dates", @a0fVkm0kR7KE via "import-urls", @927u9Xyky2pC via "mime-types", @000000000000 via "origin", @pbYxBO6fzBQV via "tags"], in=[]}
+@3JJvxFUHGAA1{out=[@VEfLhuTgZ88Z via "sequence-ids"], in=[@0daCJjMrQel8 via "historical-special-nodes"]}
+@927u9Xyky2pC{out=[], in=[@0daCJjMrQel8 via "mime-types"]}
+@AhQufiPzgyRf{out=[], in=[@0daCJjMrQel8 via "file-hashes"]}
+@S00KkOYoVpFu{out=[], in=[@0daCJjMrQel8 via "import-dates"]}
+@VEfLhuTgZ88Z{out=[], in=[@3JJvxFUHGAA1 via "sequence-ids"]}
+@a0fVkm0kR7KE{out=[], in=[@0daCJjMrQel8 via "import-urls"]}
+@pbYxBO6fzBQV{out=[], in=[@0daCJjMrQel8 via "tags"]}
+@zsBuPkn5mh8F{out=[], in=[@0daCJjMrQel8 via "file-extensions"]}
+==========data==========

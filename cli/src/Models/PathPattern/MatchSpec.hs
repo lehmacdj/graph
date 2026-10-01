@@ -198,5 +198,5 @@ spec_matchExamples = describe "matching examples" do
         firsts =
           map
             (map (.label) . (.hops) . firstSelectedRoute)
-            (matched edges [path| b + a |])
+            (matched edges [path| b ++ a |])
     firsts `shouldBe` [["a"], ["b"]]

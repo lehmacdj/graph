@@ -119,7 +119,7 @@ traverseSteps f = \case
   p@(Backwards _) -> f p
   l :/ r -> (:/) <$> traverseSteps f l <*> traverseSteps f r
   l :& r -> (:&) <$> traverseSteps f l <*> traverseSteps f r
-  l :+ r -> (:+) <$> traverseSteps f l <*> traverseSteps f r
+  Union k l r -> Union k <$> traverseSteps f l <*> traverseSteps f r
   p -> pure p
 
 -- | Replace the i-th step by @f i step@.
@@ -215,7 +215,7 @@ reassociate = \case
     q : qs -> foldl' (:/) q qs
     [] -> error "reassociate: a sequence without parts"
   l :& r -> reassociate l :& reassociate r
-  l :+ r -> reassociate l :+ reassociate r
+  Union k l r -> Union k (reassociate l) (reassociate r)
   Backwards p -> Backwards (reassociate p)
   p -> p
   where
@@ -241,7 +241,23 @@ renderSurfacePath = go 0
       Absolute n :/ Literal t | n == tagsNID -> "#" <> label t
       l :/ r -> parens (d > 7) (go 7 l <> "/" <> go 8 r)
       l :& r -> parens (d > 6) (go 6 l <> " & " <> go 7 r)
-      l :+ r -> parens (d > 5) (go 5 l <> " + " <> go 6 r)
+      Union k l r ->
+        parens (d > 5) (go (leftPrec k l) l <> symbol k <> go 6 r)
+      WithMaxAlternatives _ l p ->
+        "%override({max-alternatives = "
+          <> case l of
+            AtMostAlternatives n -> tshow n
+            UnlimitedAlternatives -> "unlimited"
+          <> "}, "
+          <> go 0 p
+          <> ")"
+    -- a chain of one union associates to the left; a different one inside
+    -- needs parentheses
+    leftPrec k = \case
+      Union k' _ _ | k' /= k -> 6
+      _ -> 5
+    symbol Relational = " | "
+    symbol Shared = " ++ "
     parens b t = if b then "(" <> t <> ")" else t
     label t
       | not (null t) && all isIdentChar t = t
@@ -256,11 +272,12 @@ renderSurfacePath = go 0
             then "regex:'" <> pattern' <> "'"
             else shown
 
--- | Parse a path without directives.
+-- | Parse a path without directives or @+@ (whose meaning depends on the
+-- command).
 parseSurfacePath :: Text -> Maybe Path
 parseSurfacePath t = case runParser (whitespace *> pPath <* eof) "" t of
   Left _ -> Nothing
-  Right p -> handleDirectivesWith (\_ _ -> Nothing) p
+  Right p -> handleDirectivesWith Nothing (\_ _ -> Nothing) p
 
 -- * Tests
 
@@ -282,12 +299,12 @@ spec_suggestPath = describe "suggestPaths" do
     suggestionsIn (graphWithEdges [edge' 1 "a" 2, edge' 1 "a" 3]) [path| a/b |]
       `shouldBe` [Just ("a/" <> n 2 <> "/b"), Just ("a/" <> n 3 <> "/b")]
   it "keeps the alternative: mk a + b" $
-    suggestionsIn (graphWithEdges []) [path| a + b |]
+    suggestionsIn (graphWithEdges []) [path| a ++ b |]
       `shouldBe` [Just "a", Just "b"]
   it "keeps the alternative of an expanded %targets" $
     suggestionsIn
       (graphWithEdges [edge' 2 "x" 2, edge' 3 "x" 3])
-      [path| x/(%never + @000000000002 + @000000000003) |]
+      [path| x/(%never ++ @000000000002 ++ @000000000003) |]
       `shouldBe` [Just ("x/" <> n 2), Just ("x/" <> n 3)]
   it "pins or excludes right evidence: mk a/b/@5" $
     suggestionsIn (graphWithEdges [edge' 6 "b" 5]) [path| a/b/@000000000005 |]
@@ -303,7 +320,7 @@ spec_suggestPath = describe "suggestPaths" do
     suggestionsIn (graphWithEdges []) [path| a/~a |]
       `shouldBe` [Just ("a/~a/!{" <> n 1 <> "}"), Just ("a/~a/" <> n 1)]
   it "keeps an @ alternative: mk (a & b)/(@ + c)" $
-    suggestionsIn (graphWithEdges []) [path| (a & b)/(@ + c) |]
+    suggestionsIn (graphWithEdges []) [path| (a & b)/(@ ++ c) |]
       `shouldBe` [Just "(a & b)/@", Just "(a & b)/c"]
   it "omits a repair that no path selects: mk a/b/@5 & c/b/@5" $
     -- a created node shared by two routes cannot be named, and nothing
@@ -316,7 +333,7 @@ spec_suggestPath = describe "suggestPaths" do
     -- 2^30 written choices, each %never side compiling to nothing
     let p =
           foldl'
-            (\q _ -> q :/ (Zero :+ Literal "c"))
+            (\q _ -> q :/ (Zero :++ Literal "c"))
             [path| a/b |]
             [1 .. 30 :: Int]
         g = graphWithEdges [edge' 1 "a" 2, edge' 1 "a" 3]
@@ -327,7 +344,8 @@ spec_suggestPath = describe "suggestPaths" do
     let p =
           foldl'
             ( \q _ ->
-                q :/ (Absolute (smallNID 2) :+ Absolute (smallNID 3) :+ One)
+                q
+                  :/ (Absolute (smallNID 2) :++ Absolute (smallNID 3) :++ One)
             )
             [path| a/b |]
             [1 .. 11 :: Int]
@@ -359,8 +377,9 @@ spec_suggestPath = describe "suggestPaths" do
           ]
         suggested = [(surface, g, r, s) | (surface, g, r, Just s) <- survivors]
     -- only steps that distribution copies with different bindings, as in
-    -- a/(a & b), get none (4049 of 4109 when written)
-    (length suggested * 100 `div` length survivors) `shouldSatisfy` (>= 95)
+    -- a/(a & b), get none (4049 of 4109 before the corpus had relational
+    -- unions copied by distribution, 94% after)
+    (length suggested * 100 `div` length survivors) `shouldSatisfy` (>= 90)
     forM_ suggested \(surface, g, r, s) -> do
       let context = show (surface, g, renderSurfacePath s)
       (context, parseSurfacePath (renderSurfacePath s))
@@ -380,8 +399,12 @@ test_renderSurfacePath =
     "renderSurfacePath"
     [ roundTrips "a/b/c" [path| a/b/c |],
       roundTrips "a/(b/c)" [path| a/(b/c) |],
-      roundTrips "(a + b)/c & d" [path| (a + b)/c & d |],
-      roundTrips "a & (b + c)" [path| a & (b + c) |],
+      roundTrips "(a ++ b)/c & d" [path| (a ++ b)/c & d |],
+      roundTrips "a & (b | c)" [path| a & (b | c) |],
+      roundTrips "a | b | c" [path| a | b | c |],
+      roundTrips "a | (b | c)" [path| a | (b | c) |],
+      roundTrips "(a | b) ++ c" [path| (a | b) ++ c |],
+      roundTrips "a ++ (b | c)" [path| a ++ (b | c) |],
       roundTrips "~a/~(b/c)" [path| ~a/~(b/c) |],
       roundTrips "\"a b\"/\"\"/*" [path| "a b"/""/* |],
       roundTrips "regex:\"^a.*\" & a" [path| regex:"^a.*" & a |],
@@ -428,5 +451,6 @@ test_renderSurfacePath =
           (1, Backwards <$> genPath (k - 1)),
           (2, (:/) <$> genPath (k `div` 2) <*> genPath (k `div` 2)),
           (2, (:&) <$> genPath (k `div` 2) <*> genPath (k `div` 2)),
-          (2, (:+) <$> genPath (k `div` 2) <*> genPath (k `div` 2))
+          (1, (:||) <$> genPath (k `div` 2) <*> genPath (k `div` 2)),
+          (1, (:++) <$> genPath (k `div` 2) <*> genPath (k `div` 2))
         ]

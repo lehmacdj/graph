@@ -30,10 +30,12 @@ rejectSplices c = case concatMap splices (commandPaths c) of
     splices = \case
       Backwards q -> splices q
       l :/ r -> splices l ++ splices r
-      l :+ r -> splices l ++ splices r
+      Union _ l r -> splices l ++ splices r
+      DefaultUnion _ l r -> splices l ++ splices r
       l :& r -> splices l ++ splices r
       Directive range (Splice expr) -> [(range, expr)]
       Directive _ (Targets q) -> splices q
+      Directive _ (Override _ q) -> splices q
       _ -> []
 
 -- | Every path a command (and the commands it contains) takes.

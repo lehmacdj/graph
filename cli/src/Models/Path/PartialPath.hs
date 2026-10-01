@@ -3,6 +3,8 @@ module Models.Path.PartialPath
     pattern Backwards,
     pattern (:/),
     pattern (:+),
+    pattern (:||),
+    pattern (:++),
     pattern (:&),
     module X,
   )
@@ -24,13 +26,22 @@ pattern l :/ r = l ::/ r
 
 infixl 7 :/
 
-pattern (:+) ::
-  PartialPath ->
-  PartialPath ->
-  PartialPath
-pattern l :+ r = l ::+ r
+pattern (:+) :: PartialPath -> PartialPath -> PartialPath
+pattern l :+ r = DefaultUnion () l r
 
 infixl 5 :+
+
+-- | @l | r@, a relational union
+pattern (:||) :: PartialPath -> PartialPath -> PartialPath
+pattern l :|| r = Union Relational l r
+
+infixl 5 :||
+
+-- | @l ++ r@, a shared union
+pattern (:++) :: PartialPath -> PartialPath -> PartialPath
+pattern l :++ r = Union Shared l r
+
+infixl 5 :++
 
 pattern (:&) ::
   PartialPath ->
@@ -50,7 +61,26 @@ infixl 6 :&
   ExcludingNIDs,
   Backwards,
   (:/),
-  (:+),
+  Union,
+  DefaultUnion,
+  (:&),
+  Directive,
+  Hole
+  #-}
+
+{-# COMPLETE
+  One,
+  Zero,
+  Wild,
+  Literal,
+  RegexMatch,
+  Absolute,
+  ExcludingNIDs,
+  Backwards,
+  (:/),
+  (:||),
+  (:++),
+  DefaultUnion,
   (:&),
   Directive,
   Hole

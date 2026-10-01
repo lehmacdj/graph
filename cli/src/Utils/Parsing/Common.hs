@@ -29,6 +29,18 @@ data CustomParseError
       { sourceRange :: SourceRange,
         spliceExpr :: String
       }
+  | -- | Two different union operators (@+@, @|@, @++@) at the same level
+    -- without parentheses, e.g. @a + b | c@.
+    MixedUnionOperators
+      { sourceRange :: SourceRange,
+        firstOperator :: Text,
+        secondOperator :: Text
+      }
+  | -- | A setting @%override@ does not know, or a value it does not accept
+    InvalidOverrideSetting
+      { sourceRange :: SourceRange,
+        problem :: Text
+      }
   deriving (Eq, Ord, Show)
 
 instance ShowErrorComponent CustomParseError where
@@ -45,6 +57,26 @@ instance ShowErrorComponent CustomParseError where
       <> ": a NID needs all "
       <> show nidDigits
       <> " base62 characters. (IncompleteFullNID)"
+  showErrorComponent (MixedUnionOperators range first second) =
+    "The union operators "
+      <> unpack first
+      <> " and "
+      <> unpack second
+      <> " are mixed without parentheses; add parentheses around one of "
+      <> "them, e.g. (a "
+      <> unpack first
+      <> " b) "
+      <> unpack second
+      <> " c, near the "
+      <> unpack second
+      <> " at "
+      <> showSpan range.startPos range.endPos
+      <> ". (MixedUnionOperators)"
+  showErrorComponent (InvalidOverrideSetting range problem) =
+    unpack problem
+      <> " at "
+      <> showSpan range.startPos range.endPos
+      <> ". (InvalidOverrideSetting)"
   showErrorComponent (SpliceInCommand range expr) =
     "The splice directive %{"
       <> expr

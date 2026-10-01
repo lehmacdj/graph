@@ -63,7 +63,56 @@ pDirective =
     <|> try (HttpResource <$> pHttpURI)
     <|> try (LocationFromHistory 1 <$ symbol "%last")
     <|> (Targets <$> pDirectiveNamed "targets" pPartialPath)
+    <|> pDirectiveNamed "override" pOverride
     <|> (Splice <$> between (symbol "%{") (symbol "}") (many (noneOf ['}'])))
+
+-- | @{plus = shared}, p@: settings, then the path they apply to.
+pOverride :: Parser (Directive 'Partial)
+pOverride = do
+  settings <-
+    between (symbol "{") (symbol "}") (pSetting `sepBy` symbol ",")
+  settings' <- foldM addSetting (OverrideSettings Nothing Nothing) settings
+  _ <- symbol ","
+  Override settings' <$> pPartialPath
+  where
+    pSetting = do
+      offset <- getOffset
+      (range, setting) <- withSourceRange do
+        key <- ident
+        _ <- symbol "="
+        value <- ident
+        pure (key, value)
+      pure ((offset, range), setting)
+    addSetting s (range, (key, value)) = case key of
+      "plus" -> case s.plus of
+        Just _ -> invalid range "The setting plus is given twice"
+        Nothing -> case value of
+          "shared" -> pure s {plus = Just Shared}
+          "relational" -> pure s {plus = Just Relational}
+          _ ->
+            invalid range $
+              "Unknown value "
+                <> value
+                <> " for plus; it accepts shared or relational"
+      "max-alternatives" -> case s.maxAlternatives of
+        Just _ -> invalid range "The setting max-alternatives is given twice"
+        Nothing -> case (value, readMay value) of
+          ("unlimited", _) ->
+            pure s {maxAlternatives = Just UnlimitedAlternatives}
+          (_, Just n)
+            | n > 0 -> pure s {maxAlternatives = Just (AtMostAlternatives n)}
+          _ ->
+            invalid range $
+              "Unknown value "
+                <> value
+                <> " for max-alternatives; it accepts a positive number or "
+                <> "unlimited"
+      _ ->
+        invalid range $
+          "Unknown setting "
+            <> key
+            <> " in %override; the settings are plus and max-alternatives"
+    invalid (offset, range) = failAt offset . InvalidOverrideSetting range
 
 pHttpURI :: Parser URI
 pHttpURI = lexeme (lookAhead (string "http://" <|> string "https://") *> pURI)
@@ -81,13 +130,43 @@ table :: [[Operator Parser PartialPath]]
 table =
   [ [Prefix (Backwards <$ symbol "~")],
     [InfixL $ (:/) <$ symbol "/"],
-    [InfixL $ (:&) <$ symbol "&"],
-    [InfixL $ (:+) <$ symbol "+"]
+    [InfixL $ (:&) <$ symbol "&"]
   ]
 
+-- | The union operators, which share the lowest precedence. A chain of one
+-- of them associates to the left; two different ones need parentheses.
+pUnionOperator ::
+  Parser (SourceRange, Text, PartialPath -> PartialPath -> PartialPath)
+pUnionOperator = do
+  (range, (op, f)) <-
+    withSourceRange $
+      (("++", (:++)) <$ string "++")
+        <|> (("+", (:+)) <$ string "+")
+        <|> (("|", (:||)) <$ string "|")
+  whitespace
+  pure (range, op, f)
+
 pPartialPath' :: Parser (NIDVal Partial) -> Parser PartialPath
-pPartialPath' pNID =
-  makeExprParser (partialPathTerm' pNID) table
+pPartialPath' pNID = do
+  first <- operand
+  rest <- many do
+    offset <- getOffset
+    (range, op, f) <- pUnionOperator
+    r <- operand
+    pure ((offset, range, op), f, r)
+  case rest of
+    ((_, _, op), _, _) : more
+      | (offset, range, op') : _ <-
+          [o | (o@(_, _, op'), _, _) <- more, op' /= op] ->
+          failAt offset (MixedUnionOperators range op op')
+    _ -> pure (foldl' (\l (_, f, r) -> f l r) first rest)
+  where
+    operand = makeExprParser (partialPathTerm' pNID) table
+
+-- | Fail with a custom error at an earlier offset.
+failAt :: Int -> CustomParseError -> Parser a
+failAt offset =
+  parseError . FancyError offset . singletonSet . ErrorCustom
 
 pPartialPath :: Parser PartialPath
 pPartialPath = pPartialPath' pFullNID
@@ -201,7 +280,19 @@ test_pPath =
       parseFails "regex:\"",
       -- we could allow this, but seems wise to exclude for ambiguity reasons
       parseFails "!@000000000001",
-      parseFails "!{}"
+      parseFails "!{}",
+      "a | b" `parsesTo` (Literal "a" :|| Literal "b"),
+      "a ++ b" `parsesTo` (Literal "a" :++ Literal "b"),
+      "a|b|c" `parsesTo` (Literal "a" :|| Literal "b" :|| Literal "c"),
+      "a ++ b/c & d"
+        `parsesTo` (Literal "a" :++ Literal "b" :/ Literal "c" :& Literal "d"),
+      "(a + b) | c" `parsesTo` ((Literal "a" :+ Literal "b") :|| Literal "c"),
+      "a ++ (b | c)" `parsesTo` (Literal "a" :++ (Literal "b" :|| Literal "c")),
+      parseFails "a + b | c",
+      parseFails "a | b ++ c",
+      parseFails "a ++ b + c",
+      parseFails "a |",
+      parseFails "a +++ b"
     ]
   where
     parsesTo :: Text -> PartialPath -> TestTree
@@ -232,6 +323,24 @@ test_pDirective =
           ),
       -- this needs to be Haskell code to actually work, but we just want to
       -- parse anything here
+      "%override({plus = shared}, a + b)"
+        `parsesTo` Override
+          (OverrideSettings (Just Shared) Nothing)
+          (Literal "a" :+ Literal "b"),
+      "%override({ plus=relational }, %targets(a) + b)"
+        `parsesTo` Override
+          (OverrideSettings (Just Relational) Nothing)
+          (Directive testRange (Targets (Literal "a")) :+ Literal "b"),
+      "%override({}, a)"
+        `parsesTo` Override (OverrideSettings Nothing Nothing) (Literal "a"),
+      "%override({max-alternatives = 100000}, a)"
+        `parsesTo` Override
+          (OverrideSettings Nothing (Just (AtMostAlternatives 100000)))
+          (Literal "a"),
+      "%override({plus = shared, max-alternatives = unlimited}, a)"
+        `parsesTo` Override
+          (OverrideSettings (Just Shared) (Just UnlimitedAlternatives))
+          (Literal "a"),
       "%{some text here}" `parsesTo` Splice "some text here",
       "%{Absolute nid}" `parsesTo` Splice "Absolute nid",
       "https://example.com/resource"
@@ -241,6 +350,15 @@ test_pDirective =
       parseFails "%history(foo)",
       parseFails "%targets()",
       parseFails "%targets(foo",
+      parseFails "%override({plus = shared}, )",
+      parseFails "%override({plus = shared} a)",
+      parseFails "%override({plus = both}, a)",
+      parseFails "%override({minus = shared}, a)",
+      parseFails "%override({plus = shared, plus = shared}, a)",
+      parseFails "%override(a)",
+      parseFails "%override({max-alternatives = 0}, a)",
+      parseFails "%override({max-alternatives = many}, a)",
+      parseFails "%override({max-alternatives = 1, max-alternatives = 2}, a)",
       -- these were old regex syntax
       parseFails "re\"asdf\"",
       parseFails "re'asdf'",

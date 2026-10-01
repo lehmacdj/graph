@@ -14,6 +14,7 @@ import Graph.PathPattern.Execution (completionTransitions)
 import Models.LegacyPartialPath
 import Models.NID (nidDigits)
 import Models.Path.Simple qualified as Simple
+import Models.PathPattern.Compile (checkAlternatives)
 import MyPrelude
 import System.Console.Haskeline
 import Utils.Base62 (isBase62Char)
@@ -95,7 +96,11 @@ completePath env (i, _) = case getLegacyPartialPath (pack $ takeRelevantFromEnd 
               [] -> Simple.One
               p0 : rest -> foldl' (Simple.:/) p0 rest
         nid <- currentLocation
-        octs <- map unpack . toList <$> completionTransitions nid p
+        -- a prefix beyond its alternatives limit completes to nothing,
+        -- rather than hanging on TAB
+        octs <- case checkAlternatives p of
+          Left _ -> pure []
+          Right () -> map unpack . toList <$> completionTransitions nid p
         pure (fromMaybe i (stripPrefix (reverse end) i), mkCompleter octs end)
 
 completeNID :: Env -> (String, String) -> IO (String, [Completion])

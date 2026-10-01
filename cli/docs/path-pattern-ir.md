@@ -77,16 +77,22 @@ newtype PathQuery = PathQuery (Set PatternPath)  -- `+` alternatives
 
 ## 2. Compilation (`Path` → `PathQuery`)
 
-1. Expand directives (`handleDirectivesWith`; see *Directives* below).
+1. Expand directives and lower `+` (`handleDirectivesWith`; see
+   *Directives* and *Unions* below). The compiled `Path` (the `Prenormal`
+   phase) has only `|` and `++`: `+` is unrepresentable there.
 2. Apply `~` on the surface, using `main`'s semantics (a true inverse):
-   `~(p/q) = ~q/~p`, `~(p & q) = ~p & ~q`, `~(p + q) = ~p + ~q`; node
-   specs are unchanged and each step's direction flips.
+   `~(p/q) = ~q/~p`, `~(p & q) = ~p & ~q`, and `~` distributes over `|` and
+   `++`; node specs are unchanged and each step's direction flips.
 3. **Distribute** unjoined sequencing over conjunction. `a/(b & c)`
    becomes `a/b & a/c` with independent copies of `a`, and
    `(a & b)/(c & d)` becomes four conjuncts in `p`-major order.
    Distribution stops at joins: after `/@`, `@N`, or `!{…}` the prefix is
    shared by every continuation. This is the branch's
-   `sequenceExpr`/`prefix` behavior.
+   `sequenceExpr`/`prefix` behavior. A shared union (`++`) is chosen
+   before distributing, once for the whole path; a relational one (`|`)
+   is copied like a step and chosen afterwards, for each copy, and a
+   side with a join that several copies chose is put together as one
+   walk (see *Unions*).
 4. **Glue.** Each step occurrence gets a fresh `Var` target and a fresh
    `EdgeId`. `/` identifies the left output with the right input. A join
    merges outputs (taking the meet of their tests). Relative paths are
@@ -110,6 +116,369 @@ as in `((@ + a) & b)/@N`, is not at the boundary and stays at its input.
 This also applies to a `%targets(…)` expansion (`%never + @N + …`) that
 follows an `@` alternative, as in `(@ + b)/%targets(@N)`. `%float` and `%unanchored` are **not** supported.
 
+**Unions.** There are three union operators, all at the lowest
+precedence. A chain of one of them associates to the left; mixing two
+different ones without parentheses (`a + b | c`) is a parse error
+(`MixedUnionOperators`), so `(a + b) | c` must be written.
+
+| operator | name | chooses | keeps | loses |
+|---|---|---|---|---|
+| `p \| q` | relational | separately in each copy distribution makes | `p/(q & r) = p/q & p/r` and `(p & q)/r = p/r & q/r` for unjoined `p`, `r`; `a \| b` agrees with `regex:"^(a\|b)$"`; `*` is the `\|` of all labels | `p/(q \| r) = p/q \| p/r` when `p` has several outputs, `(p \| q)/r = p/r \| q/r` when `r` has several inputs or `p`, `q` join (their copies share an instance, which `p/r \| q/r` chooses once) |
+| `p ++ q` | shared | once for the whole path; copies share the choice | `p/(q ++ r) = p/q ++ p/r` and `(p ++ q)/r = p/r ++ q/r` | `p/(q & r) = p/q & p/r` when `p` contains `++` |
+| `p + q` | contextual | as `\|` or `++`, by context | | |
+
+Why: distribution copies an unjoined prefix (or suffix), and the laws
+differ in where the choice sits relative to the copy. Relationally `/` is
+composition and `\|` union; copying is contraction, and `\|` puts the
+choice inside the copy, `!(A ⊕ B)`, which contraction duplicates into
+independent choices (as `*` and regexes always did). `++` puts it
+outside, `!A ⊕ !B`: the choice is made first and every copy has the
+same side. A union that is not copied (no `&` after or before it) means
+the same either way.
+
+`+` is a directive: it is lowered while directives are expanded, after
+they expand (so a `%targets(…)` result, which is a `+` union, is lowered
+like a `+` written there), to `|` in a query and to `++` in a
+construction:
+
+| context | `+` is |
+|---|---|
+| `ls`, preview, `cd`, `rm`, `rmnf`, `mv`/`cp` (both paths), `rn`/`cl` (both), every `mg` argument, `at`'s path, `tag`'s target (second argument), completion, a `%targets(…)` argument | `\|` |
+| `mk`, `mk --allow-orphans`, the path `tag` constructs (first argument) | `++` |
+
+`%override({plus = shared}, p)` and `%override({plus = relational}, p)`
+lower every `+` in `p` to `++` or `|` instead, in any command; the
+innermost override wins, `|` and `++` written in `p` are unaffected, and
+an override inside `%targets(…)` applies to its query
+(`%targets(%override({plus = shared}, …))`). Its settings record is
+`{key = value, …}`, with the keys `plus` (`shared` or `relational`) and
+`max-alternatives` (a positive number or `unlimited`; see the limit
+below). Settings combine (`{plus = shared, max-alternatives = 50000}`); an
+unknown key or value, or a key given twice, is a parse error naming the
+accepted ones (`InvalidOverrideSetting`). The
+path quasiquoter rejects `+`, since a quoted path has no command; tests
+write `|` or `++` (or an `%override`). Suggestions (§5) are rendered with
+`|` and `++` only, so they mean the same in every command.
+
+Relational unions in detail. What a path with `|` means is defined by
+how its unions are chosen, and the compiler does just that
+(`Models.PathPattern.Compile`: `fragment` keeps the unions in the term,
+`resolve` chooses them):
+
+1. *A union is copied like a step.* Distribution copies a union with the
+   prefix or continuation it is part of, however many conjunctions do the
+   copying and in whatever order they are written:
+   `(x | y)/(c & d)/(a & b)` has four copies of the union, one before
+   each of `c/a`, `c/b`, `d/a` and `d/b`, exactly as
+   `(x | y)/(c/a & c/b & d/a & d/b)` has; `(p & q)/(x | y)/(a & b)` has
+   four too, one for each pair of a prefix and a continuation.
+2. *Each copy chooses a side*, independently of the others.
+3. *A side with a join is one walk.* A side with a join in it (`/@`, `@N`,
+   `!{…}`, also the join an `@` side is at a sequence boundary) is not
+   copied when it is chosen: the copies that choose it share one walk of
+   it (its vertices and edge ids, as a joined prefix is shared). The walk
+   is written once, after the conjunction of those copies' prefixes and
+   before the conjunction of their continuations, and it is sequenced
+   there exactly as it would be if it were written there: with
+   `J = x/*/@`, the alternative of `(J | y)/(c & d)/(a & b)` in which the
+   copies before `c/a` and `d/b` choose `J` is
+   `J/(c/a & d/b) & y/c/b & y/d/a`, one walk of `x/*`. So
+   `((a & b)/@ | c)/(x & y)`, with `J = (a & b)/@`, has the four
+   alternatives `J/(x & y)` (one merged node), `J/x & c/y`, `c/x & J/y`
+   and `c/x & c/y`; `(a & b)/(@ | c)` has `(a & b)/@`, `a/@ & b/c`,
+   `a/c & b/@` and `a/c & b/c`; and `a/(@1 | @2)/(x & y)` has four,
+   including `a/@1/x & a/@2/y`, so `%targets(…)` in a query lets each copy
+   choose its target (in `mk`, where `+` is `++`, there are two). The
+   prefixes and the continuations of the walk are parts of the path as it
+   is written, and the copies distribution made of one part are that one
+   part: when all four copies of `(p & q)/(J | y)/(a & b)` choose `J`,
+   the alternative is `(p & q)/J/(a & b)`, with one `p` and one `a`, and
+   in `(c & d)/(J | y)/(K | z)/(a & b)` the copies after `c` and `d` that
+   chose `J` and then `K` are `(c & d)/J/K/(a & b)`, with `K` once after
+   the one `J`. What is written twice is two parts (`(c & c)/J` has two
+   `c` edges), and so are two conjuncts without a step in one
+   conjunction (`(@ & @)/J`). Copies that chose different sides are
+   independent, and a side no copy chose does not appear. The routes of
+   the copies that share a walk are listed together, where the first of
+   them is.
+
+   The copies that share a walk are conjuncts of one conjunction: of the
+   whole path, of the continuations of a join or of another shared walk,
+   or of the prefix of a join. A copy inside the prefix of a join, next
+   to a conjunct that did not choose the walk, is put together only with
+   the other copies in that prefix: in `(J | s)/((c & y)/@/e & d)` the
+   copies before `c` and `d` choosing `J` and the one before `y` choosing
+   `s` give `(J/c & s/y)/@/e & J/d`, two walks of `J`, since no path
+   without unions has `s/y` start before a walk whose end it joins. Every
+   alternative is thereby a path without unions (`compileAlternatives`
+   gives one for each, which is what `mk` suggests).
+
+   A join of the input itself (`@`, `@N` or `!{…}` with nothing before
+   it) is no such prefix where the input is one node, which is at the
+   root of the path and right after another join: it has nothing to
+   share, it only says where what follows it starts, and each of its
+   continuations can say so. There `J/(p & q)` is `J/p & J/q`, and its
+   continuations are conjuncts of the conjunction the join is in:
+   `(@/(a & b) & c)/U` is `(a & b & c)/U`, `(@1/(a & b) & c)/U` is
+   `(@1/a & @1/b & c)/U`, and `x/@/(@/(a & b) & c)/U` is
+   `x/@/(a & b & c)/U`, for any `U`. The same goes for a walk that starts
+   with such a join once it is chosen: in `((@1/a | z)/(k & l) & c)/U` the
+   copies of `U` after `@1/a/k`, `@1/a/l` and `c` are conjuncts of the
+   root. So a leading `@` at the root of a path is the same wherever it
+   is written: as a conjunct, in a side of a union, or not at all.
+4. *Choosing changes what is copied.* A chosen side with several outputs
+   or inputs copies what follows or precedes it, with the unions there
+   that are not chosen yet; a shared walk takes the copies of its prefix
+   or its continuations together again, with theirs. So the order in
+   which the unions are chosen matters, and every order is taken: the
+   alternatives of a path are those that any order of choosing its
+   unions ends with. In `((a & b) | x)/((c & d) | e)` the prefix may
+   choose first and each copy of the suffix then chooses, or the other
+   way around (either order alone gives six of the eight alternatives).
+   A union is always chosen in all its copies at once.
+
+   Two unions give the same in either order when no copy of one is
+   sequenced with a copy of the other (`(a | b) & (c | d)`: choosing a
+   union changes only the conjuncts it is in), and when all the sides of
+   both are single chains of steps (`(a | b)/(c | d)/(m & n)`: choosing
+   such a union writes a chain in each copy's place, which copies nothing
+   and puts nothing together). The compiler takes only the orders that
+   can differ, so unions like these cost what their alternatives cost.
+   Unions that are sequenced with each other and have a side with a join
+   or a conjunction are chosen in every order, which costs more than
+   their alternatives do (see the limit below).
+5. *Before it is copied, or after.* A union may also be chosen before
+   anything copies it: every copy then has that side, and the path is the
+   one with that side written in the union's place. Each copy choosing
+   the same side after the copying is mostly the same, but not always,
+   because a side written alone is distributed as a whole:
+   `(p & q)/(J & x)` has two walks of `J` (the conjunction `J & x` is
+   copied after `p` and after `q`), where the two copies of `(J | y)` in
+   `(p & q)/((J | y) & x)` both choosing `J` share one,
+   `(p & q)/J & p/x & q/x`; and `(@ & v)/(@1 & b)` has the root `@1` (see
+   the `@` semantics above), where `(@ & v)` chosen by the copy before
+   `@1` is `(@ & v)/@1`, a test. Both are alternatives.
+6. *A copy is sequenced as written.* What a copy chooses follows that
+   copy's conjunct as it would if written after it. In particular a copy
+   whose conjunct is a lone `@` follows it as in `@/…`, where `@` is a
+   join: `(a & @)/(@1 | b)` is
+   `(a & @)/@1 | (a & @)/b | a/@1 & @/b | a/b & @/@1`, and the `@1` chosen
+   by the `@` copy alone tests the current node (`@/@1`) instead of being
+   a root. (Written without a union, `(c & @)/(@1 & d)` keeps its root
+   `@1`: there the `@` is a conjunct before the conjunction, not a copy
+   choosing; that is the alternative of 5.)
+
+These laws hold (and are checked on random paths with joins,
+`spec_compileUnionMonotoneRandom`, `spec_compileSubUnions`,
+`spec_compileSharedWalks`, `spec_compileChoicesWrittenOut`):
+
+- *`/` associates*, on the alternatives and not only on what they reach:
+  a sequence is compiled from its flat chain of segments, left to right,
+  whatever its parentheses. `(c & e)/(x & y)/(d | @)` and
+  `(c & e)/((x & y)/(d | @))` are the same alternatives, and a join
+  written before a union stays outside it, one instance for every side:
+  `(b & a)/(@/(@ | c))` is `(b & a)/@/(@ | c)`.
+- *Conjunctions may be written out*: replacing adjacent segments without
+  unions or joins by their distribution, with its conjuncts in the order
+  distribution makes them, `(c & d)/(a & b) = c/a & c/b & d/a & d/b`,
+  changes no alternative and no order of routes: the terms are the same,
+  conjunct for conjunct.
+- *Sides are the same when they compile to the same routes in the same
+  order*, however they are written, and the order the sides are written
+  in never matters (the alternatives and their routes are the same): a
+  union's sides are those of the whole nested union, and sides that give
+  the same terms are one side. A join of a join is one
+  join with both tests (`a/@/@` is `a/@`, `a/@1/!{@2}` is `a/@1`,
+  `!{@1}/!{@1}` is `!{@1}`), and an `@N` followed by tests that accept
+  `N` is that root (`@1/@` and `@1/!{@2}` are `@1`). So `p | p = p`,
+  `(p | q) | p = p | q`, `(a/@ | a/@/@)/(d & e)` is `a/@/(d & e)`, and
+  with `p = (a | !{@1})/b/@`, `p | p/@` and `p` with its inner union
+  written the other way around are `p`. Three things keep sides apart:
+  - A joined side and an unjoined one: `(a | a/@)/(d & e)` is
+    `a/(d & e) | a/@/(d & e)`.
+  - The order of conjuncts, since it is the order of the routes, which
+    decides the edge a command acts on (§3): `c & *` and `* & c` are two
+    sides. With joins that is visible in what `ls` finds, since the two
+    sides are two walks: with `0 -a-> 0`, `2 -a-> 0`, `0 -d-> 0` and the
+    current node `0`,
+    `~*/((* & !{@1})/(~a/@) | (!{@1} & *)/(~a/@))/(!{@1} & ~a)` reaches
+    `0` and `2`, either side alone only `0`.
+  - A leading `@`, except at the root. At the root of the whole path a
+    leading `@` joins nothing (3), and in a side of a union there it is
+    not part of the side: `@/b` there is the side `b`, and `p | @/p` is
+    `p`, whichever is written first and whatever follows. One thing is
+    left of it, and for that it is kept: an `@N` that follows the `@`
+    itself is a test of the current node instead of a root. So it stays
+    before an `@N` (`@/@1` and `@1` are always two sides), and before a
+    side with an output at its own input (`@/(c & @)` and `c & @` are two
+    sides: of an `@N` written after the union, the first makes a test and
+    the second a root; without a union, `@/(c & @)/(@1 & d)` tests that
+    the current node is `1`). Anywhere but at the root a leading `@` is a
+    join like any other.
+- *`p | %never = p`.*
+- *Adding a side to a union never removes alternatives* (so never
+  targets), up to the order of their routes, for unions of any number of
+  sides, and for `|` and `++`: the alternatives of `C[p]` are among those
+  of `C[p | q]`, by 5 (the union chosen before it is copied is `C[p]`),
+  and those of `C[p | q]` among those of `C[p | q | r]` (the copies
+  choosing among `p` and `q` only).
+- *A union is its choices written out*: the alternatives of a union are
+  those of the paths in which each copy's choice is written in the
+  copy's place (with the copies that share a walk written as in 3), and
+  those of 5.
+- *Prefixes that compile the same are the same prefix.* Two paths
+  without unions that compile to the same pattern, alone and before each
+  side of the unions that follow, give the same alternatives before
+  those unions: `(a & b) & c`, `a & (b & c)`, `@/(a & b) & c` and
+  `@/a & @/b & c` before `(y | d/@)/e`, or `x/(a & b)` and `x/a & x/b`
+  (checked on random prefixes rewritten at one place,
+  `spec_compileInterchangeablePrefixes`). That takes the joins of the
+  root being written out (3): which copies share a walk depends on which
+  conjunction they are conjuncts of, and only for those joins do two
+  ways to nest a conjunction compile to the same pattern. Two things are
+  outside this law. A prefix with a conjunct that is only `@` is not
+  the same as one where that `@` follows a join, although they compile
+  to the same pattern: `c & @` and `@/(c & @)` differ before `@1 & d`
+  already (a root, and a test), so before `(@1 & d | x)` too. And
+  conjuncts without a step are told apart only within the conjunction
+  they are written in: `@/(d & @ & @)` and `@/(d & @) & @/@` compile to
+  the same pattern, alone and before `@` and before `x`, and differ
+  before `(@ | x)` (in whether the two `@` that choose the side `@` are
+  one conjunct or two).
+  The law is about what comes before a union. After one, how a joined
+  conjunction is nested still decides which copies share a walk (3):
+  `((a & b)/@ & c)/@` and `(a & b & c)/@` compile to the same pattern
+  after any path without unions, and with `J = x/@`,
+  `(J | s)/((a & b)/@ & c)/@` has `((s/a & J/b)/@ & J/c)/@`, two walks of
+  `x`, where `(J | s)/(a & b & c)/@` has `(s/a & J/(b & c))/@`, one. With
+  `0 -x-> 1 -b-> 9`, `0 -x-> 2 -c-> 9` and `0 -s-> 3 -a-> 9` the first
+  reaches `9` and the second nothing.
+
+A union inside a joined prefix or suffix that is not itself a union side
+is not copied, so it chooses once: `(a | b)/@/(c & d)` is
+`a/@/(c & d) | b/@/(c & d)`. A union inside a shared walk is copied, and
+chosen, as it is when the walk is written in its place.
+
+**Alternatives limit.** Alternatives multiply: a `k`-way `|` copied into
+`n` conjuncts gives `k^n` alternatives (`(a | b | c)/(d & e & f & g)` has
+81), deduplicated by canonical equality. Since `+` is `|` in queries, a
+path with a `|` union and a conjunction may compile to at most 1000
+alternatives (`Models.PathPattern.Compile.defaultMaxAlternatives`);
+beyond that the command fails, before doing anything, with an error that
+names the limit and suggests `++`, `%override({plus = shared}, …)`,
+narrowing the path, or raising the limit (`TooManyAlternatives`). A path
+with only `++` unions has no limit, as before. Nor has a path without a
+conjunction, since nothing copies its unions and it compiles as it would
+with `++` (a chain of ten `(a | b)` is fine); such a chain multiplies all
+the same (`k` unions of `n` sides are `n^k` alternatives), and a long
+one of wide unions is slow: four unions of 64, 64, 64 and 2 sides are
+524,288 alternatives and take several seconds to compile. 1000 keeps
+compiling and resolving a query well under a second. It does not bound
+`mk`: the time to choose among the repairs (residuation) grows faster
+than linearly in the alternatives and depends on the graph. Measured
+with `ge`, each including about 0.07s of startup: on a graph with none
+of the path's edges, `mk (a | b)/(c & … & j)` (256 repairs) takes 1.0s,
+`mk (a | b)/(c & … & k)` (512) 3.8s and `mk (a | b | c)/(d & … & i)`
+(729) 4.1s; on a graph that already has an `a` and a `b` edge, the
+32-repair `mk (a | b)/(c & … & g)` takes 0.6s, the 729-repair one 11s,
+and the 256-repair one does not finish in a minute. That cost is in
+residuation, not in compiling, and is a known issue of its own; in `mk`
+a `+` is `++`, so it only arises for a `|` written there.
+
+The check (`checkAlternatives`) counts the alternatives as `compilePath`
+makes them, after contradictory ones are dropped and ones that glue to
+the same pattern are merged, and stops as soon as the limit is passed. So
+the count is exact: `(@1 | … | @31)/(a & b)`, 961 alternatives, passes
+and with 32 nodes, 1024, it is refused; sides of other shapes among the
+targets, as in
+`(@1 | … | @25 | a | b | c & d | e & f | x/@ & d | y/@ & d)/(e & f)`
+(963), make no difference. Three bounds make the check always finish
+fast (roughly half a second at the default limit in an unoptimized
+build, which is a measurement and not a guarantee:
+`(c & d)/(@1 | … | @29)/(a & b)/@` took 0.44s on an idle machine and
+0.56s on a loaded one; most paths take a few milliseconds; a path it passes compiles in about the time
+the check took) and never repeat a long compilation. A path beyond one of them is refused too,
+however few alternatives it would end up with, with an error of its own
+that says so (`TooLargeToCount`: the alternatives cannot be counted
+within what the limit allows to be made on the way), and the same
+remedies.
+
+- The terms (one for each choice of the shared unions, and for each
+  relational union chosen before it is copied), the sides of the unions
+  in one term, and the alternatives one term resolves to before they are
+  glued, may each be four times the limit. So
+  `(a & b)/(@1 | … | @64)/@1` is refused: its 4096 choices are all
+  contradictory but one, and it compiles to a single alternative.
+- Making the terms and the alternatives that were not made before may
+  take 20 steps for each alternative allowed (a step is a term, or an
+  alternative resolved or glued).
+- Everything made may have a size of 500 for each alternative allowed.
+  The size of a term is the number of its steps and node specs, and it
+  is counted for every term, every copy distribution makes of a term
+  with a shared walk, every term gone through to choose a union and
+  every term a choice gives; a new alternative is counted once more by
+  the routes and hops of the pattern it glues to (a sequence has a route
+  for each pair of a route before and one after). So unions copied into
+  more ways to choose than can be listed are refused while they are
+  being chosen, as
+  `(a & b)/(f | @1 | … | @30)/(j | @1 | … | @30)/(k & l)` is; and so is a
+  path with few alternatives that are very large:
+  `(a & b & c)/(a & b & c)/(a & b & c)/(a & b & c)/(a & b)/@/((e | f) & g)/(a & b & c)/(a & b & c)`
+  has 512 alternatives of 2916 routes each. Unions whose order cannot
+  matter (4 of *Relational unions in detail*) cost what their
+  alternatives cost: nine `(a | b)` joined by `&`, or in a chain before
+  `& z`, are 512 alternatives and pass in under 20ms, and
+  `(a | b)/(c | d)/(e | f)/(g | h)/(i | j)/(m & n)` (1024) is refused as
+  too many (with a sixth union, 4096, as too large to count, being more
+  than four times the limit). Unions that are chosen in every order
+  cost more, since every partial choice is a term of its own:
+  `(p & q)/(x/@ | y)/(w/@ | z)/(u/@ | v)/(s/@ | t)` has 256 alternatives
+  and takes 0.04s to check, six times what four unions of plain steps
+  there take; with a fifth such union (1024 alternatives) it is refused
+  as too large to count before they are counted. A union with a joined
+  side costs more than its alternatives even when nothing copies it and
+  no order matters, since each joined side is put in its place in a term
+  of its own: seven `(p/@ | q)` joined by `&` (128 alternatives) pass in
+  0.18s, and eight (256) are refused as too large to count. A path
+  under the limit can be too large as well: with
+  `u = (@1 | @2 | @3 | a | (a | b) & (c | d) | (c & d)/(a | b) | (a & b | c)/@ | (a | b/@)/(c & d))`,
+  `(u & u)/c` has 324 alternatives, takes a fifth of a second to
+  compile, and is refused.
+
+`%override({max-alternatives = N}, p)`
+(or `unlimited`) changes the limit: the innermost override around a `|`
+is that union's limit, and since alternatives multiply across unions and
+cannot be attributed to one, the largest limit among the path's `|`
+unions applies to the whole path. So a low limit on one union does not
+constrain a path that also has a `|` outside the override (which has the
+default limit); to lower the limit, wrap the whole path. `%override` is a
+directive, expanded before compilation, so the setting is carried
+explicitly: expansion leaves a `WithMaxAlternatives limit p` node around
+the expanded `p` (a constructor that only exists in the `Prenormal`
+phase), which `checkAlternatives` reads
+(`Graph.Command.expandDirectives` runs it on every command path and on
+each `%targets(…)` query); it does not otherwise change what the path
+means. TAB completion lowers `+` as `|` like a query and runs the same
+check: a prefix beyond its limit offers no completions.
+
+Implementation: `fragment` builds the terms from each flat chain of
+segments (`chain`): shared unions choose there (they are the outer set of
+terms), a relational union's sides are identified, and it becomes an
+`Alt` in the term, with its sides that have a join as `Held` walks, and a
+term for each side written alone. Until its unions are chosen a term
+has each step with the place it is written at in the path (`Written`),
+so that two parts of it are equal exactly when they are copies of one
+written part. `sequenceExpr` (`sequenceWithin`) distributes as it does
+without unions, copying an `Alt` or a `Held` walk like a step.
+`resolve` chooses the unions, each in all its copies at once, in every
+order within a group of unions whose order can matter (`dependent`), and
+`placeShared` puts the copies that chose a walk together, with each
+prefix and continuation once. `atRoot` writes the joins of the root (and
+those right after another join) out for each of their continuations, in
+the term of a whole path and after every choice.
+
+The `@` examples above hold for either union.
+
 **Command policy (from the branch).** Query commands append `/@` before
 compiling. Construction (`mk`) does not. The engine never adds defaults
 itself.
@@ -119,15 +488,37 @@ itself.
 `tag`/`t`, `rm`, `rmnf`, `at`, `mv`, `cp`, `rn`/`cl` with or without
 `--all-parents`) accepts directives. `dd`, `text` and `desc` take a
 label, not a path. A command keeps its paths unexpanded until it runs,
-then expands each one (`Graph.Command.expandDirectives`), left to right,
-before it does anything else:
+then expands each one (`Graph.Command.expandDirectives` for a query,
+`expandConstruction` for a constructed path), left to right, before it
+does anything else; expanding also lowers `+` (see *Unions*):
+
+- `%override({plus = shared}, p)` / `%override({plus = relational}, p)`
+  expand `p` with `+` lowered to `++` / `|`, and
+  `%override({max-alternatives = N}, p)` sets its alternatives limit (see
+  *Unions*).
 
 - `%history(n)` / `%last` become `@N` for the location `n` steps back in the
   history *at that moment*, so in `cd a; cd %last` (one line) the `%last`
   is the location before `cd a`.
 - `%targets(p)` becomes `%never + @N1 + @N2 + …` for the current targets of
-  `p`, queried from the current location. It is a union, so in `mk` each
-  target is one alternative: with `0 -p-> 1`, `mk x/%targets(p)` creates
+  `p`, queried from the current location (a `+` in `p` is a query's, `|`,
+  unless an `%override` inside `p` says otherwise). The result is a `+`
+  union, lowered where `%targets` is: `++` in `mk`, so
+  `mk a/%targets(p)/(x & y)` chooses one target for the whole path, and
+  `|` in a query, where each copy that distribution makes may choose a
+  different target: `ls a/%targets(p)/(x & y)` also finds an `x` under
+  one target with a `y` under another. For the per-target reading in a
+  query, write `%override({plus = shared}, a/%targets(p)/(x & y))`, or
+  run the command at each target with `at %targets(p) …`
+  (`%override({plus = relational}, …)` gives the per-copy reading in
+  `mk`). Many targets before a conjunction multiply (`k` targets copied
+  into `n` conjuncts are `k^n` alternatives) and can hit the alternatives
+  limit: with 42 targets, `ls %targets(*)/(a & b)` would have 1764 and is
+  refused, where the per-target reading has 42. Targets that nothing
+  copies do not multiply, whatever else the path has: `ls x & %targets(*)/a`
+  has one alternative for each target
+  (`test/golden/ge/directives/targets-many.golden`). In
+  `mk` each target is one alternative: with `0 -p-> 1`, `mk x/%targets(p)` creates
   `0 -x-> 1`, but with `0 -p-> 1` and `0 -p-> 2` it is ambiguous (two
   repairs, nothing changed). `mk #t/""/%targets(q)` and
   `tag #t %targets(q)` tag `q`'s target. Likewise, as an `rn`/`cl`

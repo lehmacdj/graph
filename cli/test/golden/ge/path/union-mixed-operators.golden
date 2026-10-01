@@ -1,0 +1,49 @@
+==========graph==========
+0 -a-> 1
+==========input==========
+ls a + b | c
+ls a | b ++ c
+ls %override({plus = both}, a)
+ls %override({minus = shared}, a)
+ls (a + b) | c
+==========stdout==========
+g> <interactive>:1:10:
+  |
+1 | ls a + b | c
+  |          ^
+The union operators + and | are mixed without parentheses; add parentheses around one of them, e.g. (a + b) | c, near the | at line 1, columns 10-10. (MixedUnionOperators)
+
+g> <interactive>:1:10:
+  |
+1 | ls a | b ++ c
+  |          ^
+The union operators | and ++ are mixed without parentheses; add parentheses around one of them, e.g. (a | b) ++ c, near the ++ at line 1, columns 10-11. (MixedUnionOperators)
+
+g> <interactive>:1:15:
+  |
+1 | ls %override({plus = both}, a)
+  |               ^
+Unknown value both for plus; it accepts shared or relational at line 1, columns 15-25. (InvalidOverrideSetting)
+
+g> <interactive>:1:15:
+  |
+1 | ls %override({minus = shared}, a)
+  |               ^
+Unknown setting minus in %override; the settings are plus and max-alternatives at line 1, columns 15-28. (InvalidOverrideSetting)
+
+g> [0m[0;1ma[0m[0m [0;34m@000000000001[0m [0m[0m
+g> Goodbye!
+==========stderr==========
+==========graph-dump==========
+@000000000000{out=[@000000000001 via "a"], in=[@0daCJjMrQel8 via "origin"]}
+@000000000001{out=[], in=[@000000000000 via "a"]}
+@0daCJjMrQel8{out=[@zsBuPkn5mh8F via "file-extensions", @AhQufiPzgyRf via "file-hashes", @3JJvxFUHGAA1 via "historical-special-nodes", @S00KkOYoVpFu via "import-dates", @a0fVkm0kR7KE via "import-urls", @927u9Xyky2pC via "mime-types", @000000000000 via "origin", @pbYxBO6fzBQV via "tags"], in=[]}
+@3JJvxFUHGAA1{out=[@VEfLhuTgZ88Z via "sequence-ids"], in=[@0daCJjMrQel8 via "historical-special-nodes"]}
+@927u9Xyky2pC{out=[], in=[@0daCJjMrQel8 via "mime-types"]}
+@AhQufiPzgyRf{out=[], in=[@0daCJjMrQel8 via "file-hashes"]}
+@S00KkOYoVpFu{out=[], in=[@0daCJjMrQel8 via "import-dates"]}
+@VEfLhuTgZ88Z{out=[], in=[@3JJvxFUHGAA1 via "sequence-ids"]}
+@a0fVkm0kR7KE{out=[], in=[@0daCJjMrQel8 via "import-urls"]}
+@pbYxBO6fzBQV{out=[], in=[@0daCJjMrQel8 via "tags"]}
+@zsBuPkn5mh8F{out=[], in=[@0daCJjMrQel8 via "file-extensions"]}
+==========data==========

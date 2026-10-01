@@ -41,6 +41,7 @@ import Models.NID
 import Models.Path.ParsedPath
 import Models.Path.Simple (Path)
 import Models.Path.Simple qualified as Simple
+import Models.PathPattern.Compile (TooManyAlternatives (..), checkAlternatives)
 import Models.PathPattern.Match (ConcreteHop (..), ConcreteRoute (..), selectedRoutes)
 import MyPrelude
 import System.Console.Terminal.Size qualified as Terminal
@@ -115,12 +116,13 @@ interpretDirective ::
   ) =>
   SourceRange ->
   Directive 'WithDirectives ->
-  Eff effs Path
+  Eff effs ParsedPath
 interpretDirective sourceRange = \case
   LocationFromHistory i -> gets @History (Absolute . fst . backInTime i)
   Targets p -> do
     currentNid <- currentLocation
-    p' <- handleDirectivesWith interpretDirective p
+    p' <- handleDirectivesWith (pure Relational) interpretDirective p
+    checkAlternativesLimit p'
     targets <- Paths.queryTargets currentNid p'
     when (null targets) $
       let shown =
@@ -129,8 +131,9 @@ interpretDirective sourceRange = \case
               ++ ") at "
               ++ pack (showSpan sourceRange.startPos sourceRange.endPos)
        in modify \(EmptyTargets xs) -> EmptyTargets (shown : xs)
-    -- this is a little bit inefficient of an embedding, but not too bad
-    pure $ foldl' (Simple.:+) Zero (mapSet Absolute targets)
+    -- this is a little bit inefficient of an embedding, but not too bad;
+    -- it is a + union, lowered like a + written where %targets is
+    pure $ foldl' (:+) Zero (mapSet Absolute targets)
   HttpResource uri -> Absolute <$> importUrlOnce uri
   Splice expr ->
     throwError $
@@ -141,6 +144,8 @@ interpretDirective sourceRange = \case
           ++ " one at "
           ++ pack (showSpan sourceRange.startPos sourceRange.endPos)
           ++ "."
+  -- 'handleDirectivesWith' lowers these itself
+  Override settings p -> pure (Directive sourceRange (Override settings p))
 
 -- | Import a URL unless this command line already imported it (and that
 -- node still exists: @mk x/URL ; rmnf x ; mk y/URL@ imports it again).
@@ -245,7 +250,80 @@ expandDirectives ::
   ) =>
   ParsedPath ->
   Eff effs Path
-expandDirectives p = provide_ (handleDirectivesWith interpretDirective p)
+expandDirectives = expandDirectivesAs Relational
+
+-- | 'expandDirectives' for a path that is constructed: @+@ is @++@.
+expandConstruction ::
+  ( Members
+      [ Provider_ GraphMetadataEditing (),
+        State History,
+        State ImportedUrls,
+        State EmptyTargets,
+        GetLocation,
+        Error UserError,
+        GetTime,
+        Web,
+        FreshNID,
+        Dualizeable,
+        Readline
+      ]
+      effs,
+    HasGraph Text effs
+  ) =>
+  ParsedPath ->
+  Eff effs Path
+expandConstruction = expandDirectivesAs Shared
+
+expandDirectivesAs ::
+  ( Members
+      [ Provider_ GraphMetadataEditing (),
+        State History,
+        State ImportedUrls,
+        State EmptyTargets,
+        GetLocation,
+        Error UserError,
+        GetTime,
+        Web,
+        FreshNID,
+        Dualizeable,
+        Readline
+      ]
+      effs,
+    HasGraph Text effs
+  ) =>
+  UnionKind ->
+  ParsedPath ->
+  Eff effs Path
+expandDirectivesAs plus p0 = do
+  p <- provide_ (handleDirectivesWith (pure plus) interpretDirective p0)
+  checkAlternativesLimit p
+  pure p
+
+-- | Fail readably, before compiling it for real, if a path would make more
+-- alternatives than its limit allows.
+checkAlternativesLimit :: (Error UserError :> effs) => Path -> Eff effs ()
+checkAlternativesLimit p = case checkAlternatives p of
+  Right () -> pure ()
+  Left (TooManyAlternatives n) ->
+    throwError . OtherError $
+      "This path would make more than "
+        ++ tshow n
+        ++ " alternatives, since each copy distribution makes of a | union"
+        ++ " chooses its side. Write ++ for a union whose side every copy"
+        ++ " shares, wrap the path in %override({plus = shared}, …), narrow"
+        ++ " it, or raise the limit with %override({max-alternatives = …},"
+        ++ " …). (TooManyAlternatives)"
+  Left (TooLargeToCount n) ->
+    throwError . OtherError $
+      "This path's unions make too much to count its alternatives within"
+        ++ " the limit of "
+        ++ tshow n
+        ++ ": each copy distribution makes of a | union chooses its side,"
+        ++ " and what is made on the way is limited too, however few"
+        ++ " alternatives it comes to. Write ++ for a union whose side every"
+        ++ " copy shares, wrap the path in %override({plus = shared}, …),"
+        ++ " narrow it, or raise the limit with"
+        ++ " %override({max-alternatives = …}, …). (TooLargeToCount)"
 
 type CommandEffects effs =
   ( Members [DisplayImage, Echo, Error UserError, SetLocation, GetLocation, Dualizeable] effs,
@@ -394,13 +472,13 @@ runCommand' = \case
   NodeId -> currentLocation >>= echo . show
   Dualize -> dualize
   Make p0 -> do
-    p <- expandDirectives p0
+    p <- expandConstruction p0
     nid <- currentLocation
     prompt <- gets @History (view #now)
     newNodes <- Paths.constructPath prompt False nid p
     subsumeUserError @Missing (tagNodesWithTime newNodes)
   MakeAllowingOrphans p0 -> do
-    p <- expandDirectives p0
+    p <- expandConstruction p0
     nid <- currentLocation
     prompt <- gets @History (view #now)
     newNodes <- Paths.constructPath prompt True nid p
@@ -427,7 +505,7 @@ runCommand' = \case
     nids <- Paths.queryTargets nid p
     forM_ nids $ deleteNode @Text
   Tag p0 q0 -> do
-    p <- expandDirectives p0
+    p <- expandConstruction p0
     q <- expandDirectives q0
     nid <- currentLocation
     let err = singleErr "the last argument of tag"

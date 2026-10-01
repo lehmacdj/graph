@@ -1,0 +1,56 @@
+==========graph==========
+==========input==========
+mk (a + b)/(x & y)
+mk (a | b)/(x & y)
+mk %override({plus = relational}, (a + b)/(x & y))
+==========stdout==========
+g> g> g> g> Goodbye!
+==========stderr==========
+This path has 2 possible repairs. Nothing was changed. Pin a node with @N or exclude one with !{@N} to choose.
+  1. @000000000000 -"a"-> new1 -"x"-> new2 & @000000000000 -"a"-> new1 -"y"-> new3
+    creates: @000000000000 -"a"-> new1, new1 -"x"-> new2, new1 -"y"-> new3
+    use: mk a/(x & y)
+  2. @000000000000 -"b"-> new1 -"x"-> new2 & @000000000000 -"b"-> new1 -"y"-> new3
+    creates: @000000000000 -"b"-> new1, new1 -"x"-> new2, new1 -"y"-> new3
+    use: mk b/(x & y)
+
+This path has 4 possible repairs. Nothing was changed. Pin a node with @N or exclude one with !{@N} to choose.
+  1. @000000000000 -"a"-> new1 -"x"-> new2 & @000000000000 -"a"-> new1 -"y"-> new3
+    creates: @000000000000 -"a"-> new1, new1 -"x"-> new2, new1 -"y"-> new3
+    use: mk a/(x & y)
+  2. @000000000000 -"b"-> new1 -"x"-> new2 & @000000000000 -"b"-> new1 -"y"-> new3
+    creates: @000000000000 -"b"-> new1, new1 -"x"-> new2, new1 -"y"-> new3
+    use: mk b/(x & y)
+  3. @000000000000 -"a"-> new1 -"x"-> new2 & @000000000000 -"b"-> new3 -"y"-> new4
+    creates: @000000000000 -"a"-> new1, @000000000000 -"b"-> new3, new1 -"x"-> new2, new3 -"y"-> new4
+    use: mk a/x & b/y
+  4. @000000000000 -"b"-> new1 -"x"-> new2 & @000000000000 -"a"-> new3 -"y"-> new4
+    creates: @000000000000 -"a"-> new3, @000000000000 -"b"-> new1, new1 -"x"-> new2, new3 -"y"-> new4
+    use: mk b/x & a/y
+
+This path has 4 possible repairs. Nothing was changed. Pin a node with @N or exclude one with !{@N} to choose.
+  1. @000000000000 -"a"-> new1 -"x"-> new2 & @000000000000 -"a"-> new1 -"y"-> new3
+    creates: @000000000000 -"a"-> new1, new1 -"x"-> new2, new1 -"y"-> new3
+    use: mk a/(x & y)
+  2. @000000000000 -"b"-> new1 -"x"-> new2 & @000000000000 -"b"-> new1 -"y"-> new3
+    creates: @000000000000 -"b"-> new1, new1 -"x"-> new2, new1 -"y"-> new3
+    use: mk b/(x & y)
+  3. @000000000000 -"a"-> new1 -"x"-> new2 & @000000000000 -"b"-> new3 -"y"-> new4
+    creates: @000000000000 -"a"-> new1, @000000000000 -"b"-> new3, new1 -"x"-> new2, new3 -"y"-> new4
+    use: mk a/x & b/y
+  4. @000000000000 -"b"-> new1 -"x"-> new2 & @000000000000 -"a"-> new3 -"y"-> new4
+    creates: @000000000000 -"a"-> new3, @000000000000 -"b"-> new1, new1 -"x"-> new2, new3 -"y"-> new4
+    use: mk b/x & a/y
+
+==========graph-dump==========
+@000000000000{out=[], in=[@0daCJjMrQel8 via "origin"]}
+@0daCJjMrQel8{out=[@zsBuPkn5mh8F via "file-extensions", @AhQufiPzgyRf via "file-hashes", @3JJvxFUHGAA1 via "historical-special-nodes", @S00KkOYoVpFu via "import-dates", @a0fVkm0kR7KE via "import-urls", @927u9Xyky2pC via "mime-types", @000000000000 via "origin", @pbYxBO6fzBQV via "tags"], in=[]}
+@3JJvxFUHGAA1{out=[@VEfLhuTgZ88Z via "sequence-ids"], in=[@0daCJjMrQel8 via "historical-special-nodes"]}
+@927u9Xyky2pC{out=[], in=[@0daCJjMrQel8 via "mime-types"]}
+@AhQufiPzgyRf{out=[], in=[@0daCJjMrQel8 via "file-hashes"]}
+@S00KkOYoVpFu{out=[], in=[@0daCJjMrQel8 via "import-dates"]}
+@VEfLhuTgZ88Z{out=[], in=[@3JJvxFUHGAA1 via "sequence-ids"]}
+@a0fVkm0kR7KE{out=[], in=[@0daCJjMrQel8 via "import-urls"]}
+@pbYxBO6fzBQV{out=[], in=[@0daCJjMrQel8 via "tags"]}
+@zsBuPkn5mh8F{out=[], in=[@0daCJjMrQel8 via "file-extensions"]}
+==========data==========

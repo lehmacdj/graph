@@ -236,10 +236,10 @@ spec_residuationExamples = describe "residuation examples" do
       residuateIn (graphWithEdges [edge' 1 "a" 2]) [path| a & a/@000000000002 |]
         `shouldBe` Right AlreadyResolves
     it "an unpinned repair from another alternative still wins" $
-      patches (graphWithEdges [two]) [path| a/@000000000002 + (a & a/@000000000002) |]
+      patches (graphWithEdges [two]) [path| a/@000000000002 ++ (a & a/@000000000002) |]
         `shouldBe` [[c <> " a " <> n 2]]
     it "a pin does not eliminate a superset from another alternative" $
-      length (patches (graphWithEdges [two]) [path| (a & a/@000000000002) + a/@000000000002/b |])
+      length (patches (graphWithEdges [two]) [path| (a & a/@000000000002) ++ a/@000000000002/b |])
         `shouldBe` 3
     it "a pin does not eliminate left evidence: mk b/a & b/@2/a" $
       length (patches (graphWithEdges [edge' 1 "b" 1, two]) [path| b/a & b/@000000000002/a |])
@@ -248,7 +248,7 @@ spec_residuationExamples = describe "residuation examples" do
       length
         ( patches
             (graphWithEdges [two])
-            [path| (b/a & b/@000000000002/a) + (b & b/@000000000002/a) |]
+            [path| (b/a & b/@000000000002/a) ++ (b & b/@000000000002/a) |]
         )
         `shouldBe` 2
     it "a pin to the current node: mk (a & b)/@ & a" $
@@ -361,12 +361,12 @@ spec_residuationExamples = describe "residuation examples" do
     patches (graphWithEdges []) [path| (a & b)/@ |]
       `shouldBe` [[c <> " a new1", c <> " b new1"]]
   it "unions are alternatives: mk a + b" $
-    patches (graphWithEdges []) [path| a + b |]
+    patches (graphWithEdges []) [path| a ++ b |]
       `shouldBe` [[c <> " a new1"], [c <> " b new1"]]
   it "equivalent alternatives are one repair: mk a + a/@" $
-    patches (graphWithEdges []) [path| a + a/@ |] `shouldBe` [[c <> " a new1"]]
+    patches (graphWithEdges []) [path| a ++ a/@ |] `shouldBe` [[c <> " a new1"]]
   it "a redundant start join is one repair: mk a + @/a" $
-    patches (graphWithEdges []) [path| a + @/a |] `shouldBe` [[c <> " a new1"]]
+    patches (graphWithEdges []) [path| a ++ @/a |] `shouldBe` [[c <> " a new1"]]
   it "independent endpoints may already coincide" $
     residuateIn (graphWithEdges [edge' 1 "a" 2, edge' 1 "b" 2]) [path| a & b |]
       `shouldBe` Right AlreadyResolves
@@ -392,25 +392,25 @@ spec_residuationExamples = describe "residuation examples" do
       noLabel (graphWithEdges [edge' 1 "a" 2, edge' 2 "foo" 3]) [path| a/* |]
         `shouldBe` Right AlreadyResolves
     it "an alternative lacking a label is an error, not dropped: mk a + *" $
-      noLabel (graphWithEdges []) [path| a + * |]
+      noLabel (graphWithEdges []) [path| a ++ * |]
         `shouldNeedLabel` (MWild, 0, 0)
     it "whichever alternative comes first: mk * + a" $
-      noLabel (graphWithEdges []) [path| * + a |]
+      noLabel (graphWithEdges []) [path| * ++ a |]
         `shouldNeedLabel` (MWild, 0, 0)
     it "a regex alternative lacking a label is an error: mk a + regex" $
-      noLabel (graphWithEdges []) [path| a + regex:"^x"|]
+      noLabel (graphWithEdges []) [path| a ++ regex:"^x"|]
         `shouldSatisfy` \case
           Left (UnsupportedLabel (MRegex _) 0 0 _) -> True
           _ -> False
     it "a path that already resolves is a no-op: mk a + *" $ do
-      noLabel (graphWithEdges [edge' 1 "a" 2]) [path| a + * |]
+      noLabel (graphWithEdges [edge' 1 "a" 2]) [path| a ++ * |]
         `shouldBe` Right AlreadyResolves
-      noLabel (graphWithEdges [edge' 1 "x" 2]) [path| a + * |]
+      noLabel (graphWithEdges [edge' 1 "x" 2]) [path| a ++ * |]
         `shouldBe` Right AlreadyResolves
-      noLabel (graphWithEdges [edge' 1 "x" 2, edge' 2 "y" 3]) [path| b + */* |]
+      noLabel (graphWithEdges [edge' 1 "x" 2, edge' 2 "y" 3]) [path| b ++ */* |]
         `shouldBe` Right AlreadyResolves
     it "a label-needing superset of another repair is not needed: mk a + a/*" $
-      fmap repairLabels (noLabel (graphWithEdges []) [path| a + a/* |])
+      fmap repairLabels (noLabel (graphWithEdges []) [path| a ++ a/* |])
         `shouldBe` Right [["a"]]
     it "an existing edge for * avoids the label: mk * & a" $
       fmap repairLabels (noLabel (graphWithEdges [edge' 1 "x" 2]) [path| * & a |])
@@ -425,19 +425,19 @@ spec_residuationExamples = describe "residuation examples" do
         [path| a/*/@000000000005 |]
         `shouldNeedLabel` (MWild, 0, 1)
     it "the error lists every survivor: mk c/d + c/e + *" $ do
-      let result = noLabel (graphWithEdges []) [path| c/d + c/e + * |]
+      let result = noLabel (graphWithEdges []) [path| c/d ++ c/e ++ * |]
       result `shouldNeedLabel` (MWild, 0, 0)
       labelErrorRepairs result `shouldBe` Just 3
     it "a plain wildcard lists only its own repair: mk a/*" $
       labelErrorRepairs (noLabel (graphWithEdges []) [path| a/* |])
         `shouldBe` Just 1
     it "an equally good label-free repair is not taken: mk a/* + */b" $ do
-      let result = noLabel (graphWithEdges [edge' 1 "a" 2]) [path| a/* + */b |]
+      let result = noLabel (graphWithEdges [edge' 1 "a" 2]) [path| a/* ++ */b |]
       result `shouldNeedLabel` (MWild, 0, 1)
       labelErrorRepairs result `shouldBe` Just 2
     it "a missing label equals no literal: mk \"\\0MWild\" + *" $
       labelErrorRepairs
-        (noLabel (graphWithEdges []) (P.Literal "\0MWild" P.:+ P.Wild))
+        (noLabel (graphWithEdges []) (P.Literal "\0MWild" P.:++ P.Wild))
         `shouldBe` Just 2
     it "chooser-supplied labels are unaffected: mk a + *" $ do
       let withChooser chooser =
@@ -447,7 +447,7 @@ spec_residuationExamples = describe "residuation examples" do
                   (`maybeNodeLookup` graphWithEdges [])
                   chooser
                   corpusCurrent
-                  (compilePath [path| a + * |])
+                  (compilePath [path| a ++ * |])
               )
       withChooser (const (Just "a")) `shouldBe` Right [["a"]]
       withChooser (const (Just "x")) `shouldBe` Right [["a"], ["x"]]
