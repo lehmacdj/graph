@@ -167,6 +167,8 @@ test_pPath =
       "regex:'asdf'" `parsesTo` RegexMatch [re|asdf|],
       "regex:'\\.'" `parsesTo` RegexMatch [re|\.|],
       "~regex:\"asdf\"" `parsesTo` Backwards (RegexMatch [re|asdf|]),
+      "regex:\"x\" & a" `parsesTo` (RegexMatch [re|x|] :& Literal "a"),
+      "regex:'x' / a" `parsesTo` (RegexMatch [re|x|] :/ Literal "a"),
       -- escape sequences need to not be interpreted in regexes
       [rq|~regex:"\."|] `parsesTo` Backwards (RegexMatch [re|\.|]),
       -- regression: caught this as an error while working on Graph.Timestamps

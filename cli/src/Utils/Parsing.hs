@@ -130,7 +130,7 @@ debugParser parser input = do
     Left err -> say $ "Parser failed with:\n" ++ pack (errorBundlePretty err)
 
 pRegex :: Parser CheckedRegex
-pRegex = label "regex:\"<regex>\"" do
+pRegex = label "regex:\"<regex>\"" $ lexeme do
   str <-
     between (string "regex:\"") (char '"') (takeWhileP Nothing (/= '"'))
       <|> between (string "regex:'") (char '\'') (takeWhileP Nothing (/= '\''))
