@@ -381,17 +381,16 @@ compiling and resolving a query well under a second. It does not bound
 own, `max-repairs` (§5). Measured with `ge` in an unoptimized (`--fast`)
 build, each including about 0.06s of startup: on a graph with none of
 the path's edges, where each alternative has one candidate,
-`mk (a | b)/(c & … & j)` (256 repairs) takes 0.25s,
-`mk (a | b)/(c & … & k)` (512) 0.47s and `mk (a | b | c)/(d & … & i)`
-(729) 0.44s. On a graph that already has an `a` and a `b` edge every
+`mk (a | b)/(c & … & j)` (256 repairs) takes 0.20s,
+`mk (a | b)/(c & … & k)` (512) 0.35s and `mk (a | b | c)/(d & … & i)`
+(729) 0.30s. On a graph that already has an `a` and a `b` edge every
 copy of the prefix may bind or not, so each alternative of
 `mk (a | b)/(c & … & g)` has 32 candidates: 1024 in all, under the
-default limit of 5000, and its 32 repairs are listed in about 0.5s. The
+default limit of 5000, and its 32 repairs are listed in about 0.2s. The
 729- and 256-repair paths above have far more (the latter 65,536) and
-are refused in about 2s to 3s. In `mk` a `+` is `++`, so this only
+are refused in about 0.6s and 0.8s. In `mk` a `+` is `++`, so this only
 arises for a `|` written there. (All figures here and in §5 are
-approximate: they were taken on a machine doing other work, and an idle
-one gave about 0.7 of them.)
+approximate, from single runs on a machine that was not always idle.)
 
 The check (`checkAlternatives`) counts the alternatives as `compilePath`
 makes them, after contradictory ones are dropped and ones that glue to
@@ -827,9 +826,9 @@ count, since telling which they are is the work the limit bounds; so a
 path with one repair can have many candidates (ten existing conjuncts
 and a new one are 1024, four chains of five 1296, five chains of three
 1024, seven chains of two 2187: all under the default, and done in
-about 0.8s, 1.3s, 0.9s and 2.0s with `ge`), and with enough existing
+about 0.2s, 0.4s, 0.3s and 0.5s with `ge`), and with enough existing
 steps it is over the limit (thirteen existing conjuncts and a new one
-are 8192). Pinning a step with `@N` leaves it one way to match, and so
+are 8192, refused in 0.3s). Pinning a step with `@N` leaves it one way to match, and so
 divides the count.
 Then:
 - Up to the limit nothing differs: the same survivors in the same order,
@@ -874,41 +873,43 @@ paths below, and almost all of it is in making the candidates, not in
 selecting. Refusing a path costs what making the candidates up to the
 limit costs, and then the matching pass that tells whether the path
 resolves. Measured in an unoptimized (`--fast`) build; "alone" is
-residuation alone, and `ge` adds about 0.06s of startup, compiling, and
-for an ambiguous path the suggestions below. The figures are
+residuation alone over a graph in memory, and `ge` adds about 0.06s of
+startup, compiling, reading the nodes (each once for a command) and,
+for an ambiguous path, the suggestions below. The figures are
 approximate (see §2):
 - Small patterns. 625 candidates of four steps with four matches each
   (`mk regex/x & regex/y & regex/z & regex/w`, 256 repairs) take 0.03s
   alone, and so do the 511 of a chain of eight steps down a binary
   tree. With seven matches each (4096 candidates, 2401 repairs) the
-  four steps take 0.3s alone and 2.0s with `ge`; with eight (6561) the
-  path is refused, in 0.7s with `ge`.
+  four steps take 0.3s alone and 0.5s with `ge`; with eight (6561) the
+  path is refused, in 0.16s with `ge`.
 - Independent pins. `mk a/~a & … & k/~k` (2048 candidates, all of them
-  repairs) takes 0.9s alone and 2.3s with `ge`; with a twelfth (4096)
-  3.6s alone and 5.5s with `ge`; with a thirteenth it is refused.
+  repairs) takes 0.9s alone and 1.4s with `ge`; with a twelfth (4096)
+  2.5s alone and 3.7s with `ge`; with a thirteenth it is refused, in
+  1.6s.
 - Many pins in a larger pattern.
   `mk (a & b & c & d)/~a/(a & b & c & d)/~b` (64 pattern edges, 768
   counted, 576 candidates after unjustified pins, 27 repairs) takes
-  0.65s alone and 3.7s with `ge`, most of it suggestions.
+  0.65s alone and 2.0s with `ge`.
   `mk (a & b & c & d & e)/~a/(a & b & c & d)/~b` (100 edges, 3072
-  counted, 54 repairs) takes 4.6s alone and 20s with `ge`: the slowest
-  path of this kind found under the default.
+  counted, 54 repairs) takes 4s to 4.6s alone and 5.7s with `ge`: the
+  slowest path of this kind found under the default.
   `mk (a & b & c & d & e & f)/~a/(a & b)/~b` (12,288) is refused in
   2.4s with `ge`, and
-  `mk (a & b & c & d)/~a/(a & b & c & d)/~b/(a & b & c)` in 20s; without
+  `mk (a & b & c & d)/~a/(a & b & c & d)/~b/(a & b & c)` in 19s; without
   a limit that last path did not finish in 90 minutes.
 - Large patterns are not bounded by the count at all.
   `mk (a & a & c & b & b)/~b/(b & c & b & a)/~b/(c/@ & ~a/b/b/b & c & a/a)`
   on an empty graph distributes to 480 pattern edges and has only 45
   candidates and 10 repairs: it takes 8s to 10s alone, all of it making
-  the candidates, and 26s with `ge`.
+  the candidates, and 16s with `ge`.
   `mk (b/~b & c/~c & a/~a & b/~b & b/~b & a/~a & c/~c & b/~b)/(a/~a/b & c/~c & c/@N)`,
   with `N` the current node, is refused with `ge` after 29s on an empty
-  graph, 10s on one with `a/b` and `c`, and 2.2s on one with `a`, `b`
+  graph, 8s on one with `a/b` and `c`, and 1.8s on one with `a`, `b`
   and `c`.
 - Without a limit, the 6561 candidates (4096 repairs) of four steps with
   eight matches each take 0.6s alone (34s before selection stopped
-  comparing every pair) and 3.1s with `ge`.
+  comparing every pair) and 0.7s with `ge`.
 
 **`mk`.**
 - One survivor: apply it.
@@ -962,9 +963,37 @@ approximate (see §2):
   exponential in the number of written `+` choices either way), and for
   each of the five listed repairs at most 16 residuations of paths
   without `+` (rewrites beyond that are kept rather than tried for
-  removal). With `0 -a-> 1`, `0 -a-> 2`,
-  `mk a/b/(@1 + @2 + @)/…` with 12 such factors takes about 8s with
-  suggestions, against about 3s without (`ls` of it takes about 3s).
+  removal). Residuating a candidate costs little when its rewrites pin
+  most steps, and as much as the residuation that gave the repairs when
+  they pin none, so two things spare residuations without changing what
+  is suggested (`suggestPathsReference` residuates every candidate, and
+  the tests compare the two):
+  - A candidate is residuated once, whichever of the listed repairs it
+    is tried for: its repair, if it has exactly one, is kept by what the
+    candidate compiles to.
+  - A candidate that compiles to just one alternative that two or more
+    of the repairs are of is not residuated. Alone that alternative has
+    the candidates it had among the path's, a candidate is dominated
+    only within its alternative, and a survivor stays minimal among
+    fewer candidates, so it has those repairs still and cannot have just
+    one. This is the case of a repair none of whose steps can be
+    rewritten: its candidate is the path itself.
+
+  `mk` also reads each node once for the residuation and the
+  suggestions together, as nothing is written while a repair is chosen.
+  Measured as in *Limit on candidates*, the suggestions for
+  `mk (a & b & c & d & e)/~a/(a & b & c)/~b` (60 repairs, none of which
+  a path selects) took 10s for a residuation of 2.4s, and take 0.9s;
+  for the 100-edge path there 13s, now 1.0s. What is left is one
+  candidate, the path with `!{@N}` after its last step, which is over
+  the limit on candidates and costs about 0.9s to refuse, whatever the
+  residuation cost: for `mk (a & b & c)/~a/(a & b & c)/~b` that is
+  0.95s after a residuation of 0.07s. Where every listed repair gets a
+  suggestion the step was cheap already: 0.16s for 2048 independent
+  pins (residuation 1.0s), 0.03s for four steps with seven matches
+  each, and a millisecond or two for `mk a/b` with two `a` edges or
+  `mk a & a/@N`. With `0 -a-> 1`, `0 -a-> 2`,
+  `mk a/b/(@1 + @2 + @)/…` with 12 such factors takes 0.07s with `ge`.
   The label error (6) lists no suggestions.
 - More candidates than the limit: the `TooManyRepairs` error above.
 - **Orphans.** If the patch creates a weakly-connected component with no

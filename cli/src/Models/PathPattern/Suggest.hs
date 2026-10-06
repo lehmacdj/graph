@@ -9,6 +9,7 @@
 -- so a suggested path is never wrong; when none is confirmed there is none.
 module Models.PathPattern.Suggest
   ( suggestPaths,
+    suggestPathsReference,
     renderSurfacePath,
     parseSurfacePath,
     spec_suggestPath,
@@ -47,6 +48,16 @@ data Rewrite = Pin NID | Exclude (Set NID)
 -- survivors are found: at most about the compilation residuation already
 -- did. Each suggestion then
 -- residuates paths without @+@, at most 'maxResiduations' times.
+--
+-- The suggestions are those of 'suggestPathsReference'. Two things spare
+-- residuations, which cost as much as the one that gave the survivors
+-- when a candidate path pins little:
+--
+-- * A candidate path is residuated once, whichever survivors it is tried
+--   for: its repair, if it has exactly one, is kept by what it compiles to.
+-- * A candidate that compiles to just an alternative that two or more of
+--   the survivors are of is not residuated: it has those repairs still
+--   ('stillAmbiguous').
 suggestPaths ::
   forall m.
   (Monad m) =>
@@ -58,6 +69,116 @@ suggestPaths ::
   [Residual] ->
   m [Maybe Path]
 suggestPaths lookupNode chooser cur surface survivors =
+  \wanted -> flip S.evalStateT mempty do
+    let bases = choicesFor (setFromList (map (.patternPath) wanted))
+    for wanted \survivor ->
+      case lookup survivor.patternPath bases of
+        Nothing -> pure Nothing
+        Just base -> suggestFrom survivor base
+  where
+    -- a choice for each wanted alternative, stopping once all are found
+    choicesFor :: Set PatternPath -> Map PatternPath Path
+    choicesFor = go mempty (compileAlternatives surface)
+      where
+        go found _ wanted | null wanted = found
+        go found [] _ = found
+        go found ((alternative, choice) : rest) wanted
+          | alternative `member` wanted =
+              go
+                (insertMap alternative choice found)
+                rest
+                (deleteSet alternative wanted)
+          | otherwise = go found rest wanted
+    suggestFrom survivor base = do
+      let rewrites = stepRewrites survivors survivor base
+          candidate keep =
+            reassociate (applyRewrites (Map.restrictKeys rewrites keep) base)
+          dropIfUnneeded keep i = do
+            let keep' = deleteSet i keep
+            ok <- confirms survivor (candidate keep')
+            pure (if ok then keep' else keep)
+          -- within the budget; rewrites beyond it are kept
+          droppable = take (maxResiduations - 1) (keys rewrites)
+      ok <- confirms survivor (candidate (keysSet rewrites))
+      if ok
+        then
+          Just . candidate
+            <$> foldM dropIfUnneeded (keysSet rewrites) droppable
+        else pure Nothing
+    -- the text shown parses back to the path, and the path has exactly this
+    -- repair
+    confirms :: Residual -> Path -> Confirming m Bool
+    confirms survivor p
+      | parseSurfacePath (renderSurfacePath p) /= Just p = pure False
+      | otherwise =
+          onlyRepair (compilePath p) <&> \case
+            Just patch ->
+              patchSubsumes patch survivor.patch
+                && patchSubsumes survivor.patch patch
+            Nothing -> False
+    -- the patch of a query's repair, if it has exactly one
+    onlyRepair :: PathQuery -> Confirming m (Maybe Patch)
+    onlyRepair q
+      | stillAmbiguous survivors q = pure Nothing
+      | otherwise =
+          S.gets (lookup q) >>= \case
+            Just known -> pure known
+            Nothing -> do
+              found <-
+                lift (residuate lookupNode chooser cur q) <&> \case
+                  Right (Repairs (r :| [])) -> Just r.patch
+                  _ -> Nothing
+              S.modify' (insertMap q found)
+              pure found
+
+-- | Confirming candidate paths, with the repair of each query residuated
+-- so far, if it has exactly one.
+type Confirming m = S.StateT (Map PathQuery (Maybe Patch)) m
+
+-- | Whether a query is just one alternative that two or more of the
+-- survivors are of. Residuating it alone then gives two repairs or more,
+-- or an error, and never just one:
+--
+-- * its candidates are those the alternative had among the path's, since
+--   an alternative's candidates do not depend on the others, so none of
+--   them has an empty patch and there are no more of them;
+-- * a candidate is dominated only by one of its alternative, so the same
+--   ones are;
+-- * a survivor was no strict superset of any candidate of the path with
+--   pins among its own, so it is none of a candidate of the alternative;
+-- * two survivors are not equal modulo renaming, so deduplication keeps
+--   a patch for each.
+stillAmbiguous :: NonEmpty Residual -> PathQuery -> Bool
+stillAmbiguous survivors q = case toList q.alternatives of
+  [alternative] ->
+    not . null . drop 1 $
+      filter ((== alternative) . (.patternPath)) (toList survivors)
+  _ -> False
+
+-- | 'suggestPaths' as it is defined, residuating every candidate path:
+-- the reference it is tested against.
+--
+-- For each of the given survivors, a path that residuates to exactly it
+-- (modulo renaming of created nodes), if one is found, given every survivor
+-- of the same path. The lookup and chooser must be the ones the survivors
+-- were residuated with.
+--
+-- The path's alternatives are compiled once, each with a choice of @+@
+-- sides that gives it ('compileAlternatives'), until those of the given
+-- survivors are found: at most about the compilation residuation already
+-- did. Each suggestion then
+-- residuates paths without @+@, at most 'maxResiduations' times.
+suggestPathsReference ::
+  forall m.
+  (Monad m) =>
+  NodeLookup m ->
+  LabelChooser m ->
+  NID ->
+  Path ->
+  NonEmpty Residual ->
+  [Residual] ->
+  m [Maybe Path]
+suggestPathsReference lookupNode chooser cur surface survivors =
   \wanted -> do
     let bases = choicesFor (setFromList (map (.patternPath) wanted))
     for wanted \survivor ->

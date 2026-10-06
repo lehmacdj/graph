@@ -108,6 +108,7 @@ library
       Models.PathPattern.Residuate
       Models.PathPattern.ResiduateSpec
       Models.PathPattern.Suggest
+      Models.PathPattern.SuggestSpec
       Models.PathPattern.TestCorpus
       Models.PathPatternSpec
       MyPrelude

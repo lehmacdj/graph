@@ -19,6 +19,7 @@ module Graph.PathPattern.Execution
   )
 where
 
+import Control.Monad.State.Strict qualified as S
 import Data.List.NonEmpty qualified as NE
 import Error.UserError
 import Graph.Effect
@@ -87,17 +88,23 @@ planConstruction ::
   P.Path ->
   Eff r (Maybe Residual)
 planConstruction command allowOrphans cur p = do
-  result <-
-    residuateWithin (pathMaxRepairs p) readNode noLabels cur (compilePath p)
+  -- Nothing is written while a repair is chosen, so each node is read
+  -- once for the residuation and the suggestions together.
+  (result, suggested) <- flip S.evalStateT mempty do
+    result <-
+      residuateWithin (pathMaxRepairs p) readOnce noLabels cur (compilePath p)
+    suggested <- case chooseRepair <$> result of
+      Right (Ambiguous rs) ->
+        suggestPaths readOnce noLabels cur p rs (take shownRepairs (toList rs))
+      _ -> pure []
+    pure (result, suggested)
   residuation <- either (throwError . OtherError . renderResidualError) pure result
   case chooseRepair residuation of
     NoChange -> pure Nothing
     Impossible -> throwError $ OtherError "This path cannot be constructed."
     Ambiguous rs -> do
       let shown = take shownRepairs (toList rs)
-      suggestions <-
-        zipWith (\r s -> command r =<< s) shown
-          <$> suggestPaths readNode noLabels cur p rs shown
+          suggestions = zipWith (\r s -> command r =<< s) shown suggested
       throwError . OtherError $ renderChoiceError suggestions rs
     Apply r -> do
       let orphans = patchOrphans r.patch
@@ -111,6 +118,19 @@ planConstruction command allowOrphans cur p = do
               | o <- orphans
               ]
       pure (Just r)
+
+-- | 'readNode', keeping every node read.
+readOnce ::
+  (PathReading r) =>
+  NID ->
+  S.StateT (Map NID (Maybe (Node Text ()))) (Eff r) (Maybe (Node Text ()))
+readOnce n =
+  S.gets (lookup n) >>= \case
+    Just known -> pure known
+    Nothing -> do
+      node <- lift (readNode n)
+      S.modify' (insertMap n node)
+      pure node
 
 renderResidualError :: ResidualError -> Text
 renderResidualError = \case
