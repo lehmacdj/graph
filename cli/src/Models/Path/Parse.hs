@@ -3,6 +3,7 @@
 module Models.Path.Parse where
 
 import Control.Monad.Combinators.Expr
+import Data.Char (isDigit)
 import Data.Functor
 import Graph.SystemNodes (tagsNID)
 import Models.NID
@@ -71,7 +72,7 @@ pOverride :: Parser (Directive 'Partial)
 pOverride = do
   settings <-
     between (symbol "{") (symbol "}") (pSetting `sepBy` symbol ",")
-  settings' <- foldM addSetting (OverrideSettings Nothing Nothing) settings
+  settings' <- foldM addSetting (OverrideSettings Nothing Nothing Nothing) settings
   _ <- symbol ","
   Override settings' <$> pPartialPath
   where
@@ -96,22 +97,54 @@ pOverride = do
                 <> " for plus; it accepts shared or relational"
       "max-alternatives" -> case s.maxAlternatives of
         Just _ -> invalid range "The setting max-alternatives is given twice"
-        Nothing -> case (value, readMay value) of
-          ("unlimited", _) ->
-            pure s {maxAlternatives = Just UnlimitedAlternatives}
-          (_, Just n)
-            | n > 0 -> pure s {maxAlternatives = Just (AtMostAlternatives n)}
-          _ ->
-            invalid range $
-              "Unknown value "
-                <> value
-                <> " for max-alternatives; it accepts a positive number or "
-                <> "unlimited"
+        Nothing ->
+          limit range key value <&> \l ->
+            OverrideSettings
+              { plus = s.plus,
+                maxAlternatives =
+                  Just (maybe UnlimitedAlternatives AtMostAlternatives l),
+                maxRepairs = s.maxRepairs
+              }
+      "max-repairs" -> case s.maxRepairs of
+        Just _ -> invalid range "The setting max-repairs is given twice"
+        Nothing ->
+          limit range key value <&> \l ->
+            OverrideSettings
+              { plus = s.plus,
+                maxAlternatives = s.maxAlternatives,
+                maxRepairs = Just (maybe UnlimitedRepairs AtMostRepairs l)
+              }
       _ ->
         invalid range $
           "Unknown setting "
             <> key
-            <> " in %override; the settings are plus and max-alternatives"
+            <> " in %override; the settings are plus, max-alternatives and"
+            <> " max-repairs"
+    -- A limit: @unlimited@ ('Nothing'), or a positive number written in
+    -- decimal digits that is not too large to count to.
+    limit range key value
+      | value == "unlimited" = pure Nothing
+      | not (null value) && all isDigit value =
+          case readMay value :: Maybe Integer of
+            Just n
+              | n > toInteger (maxBound :: Int) ->
+                  invalid range $
+                    "The value "
+                      <> value
+                      <> " for "
+                      <> key
+                      <> " is too large; write unlimited for no limit"
+              | n > 0 -> pure (Just (fromInteger n))
+            _ -> unknown
+      | otherwise = unknown
+      where
+        unknown =
+          invalid range $
+            "Unknown value "
+              <> value
+              <> " for "
+              <> key
+              <> "; it accepts a positive number or unlimited"
     invalid (offset, range) = failAt offset . InvalidOverrideSetting range
 
 pHttpURI :: Parser URI
@@ -325,21 +358,35 @@ test_pDirective =
       -- parse anything here
       "%override({plus = shared}, a + b)"
         `parsesTo` Override
-          (OverrideSettings (Just Shared) Nothing)
+          (OverrideSettings (Just Shared) Nothing Nothing)
           (Literal "a" :+ Literal "b"),
       "%override({ plus=relational }, %targets(a) + b)"
         `parsesTo` Override
-          (OverrideSettings (Just Relational) Nothing)
+          (OverrideSettings (Just Relational) Nothing Nothing)
           (Directive testRange (Targets (Literal "a")) :+ Literal "b"),
       "%override({}, a)"
-        `parsesTo` Override (OverrideSettings Nothing Nothing) (Literal "a"),
+        `parsesTo` Override
+          (OverrideSettings Nothing Nothing Nothing)
+          (Literal "a"),
       "%override({max-alternatives = 100000}, a)"
         `parsesTo` Override
-          (OverrideSettings Nothing (Just (AtMostAlternatives 100000)))
+          (OverrideSettings Nothing (Just (AtMostAlternatives 100000)) Nothing)
           (Literal "a"),
       "%override({plus = shared, max-alternatives = unlimited}, a)"
         `parsesTo` Override
-          (OverrideSettings (Just Shared) (Just UnlimitedAlternatives))
+          (OverrideSettings (Just Shared) (Just UnlimitedAlternatives) Nothing)
+          (Literal "a"),
+      "%override({max-repairs = 5000}, a)"
+        `parsesTo` Override
+          (OverrideSettings Nothing Nothing (Just (AtMostRepairs 5000)))
+          (Literal "a"),
+      "%override({max-repairs = unlimited, max-alternatives = 7}, a)"
+        `parsesTo` Override
+          ( OverrideSettings
+              Nothing
+              (Just (AtMostAlternatives 7))
+              (Just UnlimitedRepairs)
+          )
           (Literal "a"),
       "%{some text here}" `parsesTo` Splice "some text here",
       "%{Absolute nid}" `parsesTo` Splice "Absolute nid",
@@ -359,6 +406,20 @@ test_pDirective =
       parseFails "%override({max-alternatives = 0}, a)",
       parseFails "%override({max-alternatives = many}, a)",
       parseFails "%override({max-alternatives = 1, max-alternatives = 2}, a)",
+      parseFails "%override({max-repairs = 0x10}, a)",
+      parseFails "%override({max-repairs = 99999999999999999999999}, a)",
+      parseFails "%override({max-repairs = 1e3}, a)",
+      parseFails "%override({max-alternatives = 0x10}, a)",
+      parseFails "%override({max-alternatives = 99999999999999999999999}, a)",
+      parseFails "%override({max-alternatives = -1}, a)",
+      "%override({max-repairs = 007}, a)"
+        `parsesTo` Override
+          (OverrideSettings Nothing Nothing (Just (AtMostRepairs 7)))
+          (Literal "a"),
+      parseFails "%override({max-repairs = 0}, a)",
+      parseFails "%override({max-repairs = -3}, a)",
+      parseFails "%override({max-repairs = many}, a)",
+      parseFails "%override({max-repairs = 1, max-repairs = 2}, a)",
       -- these were old regex syntax
       parseFails "re\"asdf\"",
       parseFails "re'asdf'",

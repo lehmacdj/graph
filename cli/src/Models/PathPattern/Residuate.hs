@@ -5,7 +5,8 @@
 -- existing node or a fresh one. The patch (nodes and edges to create) is
 -- derived from it. Candidates are enumerated by the evidence rule, fresh
 -- vertices are identified where that makes two pattern edges one patch edge,
--- and dominated or redundant candidates are dropped.
+-- and dominated or redundant candidates are dropped. Enumeration stops with
+-- 'TooManyRepairs' once it has made more candidates than the path's limit.
 module Models.PathPattern.Residuate
   ( Binding (..),
     Patch' (..),
@@ -18,6 +19,9 @@ module Models.PathPattern.Residuate
     NodeLookup,
     LabelChooser,
     residuate,
+    residuateWithin,
+    defaultMaxRepairs,
+    pathMaxRepairs,
     Choice (..),
     chooseRepair,
     residuatePure,
@@ -30,17 +34,39 @@ module Models.PathPattern.Residuate
     renderPatchLabel,
     renderMatcher,
     renderBinding,
+
+    -- * For tests
+    Candidate (..),
+    candidatesOf,
+    candidatesWithin,
+    select,
+    selectReference,
+    sharedPairs,
+    sharedPairsReference,
   )
 where
 
+import Control.Monad.State.Strict qualified as S
+import Control.Monad.Trans.Maybe (MaybeT (..))
+import Data.Bits (complement, setBit, (.&.))
 import Data.List.NonEmpty (nonEmpty)
+import Data.Map.Lazy qualified as LazyMap
 import Data.Map.Strict qualified as Map
+import Data.Set qualified as Set
 import Models.Connect
 import Models.Edge
 import Models.NID
 import Models.Node
+import Models.Path.Simple qualified as P
 import Models.PathPattern
-import Models.PathPattern.Match (Lookup, stepEdges)
+import Models.PathPattern.Match
+  ( Lookup,
+    Partial (..),
+    Resolution (..),
+    loadPattern,
+    matchPatternWithin,
+    stepEdges,
+  )
 import MyPrelude
 
 -- | What a vertex becomes: an existing node, or the n-th created node.
@@ -102,6 +128,9 @@ data ResidualError
     -- alternative. The survivors are listed preferred first; each one
     -- that needs a label shows it as 'Missing'.
     UnsupportedLabel Matcher Int Int (NonEmpty (Residual' PatchLabel))
+  | -- | the path does not resolve, and has more candidate repairs than
+    -- this limit, so they were not all made, let alone compared
+    TooManyRepairs Int
   deriving stock (Eq, Show, Generic)
 
 -- | What a construction command does with a residuation.
@@ -151,34 +180,82 @@ data Candidate = Candidate
     -- from the chooser, in route order; such an edge is labelled 'Missing'
     missingLabels :: [((Int, Int), Matcher)]
   }
+  deriving stock (Eq, Show, Generic)
 
+-- | How many candidates residuating a path may make, unless an
+-- @%override({max-repairs = …}, …)@ says otherwise. This bounds a count,
+-- not time: what a candidate costs grows with the pattern
+-- (docs/path-pattern-ir.md §5 has measurements).
+defaultMaxRepairs :: Int
+defaultMaxRepairs = 5000
+
+-- | The largest limit in effect at a step or node of the path: the one of
+-- the innermost @max-repairs@ override around it, or the default. The
+-- candidates are those of the whole path and cannot be attributed to a
+-- part of it, so the most generous limit asked for applies to all of it
+-- (as for @max-alternatives@, 'Models.PathPattern.Compile.checkAlternatives').
+pathMaxRepairs :: P.Path -> P.RepairsLimit
+pathMaxRepairs = go (P.AtMostRepairs defaultMaxRepairs)
+  where
+    go l = \case
+      P.WithLimits _ l' p -> go (fromMaybe l l'.maxRepairs) p
+      P.Union _ p q -> go l p `max` go l q
+      p P.:/ q -> go l p `max` go l q
+      p P.:& q -> go l p `max` go l q
+      P.Backwards p -> go l p
+      _ -> l
+
+-- | 'residuateWithin' the default limit.
 residuate ::
-  forall m.
   (Monad m) =>
   NodeLookup m ->
   LabelChooser m ->
   NID ->
   PathQuery ->
   m (Either ResidualError Residuation)
-residuate lookupNode chooser cur q = do
-  results <-
-    traverse
-      (uncurry (candidatesFor lookupNode chooser cur))
-      (zip [0 ..] (toList q.alternatives))
-  let candidates = concat results
-  pure
-    if any (isEmptyPatch . (.residual.patch)) candidates
-      then Right AlreadyResolves
-      else case nonEmpty (select candidates) of
-        Nothing -> Right Unsatisfiable
-        Just survivors ->
-          case [miss | s <- toList survivors, miss : _ <- [s.missingLabels]] of
-            -- a survivor needs a label: report it rather than fall back to
-            -- the other survivors or to eliminated candidates
-            ((ri, hi), m) : _ ->
-              Left (UnsupportedLabel m ri hi (fmap (.residual) survivors))
-            [] -> Right (Repairs (fmap (knownResidual . (.residual)) survivors))
+residuate = residuateWithin (P.AtMostRepairs defaultMaxRepairs)
+
+-- | Residuate, making at most the given number of candidates. A candidate
+-- is a binding with one identification of its fresh vertices, in any
+-- alternative, whether or not selection keeps it. Beyond the limit the
+-- result is 'TooManyRepairs', unless the path resolves, which is checked
+-- by matching then: 'AlreadyResolves' does not depend on the limit.
+residuateWithin ::
+  forall m.
+  (Monad m) =>
+  P.RepairsLimit ->
+  NodeLookup m ->
+  LabelChooser m ->
+  NID ->
+  PathQuery ->
+  m (Either ResidualError Residuation)
+residuateWithin limit lookupNode chooser cur q = case limit of
+  P.UnlimitedRepairs -> choose <$> candidatesOf lookupNode chooser cur q
+  P.AtMostRepairs n ->
+    candidatesWithin (Just n) lookupNode chooser cur q >>= \case
+      Just candidates -> pure (choose candidates)
+      -- The candidate with an empty patch may not have been made yet, so
+      -- whether the path resolves is found by matching instead.
+      Nothing -> do
+        resolves <-
+          anyM (alternativeResolves lookupNode cur) (toList q.alternatives)
+        pure
+          if resolves
+            then Right AlreadyResolves
+            else Left (TooManyRepairs n)
   where
+    choose candidates =
+      if any (isEmptyPatch . (.residual.patch)) candidates
+        then Right AlreadyResolves
+        else case nonEmpty (select candidates) of
+          Nothing -> Right Unsatisfiable
+          Just survivors ->
+            case [miss | s <- toList survivors, miss : _ <- [s.missingLabels]] of
+              -- a survivor needs a label: report it rather than fall back to
+              -- the other survivors or to eliminated candidates
+              ((ri, hi), m) : _ ->
+                Left (UnsupportedLabel m ri hi (fmap (.residual) survivors))
+              [] -> Right (Repairs (fmap (knownResidual . (.residual)) survivors))
     isEmptyPatch patch = null patch.nodes && null patch.edges
     known = \case
       Known l -> l
@@ -197,9 +274,324 @@ residuate lookupNode chooser cur q = do
               }
         }
 
--- | Drop dominated and redundant candidates and order the survivors.
+anyM :: (Monad m) => (a -> m Bool) -> [a] -> m Bool
+anyM f =
+  foldr (\x rest -> f x >>= \ok -> if ok then pure True else rest) (pure False)
+
+allM :: (Monad m) => (a -> m Bool) -> [a] -> m Bool
+allM f = fmap not . anyM (fmap not . f)
+
+-- | Whether an alternative resolves as it is: it matches, and every node
+-- of the match exists. This is when some candidate has an empty patch,
+-- since a candidate's binding is total and creates nothing exactly when it
+-- is a match, and the evidence rule reaches every match.
+alternativeResolves ::
+  (Monad m) => NodeLookup m -> NID -> PatternPath -> m Bool
+alternativeResolves lookupNode cur p =
+  loadPattern lookupNode cur p >>= \case
+    Nothing -> pure False
+    Just (within, nodes) ->
+      case matchPatternWithin within (`lookup` nodes) (Just cur) p of
+        Nothing -> pure False
+        Just r ->
+          allM (anyM (allM exists . toList . (.nodes)) . snd) r.components
+  where
+    exists n = isJust <$> lookupNode n
+
+-- | A candidate with what selection compares of it.
+data Scored = Scored
+  { candidate :: Candidate,
+    size :: Int,
+    shape :: ~(PatchShape PatchLabel),
+    -- | the order of the survivors
+    key :: ~(Bool, Int, Text)
+  }
+
+-- | What every renaming of a patch's fresh nodes has in common, to tell
+-- cheaply that one patch is not contained in, or not equal to, another.
+data PatchShape l = PatchShape
+  { -- | the created nodes that are not fresh
+    fixedNodes :: Set Binding,
+    -- | how many edges there are of each label between each two ends, a
+    -- fresh end being 'Nothing'
+    edgeKinds :: Map (Maybe NID, l, Maybe NID) Int,
+    -- | the edges at each fresh node (whether it is their source, their
+    -- label and their other end), in order
+    freshKinds :: [[(Bool, l, Maybe NID)]]
+  }
+  deriving stock (Eq, Ord, Show, Generic)
+
+patchShape :: forall l. (Ord l) => Patch' l -> PatchShape l
+patchShape p =
+  PatchShape
+    { fixedNodes = Set.filter (isNothing . fresh) p.nodes,
+      edgeKinds =
+        Map.fromListWith
+          (+)
+          [ ((existing e.source, e.transition, existing e.sink), 1)
+          | e <- toList p.edges
+          ],
+      freshKinds =
+        sort . toList $
+          map sort $
+            Map.unionWith (<>) (mapFromList [(k, []) | k <- nodes]) edgesAt
+    }
+  where
+    fresh = \case
+      Fresh k -> Just k
+      Existing _ -> Nothing
+    existing = \case
+      Existing n -> Just n
+      Fresh _ -> Nothing
+    nodes = mapMaybe fresh (toList p.nodes)
+    edgesAt :: Map Int [(Bool, l, Maybe NID)]
+    edgesAt =
+      Map.fromListWith
+        (<>)
+        [ (k, [(isSource, e.transition, existing other)])
+        | e <- toList p.edges,
+          (isSource, Fresh k, other) <-
+            [(True, e.source, e.sink), (False, e.sink, e.source)]
+        ]
+
+-- | Something a patch has if a patch it contains has it: a kind of edge, or
+-- two edges at one fresh node.
+data PatchFeature l
+  = EdgeKind (Maybe NID, l, Maybe NID)
+  | EdgesAtNode (Bool, l, Maybe NID) (Bool, l, Maybe NID)
+  deriving stock (Eq, Ord, Show, Generic)
+
+patchFeatures :: (Ord l) => PatchShape l -> Set (PatchFeature l)
+patchFeatures shape =
+  Set.map EdgeKind (Map.keysSet shape.edgeKinds)
+    <> setFromList
+      [ EdgesAtNode e1 e2
+      | edges <- shape.freshKinds,
+        e1 : later <- tails edges,
+        e2 <- later
+      ]
+
+-- | Whether the first patch can be contained in the second
+-- ('patchSubsumes'): a renaming keeps the nodes that are not fresh, and
+-- the label and such ends of every edge.
+shapeWithin :: (Ord l) => PatchShape l -> PatchShape l -> Bool
+shapeWithin small large =
+  small.fixedNodes `Set.isSubsetOf` large.fixedNodes
+    && Map.isSubmapOfBy (<=) small.edgeKinds large.edgeKinds
+
+-- | Drop dominated and redundant candidates and order the survivors
+-- (docs/path-pattern-ir.md §5, Selection). 'selectReference' states the
+-- rule; this gives the same survivors in the same order, without comparing
+-- every pair of candidates:
+--
+-- * Dominance. @c'@ dominates @c@ iff they are of one alternative and
+--   @c@'s binding is that of @c'@ without one or more variables that are
+--   left-justified in @c'@. The bindings dominated by leaving out one
+--   variable are put in a set; for more variables, the candidates are
+--   grouped by the variables they bind.
+-- * Minimality. A patch contained in another modulo renaming, and not the
+--   other way round, has fewer nodes or edges: were they as many, the
+--   renaming would be onto, and its inverse would contain the other. So a
+--   patch is compared with the strictly smaller ones only, and
+--   containment is one search, not two. The search is left out where a
+--   'PatchFeature' of the smaller patch is missing from the larger.
+-- * Deduplication. Patches equal modulo renaming have one 'PatchShape',
+--   and one contains the other; so a patch is compared with the kept ones
+--   of its shape only, by one search. A shape is not a canonical form:
+--   patches of one shape may differ, and the search tells.
 select :: [Candidate] -> [Candidate]
 select candidates =
+  map (.candidate) . sortOn (.key) . dedupe . sortOn fewerPins . minimal $
+    map scored (filter (not . dominated) candidates)
+  where
+    -- Most dominated candidates are dominated by one that binds a single
+    -- variable more, which is a lookup. For the rest, the candidates that
+    -- bind two or more variables more are gone through, by the variables
+    -- they bind: those of each set of variables at once.
+    dominated c =
+      (c.alternative, c.bound) `member` dominatedByOneMore
+        || any
+          (c.bound `member`)
+          ( LazyMap.findWithDefault
+              []
+              (c.alternative, Map.keysSet c.bound)
+              dominatedByMore
+          )
+    -- each alternative, binding and its left-justified variables
+    dominators :: [(Int, Map VarId NID, Set VarId)]
+    dominators =
+      ordNub
+        [ ( c.alternative,
+            c.bound,
+            c.leftJustified `intersection` Map.keysSet c.bound
+          )
+        | c <- candidates
+        ]
+    dominatedByOneMore :: Set (Int, Map VarId NID)
+    dominatedByOneMore =
+      setFromList
+        [ (alternative, deleteMap v larger)
+        | (alternative, larger, removable) <- dominators,
+          v <- toList removable
+        ]
+    byVars :: Map (Int, Set VarId) [(Map VarId NID, Set VarId)]
+    byVars =
+      Map.fromListWith
+        (<>)
+        [ ((alternative, Map.keysSet larger), [(larger, removable)])
+        | (alternative, larger, removable) <- dominators
+        ]
+    -- For an alternative and a set of variables: the bindings of just
+    -- those variables that are dominated by a candidate binding two or
+    -- more variables more, for each set of variables such candidates bind.
+    dominatedByMore :: LazyMap.Map (Int, Set VarId) [Set (Map VarId NID)]
+    dominatedByMore =
+      LazyMap.mapWithKey
+        ( \(alternative, vars) _ ->
+            [ setFromList
+                [ Map.restrictKeys larger vars
+                | (larger, removable) <- largers,
+                  more `Set.isSubsetOf` removable
+                ]
+            | ((alternative', vars'), largers) <- mapToList byVars,
+              alternative' == alternative,
+              vars `Set.isProperSubsetOf` vars',
+              let more = vars' `difference` vars,
+              Set.size more >= 2
+            ]
+        )
+        byVars
+    scored c =
+      let r = c.residual
+          size = patchSize r.patch
+       in Scored
+            { candidate = c,
+              size,
+              shape = patchShape r.patch,
+              key =
+                ( not r.leftOnly,
+                  size,
+                  renderResidualWith renderPatchLabel r
+                )
+            }
+    patchOf s = s.candidate.residual.patch
+    -- Identifying a fresh vertex with an existing node usually shrinks the
+    -- patch to a subset, but a repair without that identification is
+    -- always offered: a candidate is only dropped for one with no pin it
+    -- lacks. So a candidate is compared with the strictly smaller patches
+    -- of candidates whose pins are among its own. Most are told apart by
+    -- their features, as bits; the rest are searched once for each two
+    -- patches, whichever candidates have them.
+    minimal cs = filter (not . redundant) cs
+      where
+        featureBit :: Map (PatchFeature PatchLabel) Int
+        featureBit =
+          mapFromList . flip zip [0 ..] . toList $
+            foldMap (patchFeatures . (.shape)) cs
+        -- the features of each patch: a patch has those of every patch it
+        -- contains
+        featuresOf :: Map (Patch' PatchLabel) Integer
+        featuresOf =
+          mapFromList
+            [ ( patchOf s,
+                foldl' setBit 0 . mapMaybe (`lookup` featureBit) . toList $
+                  patchFeatures s.shape
+              )
+            | s <- cs
+            ]
+        lacksNone small large = small .&. complement large == (0 :: Integer)
+        -- the distinct patches of the candidates with each pins, by size
+        byPins ::
+          Map (Map VarId NID) (Map Int (Map (Patch' PatchLabel) Integer))
+        byPins =
+          Map.fromListWith
+            (Map.unionWith (<>))
+            [ ( s.candidate.pins,
+                singletonMap
+                  s.size
+                  ( singletonMap
+                      (patchOf s)
+                      (findWithDefault 0 (patchOf s) featuresOf)
+                  )
+              )
+            | s <- cs
+            ]
+        -- the patches of candidates whose pins are among the given ones:
+        -- by looking up each part of the pins or, if those are more,
+        -- by going through the pins there are
+        pinnedWithin ::
+          Map VarId NID -> [Map Int (Map (Patch' PatchLabel) Integer)]
+        pinnedWithin pins
+          | length pins < 20 && (2 :: Int) ^ length pins <= length byPins =
+              [ patches
+              | kept <- subsequences (keys pins),
+                Just patches <-
+                  [lookup (Map.restrictKeys pins (setFromList kept)) byPins]
+              ]
+          | otherwise =
+              [ patches
+              | (pins', patches) <- mapToList byPins,
+                pins' `Map.isSubmapOf` pins
+              ]
+        redundant s =
+          or
+            [ maybe False (LazyMap.findWithDefault False small) $
+                lookup size contained
+            | patches <- pinnedWithin s.candidate.pins,
+              (size, smaller) <-
+                mapToList (Map.takeWhileAntitone (< s.size) patches),
+              (small, smallFeatures) <- mapToList smaller,
+              lacksNone smallFeatures features
+            ]
+          where
+            features = findWithDefault 0 (patchOf s) featuresOf
+            contained = LazyMap.findWithDefault mempty (patchOf s) containedIn
+        -- the distinct patches by size, each with its shape
+        bySize ::
+          Map Int (LazyMap.Map (Patch' PatchLabel) (PatchShape PatchLabel))
+        bySize =
+          Map.fromListWith
+            (<>)
+            [(s.size, LazyMap.singleton (patchOf s) s.shape) | s <- cs]
+        -- for each patch, whether it contains each strictly smaller patch
+        containedIn ::
+          LazyMap.Map
+            (Patch' PatchLabel)
+            (Map Int (LazyMap.Map (Patch' PatchLabel) Bool))
+        containedIn =
+          LazyMap.fromList
+            [ ( patch,
+                map
+                  ( LazyMap.mapWithKey \small smallShape ->
+                      shapeWithin smallShape shape && patchSubsumes small patch
+                  )
+                  (Map.takeWhileAntitone (< size) bySize)
+              )
+            | (size, patches) <- mapToList bySize,
+              (patch, shape) <- mapToList patches
+            ]
+    -- of equal patches, keep one bound by evidence over one bound by pins
+    fewerPins s = (length s.candidate.pins, s.key)
+    -- keep the first of patches equal modulo renaming
+    dedupe = reverse . snd . foldl' keep (mempty, [])
+      where
+        keep ::
+          (Map (PatchShape PatchLabel) [Patch' PatchLabel], [Scored]) ->
+          Scored ->
+          (Map (PatchShape PatchLabel) [Patch' PatchLabel], [Scored])
+        keep (seen, kept) s
+          | any (samePatch (patchOf s)) (findWithDefault [] s.shape seen) =
+              (seen, kept)
+          | otherwise =
+              (Map.insertWith (<>) s.shape [patchOf s] seen, s : kept)
+        -- of one shape, so of as many nodes and edges
+        samePatch a b = a == b || patchSubsumes a b
+
+-- | Selection as its rule is stated, comparing every pair of candidates:
+-- the reference 'select' is tested against. It takes time quadratic in
+-- the candidates, with a search for each pair of patches.
+selectReference :: [Candidate] -> [Candidate]
+selectReference candidates =
   sortOn key . dedupe . sortOn fewerPins . minimal $ undominated
   where
     undominated = filter (not . dominated) candidates
@@ -339,16 +731,76 @@ patchOrphans p =
 
 -- * Candidates
 
+-- | Every candidate of every alternative, with no limit.
+candidatesOf ::
+  (Monad m) =>
+  NodeLookup m ->
+  LabelChooser m ->
+  NID ->
+  PathQuery ->
+  m [Candidate]
+candidatesOf lookupNode chooser cur q =
+  fromMaybe (error "candidatesOf: stopped without a limit")
+    <$> candidatesWithin Nothing lookupNode chooser cur q
+
+-- | The candidates of every alternative, or 'Nothing' if there are more
+-- than the limit. What is counted is every binding with every
+-- identification of its fresh vertices that enumeration makes
+-- ('mergeStates'), before any is dropped, so that it can stop as soon as
+-- there are too many.
+candidatesWithin ::
+  forall m.
+  (Monad m) =>
+  Maybe Int ->
+  NodeLookup m ->
+  LabelChooser m ->
+  NID ->
+  PathQuery ->
+  m (Maybe [Candidate])
+candidatesWithin limit lookupNode chooser cur q =
+  runMaybeT . flip S.evalStateT limit $
+    concat
+      <$> traverse
+        ( uncurry $
+            candidatesFor
+              budget
+              (lift . lift . lookupNode)
+              (lift . lift . chooser)
+              cur
+        )
+        (zip [0 ..] (toList q.alternatives))
+  where
+    budget :: Budget (S.StateT (Maybe Int) (MaybeT m))
+    budget =
+      Budget
+        { left = S.get,
+          spend = \k ->
+            S.get >>= \case
+              Nothing -> pure ()
+              Just n
+                | k > n -> lift (MaybeT (pure Nothing))
+                | otherwise -> S.put (Just (n - k))
+        }
+
+-- | How enumeration counts the candidates it makes.
+data Budget m = Budget
+  { -- | how many more may be made, if that is limited
+    left :: m (Maybe Int),
+    -- | count this many more; with fewer left, enumeration stops here
+    spend :: Int -> m ()
+  }
+
 candidatesFor ::
   forall m.
   (Monad m) =>
+  Budget m ->
   NodeLookup m ->
   LabelChooser m ->
   NID ->
   Int ->
   PatternPath ->
   m [Candidate]
-candidatesFor lookupNode chooser cur altIndex p
+candidatesFor budget lookupNode chooser cur altIndex p
   | not boundTestsOk = pure []
   | not (null unreachable) =
       -- only %unanchored could produce these; it is not supported yet
@@ -368,7 +820,7 @@ candidatesFor lookupNode chooser cur altIndex p
       m [Candidate]
     explore [] _ _ = pure []
     explore ((sigma0, pins) : rest) queued done = do
-      sigmas <- closure [sigma0] (singletonSet sigma0)
+      sigmas <- closure (Set.size done) [sigma0] (singletonSet sigma0)
       let todo = ordNub [s | s <- sigmas, (s, pins) `notMember` done]
           done' = done <> setFromList [(s, pins) | s <- todo]
       results <- traverse (candidatesForSigma pins) todo
@@ -445,12 +897,20 @@ candidatesFor lookupNode chooser cur altIndex p
           ]
 
     -- All evidence-backed bindings, closed under binding one more variable.
-    closure :: [Map VarId NID] -> Set (Map VarId NID) -> m [Map VarId NID]
-    closure [] seen = pure (toList seen)
-    closure (sigma : rest) seen = do
+    -- Each binding that has no candidates yet (all but at most the given
+    -- number) gets at least one, so with more of them than candidates are
+    -- left, there are too many already.
+    closure ::
+      Int -> [Map VarId NID] -> Set (Map VarId NID) -> m [Map VarId NID]
+    closure _ [] seen = pure (toList seen)
+    closure made (sigma : rest) seen = do
       next <- concat <$> traverse (extendWith sigma) [v | v <- vars, v `notMember` sigma]
       let new = ordNub (filter (`notMember` seen) next)
-      closure (new <> rest) (seen <> setFromList new)
+          seen' = seen <> setFromList new
+          fresh = Set.size seen' - made
+      remaining <- budget.left
+      when (maybe False (fresh >) remaining) (budget.spend fresh)
+      closure made (new <> rest) seen'
 
     extendWith :: Map VarId NID -> VarId -> m [Map VarId NID]
     extendWith sigma v = do
@@ -557,7 +1017,10 @@ candidatesFor lookupNode chooser cur altIndex p
              in fmap (\k -> findWithDefault k k renumber) classes
           (states, pinned) =
             mergeStates specs labels createdEdges binding accepts initial
-          seeds =
+      -- count the states, making no more of them than are left and one
+      remaining <- budget.left
+      budget.spend (length (maybe id (take . (+ 1)) remaining states))
+      let seeds =
             [ (sigma <> new, pins <> new)
             | (vs, nid) <- pinned,
               let new = mapFromList [(v, nid) | v <- toList vs]
@@ -641,8 +1104,13 @@ storedEdge spec s l t = case spec.direction of
 -- orientation from the same end (which binds equally), and whether the pair
 -- is from the left (both hops taken from the shared end). Identifying the
 -- other ends makes the two hops one patch edge.
+--
+-- The pairs are in the order of 'sharedPairsReference', which goes through
+-- every two hops; this groups the hops by label, end and what the end
+-- binds to, and pairs them within a group.
 sharedPairs ::
-  (Eq l) =>
+  forall l.
+  (Ord l) =>
   Map EdgeId EdgeSpec ->
   Map EdgeId l ->
   -- | edges to create
@@ -650,6 +1118,49 @@ sharedPairs ::
   (PVertex -> Binding) ->
   [(Bool, PVertex, PVertex)]
 sharedPairs specs labels created bind =
+  map snd . sortOn fst $
+    [ ((e1, e2, i1, i2), (taken1 && taken2, far1, far2))
+    | hops <- toList groups,
+      (e1, i1, far1, taken1) : later <- tails hops,
+      (e2, i2, far2, taken2) <- later
+    ]
+  where
+    -- A hop is in two groups, one for each end, and the hops of a group
+    -- are in the order of their edges.
+    groups :: Map (l, Bool, Binding) [(EdgeId, Int, PVertex, Bool)]
+    groups =
+      Map.fromListWith
+        (flip (<>))
+        [ ((l, end, bind near), [(e, i, far, taken)])
+        | (e, spec) <- mapToList specs,
+          e `member` created,
+          Just l <- [lookup e labels],
+          (i, (end, near, far, taken)) <- zip [0 :: Int ..] (hopEnds spec)
+        ]
+
+-- | Each hop, in stored orientation, as (which stored end is shared, that
+-- end, the other end, whether the hop is taken from that end).
+hopEnds :: EdgeSpec -> [(Bool, PVertex, PVertex, Bool)]
+hopEnds spec = case spec.direction of
+  Out ->
+    [ (True, spec.source, spec.target, True),
+      (False, spec.target, spec.source, False)
+    ]
+  In ->
+    [ (True, spec.target, spec.source, False),
+      (False, spec.source, spec.target, True)
+    ]
+
+-- | 'sharedPairs' as it is defined, going through every two hops.
+sharedPairsReference ::
+  (Eq l) =>
+  Map EdgeId EdgeSpec ->
+  Map EdgeId l ->
+  -- | edges to create
+  Set EdgeId ->
+  (PVertex -> Binding) ->
+  [(Bool, PVertex, PVertex)]
+sharedPairsReference specs labels created bind =
   [ (taken1 && taken2, far1, far2)
   | (e1, s1) <- specList,
     (e2, s2) <- specList,
@@ -658,18 +1169,13 @@ sharedPairs specs labels created bind =
     e2 `member` created,
     lookup e1 labels == lookup e2 labels,
     isJust (lookup e1 labels),
-    (end1, near1, far1, taken1) <- ends s1,
-    (end2, near2, far2, taken2) <- ends s2,
+    (end1, near1, far1, taken1) <- hopEnds s1,
+    (end2, near2, far2, taken2) <- hopEnds s2,
     end1 == end2,
     bind near1 == bind near2
   ]
   where
     specList = mapToList specs
-    -- Each hop, in stored orientation, as (which stored end is shared,
-    -- that end, the other end, whether the hop is taken from that end).
-    ends spec = case spec.direction of
-      Out -> [(True, spec.source, spec.target, True), (False, spec.target, spec.source, False)]
-      In -> [(True, spec.target, spec.source, False), (False, spec.source, spec.target, True)]
 
 -- | Identify fresh vertices where that makes two created pattern edges one
 -- patch edge. Identifying two fresh vertices from the left (the same hop
@@ -682,7 +1188,7 @@ sharedPairs specs labels created bind =
 -- of every variable in the fresh vertex's class. Pins are returned as the
 -- class's variables and the node, to be explored as a new binding.
 mergeStates ::
-  (Eq l) =>
+  (Ord l) =>
   Map EdgeId EdgeSpec ->
   Map EdgeId l ->
   -- | edges to create

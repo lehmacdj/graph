@@ -1,9 +1,14 @@
+{-# LANGUAGE MultiWayIf #-}
+
 -- | Pure matching of route patterns (docs/path-pattern-ir.md §4).
 --
 -- Matching is a homomorphism: distinct variables may bind the same node. The
 -- pattern is split at bound vertices ('Current' and 'Fixed') into
 -- independent components; the witnesses of a pattern are the product of the
 -- per-component solutions, which is stored rather than expanded.
+--
+-- 'loadPattern' is the one part that reads nodes: it finds the nodes a
+-- match can use, with any way of reading them.
 module Models.PathPattern.Match
   ( Component (..),
     Partial (..),
@@ -16,6 +21,7 @@ module Models.PathPattern.Match
     patternComponents,
     matchPattern,
     matchPatternWithin,
+    loadPattern,
     witnesses,
     vertexValue,
     concreteRoutes,
@@ -185,6 +191,74 @@ matchPatternWithin candidates lookupNode cur p = do
                   [Partial (insertMap v reached partial.nodes) partial.labels]
               bound -> [partial | lookup bound values == Just reached]
             go es (Partial partial'.nodes (insertMap e label partial'.labels))
+
+-- | Propagate candidate sets along the pattern edges until a fixpoint,
+-- reading every node that is a candidate source of an edge. 'Nothing' if
+-- some vertex has no candidate left.
+loadPattern ::
+  (Monad m) =>
+  (NID -> m (Maybe (Node Text ()))) ->
+  NID ->
+  PatternPath ->
+  m (Maybe (Map VarId (Set NID), Map NID (Node Text ())))
+loadPattern getNode cur p = do
+  let initial :: Map PVertex (Set NID)
+      initial =
+        mapFromList
+          [(v, singletonSet n) | v <- patternVertices p, Just n <- [bound v]]
+  nodes0 <- foldlM load mempty (concatMap toList initial)
+  let loop cands nodes = do
+        (cands', nodes') <- forward cands nodes
+        let cands'' = backward nodes' cands'
+        if
+          | any null cands'' -> pure Nothing
+          | cands'' == cands -> pure (Just (cands'', nodes'))
+          | otherwise -> loop cands'' nodes'
+  loop initial nodes0 <&> fmap \(cands, nodes) ->
+    (mapFromList [(v, s) | (Var v, s) <- mapToList cands], nodes)
+  where
+    bound = \case
+      Current -> Just cur
+      Fixed n -> Just n
+      Var _ -> Nothing
+    ordered = [s | e <- edgeOrder p, Just s <- [lookup e (patternEdges p)]]
+    load nodes n
+      | n `member` nodes = pure nodes
+      | otherwise =
+          getNode n <&> \case
+            Nothing -> nodes
+            Just node -> insertMap n node nodes
+    forward cands0 nodes0 =
+      foldlM
+        ( \(cands, nodes) spec -> do
+            let sources = findWithDefault mempty spec.source cands
+            nodes' <- foldlM load nodes (toList sources)
+            let reached =
+                  setFromList
+                    [ t
+                    | s <- toList sources,
+                      (_, t) <- stepEdges (`lookup` nodes') s spec,
+                      testAccepts (vertexTest p spec.target) t
+                    ]
+                narrowed = case lookup spec.target cands of
+                  Nothing -> reached
+                  Just existing -> intersection existing reached
+            pure (insertMap spec.target narrowed cands, nodes')
+        )
+        (cands0, nodes0)
+        ordered
+    backward nodes cands0 =
+      foldl'
+        ( \cands spec ->
+            let targetsOk = findWithDefault mempty spec.target cands
+                keep s =
+                  any
+                    ((`member` targetsOk) . snd)
+                    (stepEdges (`lookup` nodes) s spec)
+             in adjustMap (filterSet keep) spec.source cands
+        )
+        cands0
+        (reverse ordered)
 
 -- | The edges a pattern edge can take from a node, in label/node order.
 stepEdges :: Lookup -> NID -> EdgeSpec -> [(Text, NID)]

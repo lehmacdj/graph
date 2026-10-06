@@ -151,9 +151,11 @@ lower every `+` in `p` to `++` or `|` instead, in any command; the
 innermost override wins, `|` and `++` written in `p` are unaffected, and
 an override inside `%targets(…)` applies to its query
 (`%targets(%override({plus = shared}, …))`). Its settings record is
-`{key = value, …}`, with the keys `plus` (`shared` or `relational`) and
+`{key = value, …}`, with the keys `plus` (`shared` or `relational`),
 `max-alternatives` (a positive number or `unlimited`; see the limit
-below). Settings combine (`{plus = shared, max-alternatives = 50000}`); an
+below) and `max-repairs` (likewise; the limit on the candidate repairs
+of a construction, §5). Settings combine
+(`{plus = shared, max-alternatives = 50000}`); an
 unknown key or value, or a key given twice, is a parse error naming the
 accepted ones (`InvalidOverrideSetting`). The
 path quasiquoter rejects `+`, since a quoted path has no command; tests
@@ -374,16 +376,22 @@ the same (`k` unions of `n` sides are `n^k` alternatives), and a long
 one of wide unions is slow: four unions of 64, 64, 64 and 2 sides are
 524,288 alternatives and take several seconds to compile. 1000 keeps
 compiling and resolving a query well under a second. It does not bound
-`mk`: the time to choose among the repairs (residuation) grows faster
-than linearly in the alternatives and depends on the graph. Measured
-with `ge`, each including about 0.07s of startup: on a graph with none
-of the path's edges, `mk (a | b)/(c & … & j)` (256 repairs) takes 1.0s,
-`mk (a | b)/(c & … & k)` (512) 3.8s and `mk (a | b | c)/(d & … & i)`
-(729) 4.1s; on a graph that already has an `a` and a `b` edge, the
-32-repair `mk (a | b)/(c & … & g)` takes 0.6s, the 729-repair one 11s,
-and the 256-repair one does not finish in a minute. That cost is in
-residuation, not in compiling, and is a known issue of its own; in `mk`
-a `+` is `++`, so it only arises for a `|` written there.
+`mk`, whose work is in the candidate repairs of each alternative
+(residuation), which depend on the graph; they have a limit of their
+own, `max-repairs` (§5). Measured with `ge` in an unoptimized (`--fast`)
+build, each including about 0.06s of startup: on a graph with none of
+the path's edges, where each alternative has one candidate,
+`mk (a | b)/(c & … & j)` (256 repairs) takes 0.25s,
+`mk (a | b)/(c & … & k)` (512) 0.47s and `mk (a | b | c)/(d & … & i)`
+(729) 0.44s. On a graph that already has an `a` and a `b` edge every
+copy of the prefix may bind or not, so each alternative of
+`mk (a | b)/(c & … & g)` has 32 candidates: 1024 in all, under the
+default limit of 5000, and its 32 repairs are listed in about 0.5s. The
+729- and 256-repair paths above have far more (the latter 65,536) and
+are refused in about 2s to 3s. In `mk` a `+` is `++`, so this only
+arises for a `|` written there. (All figures here and in §5 are
+approximate: they were taken on a machine doing other work, and an idle
+one gave about 0.7 of them.)
 
 The check (`checkAlternatives`) counts the alternatives as `compilePath`
 makes them, after contradictory ones are dropped and ones that glue to
@@ -453,12 +461,14 @@ unions applies to the whole path. So a low limit on one union does not
 constrain a path that also has a `|` outside the override (which has the
 default limit); to lower the limit, wrap the whole path. `%override` is a
 directive, expanded before compilation, so the setting is carried
-explicitly: expansion leaves a `WithMaxAlternatives limit p` node around
+explicitly: expansion leaves a `WithLimits limits p` node around
 the expanded `p` (a constructor that only exists in the `Prenormal`
-phase), which `checkAlternatives` reads
+phase; it carries the `max-repairs` of the override as well, §5), which
+`checkAlternatives` reads
 (`Graph.Command.expandDirectives` runs it on every command path and on
 each `%targets(…)` query); it does not otherwise change what the path
-means. TAB completion lowers `+` as `|` like a query and runs the same
+means: wherever such nodes are, and however many are nested, the path
+compiles to what it compiles to without them (`withoutLimits`). TAB completion lowers `+` as `|` like a query and runs the same
 check: a prefix beyond its limit offers no completions.
 
 Implementation: `fragment` builds the terms from each flat chain of
@@ -495,7 +505,8 @@ does anything else; expanding also lowers `+` (see *Unions*):
 - `%override({plus = shared}, p)` / `%override({plus = relational}, p)`
   expand `p` with `+` lowered to `++` / `|`, and
   `%override({max-alternatives = N}, p)` sets its alternatives limit (see
-  *Unions*).
+  *Unions*), and `%override({max-repairs = N}, p)` the limit on the
+  candidate repairs of a construction (§5).
 
 - `%history(n)` / `%last` become `@N` for the location `n` steps back in the
   history *at that moment*, so in `cd a; cd %last` (one line) the `%last`
@@ -771,6 +782,134 @@ an existing edge is left-justified relative to it.
    (created nodes + created edges); then a deterministic tie-break on
    concrete routes.
 
+Rules 2 and 3 are stated over every pair of candidates, and
+`selectReference` applies them that way; it is kept as the reference
+that the tests compare `select` with (over the corpus with every chooser
+used on it, symmetric patches, and random paths and graphs). `select`
+gives the same survivors in the same order without comparing every pair:
+- *Dominance.* c' dominates c iff c's binding is that of c' without one
+  or more variables that are left-justified in c'. The bindings dominated
+  by leaving out one variable are collected in a set, so most dominated
+  candidates are found by a lookup; for the rest, the candidates that
+  bind two or more variables more are gone through, grouped by the set
+  of variables they bind.
+- *Supersets.* A patch that contains another modulo renaming, and is not
+  contained in it, has more nodes or edges: were they as many, the
+  renaming would be onto, and its inverse would contain it in turn. So a
+  patch is compared only with the strictly smaller patches of candidates
+  whose pins are among its own, each two distinct patches once, with one
+  search for a renaming instead of two. The search is skipped where the
+  smaller patch has a feature the larger lacks: an edge with some label
+  and ends, or two such edges at one fresh node (fresh ends alike).
+- *Equal patches.* Patches equal modulo renaming have the same shape:
+  the same created fixed nodes, as many edges of each label and ends, and
+  the same edges at each fresh node. A patch is compared only with the
+  kept patches of its shape, again by one search. A shape is not a
+  canonical form (patches of one shape need not be equal), so nothing is
+  merged or kept apart on its account: the search for a renaming still
+  decides, as it does in the reference.
+
+**Limit on candidates.** Candidates multiply. A step that matches `n`
+existing edges is bound to one of them or left to be created, so `k`
+such steps are `(n + 1)^k` bindings; a chain of `d` existing steps can
+be matched up to any of its steps, so `k` chains continued by something
+new (`mk a1/…/ad/x & b1/…/bd/y & …`) are `(d + 1)^k`, although only the
+binding that matches every chain in full survives; independent pins and
+identifications multiply likewise. So residuation counts the candidates
+as it makes them, and stops as soon as there are more than the path's
+limit, 5000 by default (`Models.PathPattern.Residuate.defaultMaxRepairs`).
+What is counted is every way of matching the path's steps to existing
+nodes that has to be considered: every binding with every identification
+of its fresh vertices (4), in every alternative. These are the
+candidates before selection, including those that are then dropped
+because a pin is not justified (5). Dominated and redundant candidates
+count, since telling which they are is the work the limit bounds; so a
+path with one repair can have many candidates (ten existing conjuncts
+and a new one are 1024, four chains of five 1296, five chains of three
+1024, seven chains of two 2187: all under the default, and done in
+about 0.8s, 1.3s, 0.9s and 2.0s with `ge`), and with enough existing
+steps it is over the limit (thirteen existing conjuncts and a new one
+are 8192). Pinning a step with `@N` leaves it one way to match, and so
+divides the count.
+Then:
+- Up to the limit nothing differs: the same survivors in the same order,
+  five listed, the exact count.
+- Beyond it the command fails without changing anything, and without
+  listing repairs, since which candidates survive is not known:
+  "Working out how to construct this path would take too long: its
+  steps can be matched to existing nodes, or left to be created, in more
+  ways than the limit of 5000, and each way has to be considered. Nothing
+  was changed. Pin a step to a node with @N or exclude nodes with !{@N}
+  so that fewer match, or raise the limit with
+  %override({max-repairs = …}, …).
+  (TooManyRepairs)". This comes before the label error (6) and before
+  "cannot be constructed", which both need every candidate.
+- A path that already resolves is the no-op whatever the limit (1). Up to
+  the limit that is found as before, by the candidate with an empty
+  patch. When the limit is passed first, that candidate may not have been
+  made, so each alternative is matched instead, as a query matches it
+  (`loadPattern`, `matchPatternWithin`), requiring that every matched
+  node exists. That is the same condition: a candidate's binding is
+  total and its patch empty exactly when it is such a match, and the
+  evidence rule reaches every match.
+
+`%override({max-repairs = N}, p)` (or `unlimited`) changes the limit, as
+`max-alternatives` does for alternatives (§2): `N` is a positive number;
+the innermost override around a part of the path is that part's limit;
+and since the candidates are those of the whole path and cannot be
+attributed to a part, the largest limit among the path's steps and nodes
+applies to all of it (`pathMaxRepairs`). So a low limit around one
+conjunct does not constrain a path with parts outside the override
+(which have the default); to lower the limit, wrap the whole path. The
+setting combines with the others (`{plus = shared, max-repairs = 5000}`)
+and is carried by the same `WithLimits` node. Commands that construct
+nothing (`ls`, `cd`, `rm`, …, a `%targets(…)` query, `tag`'s target)
+accept it and ignore it. The paths suggested for an ambiguous `mk`
+(below) are written without it, and are confirmed within the default
+limit.
+
+The limit bounds a count, not time. What one counted candidate costs
+grows with the pattern, by a factor of a hundred and more between the
+paths below, and almost all of it is in making the candidates, not in
+selecting. Refusing a path costs what making the candidates up to the
+limit costs, and then the matching pass that tells whether the path
+resolves. Measured in an unoptimized (`--fast`) build; "alone" is
+residuation alone, and `ge` adds about 0.06s of startup, compiling, and
+for an ambiguous path the suggestions below. The figures are
+approximate (see §2):
+- Small patterns. 625 candidates of four steps with four matches each
+  (`mk regex/x & regex/y & regex/z & regex/w`, 256 repairs) take 0.03s
+  alone, and so do the 511 of a chain of eight steps down a binary
+  tree. With seven matches each (4096 candidates, 2401 repairs) the
+  four steps take 0.3s alone and 2.0s with `ge`; with eight (6561) the
+  path is refused, in 0.7s with `ge`.
+- Independent pins. `mk a/~a & … & k/~k` (2048 candidates, all of them
+  repairs) takes 0.9s alone and 2.3s with `ge`; with a twelfth (4096)
+  3.6s alone and 5.5s with `ge`; with a thirteenth it is refused.
+- Many pins in a larger pattern.
+  `mk (a & b & c & d)/~a/(a & b & c & d)/~b` (64 pattern edges, 768
+  counted, 576 candidates after unjustified pins, 27 repairs) takes
+  0.65s alone and 3.7s with `ge`, most of it suggestions.
+  `mk (a & b & c & d & e)/~a/(a & b & c & d)/~b` (100 edges, 3072
+  counted, 54 repairs) takes 4.6s alone and 20s with `ge`: the slowest
+  path of this kind found under the default.
+  `mk (a & b & c & d & e & f)/~a/(a & b)/~b` (12,288) is refused in
+  2.4s with `ge`, and
+  `mk (a & b & c & d)/~a/(a & b & c & d)/~b/(a & b & c)` in 20s; without
+  a limit that last path did not finish in 90 minutes.
+- Large patterns are not bounded by the count at all.
+  `mk (a & a & c & b & b)/~b/(b & c & b & a)/~b/(c/@ & ~a/b/b/b & c & a/a)`
+  on an empty graph distributes to 480 pattern edges and has only 45
+  candidates and 10 repairs: it takes 8s to 10s alone, all of it making
+  the candidates, and 26s with `ge`.
+  `mk (b/~b & c/~c & a/~a & b/~b & b/~b & a/~a & c/~c & b/~b)/(a/~a/b & c/~c & c/@N)`,
+  with `N` the current node, is refused with `ge` after 29s on an empty
+  graph, 10s on one with `a/b` and `c`, and 2.2s on one with `a`, `b`
+  and `c`.
+- Without a limit, the 6561 candidates (4096 repairs) of four steps with
+  eight matches each take 0.6s alone (34s before selection stopped
+  comparing every pair) and 3.1s with `ge`.
+
 **`mk`.**
 - One survivor: apply it.
 - More than one: error without changing anything. List the survivors in
@@ -827,6 +966,7 @@ an existing edge is left-justified relative to it.
   `mk a/b/(@1 + @2 + @)/…` with 12 such factors takes about 8s with
   suggestions, against about 3s without (`ls` of it takes about 3s).
   The label error (6) lists no suggestions.
+- More candidates than the limit: the `TooManyRepairs` error above.
 - **Orphans.** If the patch creates a weakly-connected component with no
   edge to a pre-existing node (for example, `mk @5/a` with 5 missing),
   error, naming the component. An override flag allows it.

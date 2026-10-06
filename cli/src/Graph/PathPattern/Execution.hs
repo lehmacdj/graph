@@ -87,7 +87,8 @@ planConstruction ::
   P.Path ->
   Eff r (Maybe Residual)
 planConstruction command allowOrphans cur p = do
-  result <- residuate readNode noLabels cur (compilePath p)
+  result <-
+    residuateWithin (pathMaxRepairs p) readNode noLabels cur (compilePath p)
   residuation <- either (throwError . OtherError . renderResidualError) pure result
   case chooseRepair residuation of
     NoChange -> pure Nothing
@@ -113,6 +114,15 @@ planConstruction command allowOrphans cur p = do
 
 renderResidualError :: ResidualError -> Text
 renderResidualError = \case
+  TooManyRepairs n ->
+    "Working out how to construct this path would take too long: its "
+      <> "steps can be matched to existing nodes, or left to be created, in "
+      <> "more ways than the limit of "
+      <> tshow n
+      <> ", and each way has to be considered. Nothing was changed. Pin a "
+      <> "step to a node with @N or exclude nodes with !{@N} so that fewer "
+      <> "match, or raise the limit with %override({max-repairs = …}, …). "
+      <> "(TooManyRepairs)"
   UnsupportedLabel m _ _ (r :| []) ->
     "Cannot create the "
       <> renderMatcher m

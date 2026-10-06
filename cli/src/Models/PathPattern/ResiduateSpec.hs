@@ -1,13 +1,20 @@
 module Models.PathPattern.ResiduateSpec where
 
 import Models.Edge
-import Models.Graph (Graph, insertEdge, insertNode, maybeNodeLookup)
+import Models.Graph
+  ( Graph,
+    emptyGraph,
+    insertEdge,
+    insertEdges,
+    insertNode,
+    maybeNodeLookup,
+  )
 import Models.NID
 import Models.Node (emptyNode)
 import Models.Path.Simple qualified as P
 import Models.Path.TH (path)
 import Models.PathPattern
-import Models.PathPattern.Compile (compilePath)
+import Models.PathPattern.Compile (checkAlternatives, compilePath)
 import Models.PathPattern.Match
 import Models.PathPattern.Residuate
 import Models.PathPattern.TestCorpus
@@ -101,6 +108,7 @@ spec_missingLabelsActAsFreshLabels =
               (context, usesFresh withFresh) `shouldBe` (context, True)
           | otherwise ->
               (context, isLeft withFresh) `shouldBe` (context, True)
+        Left err@(TooManyRepairs _) -> expectationFailure (context <> ": " <> show err)
 
 infix 1 `shouldNeedLabel`
 
@@ -115,6 +123,7 @@ shouldNeedLabel result expected = case result of
 labelErrorRepairs :: Either ResidualError a -> Maybe Int
 labelErrorRepairs = \case
   Left (UnsupportedLabel _ _ _ rs) -> Just (length rs)
+  Left (TooManyRepairs _) -> Nothing
   Right _ -> Nothing
 
 spec_residuationCoverage :: Spec
@@ -465,3 +474,461 @@ spec_residuationExamples = describe "residuation examples" do
         `shouldBe` [setFromList [Existing (smallNID 5), Fresh 0]]
     it "creating from an existing node is not an orphan" $
       orphansOf (graphWithEdges [edge' 1 "x" 1]) [path| ~a |] `shouldBe` []
+
+-- * Selection against its reference
+
+-- | Every candidate of a path in a graph, before selection.
+candidatesIn ::
+  (Matcher -> Maybe Text) -> Graph Text () -> PathQuery -> [Candidate]
+candidatesIn chooser g q =
+  fromMaybe (error "candidatesIn: no limit") $
+    candidatesUpTo Nothing chooser g q
+
+-- | The candidates, unless there are more than the limit.
+candidatesUpTo ::
+  Maybe Int ->
+  (Matcher -> Maybe Text) ->
+  Graph Text () ->
+  PathQuery ->
+  Maybe [Candidate]
+candidatesUpTo limit chooser g q =
+  runIdentity $
+    candidatesWithin
+      limit
+      (pure . (`maybeNodeLookup` g))
+      (pure . chooser)
+      corpusCurrent
+      q
+
+-- | 'select' keeps what 'selectReference' keeps, in its order.
+selectsAsReference :: [Candidate] -> Expectation
+selectsAsReference cs = select cs `shouldBe` selectReference cs
+
+-- | A path and a graph over nodes 1 to 4 (5 never exists) and labels a, b
+-- and c: random paths, and shapes with pins, identifications from the
+-- right, missing labels, unions and steps with many matches, alone or
+-- combined with a random path.
+genRepairCase :: Gen (P.Path, Graph Text ())
+genRepairCase = do
+  surface <-
+    frequency
+      [ (4, genRepairPath =<< choose (1, 7)),
+        (2, genShape),
+        (1, (P.:&) <$> genShape <*> (genRepairPath =<< choose (1, 3))),
+        (1, (P.:/) <$> genShape <*> (genRepairPath =<< choose (1, 3))),
+        (1, (P.:/) <$> (genRepairPath =<< choose (1, 3)) <*> genShape)
+      ]
+  nodes <- sublistOf [1 .. 4 :: Int]
+  edges <- flip vectorOf genEdge =<< frequency [(3, choose (0, 6)), (1, choose (7, 14))]
+  pure
+    ( surface,
+      insertEdges
+        edges
+        (foldl' (\g k -> insertNode (emptyNode (smallNID k)) g) emptyGraph nodes)
+    )
+  where
+    genEdge = edge' <$> choose (1, 4) <*> genLabel <*> choose (1, 4)
+    genLabel = elements ["a", "b", "c"]
+    genNode = P.Absolute . smallNID <$> choose (1, 5)
+    genStep =
+      frequency
+        [ (8, P.Literal <$> genLabel),
+          (1, pure P.Wild),
+          (1, pure (P.RegexMatch [re|^[ab]$|]))
+        ]
+    conj = foldl1Ex' (P.:&)
+    genShape = do
+      x <- genStep
+      y <- genStep
+      z <- genStep
+      fixedNode <- genNode
+      k <- choose (2, 4)
+      steps <- vectorOf k genStep
+      elements
+        [ -- pins from the right, independently
+          x P.:/ P.Backwards x P.:& y P.:/ P.Backwards y,
+          conj [s P.:/ P.Backwards s | s <- steps],
+          -- created nodes that are interchangeable
+          conj steps P.:/ P.Backwards x P.:/ conj steps P.:/ P.Backwards y,
+          conj [P.Backwards s P.:/ x | s <- steps],
+          -- identification from the right
+          x P.:/ z P.:/ fixedNode P.:& y P.:/ z P.:/ fixedNode,
+          conj [s P.:/ z P.:/ fixedNode | s <- steps],
+          -- a pin to a fixed node
+          x P.:& x P.:/ fixedNode,
+          x P.:/ y P.:& x P.:/ fixedNode P.:/ z,
+          -- alternatives
+          (x P.:|| y) P.:/ conj steps,
+          (x P.:++ y P.:/ fixedNode) P.:/ conj steps,
+          conj steps P.:/ (x P.:|| y P.:|| P.One),
+          -- steps with many matches
+          conj [P.Wild P.:/ s | s <- steps],
+          conj [P.RegexMatch [re|^[abc]$|] P.:/ s | s <- steps],
+          P.Wild P.:/ P.Wild P.:/ x
+        ]
+    genRepairPath :: Int -> Gen P.Path
+    genRepairPath size
+      | size <= 1 =
+          frequency
+            [ (10, genStep),
+              (1, pure P.One),
+              (2, genNode),
+              ( 1,
+                P.ExcludingNIDs . setFromList . map smallNID
+                  <$> (sublistOf [1 .. 3] `suchThat` (not . null))
+              )
+            ]
+      | otherwise = do
+          k <- choose (1, size - 1)
+          let l = genRepairPath k
+              r = genRepairPath (size - k)
+          frequency
+            [ (5, (P.:/) <$> l <*> r),
+              (4, (P.:&) <$> l <*> r),
+              (1, (P.:||) <$> l <*> r),
+              (1, (P.:++) <$> l <*> r),
+              (1, P.Backwards <$> genRepairPath (size - 1))
+            ]
+
+-- | The labels a chooser gives in a random case: none, the corpus's, or
+-- one for wildcards only.
+data Labels = NoLabels | CorpusLabels | WildLabel
+  deriving stock (Eq, Show, Enum, Bounded)
+
+labelsOf :: Labels -> Matcher -> Maybe Text
+labelsOf = \case
+  NoLabels -> const Nothing
+  CorpusLabels -> corpusLabels
+  WildLabel -> \case
+    MWild -> Just "w"
+    _ -> Nothing
+
+spec_selectMatchesReference :: Spec
+spec_selectMatchesReference = describe "select keeps what its reference keeps" do
+  it "over the corpus, with every chooser used on it" $
+    forM_ corpusQueries \surface -> do
+      let q = compilePath surface
+          literal = \case
+            MLiteral _ -> True
+            _ -> False
+          -- a chooser is only asked about matchers that are not literals
+          choosers
+            | all (all (literal . (.matcher)) . patternEdges) q.alternatives =
+                [const Nothing]
+            | otherwise =
+                [ const Nothing,
+                  corpusLabels,
+                  \m -> find (matcherAccepts m) ["fresh"]
+                ]
+      forM_ corpusGraphs \g -> forM_ choosers \chooser ->
+        selectsAsReference (candidatesIn chooser g q)
+  describe "with created nodes that are interchangeable" do
+    let symmetric name g surface =
+          it name . selectsAsReference $
+            candidatesIn (const Nothing) g (compilePath surface)
+        bare = graphWithEdges [edge' 2 "x" 2]
+    symmetric "a/~a & b/~b" bare [path| a/~a & b/~b |]
+    symmetric "a/~a & a/~a/~a" bare [path| a/~a & a/~a/~a |]
+    symmetric "~a/a & ~b/b & ~c/c" bare [path| ~a/a & ~b/b & ~c/c |]
+    symmetric "(~a & ~b)/c" bare [path| (~a & ~b)/c |]
+    symmetric "(~a & ~b & ~c)/x & (~a & ~b & ~c)/y" bare $
+      [path| (~a & ~b & ~c)/x & (~a & ~b & ~c)/y |]
+    symmetric
+      "(a & b & c & d)/~a/(a & b & c & d)/~b"
+      bare
+      [path| (a & b & c & d)/~a/(a & b & c & d)/~b |]
+    symmetric
+      "a/b/@5 & c/b/@5 & d/b/@5"
+      (graphWithEdges [edge' 5 "x" 5])
+      [path| a/b/@000000000005 & c/b/@000000000005 & d/b/@000000000005 |]
+    symmetric
+      "(a | b)/~a/(a & b)/~b with a loop"
+      (graphWithEdges [edge' 1 "a" 1, edge' 2 "b" 1])
+      [path| (a | b)/~a/(a & b)/~b |]
+  it "on random paths and graphs" . withMaxSuccess 1500 $
+    forAll genRepairCase \(surface, g) -> forAll arbitraryBoundedEnum \labels ->
+      checkAlternatives surface
+        == Right ()
+          ==> case candidatesUpTo (Just 300) (labelsOf labels) g (compilePath surface) of
+            Nothing -> discard
+            Just cs -> select cs === selectReference cs
+  it "pairs created hops as its reference does" . withMaxSuccess 1500 $
+    forAll genRepairCase \(surface, _) ->
+      checkAlternatives surface
+        == Right ()
+          ==> forAll (genPairing (toList (compilePath surface).alternatives))
+        $ \(specs, labels, created, binds) ->
+          let bind v = findWithDefault (Fresh 0) v binds
+           in sharedPairs specs labels created bind
+                === sharedPairsReference specs labels created bind
+  where
+    -- the edges of an alternative with labels for some, some of them to
+    -- create, and its vertices bound to a few nodes
+    genPairing [] = pure (mempty, mempty, mempty, mempty)
+    genPairing alternatives = do
+      p <- elements alternatives
+      let specs = patternEdges p
+      labels <-
+        catMaybes <$> for (keys specs) \e ->
+          frequency
+            [ (5, Just . (e,) <$> elements ["a", "b" :: Text]),
+              (1, pure Nothing)
+            ]
+      created <- sublistOf (keys specs)
+      binds <-
+        for (patternVertices p) \v ->
+          (v,)
+            <$> oneof
+              [ Existing . smallNID <$> choose (1, 3),
+                Fresh <$> choose (0, 3)
+              ]
+      pure
+        ( specs,
+          mapFromList labels :: Map EdgeId Text,
+          setFromList created :: Set EdgeId,
+          mapFromList binds :: Map PVertex Binding
+        )
+
+-- * The limit on candidates
+
+-- | A path under @%override({max-repairs = …}, …)@.
+repairsLimited :: P.RepairsLimit -> P.Path -> P.Path
+repairsLimited l = P.WithLimits () (P.PathLimits Nothing (Just l))
+
+residuateUpTo ::
+  P.RepairsLimit ->
+  Graph Text () ->
+  P.Path ->
+  Either ResidualError Residuation
+residuateUpTo limit g surface =
+  runIdentity $
+    residuateWithin
+      limit
+      (pure . (`maybeNodeLookup` g))
+      (pure . const Nothing)
+      corpusCurrent
+      (compilePath surface)
+
+-- | How many repairs there are, or the error.
+repairCount :: Either ResidualError Residuation -> Either ResidualError Int
+repairCount = fmap \case
+  Repairs rs -> length rs
+  AlreadyResolves -> 0
+  Unsatisfiable -> 0
+
+-- | What residuating within the default limit gives for a path that makes
+-- this many candidates and has this result without a limit. Whether the
+-- default refuses a path is decided here only.
+underDefault ::
+  Int -> Either ResidualError Int -> Either ResidualError Int
+underDefault counted unlimited
+  | counted > defaultMaxRepairs = Left (TooManyRepairs defaultMaxRepairs)
+  | otherwise = unlimited
+
+spec_repairsLimit :: Spec
+spec_repairsLimit = describe "the limit on candidate repairs" do
+  let bare = graphWithEdges [edge' 1 "zz" 9]
+      -- node 1 with a child for each of the first letters
+      children k =
+        graphWithEdges
+          [ edge' 1 (singleton l) (10 + i)
+          | (i, l) <- zip [0 ..] (take k ['a' ..])
+          ]
+      -- k conjuncts, each a step that every child matches, then its own
+      -- step: (children + 1) ^ k candidates
+      anyChild k =
+        foldl1Ex'
+          (P.:&)
+          [ P.RegexMatch [re|^[a-z]$|] P.:/ P.Literal ("x" <> tshow i)
+          | i <- [1 .. k :: Int]
+          ]
+      finishing micros = timeout micros . evaluate
+      -- the fewest children with which four such conjuncts are over the
+      -- default limit
+      tooManyChildren =
+        headEx [k | k <- [1 ..], (k + 1) ^ (4 :: Int) > defaultMaxRepairs]
+      -- k chains of d existing steps from node 1, and the path that
+      -- continues each with a new step: (d + 1) ^ k candidates (each chain
+      -- matched up to any of its steps), one repair
+      chainLabel :: Int -> Int -> Text
+      chainLabel i j = "c" <> tshow i <> "-" <> tshow j
+      chains k d =
+        ( graphWithEdges
+            [ edge'
+                (if j == 1 then 1 else 100 * i + j - 1)
+                (chainLabel i j)
+                (100 * i + j)
+            | i <- [1 .. k :: Int],
+              j <- [1 .. d :: Int]
+            ],
+          foldl1Ex'
+            (P.:&)
+            [ foldl'
+                (P.:/)
+                (P.Literal (chainLabel i 1))
+                (map (P.Literal . chainLabel i) [2 .. d])
+                P.:/ P.Literal ("new" <> tshow i)
+            | i <- [1 .. k]
+            ]
+        )
+  describe "counts every candidate made" do
+    it "at the limit the repairs are those without one" do
+      let p = [path| a/~a & b/~b & c/~c |]
+      repairCount (residuateUpTo (P.AtMostRepairs 8) bare p) `shouldBe` Right 8
+      residuateUpTo (P.AtMostRepairs 8) bare p
+        `shouldBe` residuateUpTo P.UnlimitedRepairs bare p
+    it "one under it is an error" $
+      residuateUpTo (P.AtMostRepairs 7) bare [path| a/~a & b/~b & c/~c |]
+        `shouldBe` Left (TooManyRepairs 7)
+    it "candidates that selection drops count" do
+      -- 3 * 3 bindings, of which the one that binds both dominates
+      let g =
+            graphWithEdges
+              [edge' 1 "a" 2, edge' 1 "a" 3, edge' 1 "b" 4, edge' 1 "b" 5]
+          p = [path| a/x & b/y |]
+      repairCount (residuateUpTo (P.AtMostRepairs 9) g p) `shouldBe` Right 4
+      residuateUpTo (P.AtMostRepairs 8) g p `shouldBe` Left (TooManyRepairs 8)
+    it "and so do identifications whose pins are not justified" do
+      -- 192 are made, 144 of them candidates
+      let p = [path| (a & b & c)/~a/(a & b & c)/~b |]
+      length (candidatesIn (const Nothing) bare (compilePath p)) `shouldBe` 144
+      repairCount (residuateUpTo (P.AtMostRepairs 192) bare p)
+        `shouldBe` Right 15
+      residuateUpTo (P.AtMostRepairs 191) bare p
+        `shouldBe` Left (TooManyRepairs 191)
+  describe "the default" do
+    it "stops a path with more candidates at once" do
+      result <-
+        finishing 2000000 $
+          residuateIn (children tooManyChildren) (anyChild 4)
+      result `shouldBe` Just (Left (TooManyRepairs defaultMaxRepairs))
+    it "allows one with fewer" do
+      result <-
+        finishing 10000000 . repairCount $
+          residuateIn (children (tooManyChildren - 1)) (anyChild 4)
+      result `shouldBe` Just (Right ((tooManyChildren - 1) ^ (4 :: Int)))
+    it "no limit allows the first" do
+      result <-
+        finishing 20000000 . repairCount $
+          residuateUpTo P.UnlimitedRepairs (children tooManyChildren) $
+            anyChild 4
+      result `shouldBe` Just (Right (tooManyChildren ^ (4 :: Int)))
+  -- Paths with one repair whose existing steps multiply the candidates:
+  -- each is refused or done as its count and 'defaultMaxRepairs' say
+  -- ('underDefault'), so a change of the default needs no change here.
+  describe "unambiguous paths over existing steps" do
+    let counts name counted (g, p) = it name do
+          repairCount (residuateUpTo (P.AtMostRepairs counted) g p)
+            `shouldBe` Right 1
+          residuateUpTo (P.AtMostRepairs (counted - 1)) g p
+            `shouldBe` Left (TooManyRepairs (counted - 1))
+          result <- finishing 10000000 (repairCount (residuateIn g p))
+          result `shouldBe` Just (underDefault counted (Right 1))
+    counts "ten existing conjuncts and a new one: 2 ^ 10" 1024 $
+      ( children 10,
+        foldl1Ex' (P.:&) $
+          [P.Literal (singleton l) | l <- take 10 ['a' ..]]
+            <> [P.Literal "new"]
+      )
+    counts "four chains of five existing steps: 6 ^ 4" 1296 (chains 4 5)
+    counts "five chains of three: 4 ^ 5" 1024 (chains 5 3)
+    counts "seven chains of two: 3 ^ 7" 2187 (chains 7 2)
+  describe "a path that resolves is a no-op whatever the limit" do
+    it "with more candidates than the default" do
+      -- 2 ^ k bindings, the last of which resolves
+      let k = headEx [i | i <- [1 ..], (2 :: Int) ^ i > defaultMaxRepairs]
+          p = foldl1Ex' (P.:&) [P.Literal (singleton l) | l <- take k ['a' ..]]
+      result <- finishing 5000000 (residuateIn (children k) p)
+      result `shouldBe` Just (Right AlreadyResolves)
+    it "with a limit of one" $
+      residuateUpTo (P.AtMostRepairs 1) (children 2) [path| a & b |]
+        `shouldBe` Right AlreadyResolves
+    it "on random paths and graphs" . withMaxSuccess 1000 $
+      forAll genRepairCase \(surface, g) ->
+        checkAlternatives surface
+          == Right ()
+            ==> case candidatesUpTo
+              (Just 300)
+              (const Nothing)
+              g
+              (compilePath surface) of
+              Nothing -> discard
+              Just cs ->
+                let unlimited = residuateUpTo P.UnlimitedRepairs g surface
+                    overLimit k
+                      | unlimited == Right AlreadyResolves = unlimited
+                      | otherwise = Left (TooManyRepairs k)
+                    made = length cs
+                 in conjoin
+                      [ -- fewer than the candidates is always too few
+                        made
+                          == 0
+                            .||. residuateUpTo (P.AtMostRepairs (made - 1)) g surface
+                            === overLimit (made - 1),
+                        made
+                          == 0
+                            .||. residuateUpTo (P.AtMostRepairs 0) g surface
+                            === overLimit 0,
+                        residuateUpTo (P.AtMostRepairs 100000) g surface === unlimited,
+                        -- at least the candidates are counted, maybe more
+                        residuateUpTo (P.AtMostRepairs made) g surface
+                          `elem` [unlimited, overLimit made]
+                            === True
+                      ]
+  describe "the slow paths" do
+    it "many matches for each of several steps" do
+      -- 9 ^ 4 = 6561 candidates and 4096 repairs: stopped at once if that
+      -- is over the default, and without a limit selection is no longer
+      -- what takes long
+      limited <-
+        finishing 10000000 . repairCount $
+          residuateIn (children 8) (anyChild 4)
+      limited `shouldBe` Just (underDefault 6561 (Right 4096))
+      listed <-
+        finishing 20000000 . repairCount $
+          residuateUpTo P.UnlimitedRepairs (children 8) (anyChild 4)
+      listed `shouldBe` Just (Right 4096)
+    it "a union copied into many conjuncts finishes" do
+      let p = [path| (a | b)/(c & d & e & f & g & h & i & j) |]
+      -- 256 alternatives of one candidate each
+      new <- finishing 5000000 (repairCount (residuateIn bare p))
+      new `shouldBe` Just (underDefault 256 (Right 256))
+      -- with a and b there, 256 candidates each
+      existing <-
+        finishing 20000000 . repairCount $
+          residuateIn (graphWithEdges [edge' 1 "a" 2, edge' 1 "b" 3]) p
+      existing `shouldBe` Just (underDefault 65536 (Right 256))
+    it "many pins finishes" do
+      -- 768 made, 576 candidates, 27 repairs
+      result <-
+        finishing 10000000 . repairCount $
+          residuateIn bare [path| (a & b & c & d)/~a/(a & b & c & d)/~b |]
+      result `shouldBe` Just (underDefault 768 (Right 27))
+  describe "the limit of a path" do
+    let limitOf = pathMaxRepairs
+        upTo = repairsLimited . P.AtMostRepairs
+    it "is the default without an override" $
+      limitOf [path| a/b & c |] `shouldBe` P.AtMostRepairs defaultMaxRepairs
+    it "is the override's around the whole path" do
+      limitOf (upTo 5 [path| a/b & c |]) `shouldBe` P.AtMostRepairs 5
+      limitOf (repairsLimited P.UnlimitedRepairs [path| a/b & c |])
+        `shouldBe` P.UnlimitedRepairs
+    it "the innermost override wins" $
+      limitOf (upTo 5 (upTo 7000 [path| a/b |])) `shouldBe` P.AtMostRepairs 7000
+    it "the largest limit of any part applies" do
+      limitOf (upTo 5 [path| a |] P.:/ [path| b |])
+        `shouldBe` P.AtMostRepairs defaultMaxRepairs
+      limitOf (upTo 5 [path| a |] P.:& upTo 7000 [path| b |])
+        `shouldBe` P.AtMostRepairs 7000
+      limitOf
+        (upTo 5 ([path| a |] P.:/ repairsLimited P.UnlimitedRepairs [path| b |]))
+        `shouldBe` P.UnlimitedRepairs
+    it "an override of something else keeps it" $
+      limitOf
+        ( upTo 5 $
+            P.WithLimits
+              ()
+              (P.PathLimits (Just (P.AtMostAlternatives 3)) Nothing)
+              [path| a | b |]
+        )
+        `shouldBe` P.AtMostRepairs 5

@@ -38,6 +38,20 @@ compilePath =
     . surfaceExprs
     . pushBackwards
 
+-- | A path without the nodes that carry its limits. A limit says how much
+-- compiling or residuating the path may make, not what the path means, so
+-- everything here compiles the path without them: wherever such a node
+-- is, and however many are nested, the path compiles as if it were not
+-- there.
+withoutLimits :: Path -> Path
+withoutLimits = \case
+  WithLimits _ _ p -> withoutLimits p
+  Backwards p -> Backwards (withoutLimits p)
+  p :/ q -> withoutLimits p :/ withoutLimits q
+  p :& q -> withoutLimits p :& withoutLimits q
+  Union k p q -> Union k (withoutLimits p) (withoutLimits q)
+  p -> p
+
 -- * Backwards
 
 -- | Push 'Backwards' down to the steps. @~(p/q) = ~q/~p@, and @~@
@@ -48,7 +62,7 @@ pushBackwards = \case
   p :/ q -> pushBackwards p :/ pushBackwards q
   p :& q -> pushBackwards p :& pushBackwards q
   Union k p q -> Union k (pushBackwards p) (pushBackwards q)
-  WithMaxAlternatives v l p -> WithMaxAlternatives v l (pushBackwards p)
+  WithLimits v l p -> WithLimits v l (pushBackwards p)
   p -> p
   where
     invert = \case
@@ -59,7 +73,7 @@ pushBackwards = \case
       p :/ q -> invert q :/ invert p
       p :& q -> invert p :& invert q
       Union k p q -> Union k (invert p) (invert q)
-      WithMaxAlternatives v l p -> WithMaxAlternatives v l (invert p)
+      WithLimits v l p -> WithLimits v l (invert p)
       p -> p
 
 -- * Expressions
@@ -94,7 +108,8 @@ data Expr
 
 -- | The alternatives of a path, rooted and distributed.
 surfaceExprs :: Path -> Set Expr
-surfaceExprs = setFromList . map supplyRoot . concatMap resolved . fragment
+surfaceExprs =
+  setFromList . map supplyRoot . concatMap resolved . fragment . withoutLimits
   where
     resolved = toList . resolve
 
@@ -150,7 +165,7 @@ fragmentWithin spend path = toList . mapSet atRoot <$> go True 0 path
           combine (\a b -> pure (conjoin a [b]))
             <$> go root pos p
             <*> go root (pos + leaves p) q
-      WithMaxAlternatives _ _ p -> go root pos p
+      WithLimits _ _ p -> go root pos p
       p@(_ :/ _) -> whole root (placed pos (sequenceSegments p))
       where
         step d m = one (Written pos d m)
@@ -264,7 +279,7 @@ leaves = \case
   p :/ q -> leaves p + leaves q
   p :& q -> leaves p + leaves q
   Union _ p q -> leaves p + leaves q
-  WithMaxAlternatives _ _ p -> leaves p
+  WithLimits _ _ p -> leaves p
   _ -> 1
 
 -- | The first of the elements with each key.
@@ -283,14 +298,12 @@ distinctOn key = go (mempty :: Set k)
 sharedSides :: Path -> [Path]
 sharedSides = \case
   p :++ q -> sharedSides p ++ sharedSides q
-  WithMaxAlternatives _ _ p@(_ :++ _) -> sharedSides p
   p -> [p]
 
 -- | The sides of a relational union, through nested ones.
 unionSides :: Path -> [Path]
 unionSides = \case
   p :|| q -> unionSides p ++ unionSides q
-  WithMaxAlternatives _ _ p@(_ :|| _) -> unionSides p
   p -> [p]
 
 -- | The segments of a sequence, however it is nested: sequencing
@@ -299,7 +312,6 @@ unionSides = \case
 sequenceSegments :: Path -> [Path]
 sequenceSegments = \case
   p :/ q -> sequenceSegments p ++ sequenceSegments q
-  WithMaxAlternatives _ _ p@(_ :/ _) -> sequenceSegments p
   p -> [p]
 
 -- | A term without the leading joins of its input, which at the root of a
@@ -342,7 +354,7 @@ hasConj = \case
   Backwards p -> hasConj p
   p :/ q -> hasConj p || hasConj q
   Union _ p q -> hasConj p || hasConj q
-  WithMaxAlternatives _ _ p -> hasConj p
+  WithLimits _ _ p -> hasConj p
   _ -> False
 
 -- | Whether a path has a join (@\@@, @\@N@ or @!{…}@) or a conjunction.
@@ -355,7 +367,7 @@ joinOrConj = \case
   Backwards p -> joinOrConj p
   p :/ q -> joinOrConj p || joinOrConj q
   Union _ p q -> joinOrConj p || joinOrConj q
-  WithMaxAlternatives _ _ p -> joinOrConj p
+  WithLimits _ _ p -> joinOrConj p
   _ -> False
 
 -- | At a sequence boundary @\@@ joins the preceding outputs, also when it
@@ -880,7 +892,7 @@ pathLimit :: Path -> Maybe AlternativesLimit
 pathLimit = go (AtMostAlternatives defaultMaxAlternatives)
   where
     go l = \case
-      WithMaxAlternatives _ l' p -> go l' p
+      WithLimits _ l' p -> go (fromMaybe l l'.maxAlternatives) p
       p :|| q -> Just l `max` go l p `max` go l q
       p :++ q -> go l p `max` go l q
       p :/ q -> go l p `max` go l q
@@ -939,7 +951,7 @@ checkAlternatives p = case pathLimit p of
           work
         spend = Spend (sized (4 * n)) term made
     flip S.evalStateT (CheckBudget 0 0) do
-      es <- fragmentWithin spend (pushBackwards p)
+      es <- fragmentWithin spend (pushBackwards (withoutLimits p))
       void $
         foldM
           ( \seen e -> do
@@ -975,7 +987,9 @@ checkWork = 20
 
 -- | The size of everything 'checkAlternatives' may make, for each
 -- alternative allowed. Measured in an unoptimized build, this keeps the
--- check within half a second at the default limit (0.44s at most); of
+-- check to roughly half a second at the default limit (0.44s on an idle
+-- machine and 0.56s on a loaded one at most, which is a measurement and
+-- not a guarantee); of
 -- 1872 random unions of up to 45 targets and other sides before a
 -- conjunction, it refuses six that compile to fewer alternatives than the
 -- limit (in 0.2s to 2.0s).
@@ -997,7 +1011,7 @@ compileAlternatives p =
     Just pattern' <- [canonicalize <$> glueExpr (supplyRoot e)]
   ]
   where
-    p' = pushBackwards p
+    p' = pushBackwards (withoutLimits p)
     uniform :: Map PatternPath Path
     uniform =
       mapFromList . reverse $
@@ -1046,7 +1060,7 @@ uniformChoices = \case
   p@(ExcludingNIDs ns) -> one (Join Stay (Except ns)) p
   -- left-biased, so the first choice written is kept
   Union _ p q -> uniformChoices p <> uniformChoices q
-  WithMaxAlternatives _ _ p -> uniformChoices p
+  WithLimits _ _ p -> uniformChoices p
   p :& q ->
     combine
       (\a b -> conjoin a [b])

@@ -243,11 +243,9 @@ renderSurfacePath = go 0
       l :& r -> parens (d > 6) (go 6 l <> " & " <> go 7 r)
       Union k l r ->
         parens (d > 5) (go (leftPrec k l) l <> symbol k <> go 6 r)
-      WithMaxAlternatives _ l p ->
-        "%override({max-alternatives = "
-          <> case l of
-            AtMostAlternatives n -> tshow n
-            UnlimitedAlternatives -> "unlimited"
+      WithLimits _ l p ->
+        "%override({"
+          <> intercalate ", " (map pack (showLimits l))
           <> "}, "
           <> go 0 p
           <> ")"

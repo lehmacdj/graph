@@ -29,7 +29,7 @@ g> <interactive>:1:15:
   |
 1 | ls %override({minus = shared}, a)
   |               ^
-Unknown setting minus in %override; the settings are plus and max-alternatives at line 1, columns 15-28. (InvalidOverrideSetting)
+Unknown setting minus in %override; the settings are plus, max-alternatives and max-repairs at line 1, columns 15-28. (InvalidOverrideSetting)
 
 g> [0m[0;1ma[0m[0m [0;34m@000000000001[0m [0m[0m
 g> Goodbye!

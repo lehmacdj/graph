@@ -4,6 +4,9 @@ module Models.Path
   ( Path' (..),
     UnionKind (..),
     AlternativesLimit (..),
+    RepairsLimit (..),
+    PathLimits (..),
+    showLimits,
     OverrideSettings (..),
     PathPhase (..),
     SourceRange (..),
@@ -13,7 +16,7 @@ module Models.Path
     HoleVal,
     DirectiveVal,
     DefaultUnionVal,
-    WithMaxAlternativesVal,
+    WithLimitsVal,
     Path'Constraints,
     handleDirectivesWith,
     handleDirectivesQ,
@@ -82,11 +85,12 @@ data Path' (p :: PathPhase)
     -- directive it is lowered by 'handleDirectivesWith', which is told the
     -- kind. It does not exist in the Prenormal phase.
     DefaultUnion (DefaultUnionVal p) (Path' p) (Path' p)
-  | -- | The path inside @%override({max-alternatives = …}, p)@, after
-    -- directives are expanded: compilation allows the relational unions in
-    -- it to make this many alternatives. It only exists in the Prenormal
-    -- phase.
-    WithMaxAlternatives (WithMaxAlternativesVal p) AlternativesLimit (Path' p)
+  | -- | The path inside an @%override@ that sets a limit, after directives
+    -- are expanded: with @max-alternatives@, compilation allows the
+    -- relational unions in it to make that many alternatives; with
+    -- @max-repairs@, residuation allows that many candidate repairs. It
+    -- only exists in the Prenormal phase.
+    WithLimits (WithLimitsVal p) PathLimits (Path' p)
   | -- | intersection
     Path' p ::& Path' p
   | -- | Directives are command like things that may appear in paths.
@@ -115,14 +119,55 @@ data UnionKind
 data AlternativesLimit = AtMostAlternatives Int | UnlimitedAlternatives
   deriving (Eq, Ord, Show, Generic, Lift)
 
+-- | How many candidate repairs residuating a path may make.
+data RepairsLimit = AtMostRepairs Int | UnlimitedRepairs
+  deriving (Eq, Ord, Show, Generic, Lift)
+
+-- | The limits an @%override@ sets; 'Nothing' keeps the outer one.
+data PathLimits = PathLimits
+  { -- | how many alternatives the relational unions inside may make
+    maxAlternatives :: Maybe AlternativesLimit,
+    -- | how many candidate repairs residuation may make
+    maxRepairs :: Maybe RepairsLimit
+  }
+  deriving (Eq, Ord, Show, Generic, Lift)
+
 -- | Settings an @%override@ changes; 'Nothing' keeps the outer one.
 data OverrideSettings = OverrideSettings
   { -- | the union @+@ is lowered to
     plus :: Maybe UnionKind,
     -- | how many alternatives the relational unions inside may make
-    maxAlternatives :: Maybe AlternativesLimit
+    maxAlternatives :: Maybe AlternativesLimit,
+    -- | how many candidate repairs residuation may make
+    maxRepairs :: Maybe RepairsLimit
   }
   deriving (Eq, Ord, Show, Generic, Lift)
+
+-- | The limits of an override, if it sets one.
+overrideLimits :: OverrideSettings -> Maybe PathLimits
+overrideLimits settings
+  | isNothing settings.maxAlternatives && isNothing settings.maxRepairs =
+      Nothing
+  | otherwise =
+      Just
+        PathLimits
+          { maxAlternatives = settings.maxAlternatives,
+            maxRepairs = settings.maxRepairs
+          }
+
+-- | The settings of an @%override@ as written: @key = value@ each.
+showLimits :: PathLimits -> [String]
+showLimits limits =
+  [ "max-alternatives = " <> case l of
+      AtMostAlternatives n -> show n
+      UnlimitedAlternatives -> "unlimited"
+  | Just l <- [limits.maxAlternatives]
+  ]
+    ++ [ "max-repairs = " <> case l of
+           AtMostRepairs n -> show n
+           UnlimitedRepairs -> "unlimited"
+       | Just l <- [limits.maxRepairs]
+       ]
 
 -- * Trees that grow machinery
 
@@ -159,11 +204,11 @@ type family DefaultUnionVal (p :: PathPhase) :: Type where
   DefaultUnionVal 'WithDirectives = ()
   DefaultUnionVal 'Prenormal = Void
 
--- | 'WithMaxAlternatives' only exists after directives are expanded.
-type family WithMaxAlternativesVal (p :: PathPhase) :: Type where
-  WithMaxAlternativesVal 'Partial = Void
-  WithMaxAlternativesVal 'WithDirectives = Void
-  WithMaxAlternativesVal 'Prenormal = ()
+-- | 'WithLimits' only exists after directives are expanded.
+type family WithLimitsVal (p :: PathPhase) :: Type where
+  WithLimitsVal 'Partial = Void
+  WithLimitsVal 'WithDirectives = Void
+  WithLimitsVal 'Prenormal = ()
 
 type family NIDVal (p :: PathPhase) :: Type where
   NIDVal 'Partial = Either IncompleteNID NID
@@ -225,20 +270,13 @@ showsDirective = \case
       . shows p
       . showString ")"
   where
-    overrideSettingsList OverrideSettings {plus, maxAlternatives} =
+    overrideSettingsList settings =
       [ "plus = " <> case k of
           Shared -> "shared"
           Relational -> "relational"
-      | Just k <- [plus]
+      | Just k <- [settings.plus]
       ]
-        ++ [ "max-alternatives = " <> showLimit l
-           | Just l <- [maxAlternatives]
-           ]
-
-showLimit :: AlternativesLimit -> String
-showLimit = \case
-  AtMostAlternatives n -> show n
-  UnlimitedAlternatives -> "unlimited"
+        ++ foldMap showLimits (overrideLimits settings)
 
 instance
   (Path'Constraints Show p) =>
@@ -274,7 +312,7 @@ handleDirectivesWith plus interpretDirective = \case
   DefaultUnion () l r -> Union <$> plus <*> go l <*> go r
   l ::& r -> (::&) <$> go l <*> go r
   Directive _ (Override settings p) ->
-    maybe id (WithMaxAlternatives ()) settings.maxAlternatives
+    maybe id (WithLimits ()) (overrideLimits settings)
       <$> handleDirectivesWith
         (maybe plus pure settings.plus)
         interpretDirective
@@ -311,9 +349,9 @@ handleDirectivesQ plus interpretDirective = \case
             (maybe plus pure settings.plus)
             interpretDirective
             p
-     in case settings.maxAlternatives of
+     in case overrideLimits settings of
           Nothing -> inner
-          Just l -> [|WithMaxAlternatives () l $inner|]
+          Just l -> [|WithLimits () l $inner|]
   Directive ann directive -> interpretDirective ann directive
   where
     go = handleDirectivesQ plus interpretDirective
@@ -366,7 +404,7 @@ type Path'Constraints c p =
     c (HoleVal p),
     c (NIDVal p),
     c (DefaultUnionVal p),
-    c (WithMaxAlternativesVal p)
+    c (WithLimitsVal p)
   )
 
 -- * Instances
@@ -402,9 +440,9 @@ showsPath d (Union k l r) =
   where
     unionSymbol Relational = " | "
     unionSymbol Shared = " ++ "
-showsPath _ (WithMaxAlternatives _ l p) =
-  showString "%override({max-alternatives = "
-    . showString (showLimit l)
+showsPath _ (WithLimits _ l p) =
+  showString "%override({"
+    . showString (intercalate ", " (showLimits l))
     . showString "}, "
     . shows p
     . showString ")"

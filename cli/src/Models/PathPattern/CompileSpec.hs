@@ -22,6 +22,7 @@ import Models.Path.TH (path)
 import Models.PathPattern
 import Models.PathPattern.Compile
 import Models.PathPattern.Match
+import Models.PathPattern.ResiduateSpec (genRepairCase)
 import Models.PathPattern.TestCorpus
 import MyPrelude
 import Test.QuickCheck.Gen (unGen)
@@ -493,7 +494,7 @@ spec_compileSubUnions = describe "leaving out a side of a union" do
         union' = foldl1Ex' (P.:||)
         withinLimit x =
           isRight . checkAlternatives $
-            P.WithMaxAlternatives () (P.AtMostAlternatives 300) x
+            limitedTo 300 x
         checked =
           [ (plug ctx before suf (union' fewer), full)
           | (sides', before, suf, ctx) <- cases,
@@ -636,7 +637,7 @@ spec_compileSharedWalks = describe "a joined side is one walk" do
             30
         withinLimit x =
           isRight . checkAlternatives $
-            P.WithMaxAlternatives () (P.AtMostAlternatives 300) x
+            limitedTo 300 x
         checked =
           [ (whole, written)
           | (segments, wrap) <- cases,
@@ -836,7 +837,7 @@ spec_compileInterchangeablePrefixes =
             30
         withinLimit x =
           isRight . checkAlternatives $
-            P.WithMaxAlternatives () (P.AtMostAlternatives 300) x
+            limitedTo 300 x
         checked =
           [ (p, p', c)
           | (p, k, c) <- cases,
@@ -960,7 +961,7 @@ routesInOrder p =
 spec_compileAlternativesLimit :: Spec
 spec_compileAlternativesLimit = describe "the alternatives limit" do
   let big = [path| (a | b | c)/(d & e & f & g & h & i & j) |]
-      limited l = P.WithMaxAlternatives () l
+      limited l = P.WithLimits () (P.PathLimits (Just l) Nothing)
   it "does not limit a path without a conjunction, where nothing copies" $
     checkAlternatives
       [path| (a | b)/(a | b)/(a | b)/(a | b)/(a | b)/(a | b)/(a | b)/(a | b)/(a | b)/(a | b)/(a | b) |]
@@ -1060,7 +1061,7 @@ spec_compileUnionMonotoneRandom =
         -- keep resolving cheap
         withinLimit x =
           isRight . checkAlternatives $
-            P.WithMaxAlternatives () (P.AtMostAlternatives 100) (x P.:/ P.One)
+            limitedTo 100 (x P.:/ P.One)
         checked =
           [ (base, bigger)
           | (p, q, c, d, ctx) <- cases,
@@ -1345,3 +1346,71 @@ spec_compileExamples = describe "compile examples" do
                  \[out 0 \"a\" (var 0),out 2 \"c\" (var 2)]]]"
   where
     hopLabels r = [l | Hop _ _ (MLiteral l) _ <- r.hops]
+
+-- | The path under @%override({max-alternatives = n}, …)@.
+limitedTo :: Int -> P.Path -> P.Path
+limitedTo n =
+  P.WithLimits () (P.PathLimits (Just (P.AtMostAlternatives n)) Nothing)
+
+-- | The path with limit nodes put around random parts of it, up to three
+-- deep at one place. The alternatives limits are the default's, so the
+-- limit in effect is the same everywhere.
+genWithLimits :: P.Path -> Gen P.Path
+genWithLimits = \case
+  P.Backwards p -> wrapped (P.Backwards <$> genWithLimits p)
+  p P.:/ q -> wrapped ((P.:/) <$> genWithLimits p <*> genWithLimits q)
+  p P.:& q -> wrapped ((P.:&) <$> genWithLimits p <*> genWithLimits q)
+  P.Union k p q -> wrapped (P.Union k <$> genWithLimits p <*> genWithLimits q)
+  p -> wrapped (pure p)
+  where
+    wrapped inner = do
+      depth <- frequency [(3, pure 0), (2, pure 1), (1, choose (2, 3))]
+      limits <- vectorOf depth genLimits
+      flip (foldr (P.WithLimits ())) limits <$> inner
+    genLimits =
+      P.PathLimits
+        <$> elements
+          [Nothing, Just (P.AtMostAlternatives defaultMaxAlternatives)]
+        <*> elements
+          [Nothing, Just (P.AtMostRepairs 5), Just P.UnlimitedRepairs]
+
+spec_compileIgnoresLimits :: Spec
+spec_compileIgnoresLimits = describe "limit nodes do not change compilation" do
+  let override l = P.WithLimits () l
+      repairs = P.PathLimits Nothing (Just (P.AtMostRepairs 5000))
+      alternatives = P.PathLimits (Just (P.AtMostAlternatives 50)) Nothing
+      plain = [path| (a & b)/(@ | d) |]
+  it "two nested around a union after a conjunction" $
+    compilePath
+      ([path| a & b |] P.:/ override repairs (override alternatives [path| @ | d |]))
+      `shouldBe` compilePath plain
+  it "one around a join in a sequence" $
+    compilePath
+      ([path| a & b |] P.:/ override repairs P.One P.:/ [path| c |])
+      `shouldBe` compilePath [path| (a & b)/@/c |]
+  it "nested around shared sides and segments" do
+    compilePath
+      ( override repairs (override repairs [path| a ++ b |])
+          P.:++ [path| c |]
+          P.:/ [path| d & e |]
+      )
+      `shouldBe` compilePath [path| (a ++ b) ++ c/(d & e) |]
+    compilePath
+      ( [path| x & y |]
+          P.:/ override alternatives (override repairs [path| a/@ |])
+          P.:/ [path| d & e |]
+      )
+      `shouldBe` compilePath [path| (x & y)/a/@/(d & e) |]
+  it "any number anywhere in random paths" . withMaxSuccess 2000 $
+    forAll (fst <$> genRepairCase) \p -> forAll (genWithLimits p) \limited ->
+      conjoin
+        [ checkAlternatives limited === checkAlternatives p,
+          checkAlternatives p
+            == Right ()
+              ==> conjoin
+                [ compilePath limited === compilePath p,
+                  compileAlternatives limited === compileAlternatives p,
+                  surfaceExprs (pushBackwards limited)
+                    === surfaceExprs (pushBackwards p)
+                ]
+        ]
