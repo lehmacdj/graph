@@ -387,13 +387,15 @@ prospectiveEdges cur destination endpoint = do
 
 -- | Relocate the traversal parent of each selected last edge. For an
 -- incoming traversal this is the edge's target in the stored graph.
+-- Returns the selected edges: none means the source matched nothing, so
+-- nothing was done.
 relocateSelectedEdges ::
   (PathReading r, WriteGraph Text :> r, Error UserError :> r) =>
   Bool ->
   NID ->
   NID ->
   P.Path ->
-  Eff r ()
+  Eff r [Edge Text]
 relocateSelectedEdges removeOriginal cur destination source = do
   rs <- resolveCommandQuery cur source
   let routes = selectedConcreteRoutes rs
@@ -412,23 +414,25 @@ relocateSelectedEdges removeOriginal cur destination source = do
         )
   when removeOriginal $ traverse_ (deleteEdge @Text . fst) moves
   traverse_ (insertEdge @Text . snd) moves
+  pure (map fst moves)
 
 moveSelectedEdges ::
   (PathReading r, WriteGraph Text :> r, Error UserError :> r) =>
-  NID -> NID -> P.Path -> Eff r ()
+  NID -> NID -> P.Path -> Eff r [Edge Text]
 moveSelectedEdges = relocateSelectedEdges True
 
 copySelectedEdges ::
   (PathReading r, WriteGraph Text :> r, Error UserError :> r) =>
-  NID -> NID -> P.Path -> Eff r ()
+  NID -> NID -> P.Path -> Eff r [Edge Text]
 copySelectedEdges = relocateSelectedEdges False
 
--- | Delete the last edge of every selected route.
+-- | Delete the last edge of every selected route. Returns the selected
+-- edges: none means the path matched nothing, so nothing was done.
 removeSelectedEdges ::
   (PathReading r, WriteGraph Text :> r, Error UserError :> r) =>
   NID ->
   P.Path ->
-  Eff r ()
+  Eff r [Edge Text]
 removeSelectedEdges cur p = do
   rs <- resolveCommandQuery cur p
   edges <- for (selectedConcreteRoutes rs) \rt -> case lastEdgeOf rt of
@@ -438,6 +442,7 @@ removeSelectedEdges cur p = do
           <> "nothing was changed."
     Just (original, _) -> pure original
   traverse_ (deleteEdge @Text) edges
+  pure edges
 
 -- | Labels that continue a query prefix to at least one match.
 completionTransitions :: (PathReading r) => NID -> P.Path -> Eff r (Set Text)

@@ -574,6 +574,19 @@ directives at parse time (`IllegalDirective`).
 
 - If route 0 has zero hops (`rn (@ & a) c`), it is an error, as in the
   branch's goldens.
+- If the path `rm`, `mv` or `cp` takes its edges from (the first
+  argument of `mv`/`cp`) matches nothing, so that there is no route 0 at
+  all, the command changes nothing and prints a notice naming the path as
+  it was written, e.g. `the path of rm ("zz") matched nothing; nothing was
+  changed.` (`test/golden/ge/no-match/`). It is a warning, not an error:
+  the rest of a `;` sequence runs, and `at p cmd` goes on to its other
+  targets, where the path may match (there the notice also names the
+  target, `… matched nothing at @N; …`). A path of which some `+` side
+  matches is a match, and prints nothing. The other refusals are
+  unchanged and come without the notice: a zero-hop route 0 (`rm @`), a
+  `mv`/`cp` destination that is not one node (checked first, whatever the
+  source matches), too many alternatives, a parse error. `rn`/`cl` still
+  treat a source that matches nothing as an error.
 - The `rn`/`cl` destination creates one edge: its prefix (everything
   before the final label) must resolve to a single parent node. With
   `0 -c-> 3`, `0 -c-> 4`, `rn a c/z` is an error (`SeveralParents`) that

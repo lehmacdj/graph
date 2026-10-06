@@ -456,6 +456,27 @@ mergeTargets targets = do
       ++ intercalate ", " (map describeNode dropped)
   pure survivor
 
+-- | Tell the user that the path @rm@, @mv@ or @cp@ takes its edges from
+-- matched nothing (as it was written, before its directives were expanded),
+-- so the command did nothing. This is a warning, not an error: the rest of
+-- a @;@ sequence still runs, and so does @at p cmd@ at its other targets,
+-- where the path may well match. Inside @at@ the notice names the target.
+noticeNoMatch ::
+  (Members [Warn UserError, State History] effs) =>
+  Text ->
+  ParsedPath ->
+  NID ->
+  Eff effs ()
+noticeNoMatch what p cur = do
+  prompt <- gets @History (view #now)
+  warnText $
+    what
+      ++ " ("
+      ++ tshow p
+      ++ ") matched nothing"
+      ++ (if cur == prompt then "" else " at " ++ tshow cur)
+      ++ "; nothing was changed."
+
 runCommand' ::
   ( CommandEffects effs,
     Members [State ImportedUrls, State EmptyTargets] effs
@@ -498,7 +519,8 @@ runCommand' = \case
   Remove p0 -> do
     p <- expandDirectives p0
     nid <- currentLocation
-    Paths.removeSelectedEdges nid p
+    selected <- Paths.removeSelectedEdges nid p
+    when (null selected) $ noticeNoMatch "the path of rm" p0 nid
   RemoveNode p0 -> do
     p <- expandDirectives p0
     nid <- currentLocation
@@ -572,7 +594,8 @@ runCommand' = \case
     nid <- currentLocation
     let err = singleErr "the last argument of mv"
     target <- the' err =<< Paths.queryTargets nid q
-    Paths.moveSelectedEdges nid target p
+    selected <- Paths.moveSelectedEdges nid target p
+    when (null selected) $ noticeNoMatch "the first argument of mv" p0 nid
   Rename parents p0 q0 -> do
     p <- expandDirectives p0
     q <- expandDirectives q0
@@ -584,7 +607,8 @@ runCommand' = \case
     nid <- currentLocation
     target <-
       the' (singleErr "the last argument of cp") =<< Paths.queryTargets nid q
-    Paths.copySelectedEdges nid target p
+    selected <- Paths.copySelectedEdges nid target p
+    when (null selected) $ noticeNoMatch "the first argument of cp" p0 nid
   Alias parents p0 q0 -> do
     p <- expandDirectives p0
     q <- expandDirectives q0
