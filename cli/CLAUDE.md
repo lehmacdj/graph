@@ -8,6 +8,12 @@ For setup instructions (installing Stack, running tests), see [docs/claude-code-
 
 - **[MyPrelude Usage](docs/MyPrelude.md)** - Custom prelude built on ClassyPrelude with additional utilities. Read this first to understand import rules, collections, effects, and common patterns.
 
+- **[The path language](docs/path-language.md)** - The surface language:
+  syntax, what each operator means, the product rule and joins, unions,
+  refused and warned paths, and the laws. **[Commands and
+  paths](docs/commands.md)** - What each command does with a path,
+  including `mk` and the limits.
+
 - **[Route patterns](docs/path-pattern-ir.md)** - How paths compile to route
   patterns, and how resolution, residuation (`mk`) and edge selection work.
 
