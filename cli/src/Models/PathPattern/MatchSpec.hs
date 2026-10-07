@@ -14,6 +14,7 @@ import Models.PathPattern.Compile (compilePath)
 import Models.PathPattern.Match
 import Models.PathPattern.TestCorpus
 import MyPrelude
+import System.Mem (getAllocationCounter)
 import Utils.Testing
 
 -- | Every witness of a pattern, by exhaustive search.
@@ -122,6 +123,121 @@ lastEdgesOracle r ws =
             _ : prev : _ -> prev.target
             _ -> rt.root
     ]
+
+-- | 'patternComponents' by merging, one edge at a time, the groups that
+-- share a variable with it.
+componentsReference :: PatternPath -> [Component]
+componentsReference p =
+  map (uncurry Component) . sortOn (headMay . map position . snd) $
+    map (second (sortOn position)) (foldl' add [] order)
+  where
+    specs = patternEdges p
+    order = edgeOrder p
+    position e = length (takeWhile (/= e) order)
+    varsOf e =
+      setFromList
+        [v | Just s <- [lookup e specs], Var v <- [s.source, s.target]]
+    add groups e =
+      let vs = varsOf e
+          (touching, rest) =
+            partition (not . null . intersection vs . fst) groups
+       in (vs <> foldMap fst touching, e : concatMap snd touching) : rest
+
+-- | Routes that share prefixes, meet at variables and pass through bound
+-- vertices. Edge ids follow first appearance, as the compiler numbers them.
+genRoutes :: Gen PatternPath
+genRoutes = do
+  count <- chooseInt (1, 6)
+  routes <- foldlM (\rs _ -> (rs <>) . pure <$> genRoute rs) [] [1 .. count]
+  pure (pat routes)
+  where
+    genVertex =
+      frequency
+        [ (6, var <$> chooseInt (0, 7)),
+          (1, pure current),
+          (1, fixedN <$> chooseInt (1, 2))
+        ]
+    genRoot = elements [current, fixedN 1]
+    genRoute earlier = do
+      (root, prefix) <- case earlier of
+        [] -> (,[]) <$> genRoot
+        _ -> do
+          r <- elements earlier
+          shared <- chooseInt (0, length r.hops)
+          if shared == 0
+            then (,[]) <$> genRoot
+            else pure (r.root, take shared r.hops)
+      let used = length (ordNub [h.edge | r <- earlier, h <- r.hops])
+      extra <- chooseInt (0, 4)
+      hops <- for [used .. used + extra - 1] \e ->
+        Hop (EdgeId e)
+          <$> elements [Out, In]
+          <*> elements [MLiteral "a", MWild]
+          <*> genVertex
+      pure (Route root (prefix <> hops))
+
+spec_patternComponents :: Spec
+spec_patternComponents = describe "patternComponents" do
+  it "agrees with a reference on the corpus" do
+    forM_ corpusQueries \surface ->
+      forM_ (toList (compilePath surface).alternatives) \p ->
+        patternComponents p `shouldBe` componentsReference p
+  it "agrees with a reference on random patterns" $
+    withMaxSuccess 2000 $
+      forAll genRoutes \p ->
+        patternComponents p === componentsReference p
+
+-- | Bytes this thread allocates while running an action. Unlike time, this
+-- does not depend on the load of the machine.
+allocatedBy :: IO a -> IO Int64
+allocatedBy action = do
+  before <- getAllocationCounter
+  _ <- action
+  after <- getAllocationCounter
+  pure (before - after)
+
+-- | One route of this many steps from the current node: one component.
+chainPattern :: Int -> PatternPath
+chainPattern n = pat [route current [out i "a" (var i) | i <- [1 .. n]]]
+
+-- | Loading and matching a pattern must not cost time quadratic in its
+-- steps. Both sizes below differ by a factor of 16; work that is linear up
+-- to a logarithm allocates about 20 times as much, quadratic work 256 times.
+-- (The tests are built without optimization, like the development build,
+-- so this also sees work that only an optimizer would share.)
+spec_matchingIsNotQuadratic :: Spec
+spec_matchingIsNotQuadratic = describe "allocation grows about linearly" do
+  it "patternComponents" do
+    grows \n -> do
+      let cs = patternComponents (chainPattern n)
+      sum (map (\c -> length c.vars + length c.edges) cs) `shouldBe` 2 * n
+  it "loadPattern" do
+    grows \n -> do
+      let loaded =
+            runIdentity (loadPattern (pure . lookupIn g) cur (chainPattern n))
+      fmap (sum . map length . toList . fst) loaded `shouldBe` Just n
+  it "matchPattern" do
+    grows \n -> do
+      let matched = matchPattern (lookupIn g) (Just cur) (chainPattern n)
+      fmap (map (length . (.labels)) . witnesses) matched `shouldBe` Just [n]
+  where
+    cur = smallNID 1
+    g = graphWithEdges [edge' 1 "a" 1] :: Graph Text ()
+    small = 250 :: Int
+    grows :: (Int -> IO ()) -> IO ()
+    grows run = do
+      lesser <- allocatedBy (run small)
+      greater <- allocatedBy (run (16 * small))
+      let ratio = fromIntegral greater / fromIntegral lesser :: Double
+      unless (ratio < 64) do
+        expectationFailure $
+          "16 times the steps allocated "
+            <> show ratio
+            <> " times as much ("
+            <> show lesser
+            <> " then "
+            <> show greater
+            <> " bytes)"
 
 spec_matchExamples :: Spec
 spec_matchExamples = describe "matching examples" do

@@ -121,9 +121,10 @@ patternComponents p =
       _ -> Right e
     grouped :: Map (Either VarId EdgeId) [EdgeId]
     grouped =
-      Map.fromListWith
-        (flip (++))
-        [(keyOf e spec, [e]) | e <- order, Just spec <- [lookup e specs]]
+      map reverse $
+        Map.fromListWith
+          (++)
+          [(keyOf e spec, [e]) | e <- order, Just spec <- [lookup e specs]]
     finish es =
       Component
         { vars =
@@ -221,7 +222,8 @@ loadPattern getNode cur p = do
       Current -> Just cur
       Fixed n -> Just n
       Var _ -> Nothing
-    ordered = [s | e <- edgeOrder p, Just s <- [lookup e (patternEdges p)]]
+    specs = patternEdges p
+    ordered = [s | e <- edgeOrder p, Just s <- [lookup e specs]]
     load nodes n
       | n `member` nodes = pure nodes
       | otherwise =
