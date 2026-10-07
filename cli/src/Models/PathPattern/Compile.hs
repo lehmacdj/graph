@@ -5,7 +5,8 @@
 -- 1. push @~@ down to the steps, reversing sequences;
 -- 2. choose every shared union (@++@), once for the whole path, and write
 --    what is left as chains of segments ('Chain'): steps, joins, groups
---    (@&@) and relational unions (@|@);
+--    (@&@) and relational unions (@|@), every side that is written
+--    being a side of its own;
 -- 3. list the routes of each chain, stretch by stretch between its own
 --    joins, each route choosing a conjunct of every group it goes
 --    through and a side of every relational union, and name every step
@@ -13,9 +14,21 @@
 --    ('annotate'): that decides what routes share;
 -- 4. glue the routes into a pattern: steps with the same name are one
 --    edge, and joins with the same name are one vertex.
+--
+-- Every path compiles. Whether a command runs it is another question,
+-- which 'checkCopies' answers from the path as it is written: a path in
+-- which the product of step 3 would copy a meeting point is refused.
 module Models.PathPattern.Compile
   ( compilePath,
     compileAlternatives,
+    checkCopies,
+    asRead,
+    alternativeRoutes,
+    Item (..),
+    CopiedMeetingPoint (..),
+    UnionReading (..),
+    WalksAcross (..),
+    IdleJoin (..),
     checkAlternatives,
     TooManyAlternatives (..),
     defaultMaxAlternatives,
@@ -26,6 +39,7 @@ where
 
 import Control.Monad.State.Strict qualified as S
 import Data.IntMap.Strict qualified as IntMap
+import Data.List (scanl, scanr)
 import Data.Map.Strict qualified as Map
 import Models.Path.Simple
 import Models.PathPattern
@@ -33,6 +47,12 @@ import MyPrelude
 
 compilePath :: Path -> PathQuery
 compilePath = PathQuery . setFromList . map snd . alternatives
+
+-- | The alternatives of a path, each with its routes as lists of steps
+-- and joins numbered by the copy they are ('Item'), for tests that look
+-- at what the routes of an alternative share.
+alternativeRoutes :: Path -> [([[Item Int]], PatternPath)]
+alternativeRoutes = alternatives
 
 -- | The alternatives of a path: the routes of each, and what they glue
 -- to.
@@ -44,7 +64,7 @@ alternatives p =
     Just pattern' <- [glueRoutes routes]
   ]
   where
-    p' = pushBackwards (withoutLimits p)
+    p' = prepared p
 
 -- | A path without the nodes that carry its limits. A limit says how much
 -- compiling or residuating the path may make, not what the path means, so
@@ -144,12 +164,11 @@ structuresWithin spend path =
         b <- go (pos + leaves p) q
         collect a (map (pure . Just) (toList b))
       p@(_ :|| _) -> do
-        -- sides that give the same chains are one side, so that a union
-        -- of a path with itself is that path also when it has a shared
-        -- union, which each of the two would choose
+        -- every side that is written is a side of its own, also when
+        -- another is written the same; one that has no chain (@%never@,
+        -- or node tests that contradict each other) is no side
         sides <-
-          distinctOn (shapes . map (shape . sideOrder))
-            . filter (not . null)
+          filter (not . null)
             <$> for (placed pos (unionSides p)) \(pos', side) ->
               toList <$> go pos' side
         collect mempty $
@@ -172,7 +191,6 @@ structuresWithin spend path =
             b <- go (pos + leaves p) q
             collect mempty [pure (sequenced x y) | x <- toList a, y <- toList b]
     one = pure . singletonSet . (: [])
-    shapes = setFromList :: [Chain] -> Set Chain
     collect :: Set Chain -> [m (Maybe Chain)] -> m (Set Chain)
     collect = foldM \acc making ->
       making >>= \case
@@ -211,9 +229,11 @@ conjuncts = \case
   c -> [c]
 
 -- | A union of sides, which is its side when it has only one, and
--- nothing when it has none.
+-- nothing when it has none. A side that is a union itself is that
+-- union's sides (@p | (q | r)@ has the three sides @p@, @q@ and @r@).
+-- No side is left out for being the same as another.
 unionOf :: Int -> [Chain] -> Maybe Chain
-unionOf name sides = case ordNub (concatMap sidesOf sides) of
+unionOf name sides = case concatMap sidesOf sides of
   [] -> Nothing
   [c] -> Just c
   cs -> Just [SUnion name cs]
@@ -231,12 +251,13 @@ sequenced a b = case (reverse a, b) of
     sequenced (reverse before <> [SJoin pos both root]) after
   _ -> Just (a <> b)
 
--- | The normal form of a chain, in which what means the same is written
--- the same, so that the sides of a union can be compared ('shape'):
+-- | The normal form of a chain, in which the order sides are written in
+-- is gone:
 --
 -- * joins right after one another are one join;
--- * a union has each of its sides once, in a fixed order, and a union of
---   one side is that side;
+-- * a union has its sides in a fixed order ('shape'; sides of the same
+--   shape in the order they are written), each side that is written
+--   being a side of its own, and a union of one side is that side;
 -- * an @\@N@ is marked as a root only where it can start a route: an
 --   @\@N@ after anything, also after a leading @\@@, tests the node the
 --   route is at.
@@ -265,7 +286,6 @@ norm atStart chain = do
       pure [SGroup name (concatMap conjuncts cs')]
     (start, SUnion name cs) ->
       unionOf name
-        . distinctOn shape
         . sortOn shape
         $ mapMaybe (norm start) cs
     (False, SJoin pos test _) -> pure [SJoin pos test False]
@@ -297,12 +317,11 @@ shape = map \case
   SGroup _ cs -> SGroup 0 (map shape cs)
   SUnion _ cs -> SUnion 0 (map shape cs)
 
--- | A chain with the sides of every union in it in a fixed order.
-sideOrder :: Chain -> Chain
-sideOrder = map \case
-  SGroup name cs -> SGroup name (map sideOrder cs)
-  SUnion name cs -> SUnion name (sortOn shape (map sideOrder cs))
-  seg -> seg
+-- | A path as it is compiled: without its limits, and @~@ pushed down to
+-- the steps. Nothing else is done to it: every side of a union that is
+-- written is a side of its own, whatever it is.
+prepared :: Path -> Path
+prepared = pushBackwards . withoutLimits
 
 -- | A chain with its segments named in the order they occur in it.
 renamed :: Chain -> Chain
@@ -560,15 +579,14 @@ replaced name i body = map \case
 -- | Two routes of one chain, segment by segment: a step or a join both go
 -- through, a group with the conjunct each chooses and its route there, a
 -- conjunct both chose that has a join of its own (once its groups are
--- found to agree), or a union they chose different sides of, and whether
--- one of those sides has a group that copies what is next to the union.
--- A union they chose the same side of is that side, read in place.
+-- found to agree), or a union they chose different sides of. A union
+-- they chose the same side of is that side, read in place.
 data Aligned
   = BothStep Int
   | BothJoin Int
   | BothGroup Int Int [RSeg] [RSeg]
   | Within [Aligned]
-  | Differ Bool
+  | Differ
 
 aligned :: [RSeg] -> [RSeg] -> [Aligned]
 aligned xs ys = case (xs, ys) of
@@ -583,22 +601,8 @@ aligned xs ys = case (xs, ys) of
     | n == m ->
         if i == k
           then aligned b c <> aligned xs' ys'
-          else Differ (copies b || copies c) : aligned xs' ys'
+          else Differ : aligned xs' ys'
   _ -> error "aligned: routes of different chains"
-  where
-    -- whether a chosen side has a group outside its joins: it then adds
-    -- a choice to the stretch the union is in
-    copies body =
-      let top = written body
-          (first', rest) = break isJoin' top
-          last' = takeWhile (not . isJoin') (reverse top)
-       in any isGroup first' || (not (null rest) && any isGroup last')
-    isJoin' = \case
-      RJoin {} -> True
-      _ -> False
-    isGroup = \case
-      RGroup {} -> True
-      _ -> False
 
 -- | What two routes of a chain share: the steps and the joins that are
 -- the same copy for both, by where they are written. Nothing when the
@@ -609,7 +613,9 @@ aligned xs ys = case (xs, ys) of
 -- same side of is that side read in place, as it is for either. A union
 -- they chose different sides of is, for the two, a segment that is not
 -- chosen: it cuts nothing and chooses nothing, and what the two share
--- around it is what they would share around a step written there. So
+-- around it is what they would share around a step written there,
+-- whatever the sides are: a side with a group and a join of its own, as
+-- in @((a & b)/\@ | z)/…@, is one walk after its join as @x/\@@ is. So
 -- two routes that chose different sides are in one copy of the union
 -- exactly when nothing else tells them apart in its stretch, and the
 -- joins inside the sides they chose do not put them in one copy of what
@@ -633,14 +639,9 @@ sharedBy a b = chain' (aligned a b)
       -- different conjuncts of a group of the stretch: written apart
       Nothing -> Just ([], [])
       Just (items', False)
-        | or [True | Differ _ <- items'] -> Nothing
+        | or [True | Differ <- items'] -> Nothing
         | otherwise -> Just ([p | BothStep p <- items'], [])
-      Just (items', True)
-        -- a side with a group, chosen by one of the two, copies the
-        -- chain for that one: the two share nothing of it, but still
-        -- have to be routes of one alternative
-        | or [fork | Differ fork <- items'] -> ([], []) <$ chain' (within items')
-        | otherwise -> chain' (within items')
+      Just (items', True) -> chain' (within items')
     within = concatMap \case
       Within body -> body
       item -> [item]
@@ -1389,7 +1390,7 @@ checkSpending p = case pathLimit p of
           S.put budget {found = budget.found + 1, patterns = patterns}
         spend = Spend spent found
     flip S.evalStateT (CheckBudget (checkSteps * n) 0 0 mempty) do
-      chains <- structuresWithin spend (pushBackwards (withoutLimits p))
+      chains <- structuresWithin spend (prepared p)
       -- what listing the routes of the path once costs is allowed some
       -- times over, whatever the limit
       let once = sum [count + size | (count, size) <- map routesSize chains]
@@ -1442,6 +1443,769 @@ checkShare = 3
 -- costs 'checkAlternatives', for each segment of a route.
 checkPair :: Int
 checkPair = 4
+
+-- * Copied meeting points
+
+-- | A path that no command runs: a product would copy a meeting point
+-- (docs/path-pattern-ir.md, Meeting points).
+data CopiedMeetingPoint = CopiedMeetingPoint
+  { -- | the conjunct in which several walks meet at a join or leave it
+    meeting :: Path,
+    -- | that join
+    join :: Path,
+    -- | the conjunct that would be copied: the one with the meeting
+    -- point, or one it is written in
+    copied :: Path,
+    -- | the group the copied conjunct is a conjunct of
+    group :: Path,
+    -- | a group next to it in its stretch, which would copy it
+    copier :: Path,
+    -- | how the unions between the two are read for that
+    readings :: [UnionReading],
+    -- | the two groups, and what is between them, with a join put
+    -- between them, if they are written in one chain and the path is
+    -- then accepted
+    joinedFirst :: Maybe Path,
+    -- | the two groups, and what is between them, as their product
+    -- written out, if that is short and means what the path compiles to
+    writtenApart :: Maybe Path,
+    -- | where the conjunct is one walk by itself: the conjunct of the
+    -- copier that brings several walks to its join, or takes several
+    -- from it
+    across :: Maybe WalksAcross
+  }
+  deriving stock (Eq, Show)
+
+-- | A conjunct that holds several walks together with a join of its own
+-- (an @\@N@) and, written before another conjunct, brings them to that
+-- one's join ('arriving'), or written after it, takes them from it.
+data WalksAcross = WalksAcross {from :: Path, arriving :: Bool}
+  deriving stock (Eq, Show)
+
+-- | How a union is read for a group to be next to another: one of its
+-- sides in its place (for a shared union, the side chosen), or, for a
+-- relational union, as one step, which is what it is for two routes
+-- that chose different sides of it.
+data UnionReading
+  = SideInPlace {union :: Path, side :: Path}
+  | AsOneStep {union :: Path}
+  deriving stock (Eq, Show)
+
+-- | An @\@@ that begins or ends a conjunct that is a plain walk (steps
+-- and @\@@, nothing else) and that a product copies: it does nothing
+-- there, and looks as if it pinned. Only this shape is reported, in
+-- which the @\@@ can be left out whatever is written around the
+-- conjunct ('idleEnds'); other joins that do nothing are not.
+data IdleJoin = IdleJoin
+  { -- | the conjunct
+    conjunct :: Path,
+    -- | whether the @\@@ begins the conjunct, and whether it ends it
+    begins :: Bool,
+    ends :: Bool,
+    -- | a group that copies the conjunct
+    copier :: Path,
+    readings :: [UnionReading],
+    -- | the conjunct's group and the copier with the copier written
+    -- inside each conjunct, where the @\@@ then is one node for the
+    -- copier's conjuncts, if they are written in one chain, the @\@@
+    -- faces the copier, and the path is then accepted
+    pinned :: Maybe Path
+  }
+  deriving stock (Eq, Show)
+
+-- | Whether a product in the path would copy a meeting point, and if
+-- none would, the joins that do nothing because a product copies them
+-- ('IdleJoin').
+--
+-- The rule is about the product written out: a join other than an
+-- @\@N@ that is written once has a copy for every term of the product
+-- it comes to stand in, and a copy is a /meeting point/ when more than
+-- one walk comes into it or goes out of it. A path is refused when some
+-- such join has two copies or more of which one is a meeting point.
+--
+-- That is decided here without writing the product out. A join is
+-- /copied/ when its conjunct, or a conjunct that one is written in, is
+-- in a group with another group next to it in its stretch: nothing but
+-- steps and unions between the two, no join of their chain (a conjunct
+-- without a join of its own is no chain apart, so its groups are groups
+-- of the stretch its own group is in). Several walks come into a copy,
+-- or go out of it, when the conjunct has a group at its own level in
+-- the stretch right before or after the join ('ownMeeting'), or when
+-- the join is the first (last) of its conjunct and a conjunct of the
+-- neighbouring group holds several walks together with a join of its
+-- own and brings them along ('acrossList').
+--
+-- A union is read every way: as each of its sides written in its place
+-- and, a relational union, as one step, which keeps no two groups apart
+-- whatever joins its sides have (two routes that chose different sides
+-- pass it as a step, 'sharedBy'). The path is refused when some way of
+-- reading its unions copies a meeting point.
+--
+-- The path is read as it is written, with no union chosen and no route
+-- listed: every group looks along its chain in both directions once
+-- ('scanned'), so the work is at most the length of the path times its
+-- depth for each group, whatever the path compiles to. What is not
+-- noticed: that a side cannot be chosen because its node tests
+-- contradict those around it (@%never@ and tests that contradict each
+-- other right next to one another are noticed). Every side that is
+-- written is a side of its own here as it is for the compiler, so the
+-- check and the compiler read the same unions.
+checkCopies :: Path -> Either CopiedMeetingPoint [IdleJoin]
+checkCopies p = case scopeChain (pushBackwards (withoutLimits p)) of
+  Nothing -> Right []
+  Just chain -> case findings chain of
+    (refusal : _, _) -> Left (refused chain refusal)
+    ([], idle)
+      -- no warning unless it is certain ('reordersRoutes')
+      | reordersRoutes chain -> Right []
+      | otherwise -> Right (map (idleJoin chain) idle)
+
+-- | Whether a chain has, anywhere in it, a relational union with a join
+-- in the own chain of a side (through the unions in that side, read in
+-- place). Only then are the routes of an alternative put in another
+-- order than the conjuncts they choose give ('together'), by the joins
+-- they go through; and whether an @\@@ that joins nothing can change
+-- that order is not known. So a path with such a union gets no warning
+-- about an @\@@ that does nothing: a warning has to be certain.
+reordersRoutes :: Chain -> Bool
+reordersRoutes = any \case
+  SGroup _ cs -> any reordersRoutes cs
+  SUnion name sides ->
+    (isRelational name && any canJoin sides) || any reordersRoutes sides
+  _ -> False
+
+-- | A path as the check reads it, and as 'CopiedMeetingPoint' and
+-- 'IdleJoin' show its parts: without limits, @~@ pushed down to the
+-- steps, nested groups as one group, node tests right after one another
+-- as one. Nothing when the path has no chain.
+asRead :: Path -> Maybe Path
+asRead = fmap chainAsPath . scopeChain . pushBackwards . withoutLimits
+
+-- | The chain of a path with no union chosen: a shared union is a union
+-- too, with a negative name. Nothing when the path has no chain
+-- (@%never@, or node tests right after one another that contradict).
+scopeChain :: Path -> Maybe Chain
+scopeChain path = go 0 path >>= settle
+  where
+    total = leaves path
+    named pos p = pos * (total + 1) + leaves p
+    go :: Int -> Path -> Maybe Chain
+    go pos = \case
+      One -> Just [SJoin pos anyNode False]
+      Zero -> Nothing
+      Wild -> Just [SStep pos Out MWild]
+      Literal t -> Just [SStep pos Out (MLiteral t)]
+      RegexMatch r -> Just [SStep pos Out (MRegex r)]
+      Backwards Wild -> Just [SStep pos In MWild]
+      Backwards (Literal t) -> Just [SStep pos In (MLiteral t)]
+      Backwards (RegexMatch r) -> Just [SStep pos In (MRegex r)]
+      Backwards _ -> error "scopeChain: pushBackwards leaves ~ only on steps"
+      Absolute nid -> Just [SJoin pos (Exactly nid) True]
+      ExcludingNIDs ns -> Just [SJoin pos (Except ns) False]
+      p@(Union kind _ _) ->
+        let name = case kind of
+              Relational -> named pos p
+              Shared -> negate (named pos p) - 1
+         in oneOf name $
+              mapMaybe (uncurry go) (placed pos (sidesOfKind kind p))
+      p :& q -> do
+        a <- go pos p
+        b <- go (pos + leaves p) q
+        Just [SGroup (named pos (p :& q)) (conjuncts a <> conjuncts b)]
+      WithLimits _ _ p -> go pos p
+      p :/ q -> do
+        a <- go pos p
+        b <- go (pos + leaves p) q
+        sequenced a b
+    sidesOfKind kind = \case
+      Union kind' p q | kind' == kind -> sidesOfKind kind p <> sidesOfKind kind q
+      WithLimits _ _ p@(Union kind' _ _) | kind' == kind -> sidesOfKind kind p
+      p -> [p]
+    -- every side that is written is a side of its own, as for the
+    -- compiler ('norm'): a union of two sides written the same is also
+    -- read as one step
+    oneOf name sides = case sides of
+      [] -> Nothing
+      [c] -> Just c
+      cs -> Just [SUnion name cs]
+    settle c = do
+      c' <- tidy c
+      if c' == c then Just c else settle c'
+    tidy :: Chain -> Maybe Chain
+    tidy chain = do
+      parts <- for chain \case
+        SGroup name cs -> do
+          cs' <- traverse tidy cs
+          pure [SGroup name (concatMap conjuncts cs')]
+        SUnion name cs -> oneOf name (mapMaybe tidy cs)
+        seg -> pure [seg]
+      foldM sequenced [] parts
+
+-- | Whether a union of a 'scopeChain' is a relational one: two routes
+-- may choose different sides of it, and pass it as one step.
+isRelational :: Int -> Bool
+isRelational name = name >= 0
+
+-- | What is found looking along a chain from a group, in one direction,
+-- up to the end of the chain: a group in the same stretch, in some
+-- reading of the unions on the way; and whether the end of the chain
+-- can be reached without a join of the chain, in some reading.
+data Scan = Scan {found :: Maybe Copier, reach :: Bool}
+
+-- | A group that copies, and how the unions on the way to it are read.
+data Copier = Copier {group :: Seg, how :: [(Seg, Maybe Chain)]}
+
+-- | Looking from the right end of a chain to the left, and beyond it.
+scannedLeft :: Chain -> Scan -> Scan
+scannedLeft chain beyond = foldl' (flip (scanned scannedLeft)) beyond chain
+
+-- | Looking from the left end of a chain to the right, and beyond it.
+scannedRight :: Chain -> Scan -> Scan
+scannedRight chain beyond = foldr (scanned scannedRight) beyond chain
+
+-- | What is found from a segment on, given what is found beyond it: a
+-- step is passed, a join ends the stretch, a group is found. A union is
+-- each of its sides in place: a group may be found in a side, and a
+-- side without a join is passed; and a relational union is passed as a
+-- step.
+scanned :: (Chain -> Scan -> Scan) -> Seg -> Scan -> Scan
+scanned along seg beyond = case seg of
+  SStep {} -> beyond
+  SJoin {} -> Scan Nothing False
+  SGroup {} -> Scan (Just (Copier seg [])) beyond.reach
+  SUnion name sides ->
+    let inside = [(side', along side' (Scan Nothing True)) | side' <- sides]
+        passing =
+          take 1 $
+            [Just side' | (side', scan) <- inside, scan.reach]
+              <> [Nothing | isRelational name]
+        via reading c = Copier c.group ((seg, reading) : c.how)
+     in Scan
+          ( asum [via (Just side') <$> scan.found | (side', scan) <- inside]
+              <|> asum [via reading <$> beyond.found | reading <- passing]
+          )
+          (not (null passing) && beyond.reach)
+
+pinsNode :: NodeTest -> Bool
+pinsNode = \case
+  Exactly _ -> True
+  Except _ -> False
+
+-- | A join of a conjunct's own level that is no @\@N@ and has a group of
+-- that level in the stretch right before it or right after it (no
+-- other join of the conjunct between the two), in some reading of the
+-- conjunct's unions: several walks of the conjunct meet at it, or
+-- leave it.
+ownMeeting :: Chain -> Maybe Seg
+ownMeeting = asum . map (\(_, _, found) -> found) . toList . foldl' along start
+  where
+    -- for each reading so far: whether a group is in the stretch since
+    -- the last join; the last join, if it is no @N and nothing but
+    -- steps came after it; and a join that is found
+    start :: Set (Bool, Maybe Seg, Maybe Seg)
+    start = singletonSet (False, Nothing, Nothing)
+    along :: Set (Bool, Maybe Seg, Maybe Seg) -> Seg -> Set (Bool, Maybe Seg, Maybe Seg)
+    along states seg = case seg of
+      SStep {} -> states
+      SJoin _ test _ ->
+        flip mapSet states \(grouped, _, found) ->
+          let open = not (pinsNode test)
+           in ( False,
+                seg <$ guard open,
+                found <|> (seg <$ guard (open && grouped))
+              )
+      SGroup {} ->
+        flip mapSet states \(_, waiting, found) ->
+          (True, waiting, found <|> waiting)
+      SUnion name sides ->
+        foldMap (foldl' along states) sides
+          <> (if isRelational name then states else mempty)
+
+-- | Whether a conjunct is a plain walk that begins with an @\@@, and
+-- whether it is one that ends with an @\@@: a walk of steps and @\@@
+-- and nothing else, with a step in it.
+--
+-- This is what 'IdleJoin' warns about, and it is narrow on purpose: the
+-- warning says that the @\@@ may be left out, and that has to be true
+-- whatever is written around the conjunct. In a plain walk it is. The
+-- path is one the check accepts, so no copy of the @\@@ has more than
+-- one walk coming into it or going out of it; and the steps of the
+-- conjunct are named by the choices of its stretch alike with the @\@@
+-- and without it ('annotate': a conjunct without a group brings no
+-- choice of its own, whether it is a chain apart or not), so the routes
+-- share what they shared. What an @\@@ can do besides is left out by
+-- the shape:
+--
+-- * an @\@@ before an @\@N@ makes it a test of the node the route is
+--   at, where it would be a root ('norm'): so no @\@N@ and no union,
+--   whose sides may begin with one, as in @(\@/(x | \@1/b) & a)/(c & d)@;
+-- * a conjunct that is only @\@@ is a join that cannot be left out;
+-- * a conjunct with a group, or with a union that has one in a side, is
+--   copied whole with the join and falls apart without it.
+--
+-- A @!{…}@ is a test as well as a join, so a walk with one is left
+-- alone too.
+idleEnds :: Chain -> (Bool, Bool)
+idleEnds chain
+  | all plain chain && any isStep chain =
+      (any isJoin (take 1 chain), any isJoin (take 1 (reverse chain)))
+  | otherwise = (False, False)
+  where
+    plain = \case
+      SStep {} -> True
+      SJoin _ test _ -> test == anyNode
+      _ -> False
+    isStep = \case
+      SStep {} -> True
+      _ -> False
+
+-- | What is found looking from a group along its chain for walks that
+-- a conjunct of a group next to it holds together ('acrossList'), at one
+-- depth: a group that is left in the stretch; one with a join of the
+-- chain looked along beyond it; one with no such join beyond it; and
+-- whether the chain can be passed without a join.
+data Across = Across
+  { found :: Maybe Delivery,
+    foundJoined :: Maybe Delivery,
+    foundPassed :: Maybe Delivery,
+    pass :: Bool
+  }
+
+-- | Walks that one conjunct holds together next to another conjunct's
+-- join: the group that conjunct is chosen in, the conjunct, and how the
+-- unions on the way are read.
+data Delivery = Delivery
+  { outer :: Maybe Seg,
+    deliverer :: Maybe Chain,
+    sidesRead :: [(Seg, Maybe Chain)]
+  }
+
+-- | A chain as it is looked along: as written to the right, and
+-- backwards to the left.
+type Facing = Chain -> Chain
+
+-- | What is found along a chain (given in the order it is looked along),
+-- for every depth from -1 on.
+--
+-- This follows what the product makes of a stretch ('annotate'): each
+-- group is replaced by the conjunct a route chooses, a conjunct without
+-- a join of its own with its segments in the stretch, and one with a
+-- join written whole in its place, where its joins cut the chain and
+-- the groups at its own level are left as groups, to be chosen in turn.
+-- A join that a chosen conjunct brings has several walks arriving (or
+-- leaving) in one copy exactly when such a group is left in the
+-- stretch before (after) it. So, looking from the group of the join's
+-- conjunct, at depth 0: a step is passed; a join ends the stretch; of a
+-- group, a conjunct without a join is looked through at the same depth,
+-- and one with a join is looked into from its facing end one depth
+-- lower; and a group met below depth 0 is left in the stretch: found.
+-- (Leaving a conjunct with a join through its end, the depth is one
+-- higher: the groups out there are chosen one round earlier.)
+acrossList :: Facing -> Chain -> [Across]
+acrossList facing = (\(found', _, _) -> found') . foldr before' (nothing, False, True)
+  where
+    nothing = repeat (Across Nothing Nothing Nothing True)
+    -- what is found from a segment on, with whether what is after it
+    -- has a join of the chain, and whether it can be passed without one
+    before' seg (rest, joins, passes) =
+      ( zipWith both (acrossSeg facing seg) rest,
+        joins || canJoin [seg],
+        passes && passable [seg]
+      )
+      where
+        both a b =
+          Across
+            { found = a.found <|> (guard a.pass *> b.found),
+              foundJoined =
+                a.foundJoined
+                  <|> (guard joins *> a.found)
+                  <|> (guard a.pass *> b.foundJoined),
+              foundPassed =
+                (guard passes *> a.foundPassed)
+                  <|> (guard a.pass *> b.foundPassed),
+              pass = a.pass && b.pass
+            }
+
+acrossSeg :: Facing -> Seg -> [Across]
+acrossSeg facing seg = case seg of
+  SStep {} -> repeat (Across Nothing Nothing Nothing True)
+  SJoin {} -> repeat (Across Nothing Nothing Nothing False)
+  SUnion name sides ->
+    foldr
+      (zipWith either')
+      (repeat (Across Nothing Nothing Nothing (isRelational name)))
+      [ map (via side') (acrossList facing (facing side'))
+      | side' <- sides
+      ]
+    where
+      either' a b =
+        Across
+          (a.found <|> b.found)
+          (a.foundJoined <|> b.foundJoined)
+          (a.foundPassed <|> b.foundPassed)
+          (a.pass || b.pass)
+      via side' a =
+        let read' = fmap \w -> w {sidesRead = (seg, Just side') : w.sidesRead}
+         in Across (read' a.found) (read' a.foundJoined) (read' a.foundPassed) a.pass
+  SGroup _ cs ->
+    (Across here Nothing here True :) . map finish . foldr (zipWith either') (repeat (Nothing, False)) $
+      [ zipWith
+          ( \lower same ->
+              ( (lower.foundJoined <&> \w -> w {deliverer = w.deliverer <|> Just c})
+                  <|> same.foundPassed,
+                same.pass
+              )
+          )
+          along
+          (drop 1 along)
+      | c <- cs,
+        let along = acrossList facing (facing c)
+      ]
+    where
+      finish (x, p) =
+        let x' = x <&> \w -> w {outer = Just seg}
+         in Across x' Nothing x' p
+      here = Just (Delivery (Just seg) Nothing [])
+      either' (a, p) (b, q) = (a <|> b, p || q)
+
+-- | Whether a chain has a join of its own, in some reading of its
+-- unions.
+canJoin :: Chain -> Bool
+canJoin = any \case
+  SJoin {} -> True
+  SUnion _ sides -> any canJoin sides
+  _ -> False
+
+-- | Whether a chain has no join of its own, in some reading of its
+-- unions.
+passable :: Chain -> Bool
+passable = all \case
+  SJoin {} -> False
+  SUnion name sides -> isRelational name || any passable sides
+  _ -> True
+
+-- | Whether the first join of its own that a conjunct has, looked along,
+-- is no @\@N@, in some reading of its unions; and that join.
+firstOpen :: Facing -> Chain -> Maybe Seg
+firstOpen facing = fst . go . facing
+  where
+    go :: Chain -> (Maybe Seg, Bool)
+    go [] = (Nothing, True)
+    go (seg : rest) =
+      let (open, pass) = case seg of
+            SJoin _ test _ -> (seg <$ guard (not (pinsNode test)), False)
+            SUnion name sides ->
+              let each = map (go . facing) sides
+               in (asum (map fst each), isRelational name || any snd each)
+            _ -> (Nothing, True)
+          (open', pass') = go rest
+       in (open <|> (guard pass *> open'), pass && pass')
+
+-- | A join that is a meeting point in a copy, or a conjunct that is one
+-- walk with an @\@@ at an end that is copied.
+data Finding = Finding
+  { -- | the conjunct that is copied, and its group
+    group :: Seg,
+    copied :: Chain,
+    copier :: Copier,
+    -- | the conjunct with the join: the copied one, or one inside it
+    conjunct :: Chain,
+    -- | the join that is a meeting point in a copy
+    at :: Maybe Seg,
+    -- | where the walks that meet at it or leave it are held together
+    -- by a conjunct of the copier: that conjunct, and whether they
+    -- arrive
+    across :: Maybe (Chain, Bool)
+  }
+
+-- | What is found beyond the ends of a chain looking for walks held
+-- together ('acrossList'): at a depth, and given whether the chain has
+-- a join, and whether it has none, on the side that is not looked
+-- along, in some reading.
+data Beyond = Beyond
+  { before :: Int -> (Bool, Bool) -> Maybe Delivery,
+    after :: Int -> (Bool, Bool) -> Maybe Delivery
+  }
+
+-- | The conjuncts that a product copies and must not (those with a
+-- meeting point, and those with a join that a conjunct of the copier
+-- brings several walks to or takes several from), and the conjuncts
+-- that are a plain walk with an @\@@ at an end ('idleEnds') and that a
+-- product copies.
+findings :: Chain -> ([Finding], [Finding])
+findings =
+  walk
+    (Scan Nothing True)
+    (Scan Nothing True)
+    Nothing
+    Nothing
+    (Beyond (\_ _ -> Nothing) (\_ _ -> Nothing))
+  where
+    -- a chain, with what is found beyond its ends, and the copier of
+    -- the group it is a conjunct of
+    -- (and the conjunct the chain is in that is copied, if one is: all
+    -- that is in it is copied with it)
+    walk ::
+      Scan ->
+      Scan ->
+      Maybe Copier ->
+      Maybe (Seg, Chain, Copier) ->
+      Beyond ->
+      Chain ->
+      ([Finding], [Finding])
+    walk left right above around' beyond chain =
+      mconcat
+        [ case seg of
+            SGroup _ cs ->
+              let copier' =
+                    l.found
+                      <|> r.found
+                      -- a conjunct without a join is no chain apart: its
+                      -- groups are groups of the stretch its group is in
+                      <|> (guard (l.reach && r.reach) *> above)
+                  -- inside a conjunct with a join the groups around are
+                  -- chosen a round earlier; inside one without, in the
+                  -- same round
+                  inside =
+                    Beyond
+                      ( \d (joins, passes) ->
+                          (guard joins *> arriving (d + 1))
+                            <|> (guard passes *> arriving d)
+                      )
+                      ( \d (joins, passes) ->
+                          (guard joins *> leaving (d + 1))
+                            <|> (guard passes *> leaving d)
+                      )
+                  held arrives w k j =
+                    Finding
+                      seg
+                      k
+                      (Copier (fromMaybe seg w.outer) w.sidesRead)
+                      k
+                      (Just j)
+                      (Just (fromMaybe [] w.deliverer, arrives))
+                  -- the copy this conjunct is in: its own, or that of a
+                  -- conjunct around it
+                  copy k = (copier' <&> (seg,k,)) <|> around'
+               in mconcat
+                    [ ( [ Finding g k' c k (Just j) Nothing
+                        | j <- toList (ownMeeting k),
+                          (g, k', c) <- toList (copy k)
+                        ]
+                          <> [ held True w k j
+                             | j <- toList (firstOpen id k),
+                               w <- toList (arriving 0)
+                             ]
+                          <> [ held False w k j
+                             | j <- toList (firstOpen reverse k),
+                               w <- toList (leaving 0)
+                             ],
+                        [ Finding seg k c k Nothing Nothing
+                        | c <- toList copier',
+                          let (b, e) = idleEnds k,
+                          b || e
+                        ]
+                      )
+                        <> walk
+                          (Scan Nothing True)
+                          (Scan Nothing True)
+                          copier'
+                          (around' <|> (copier' <&> (seg,k,)))
+                          inside
+                          k
+                    | k <- cs
+                    ]
+            SUnion _ sides ->
+              foldMap
+                ( walk
+                    l
+                    r
+                    above
+                    around'
+                    ( Beyond
+                        ( \d (joins, passes) ->
+                            lookFrom
+                              reverse
+                              earlier
+                              d
+                              beyond.before
+                              (joins || canJoin later, passes && passable later)
+                        )
+                        ( \d (joins, passes) ->
+                            lookFrom
+                              id
+                              later
+                              d
+                              beyond.after
+                              (joins || canJoin earlier, passes && passable earlier)
+                        )
+                    )
+                )
+                sides
+            _ -> mempty
+        | (i, (l, seg, r)) <-
+            zip [0 ..] $
+              zip3
+                (scanl (flip (scanned scannedLeft)) left chain)
+                chain
+                (drop 1 (scanr (scanned scannedRight) right chain)),
+          let earlier = take i chain
+              later = drop (i + 1) chain
+              arriving d =
+                lookFrom reverse earlier d beyond.before (canJoin later, passable later)
+              leaving d =
+                lookFrom id later d beyond.after (canJoin earlier, passable earlier)
+        ]
+    -- looking along part of a chain at a depth, and beyond its end
+    lookFrom ::
+      Facing ->
+      Chain ->
+      Int ->
+      (Int -> (Bool, Bool) -> Maybe Delivery) ->
+      (Bool, Bool) ->
+      Maybe Delivery
+    lookFrom facing part d out other =
+      case drop (d + 1) (acrossList facing (facing part)) of
+        a : _ -> a.found <|> (guard a.pass *> out d other)
+        [] -> Nothing
+
+-- | A chain as a path.
+chainAsPath :: Chain -> Path
+chainAsPath = \case
+  [] -> One
+  seg : rest -> foldl' (:/) (segAsPath seg) (map segAsPath rest)
+
+segAsPath :: Seg -> Path
+segAsPath = \case
+  SStep _ d m ->
+    (case d of Out -> id; In -> Backwards) case m of
+      MLiteral t -> Literal t
+      MWild -> Wild
+      MRegex r -> RegexMatch r
+  SJoin _ test _ -> case test of
+    Exactly n -> Absolute n
+    Except ns
+      | null ns -> One
+      | otherwise -> ExcludingNIDs ns
+  SGroup _ cs -> foldl1Ex' (:&) (map chainAsPath cs)
+  SUnion name cs ->
+    foldl1Ex'
+      (Union (if isRelational name then Relational else Shared))
+      (map chainAsPath cs)
+
+readingsOf :: Copier -> [UnionReading]
+readingsOf c =
+  [ case reading of
+      Just side' -> SideInPlace (segAsPath u) (chainAsPath side')
+      Nothing -> AsOneStep (segAsPath u)
+  | (u, reading) <- c.how
+  ]
+
+-- | The chain in which a group and its copier stand, rewritten: the
+-- two (or, where one of them is written inside a conjunct of a group of
+-- that chain, that group) and what is between them are replaced by what
+-- is made of the earlier of the two, what is between, and the later.
+rewritten ::
+  Seg ->
+  Seg ->
+  (Seg -> Chain -> Seg -> Maybe Chain) ->
+  Chain ->
+  Maybe (Chain, Chain)
+rewritten g c make = go
+  where
+    go :: Chain -> Maybe (Chain, Chain)
+    go chain = case break (\seg -> holds g seg || holds c seg) chain of
+      (before, first' : rest)
+        | (between, last' : after) <-
+            break (\seg -> holds g seg || holds c seg) rest,
+          holds g first' /= holds g last' || holds c first' /= holds c last' -> do
+            made <- make first' between last'
+            Just (before <> made <> after, made)
+      _ -> asum (map inside (holes chain))
+    -- whether a segment is a group, or has it in a conjunct of a group
+    holds x seg =
+      seg == x || case seg of
+        SGroup _ cs -> any (any (holds x)) cs
+        _ -> False
+    inside (before, seg, after) = case seg of
+      SGroup name cs ->
+        asum
+          [ go k <&> \(k', made) -> (before <> [SGroup name (ks <> [k'] <> ks')] <> after, made)
+          | (ks, k, ks') <- holes cs
+          ]
+      SUnion name cs ->
+        asum
+          [ go k <&> \(k', made) -> (before <> [SUnion name (ks <> [k'] <> ks')] <> after, made)
+          | (ks, k, ks') <- holes cs
+          ]
+      _ -> Nothing
+    holes :: [a] -> [([a], a, [a])]
+    holes xs = [(take i xs, x, drop (i + 1) xs) | (i, x) <- zip [0 ..] xs]
+
+refused :: Chain -> Finding -> CopiedMeetingPoint
+refused chain f =
+  CopiedMeetingPoint
+    { meeting = chainAsPath f.conjunct,
+      join = maybe One segAsPath f.at,
+      copied = chainAsPath f.copied,
+      group = segAsPath f.group,
+      copier = segAsPath f.copier.group,
+      readings = readingsOf f.copier,
+      across =
+        f.across <&> \(k, arrives) -> WalksAcross (chainAsPath k) arrives,
+      joinedFirst = do
+        guard (null f.copier.how)
+        (whole, made) <-
+          rewritten f.group f.copier.group (\a between b -> Just ([a, SJoin (-1) anyNode False] <> between <> [b])) chain
+        guard (null (fst (findings whole)))
+        Just (chainAsPath made),
+      writtenApart = do
+        guard (null f.copier.how)
+        (whole, made) <- rewritten f.group f.copier.group apart chain
+        guard (null (fst (findings whole)))
+        -- only where it is cheap to see that it means the same: a path
+        -- without unions, with few routes
+        guard (null (unionsIn chain))
+        guard (snd (routesSize chain) <= 2000 && snd (routesSize whole) <= 2000)
+        guard (compilePath (chainAsPath whole) == compilePath (chainAsPath chain))
+        Just (chainAsPath made)
+    }
+  where
+    apart a between b = case (a, b) of
+      (SGroup _ as, SGroup _ bs)
+        | length as * length bs <= 9 ->
+            Just [SGroup (-2) [x <> between <> y | x <- as, y <- bs]]
+      _ -> Nothing
+
+idleJoin :: Chain -> Finding -> IdleJoin
+idleJoin chain f =
+  IdleJoin
+    { conjunct = chainAsPath f.conjunct,
+      begins = b,
+      ends = e,
+      copier = segAsPath f.copier.group,
+      readings = readingsOf f.copier,
+      pinned = do
+        guard (null f.copier.how)
+        (whole, made) <- rewritten f.group f.copier.group inside chain
+        let (bad, idle) = findings whole
+        guard (null bad && length idle < length (snd (findings chain)))
+        Just (chainAsPath made)
+    }
+  where
+    (b, e) = idleEnds f.conjunct
+    -- the copier written inside each conjunct of the group, on the side
+    -- the @ faces
+    inside first' between last'
+      | first' == f.group,
+        e,
+        SGroup name cs <- first' =
+          Just [SGroup name [k <> between <> [last'] | k <- cs]]
+      | last' == f.group,
+        b,
+        SGroup name cs <- last' =
+          Just [SGroup name [[first'] <> between <> k | k <- cs]]
+      | otherwise = Nothing
 
 -- * Alternatives as paths
 

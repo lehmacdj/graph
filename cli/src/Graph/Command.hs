@@ -48,13 +48,23 @@ import Models.NID
 import Models.Path.ParsedPath
 import Models.Path.Simple (Path)
 import Models.Path.Simple qualified as Simple
-import Models.PathPattern.Compile (TooManyAlternatives (..), checkAlternatives)
+import Models.PathPattern.Compile
+  ( CopiedMeetingPoint (..),
+    IdleJoin (..),
+    TooManyAlternatives (..),
+    UnionReading (..),
+    WalksAcross (..),
+    asRead,
+    checkAlternatives,
+    checkCopies,
+  )
 import Models.PathPattern.Match
   ( ConcreteHop (..),
     ConcreteRoute (..),
     routeLastEdges,
     selectedRoutes,
   )
+import Models.PathPattern.Suggest (renderSurfacePath)
 import MyPrelude
 import System.Console.Terminal.Size qualified as Terminal
 import Utils.Parsing.Common (showSpan)
@@ -109,12 +119,19 @@ newtype ImportedUrls = ImportedUrls (Map URI NID)
 -- rendered with their position (newest first); mentioned if it fails.
 newtype EmptyTargets = EmptyTargets [Text]
 
+-- | The warnings about paths that the current command line has shown, so
+-- that a path that is expanded more than once (inside @at@, or written
+-- twice) is warned about once.
+newtype ShownWarnings = ShownWarnings (Set Text)
+
 interpretDirective ::
   ( Members
       [ GraphMetadataReading,
         State History,
         State ImportedUrls,
         State EmptyTargets,
+        State ShownWarnings,
+        Warn UserError,
         GetLocation,
         Error UserError,
         GetTime,
@@ -134,7 +151,7 @@ interpretDirective sourceRange = \case
   Targets p -> do
     currentNid <- currentLocation
     p' <- handleDirectivesWith (pure Relational) interpretDirective p
-    checkAlternativesLimit p'
+    checkPath (plusWritten Relational p) p'
     targets <- Paths.queryTargets currentNid p'
     when (null targets) $
       let shown =
@@ -249,6 +266,8 @@ expandDirectives ::
         State History,
         State ImportedUrls,
         State EmptyTargets,
+        State ShownWarnings,
+        Warn UserError,
         GetLocation,
         Error UserError,
         GetTime,
@@ -270,6 +289,8 @@ expandConstruction ::
         State History,
         State ImportedUrls,
         State EmptyTargets,
+        State ShownWarnings,
+        Warn UserError,
         GetLocation,
         Error UserError,
         GetTime,
@@ -290,6 +311,8 @@ expandDirectivesAs ::
         State History,
         State ImportedUrls,
         State EmptyTargets,
+        State ShownWarnings,
+        Warn UserError,
         GetLocation,
         Error UserError,
         GetTime,
@@ -305,7 +328,7 @@ expandDirectivesAs ::
   Eff effs Path
 expandDirectivesAs plus p0 = do
   p <- editing (handleDirectivesWith (pure plus) interpretDirective p0)
-  checkAlternativesLimit p
+  checkPath (plusWritten plus p0) p
   pure p
 
 -- | Edit the graph as one transaction: the edits are written to the graph
@@ -316,8 +339,274 @@ editing ::
   Eff effs a
 editing = provideList_ @GraphEditing
 
--- | Fail readably, before compiling it for real, if a path would make more
--- alternatives than its limit allows.
+-- | The unions of a path that are written @+@, as an error about the
+-- path shows them ('asRead') once @+@ is lowered to the given kind (or
+-- to what an @%override@ around it says); those of them whose kind an
+-- @%override({plus = …}, …)@ around them says, and not the command; and
+-- whether the path has a @%targets(…)@, which is a @+@ of nodes, and
+-- whether one is inside such an override.
+data PlusWritten = PlusWritten
+  { unions :: [Path],
+    overridden :: [Path],
+    targets :: Bool,
+    targetsOverridden :: Bool
+  }
+
+plusWritten :: UnionKind -> ParsedPath -> PlusWritten
+plusWritten = go False
+  where
+    go inOverride plus = \case
+      p@(DefaultUnion () l r) ->
+        let shown = toList (lowered plus p >>= asRead)
+         in PlusWritten shown (if inOverride then shown else []) False False
+              <> go inOverride plus l
+              <> go inOverride plus r
+      Directive _ (Targets _) -> PlusWritten [] [] True inOverride
+      Directive _ (Override settings p) ->
+        go (inOverride || isJust settings.plus) (fromMaybe plus settings.plus) p
+      Directive _ _ -> mempty
+      Backwards' p -> go inOverride plus p
+      l ::/ r -> go inOverride plus l <> go inOverride plus r
+      l ::& r -> go inOverride plus l <> go inOverride plus r
+      Union _ l r -> go inOverride plus l <> go inOverride plus r
+      _ -> mempty
+    -- without the directives that need the graph
+    lowered kind = handleDirectivesWith (Just kind) (\_ _ -> Nothing)
+
+instance Semigroup PlusWritten where
+  PlusWritten a b c d <> PlusWritten a' b' c' d' =
+    PlusWritten (a <> a') (b <> b') (c || c') (d || d')
+
+instance Monoid PlusWritten where
+  mempty = PlusWritten [] [] False False
+
+-- | Whether a union shown in an error was written with @+@: one of
+-- those of the path, or a union of nodes where the path has a
+-- @%targets(…)@.
+writtenPlus :: PlusWritten -> Path -> Bool
+writtenPlus written u =
+  u `elem` written.unions || (written.targets && unionOfNodes u)
+
+-- | Whether a union written with @+@ ('writtenPlus') has its kind from
+-- an @%override({plus = …}, …)@ around it, and not from the command.
+plusOverridden :: PlusWritten -> Path -> Bool
+plusOverridden written u =
+  u `elem` written.overridden
+    || (u `notElem` written.unions && written.targetsOverridden && unionOfNodes u)
+
+unionOfNodes :: Path -> Bool
+unionOfNodes = all isNode . sidesOf
+  where
+    sidesOf = \case
+      Union _ l r -> sidesOf l <> sidesOf r
+      p -> [p]
+    isNode = \case
+      Simple.Absolute _ -> True
+      _ -> False
+
+-- | Fail readably, before a path is compiled for a command, if no
+-- command runs it: a product in it would copy a meeting point
+-- ('checkCopies'), or it would make more alternatives than its limit
+-- allows. A path that is both is refused for the first, which no limit
+-- cures. Warn, once for each path of a command line, about an @ that
+-- does nothing because a product copies it. The first argument says
+-- which unions of the path were written @+@.
+checkPath ::
+  (Members [Error UserError, Warn UserError, State ShownWarnings] effs) =>
+  PlusWritten ->
+  Path ->
+  Eff effs ()
+checkPath written p = case checkCopies p of
+  Left refusal ->
+    throwError . OtherError $ renderCopiedMeetingPoint written refusal
+  Right idle -> do
+    for_ (renderIdleJoins idle) \warning -> do
+      ShownWarnings shown <- get
+      unless (warning `member` shown) do
+        put (ShownWarnings (insertSet warning shown))
+        warnText warning
+    checkAlternativesLimit p
+
+-- | A path as part of a sentence: as it would be typed, with parentheses
+-- around a conjunction or a union.
+quoted :: Path -> Text
+quoted p = "`" ++ shown ++ "`"
+  where
+    shown = case p of
+      _ Simple.:& _ -> "(" ++ renderSurfacePath p ++ ")"
+      Union {} -> "(" ++ renderSurfacePath p ++ ")"
+      _ -> renderSurfacePath p
+
+-- | A path as part of a sentence, as it would be typed.
+plain :: Path -> Text
+plain p = "`" ++ renderSurfacePath p ++ "`"
+
+-- | Why no command runs a path in which a product would copy a meeting
+-- point, and what to write instead. Commands before it on the line have
+-- run, and the directives of the path are expanded already (a URL in it
+-- is imported), so the error says only that this command was not run.
+renderCopiedMeetingPoint :: PlusWritten -> CopiedMeetingPoint -> Text
+renderCopiedMeetingPoint written r =
+  "This path would copy a meeting point, which has no clear meaning, so"
+    ++ " the command was not run. "
+    ++ ( case r.across of
+           Nothing ->
+             "In "
+               ++ quoted r.meeting
+               ++ " several walks meet at the "
+               ++ quoted r.join
+               ++ " or leave it"
+               ++ ( if r.copied == r.meeting
+                      then ""
+                      else ", inside " ++ quoted r.copied
+                  )
+               ++ ", and "
+               ++ quoted r.copier
+               ++ " would copy it, once for each of its conjuncts: it"
+               ++ " stands next to the group "
+               ++ quoted r.group
+               ++ " with no join of their chain between the two."
+           Just walks ->
+             quoted r.copier
+               ++ " would copy "
+               ++ quoted r.meeting
+               ++ ", once for each of its conjuncts: it stands next to"
+               ++ " the group "
+               ++ quoted r.group
+               ++ " with no join of their chain between the two. In the"
+               ++ " copy for "
+               ++ quoted walks.from
+               ++ ", which holds several walks together, those walks "
+               ++ (if walks.arriving then "meet at" else "all leave from")
+               ++ " the "
+               ++ quoted r.join
+               ++ " of "
+               ++ quoted r.meeting
+               ++ ", and in the other copies they do not."
+       )
+    ++ concatMap reading r.readings
+    ++ " If the walks should come together between the two groups, put a"
+    ++ " join between them"
+    ++ maybe " (/@)" ((": " ++) . plain) r.joinedFirst
+    ++ ". Otherwise write the copies out, one conjunct for each pair"
+    ++ maybe "" ((": " ++) . plain) r.writtenApart
+    ++ "."
+    ++ plusNote
+    ++ " (CopiedMeetingPoint)"
+  where
+    reading = \case
+      SideInPlace u side
+        | isShared u ->
+            " That is the path with "
+              ++ quoted side
+              ++ " chosen in "
+              ++ quoted u
+              ++ ( if writtenPlus written u
+                     then " (written with +, which is ++ " ++ plusFrom u ++ ")"
+                     else ""
+                 )
+              ++ ": a path is refused when one choice of its ++ unions is."
+        | otherwise ->
+            " That is how the path reads for a route that takes the side "
+              ++ quoted side
+              ++ " of "
+              ++ quoted u
+              ++ plusAs u
+              ++ ": a path is refused when one way to take the sides of"
+              ++ " its | unions is."
+      AsOneStep u ->
+        " Routes that take different sides of "
+          ++ quoted u
+          ++ plusAs u
+          ++ " pass it as one step, so it keeps the two groups apart for"
+          ++ " none of them; write ++ there to choose one side for the"
+          ++ " whole path."
+    plusAs u
+      | writtenPlus written u =
+          " (written with +, which is | " ++ plusFrom u ++ ")"
+      | otherwise = ""
+    -- what makes a + the kind of union it is
+    plusFrom u
+      | plusOverridden written u = "by the %override({plus = …}, …) around it"
+      | otherwise = "in this command"
+    isShared = \case
+      Union Shared _ _ -> True
+      _ -> False
+    stepped = [u | AsOneStep u <- r.readings, writtenPlus written u]
+    sided =
+      [ u
+      | SideInPlace u _ <- r.readings,
+        not (isShared u),
+        writtenPlus written u
+      ]
+    -- what else makes a + a ++: an override around the path, or, where
+    -- the + is in one that makes it a | already, that one saying shared
+    sharedInstead us
+      | any (plusOverridden written) us =
+          "say plus = shared in the %override around it"
+      | otherwise = "wrap the path in %override({plus = shared}, …)"
+    plusNote
+      | not (null stepped) =
+          " For that +, write ++ instead, or "
+            ++ sharedInstead stepped
+            ++ "."
+      | not (null sided) =
+          " Writing ++ for that +, or "
+            ++ ( if any (plusOverridden written) sided
+                   then "plus = shared in the %override around it"
+                   else "%override({plus = shared}, …)"
+               )
+            ++ ", does not help here, since the path is refused with that"
+            ++ " side alone."
+      | otherwise = ""
+
+-- | The warning about the joins of a path that do nothing, if it has any.
+renderIdleJoins :: [IdleJoin] -> Maybe Text
+renderIdleJoins = \case
+  [] -> Nothing
+  j : more ->
+    Just $
+      "Warning: the @ that "
+        ++ ( case (j.begins, j.ends) of
+               (True, False) -> "begins "
+               (False, True) -> "ends "
+               _ -> "begins and ends "
+           )
+        ++ quoted j.conjunct
+        ++ " does nothing here: "
+        ++ quoted j.copier
+        ++ " copies "
+        ++ quoted j.conjunct
+        ++ " whole, once for each of its conjuncts, so the @ joins nothing"
+        ++ " and pins nothing."
+        ++ concatMap reading j.readings
+        ++ ( case j.pinned of
+               Just p ->
+                 " If one node was meant, write "
+                   ++ plain p
+                   ++ "; otherwise leave the @ out."
+               Nothing ->
+                 " An @ pins only in the chain it is written in, as in"
+                   ++ " x/@/(c & d): leave this one out, or write out"
+                   ++ " what it should join."
+           )
+        ++ ( case length more of
+               0 -> ""
+               1 -> " The same holds for one more @ in this path."
+               n -> " The same holds for " ++ tshow n ++ " more @ in this path."
+           )
+        ++ " (JoinDoesNothing)"
+  where
+    reading = \case
+      SideInPlace u side ->
+        " (That is with the side " ++ quoted side ++ " of " ++ quoted u ++ ".)"
+      AsOneStep u ->
+        " (Routes that take different sides of "
+          ++ quoted u
+          ++ " pass it as one step.)"
+
+-- | Fail readably if a path would make more alternatives than its limit
+-- allows ('checkPath').
 checkAlternativesLimit :: (Error UserError :> effs) => Path -> Eff effs ()
 checkAlternativesLimit p = case checkAlternatives p of
   Right () -> pure ()
@@ -376,8 +665,10 @@ type CommandEffects effs =
 interpretCommand ::
   (CommandEffects effs) => (Opening -> Eff effs ()) -> Command -> Eff effs ()
 interpretCommand open command =
-  warningOfDamageReadPast $
-    evalStateLocal (ImportedUrls mempty) (runCommand (raise . open) command)
+  warningOfDamageReadPast
+    . evalStateLocal (ImportedUrls mempty)
+    . evalStateLocal (ShownWarnings mempty)
+    $ runCommand (raise . raise . open) command
 
 -- | What the commands ask of whoever opens the graph for them
 data Opening
@@ -394,7 +685,7 @@ data Opening
 -- A command is one decision ('asOneDecision'): once it has read past damage,
 -- in resolving its arguments or the targets of @at@, say, it writes nothing.
 runCommand ::
-  (CommandEffects effs, State ImportedUrls :> effs) =>
+  (CommandEffects effs, Members [State ImportedUrls, State ShownWarnings] effs) =>
   -- | open the graph (see 'interpretCommand')
   (Opening -> Eff effs ()) ->
   Command ->
@@ -648,7 +939,7 @@ isDamageReport = \case
 
 runCommand' ::
   ( CommandEffects effs,
-    Members [State ImportedUrls, State EmptyTargets] effs
+    Members [State ImportedUrls, State EmptyTargets, State ShownWarnings] effs
   ) =>
   -- | open the graph (see 'interpretCommand')
   (Opening -> Eff effs ()) ->

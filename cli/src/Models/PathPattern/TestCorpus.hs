@@ -87,8 +87,12 @@ corpusEquivalences =
       [path| (a & b)/@/(a & b) | (a & b)/@/a & a/b | a/a & (a & b)/@/b
              | a/a & a/b |]
     ),
-    -- a union with one side, or a %never side, is that side
-    ([path| (a/@ | a/@)/(a & b) |], [path| a/@/(a & b) |]),
+    -- a side written twice is two sides: each copy chooses one, and
+    -- the copies that choose different ones share no walk
+    ( [path| (a/@ | a/@)/(a & b) |],
+      [path| a/@/(a & b) | a/@/a & a/@/b |]
+    ),
+    -- a %never side is no side, and a union with one side is that side
     ([path| (a/@ | %never)/(a & b) |], [path| a/@/(a & b) |]),
     -- on single labels, | is a regex alternation
     ([path| a | b |], [path| a ++ b |]),

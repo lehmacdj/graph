@@ -2,6 +2,14 @@
 -- docs/path-pattern-ir.md, and the compiler as it was before relational
 -- unions, with an interpreter of its terms, as a reference that shares no
 -- code with it.
+--
+-- 'compilePath' compiles every path, also one that no command runs
+-- because a product in it would copy a meeting point ('checkCopies').
+-- The random law tests here are about the compiler and keep those
+-- paths: none of them leaves a path out for being refused. Where a test
+-- is about what a command finds, it says how many of its paths are run
+-- ('runs'), and a test of a refused path written out says so
+-- ('refuses').
 module Models.PathPattern.CompileSpec where
 
 import Control.Monad.State.Strict qualified as S
@@ -25,6 +33,7 @@ import Models.PathPattern
 import Models.PathPattern.Compile
 import Models.PathPattern.Match
 import Models.PathPattern.ResiduateSpec (genRepairCase)
+import Models.PathPattern.Suggest (parseSurfacePath)
 import Models.PathPattern.TestCorpus
 import MyPrelude
 import Test.QuickCheck.Gen (unGen)
@@ -201,59 +210,78 @@ spec_compileJoinBeforeUnion = describe "a join before a union stays outside" do
     length (compilePath [path| (b & a)/@/(@ | c)/(x & y) |]).alternatives
       `shouldBe` 4
 
--- | Sides are the same when they compile to the same routes in the same
--- order, however they are written.
+-- | Every side of a union that is written is a side of its own, also
+-- when another side is written the same or compiles to the same thing
+-- ('spec_compileEverySide' has the results this is for).
 spec_compileSameSides :: Spec
-spec_compileSameSides = describe "a side written twice is one side" do
+spec_compileSameSides = describe "a side written twice is two sides" do
   let same a b = compilePath a `shouldBe` compilePath b
+      count q = length (compilePath q).alternatives
       n1 = smallNID 1
       p = (P.Literal "a" P.:|| P.ExcludingNIDs (singletonSet n1)) P.:/ [path| b/@ |]
       p' = (P.ExcludingNIDs (singletonSet n1) P.:|| P.Literal "a") P.:/ [path| b/@ |]
       before x = x P.:/ [path| d & e |]
-  it "(a/@ | a/@/@)/(d & e)" $
-    same [path| (a/@ | a/@/@)/(d & e) |] [path| a/@/(d & e) |]
-  it "(p | q) | p and p | q | p are p | q" do
-    same (before ((p P.:|| [path| x |]) P.:|| p)) (before (p P.:|| [path| x |]))
-    same (before (p P.:|| ([path| x |] P.:|| p))) (before (p P.:|| [path| x |]))
-  it "p with its inner union written the other way around" $
-    same (before (p P.:|| p')) (before p)
-  it "p | p/@ is p, and p | @/p is two sides" do
-    same (before (p P.:|| (p P.:/ P.One))) (before p)
-    -- a leading @ is kept as written, so @/p is another side than p: the
-    -- two copies of the union may choose one each, and then share no walk
-    compilePath (before (p P.:|| (P.One P.:/ p)))
-      `shouldNotBe` compilePath (before p)
-    length (compilePath [path| (a/@ | @/a/@)/(d & e) |]).alternatives
-      `shouldBe` 2
-    same
-      [path| (a/@ | @/a/@)/(d & e) |]
-      [path| a/@/(d & e) | a/@/d & a/@/e |]
+  it "(a/@ | a/@/@)/(d & e)" do
+    -- a/@/@ is a/@ (joins right after one another are one join), and the
+    -- union is not a/@: the copies before d and e may choose one each
+    same [path| (a/@ | a/@/@)/(d & e) |] [path| (a/@ | a/@)/(d & e) |]
+    same [path| (a/@ | a/@)/(d & e) |] [path| a/@/(d & e) | a/@/d & a/@/e |]
+    count [path| (a/@ | a/@)/(d & e) |] `shouldBe` 2
+    count [path| a/@/(d & e) |] `shouldBe` 1
+  it "(p | q) | p and p | (q | p) are the three sides p, q and p" do
+    same (before ((p P.:|| [path| x |]) P.:|| p)) (before (p P.:|| ([path| x |] P.:|| p)))
+    same (before ((p P.:|| [path| x |]) P.:|| p)) (before ((p P.:|| p) P.:|| [path| x |]))
+    -- and not the two sides p and q
+    count (before ((p P.:|| [path| x |]) P.:|| p))
+      `shouldSatisfy` (> count (before (p P.:|| [path| x |])))
+  it "p with its inner union written the other way around is p again" do
+    same (before (p P.:|| p')) (before (p P.:|| p))
+    same (before p') (before p)
+    compilePath (before (p P.:|| p')) `shouldNotBe` compilePath (before p)
+  it "p | p/@ and p | @/p are two sides" do
+    -- p ends with a join, so p/@ is p written again
+    same (before (p P.:|| (p P.:/ P.One))) (before (p P.:|| p))
+    compilePath (before (p P.:|| (p P.:/ P.One))) `shouldNotBe` compilePath (before p)
+    compilePath (before (p P.:|| (P.One P.:/ p))) `shouldNotBe` compilePath (before p)
+    -- a leading @ is kept as written; where the path starts it joins
+    -- nothing, and the side it starts is a side of its own all the same
+    count [path| (a/@ | @/a/@)/(d & e) |] `shouldBe` 2
+    same [path| (a/@ | @/a/@)/(d & e) |] [path| (a/@ | a/@)/(d & e) |]
   it "@/a is a where nothing forks after the @" do
     same [path| @/a |] [path| a |]
     same [path| (@/a & b)/(c & d) |] [path| (a & b)/(c & d) |]
+    -- two sides, but neither has a join that the copies could share
+    -- after it: whichever each copy chooses, d and e have an a each
     same [path| (a | @/a)/(d & e) |] [path| a/(d & e) |]
+    same [path| (a | a)/(d & e) |] [path| a/(d & e) |]
     same [path| @/(a & b)/(c & d) |] [path| (a & b)/(c & d) |]
-  it "p | @/p is two sides when p forks" do
-    let count q = length (compilePath q).alternatives
-    -- the copy before @/f chooses between a and b that meet before f
-    -- and a and b apart, and so does the copy before e, where the two
-    -- sides are the same walks
-    count [path| (((a & b) | @/(a & b)) & c)/(@/f & e) |] `shouldBe` 3
+  it "p | @/p is two sides when p forks, and then no command runs it" do
+    -- the copy before @/f would choose between a and b that meet before
+    -- f and a and b apart: @/(a & b) is a meeting point that the group
+    -- after it copies
+    refuses [path| (((a & b) | @/(a & b)) & c)/(@/f & e) |]
     count [path| ((a & b) & c)/(@/f & e) |] `shouldBe` 1
-  it "but an unjoined side and a joined one differ" $
+    -- where nothing copies it the two sides stay two
+    runsQuietly [path| q/(((a & b) | @/(a & b)) & c) |]
+    count [path| q/(((a & b) | @/(a & b)) & c) |] `shouldBe` 2
+  it "an unjoined side and a joined one differ" $
     compilePath [path| (a | a/@)/(d & e) |]
       `shouldBe` compilePath [path| a/(d & e) | a/@/(d & e) |]
   it "a test repeated after an @ side" do
+    -- the second side is the first written again (a test passed twice
+    -- is passed once): two sides
     same
       [path| ((c | @)/!{@000000000001} | (c | @)/!{@000000000001}/!{@000000000001})/(e & d) |]
-      [path| (c | @)/!{@000000000001}/(e & d) |]
+      [path| ((c | @)/!{@000000000001} | (c | @)/!{@000000000001})/(e & d) |]
     same
       [path| (@/!{@000000000001} | !{@000000000001}/@ | !{@000000000001})/(e & d) |]
-      [path| !{@000000000001}/(e & d) |]
+      [path| (!{@000000000001} | !{@000000000001} | !{@000000000001})/(e & d) |]
   it "a test that an @N side already passes" do
     same
       [path| ((~a | * | @000000000001)/@000000000001 | (~a | * | @000000000001)/@000000000001/!{@000000000002})/(d & b) |]
-      [path| (~a | * | @000000000001)/@000000000001/(d & b) |]
+      [path| ((~a | * | @000000000001)/@000000000001 | (~a | * | @000000000001)/@000000000001)/(d & b) |]
+    -- every side is the node 1, which is one node whichever side a copy
+    -- chooses: here the union is what one side is
     same
       [path| (@000000000001 | @000000000001/@ | @000000000001/@000000000001 | @000000000001/!{@000000000002})/(d & b) |]
       [path| @000000000001/(d & b) |]
@@ -327,15 +355,19 @@ spec_compileRootJoin = describe "a leading @ before an @N conjunct" do
     compilePath p `shouldBe` compilePath [path| (@ | c)/(@000000000001 & d) |]
     length (compilePath p).alternatives `shouldBe` 4
     neverJumps p
-  it "sides that differ in a leading @ are two sides, and neither jumps" do
+  it "sides that differ in a leading @ before a fork are two sides, and neither jumps" do
     -- (c & @)/(@1 & d) tests the current node as @/(c & @)/(@1 & d) does
     -- (before chain-scoped joins it jumped to node 1)
     let both = [path| ((@/(c & @) | (c & @)) & g)/(@000000000001 & d) |]
-    alternativesUpToOrder both
-      `shouldBe` alternativesUpToOrder
-        [path| ((c & @) & g)/(@000000000001 & d)
-               | (@/(c & @) & g)/(@000000000001 & d) |]
+    -- no command runs it: the group after it would copy @/(c & @), in
+    -- which two walks leave the @ ('spec_compileCopiedMeetingPoints')
+    refuses both
+    refuses [path| (@/(c & @) & g)/(@000000000001 & d) |]
     neverJumps both
+    -- where nothing copies it, it runs, and does not jump either
+    let alone = [path| q/((@/(c & @) | (c & @)) & g)/@000000000001 |]
+    isRight (checkCopies alone) `shouldBe` True
+    neverJumps alone
   it "a leading @ before a side that does not fork changes nothing" $
     alternativesUpToOrder [path| ((@/c | c) & g)/(@000000000001 & d) |]
       `shouldBe` alternativesUpToOrder [path| (c & g)/(@000000000001 & d) |]
@@ -1310,25 +1342,48 @@ spec_compileUnionMonotoneRandom =
             withinLimit base && withinLimit bigger
           ]
     length checked `shouldSatisfy` (> 400)
-    -- a union of a path with itself, or with %never, is that path
+    -- a union of a path with %never is that path
     forM_ cases \(p, _, c, d, ctx) -> when (withinLimit (plug ctx c d p)) do
       let same x =
             (show (p, ctx, c, d), compilePath (plug ctx c d x))
               `shouldBe` (show (p, ctx, c, d), compilePath (plug ctx c d p))
-      same (p P.:|| p)
       same (p P.:|| P.Zero)
       same (P.Zero P.:|| p)
-      -- ...as is one with a side repeated, regrouped, or with the sides
-      -- of every union in it written the other way around
+    -- A union of a path with itself is two sides, and on this sample it
+    -- is that path where the path has no join of the chain it is
+    -- written in and no ++ union: then the routes through it share
+    -- nothing of it, whichever side each takes, and the two sides are
+    -- the same path. (With such a join it may be more, and so it is,
+    -- by one alternative that finds nothing more, for a path that forks
+    -- next to a conjunct in which walks meet at an @N and go on as one:
+    -- 'spec_compileEverySide'; no path of this sample shows that. A ++
+    -- written twice is two unions, which are chosen apart.)
+    let twice = [x | x@(p, _, c, d, ctx) <- cases, withinLimit (plug ctx c d (p P.:|| p))]
+        joinless = [x | x@(p, _, _, _, _) <- twice, not (ownJoin p), not (hasShared p)]
+    length joinless `shouldSatisfy` (> 60)
+    length twice - length joinless `shouldSatisfy` (> 60)
+    forM_ joinless \(p, _, c, d, ctx) ->
+      (show (p, ctx, c, d), compilePath (plug ctx c d (p P.:|| p)))
+        `shouldBe` (show (p, ctx, c, d), compilePath (plug ctx c d p))
+    forM_ twice \(p, _, c, d, ctx) ->
+      ( show (p, ctx, c, d),
+        alternativesOf (plug ctx c d p) `difference` alternativesOf (plug ctx c d (p P.:|| p))
+      )
+        `shouldBe` (show (p, ctx, c, d), mempty)
+    -- The sides of a union in another order, or grouped another way,
+    -- are the same union; and so is one with the sides of every union
+    -- in a side written the other way around.
+    forM_ cases \(p, _, c, d, ctx) -> do
       let other = P.Union P.Relational c d
           sameAs y x =
             (show (x, ctx), compilePath (plug ctx c d x))
               `shouldBe` (show (x, ctx), compilePath (plug ctx c d y))
-      when (withinLimit (plug ctx c d (p P.:|| other))) do
-        ((p P.:|| other) P.:|| p) `sameAs` (p P.:|| other)
-        (p P.:|| (other P.:|| p)) `sameAs` (p P.:|| other)
+      when (withinLimit (plug ctx c d ((p P.:|| other) P.:|| p))) do
+        (p P.:|| (other P.:|| p)) `sameAs` ((p P.:|| other) P.:|| p)
+        ((p P.:|| p) P.:|| other) `sameAs` ((p P.:|| other) P.:|| p)
+        ((other P.:|| p) P.:|| p) `sameAs` ((p P.:|| other) P.:|| p)
         (other P.:|| p) `sameAs` (p P.:|| other)
-        (p P.:|| swapUnions p) `sameAs` p
+        (p P.:|| swapUnions p) `sameAs` (p P.:|| p)
     -- sequencing associates: the same alternatives however it is grouped
     forM_ cases \(_, p, q, c, _) ->
       when (withinLimit (p P.:/ q P.:/ c)) $
@@ -1358,6 +1413,25 @@ spec_compileUnionMonotoneRandom =
       l P.:& r -> swapUnions l P.:& swapUnions r
       P.Backwards x -> P.Backwards (swapUnions x)
       x -> x
+    -- whether a path has a join at its own level: one that is a join of
+    -- the chain the path is written in (one in a conjunct is not)
+    ownJoin = \case
+      P.One -> True
+      P.Absolute _ -> True
+      P.ExcludingNIDs _ -> True
+      l P.:/ r -> ownJoin l || ownJoin r
+      P.Union _ l r -> ownJoin l || ownJoin r
+      P.Backwards x -> ownJoin x
+      P.WithLimits _ _ x -> ownJoin x
+      _ -> False
+    hasShared = \case
+      P.Union P.Shared _ _ -> True
+      P.Union _ l r -> hasShared l || hasShared r
+      l P.:/ r -> hasShared l || hasShared r
+      l P.:& r -> hasShared l || hasShared r
+      P.Backwards x -> hasShared x
+      P.WithLimits _ _ x -> hasShared x
+      _ -> False
     alternativesOf = alternativesUpToOrder
     plug :: Int -> P.Path -> P.Path -> P.Path -> P.Path
     plug ctx c d x = case ctx of
@@ -2129,7 +2203,13 @@ spec_compileUnionFree = describe "paths without | compile as before" do
     referenceClasses [path| (a & @)/(@000000000001 & d) |]
       `shouldBe` (True, True)
     -- a conjunct that is only @ is the join it is in @/…, so it is in
-    -- class 1 too: here @/(c & d)/@ has one q where there were two
+    -- class 1 too: here @/(c & d)/@ has one q where there were two.
+    -- No command runs this path now (the group before would copy
+    -- (c & d)/@, where c and d meet); what it compiles to is still its
+    -- product written out, which is what the error says to write
+    refuses [path| q/(@ & b)/((c & d)/@ & e) |]
+    isRight (checkCopies [path| q/@/(c & d)/@ & q/e & q/b/(c & d)/@ & q/b/e |])
+      `shouldBe` True
     compilePath [path| q/(@ & b)/((c & d)/@ & e) |]
       `shouldBe` compilePath
         [path| q/@/(c & d)/@ & q/e & q/b/(c & d)/@ & q/b/e |]
@@ -2142,6 +2222,12 @@ spec_compileUnionFree = describe "paths without | compile as before" do
     -- and is no group of the stretch: @/(c & d)/@/e merges c and d,
     -- which (c & d & a)/(@/e & y) does not. Before, the @ was left out.
     let p = [path| (@/(c & d) & a)/(@/e & y) |]
+    -- no command runs it, nor the one below: @/(c & d) is a meeting
+    -- point (c and d leave one node) that the next group would copy.
+    -- The compiler still gives the product written out for both.
+    refuses p
+    refuses [path| (@/(c & d) & a)/(e & y) |]
+    runsQuietly [path| @/(c & d)/e & @/(c & d)/y & a/e & a/y |]
     compilePath p `shouldBe` referenceCompile WrittenOut p
     compilePath p `shouldNotBe` compilePath [path| (c & d & a)/(@/e & y) |]
     compilePath p `shouldNotBe` referenceCompile AsBefore p
@@ -2293,7 +2379,13 @@ spec_compileProduct = describe "adjacent conjunctions are their product" do
       `shouldBe` compilePath [path| (x/@ & d)/(c/e & c/f & y) |]
     compilePath [path| (k/(m & n) & d)/(c/@ & y) |]
       `shouldBe` compilePath [path| (k/m & k/n & d)/(c/@ & y) |]
-    -- with a join before the fork it is one conjunct, copied whole
+    -- with a join before the fork it is one conjunct, copied whole:
+    -- which no command runs, since e and f leave one node in it. The
+    -- copies written out, which the error says to write, are run, and
+    -- are what the compiler makes of it
+    refuses [path| (x/@ & d)/(c/@/(e & f) & y) |]
+    isRight (checkCopies [path| x/@/c/@/(e & f) & x/@/y & d/c/@/(e & f) & d/y |])
+      `shouldBe` True
     compilePath [path| (x/@ & d)/(c/@/(e & f) & y) |]
       `shouldBe` compilePath
         [path| x/@/c/@/(e & f) & x/@/y & d/c/@/(e & f) & d/y |]
@@ -2377,6 +2469,11 @@ spec_compileReversal = describe "the reverse of a path is its converse" do
           (resolveFrom (smallNID cur) g (compilePath (surface P.:/ P.One))).resolutions
   it "on random paths and graphs" do
     length checked `shouldSatisfy` (> 550)
+    -- the paths that commands run; the others are refused in both
+    -- directions, and the compiler makes a converse of them all the same
+    length (filter (runs . fst) checked) `shouldSatisfy` (> 300)
+    forM_ checked \(p, _) ->
+      (show p, runs (P.Backwards p)) `shouldBe` (show p, runs p)
     forM_ checked \(p, gs) -> forM_ gs \(edges, g) ->
       forM_ nodes \c -> forM_ nodes \t ->
         (show (p, edges, c, t), smallNID t `member` reached c g p)
@@ -2403,10 +2500,35 @@ spec_compileReversal = describe "the reverse of a path is its converse" do
       `shouldBe` singletonSet (smallNID 0)
     reached 0 g [path| (p & q)/x/@/w |] `shouldBe` mempty
     reached 9 g [path| ~w/@/~x/(~p & ~q) |] `shouldBe` mempty
-  it "a conjunct that starts with @, forks and is joined by the next group" do
-    -- c/@/(c & d)/@ finds no node with both c and d to 9; its reverse
-    -- @/(~c & ~d)/@/~c has to merge ~c and ~d likewise, which it did not
-    -- while a leading @ was left out
+  it "a conjunct that forks and joins, and its reverse, which starts with @" do
+    -- a and b end apart, so ((a & b)/@ & c)/q finds nothing; its
+    -- reverse from 9 finds nothing either, because the leading @ of
+    -- @/(~a & ~b) is kept: without it 0 is found
+    let apart =
+          graphOf
+            [0, 1, 2, 3, 9]
+            [ (0, "a", 1),
+              (0, "b", 3),
+              (1, "q", 9),
+              (3, "q", 9),
+              (0, "c", 2),
+              (2, "q", 9)
+            ]
+    runsQuietly [path| ((a & b)/@ & c)/q |]
+    runsQuietly [path| ~q/(@/(~a & ~b) & ~c) |]
+    reached 0 apart [path| ((a & b)/@ & c)/q |] `shouldBe` mempty
+    reached 9 apart [path| ~q/(@/(~a & ~b) & ~c) |] `shouldBe` mempty
+    reached 9 apart [path| ~(((a & b)/@ & c)/q) |] `shouldBe` mempty
+    reached 9 apart [path| ~q/(~a & ~b & ~c) |]
+      `shouldBe` singletonSet (smallNID 0)
+  it "between two groups such a conjunct is refused, as is its reverse" do
+    -- The compiler still makes a converse of the reverse: c/@/(c & d)/@
+    -- finds no node with both c and d to 9, and @/(~c & ~d)/@/~c has to
+    -- merge ~c and ~d likewise. But no command runs either path: the
+    -- group next to (c & d)/@ would copy the node c and d meet at.
+    refuses [path| (x & c/@)/((c & d)/@ & a) |]
+    refuses [path| (@/(~c & ~d) & ~a)/(~x & @/~c) |]
+    refuses [path| ~((x & c/@)/((c & d)/@ & a)) |]
     let g =
           graphOf
             [0, 1, 2, 5, 9]
@@ -2527,9 +2649,13 @@ spec_compileUnionIsItsChoices =
         (show bigger, withoutMarked bigger)
           `shouldBe` (show bigger, (compilePath base).alternatives)
         (show swapped, compilePath swapped) `shouldBe` (show swapped, compilePath bigger)
-    it "the routes are in the order of C[p] also where a conjunct has a join" $
+    it "the routes are in the order of C[p] also where a conjunct has a join" do
       -- the conjunct (!{@1} & *)/!{@1} is copied whole for each conjunct
-      -- of the group that follows, and its routes are listed together
+      -- of the group that follows, and its routes are listed together.
+      -- (No command runs these two paths: two walks meet at the !{@1}
+      -- that ends the conjunct, and the other group would copy it. The
+      -- order of the routes is still the compiler's to keep.)
+      refuses [path| (x & (!{@000000000001} & *)/!{@000000000001})/((!{@000000000001} & *)/!{@000000000001}) |]
       (compilePath [path| ((x | zq) & (!{@000000000001} & *)/!{@000000000001})/((!{@000000000001} & *)/!{@000000000001}) |]).alternatives
         `shouldSatisfy` ( null
                             . ( (compilePath [path| (x & (!{@000000000001} & *)/!{@000000000001})/((!{@000000000001} & *)/!{@000000000001}) |]).alternatives
@@ -2623,6 +2749,36 @@ spec_compileRepeatedConjunct = describe "a conjunct written twice" do
     forM_ checked \(once', twice) -> forM_ graphs \g ->
       (show (twice, g), reached corpusCurrent g twice)
         `shouldBe` (show (twice, g), reached corpusCurrent g once')
+  it "sealed, q & q finds what q finds, in every context" do
+    -- To seal a path is to write @/ before it and /@ after it: then
+    -- nothing around it copies into its joins, and its joins hold
+    -- nothing around it together. (The compiler's law: some of these
+    -- contexts copy the sealed q & q, which is then a meeting point, so
+    -- no command runs it; 'runs' says how many of the pairs are run.)
+    let sealed x = P.One P.:/ x P.:/ P.One
+        contexts =
+          [ id,
+            (P.:/ [path| b & c |]),
+            ([path| a & b |] P.:/),
+            (\x -> [path| a & b |] P.:/ x P.:/ [path| b & c |]),
+            (\x -> (x P.:& [path| c |]) P.:/ [path| a & b |]),
+            (\x -> [path| a & c |] P.:/ (x P.:& [path| b |])),
+            (\x -> [path| a | c/@ |] P.:/ x P.:/ [path| b & c |])
+          ] ::
+            [P.Path -> P.Path]
+        checked =
+          [ (ctx (sealed q), ctx (sealed (q P.:& q)))
+          | q <- concat [[p, q] | (p, q) <- take 120 cases],
+            relative q,
+            ctx <- contexts,
+            withinLimit (ctx (sealed (q P.:& q)))
+          ]
+    length checked `shouldSatisfy` (> 600)
+    length [() | (once', twice) <- checked, runs once', runs twice]
+      `shouldSatisfy` (> 300)
+    forM_ checked \(once', twice) -> forM_ (take 6 graphs) \g ->
+      (show (twice, g), reached corpusCurrent g twice)
+        `shouldBe` (show (twice, g), reached corpusCurrent g once')
   it "but not when q joins the outputs of P" do
     let g = graphOf [0, 1, 2, 9] [(0, "a", 1), (0, "b", 2), (1, "c", 9), (2, "c", 9)]
     reached (smallNID 0) g [path| (a & b)/@/c |] `shouldBe` mempty
@@ -2641,6 +2797,12 @@ spec_compileRepeatedConjunct = describe "a conjunct written twice" do
       `shouldBe` singletonSet (smallNID 1)
   where
     graphs = [g | (i, g) <- zip [0 :: Int ..] corpusGraphs, i `mod` 37 == 0]
+    relative = \case
+      P.Absolute _ -> False
+      l P.:/ r -> relative l && relative r
+      l P.:& r -> relative l && relative r
+      P.Union _ l r -> relative l && relative r
+      _ -> True
     oneOutput = \case
       _ P.:& _ -> False
       l P.:/ r -> oneOutput l && oneOutput r
@@ -2703,13 +2865,22 @@ spec_compileChainScoped = describe "chain-scoped joins" do
             (2, "e", 9),
             (3, "e", 9)
           ]
-    -- the first has the chain @/(a & b)/@/f, where a and b have to meet
-    ls 0 g [path| (@/(a & b) & c)/(@/f & e) |] `shouldBe` []
+    -- the first has the chain @/(a & b)/@/f, where a and b have to meet:
+    -- as a group that the next one copies it is refused, and written
+    -- out it finds nothing
+    refuses [path| (@/(a & b) & c)/(@/f & e) |]
+    refuses [path| (@/(a & b) & c)/(f & e) |]
+    runsQuietly [path| @/(a & b)/@/f & @/(a & b)/e & c/@/f & c/e |]
+    ls 0 g [path| @/(a & b)/@/f & @/(a & b)/e & c/@/f & c/e |] `shouldBe` []
+    compilePath [path| (@/(a & b) & c)/(@/f & e) |]
+      `shouldBe` compilePath [path| @/(a & b)/@/f & @/(a & b)/e & c/@/f & c/e |]
     ls 0 g [path| (a & b & c)/(@/f & e) |] `shouldBe` [Just 9]
-    ls 0 g [path| (@/(a & b) & c)/(f & e) |] `shouldBe` [Just 9]
+    ls 0 g [path| @/(a & b)/f & @/(a & b)/e & c/f & c/e |] `shouldBe` [Just 9]
   it "the copies of a union that choose a joined side share its walk" do
     ls 0 twoX [path| (x/@ | zz)/(c & d) |] `shouldBe` []
-    ls 0 twoX [path| (x/@ | x/@)/(c & d) |] `shouldBe` []
+    -- a side written twice is two sides: the copies may choose one each
+    ls 0 twoX [path| (x/@ | x/@)/(c & d) |] `shouldBe` [Just 9]
+    ls 0 twoX [path| (x/@ ++ x/@)/(c & d) |] `shouldBe` []
     ls 0 twoX [path| (x | x/@)/(c & d) |] `shouldBe` [Just 9]
   it "conjuncts in another order are another side" do
     let g =
@@ -2914,6 +3085,10 @@ spec_compileCopies = describe "the copies of a union choose on their own" do
     -- @/(a & b) is copied whole by m & n inside the conjunct that the
     -- leading @ keeps together: a/m, b/m, a/n, b/n
     let p = [path| @/(@/(a & b) & c)/(m & n) & z |]
+    -- (which no command runs: m & n would copy the node a and b leave;
+    -- the order of the routes is that of the copies written out)
+    refuses p
+    runsQuietly [path| @/(@/(a & b)/m & @/(a & b)/n & c/m & c/n) & z |]
     compilePath p
       `shouldBe` compilePath
         [path| @/(@/(a & b)/m & @/(a & b)/n & c/m & c/n) & z |]
@@ -3243,3 +3418,1359 @@ gridSpellings pres sides conts =
                           w <- if null post then [Nothing] else map Just post
                         ]
                    in [[conj terms P.:/ node P.:/ conj out | terms <- into]]
+
+-- * Copied meeting points
+
+-- | Whether commands run the path: no product in it copies a meeting
+-- point.
+runs :: P.Path -> Bool
+runs = isRight . checkCopies
+
+-- | No command runs the path: a product would copy a meeting point.
+refuses :: P.Path -> Expectation
+refuses p = (show p, isLeft (checkCopies p)) `shouldBe` (show p, True)
+
+-- | Commands run the path, and nothing is warned about.
+runsQuietly :: P.Path -> Expectation
+runsQuietly p = (show p, checkCopies p) `shouldBe` (show p, Right [])
+
+-- | Commands run the path, with a warning about an @ that does nothing.
+runsWarning :: P.Path -> Expectation
+runsWarning p =
+  (show p, fmap (not . null) (checkCopies p)) `shouldBe` (show p, Right True)
+
+-- | The path that keeps what the test is about: @K@ is @(c & y)/\@/e@, a
+-- conjunct in which @c@ and @y@ meet.
+spec_compileCopiedMeetingPoints :: Spec
+spec_compileCopiedMeetingPoints = describe "a product may not copy a meeting point" do
+  it "refuses a conjunct with a meeting point that a group copies" do
+    refuses [path| (a & b)/((c & y)/@/e & d) |]
+    refuses [path| (x/@/(w & v) & b)/(c & d) |]
+    refuses [path| (@/(a & b) & c)/(@/f & e) |]
+    refuses [path| (x & y)/(@/(a & b) & c) |]
+    refuses [path| (a/@/(b & c) & d)/(e & f) |]
+    refuses [path| (p & q)/(a/@/(b & c) & d) |]
+    -- steps between the groups do not keep them apart
+    refuses [path| (a & b)/k/((c & y)/@/e & d) |]
+    -- !{…} is a meeting point where walks meet at it
+    refuses [path| (a & b)/((c & y)/!{@000000000001}/e & d) |]
+    -- the meeting point may be deeper in the copied conjunct
+    refuses [path| (p & q)/(@000000000001/((c & y)/@/e & z) & d) |]
+    refuses [path| (p & q)/(m/((c & y)/@/e & z) & d) |]
+    -- a conjunct that forks without a join is no chain apart: its groups
+    -- are groups of the stretch around it
+    refuses [path| ((p & q)/x & z)/((c & y)/@/e & d) |]
+    refuses [path| (m/((c & y)/@/e & z)/(e & f) & d) |]
+  it "names the conjunct, the join, the copier and what to write" do
+    let refusal = either Just (const Nothing) . checkCopies
+    refusal [path| (a & b)/((c & y)/@/e & d) |]
+      `shouldBe` Just
+        CopiedMeetingPoint
+          { meeting = [path| (c & y)/@/e |],
+            join = P.One,
+            copied = [path| (c & y)/@/e |],
+            group = [path| (c & y)/@/e & d |],
+            copier = [path| a & b |],
+            readings = [],
+            joinedFirst = Just [path| (a & b)/@/((c & y)/@/e & d) |],
+            writtenApart =
+              Just [path| a/(c & y)/@/e & a/d & b/(c & y)/@/e & b/d |],
+            across = Nothing
+          }
+    -- what it says to write is run, and the copies written out are what
+    -- the path compiles to
+    for_
+      [ [path| (a & b)/((c & y)/@/e & d) |],
+        [path| (x/@/(w & v) & b)/(c & d) |],
+        [path| (@/(a & b) & c)/(@/f & e) |],
+        [path| (x & y)/(@/(a & b) & c) |],
+        [path| (a/@/(b & c) & d)/(e & f) |],
+        [path| (p & q)/(a/@/(b & c) & d) |],
+        [path| q/(a & b)/k/((c & y)/@/e & d)/w |]
+      ]
+      \p -> case refusal p of
+        Just CopiedMeetingPoint {joinedFirst = Just joined, writtenApart = Just apart} -> do
+          runsQuietly joined
+          isRight (checkCopies apart) `shouldBe` True
+        other -> expectationFailure (show (p, other))
+    (.writtenApart)
+      <$> refusal [path| (a & b)/((c & y)/@/e & d) |]
+        `shouldSatisfy` maybe False (maybe False (\apart -> compilePath apart == compilePath [path| (a & b)/((c & y)/@/e & d) |]))
+    -- the conjunct that is copied is not always the one with the meeting point
+    ((\r -> (r.meeting, r.copied)) <$> refusal [path| (p & q)/(@000000000001/((c & y)/@/e & z) & d) |])
+      `shouldBe` Just ([path| (c & y)/@/e |], [path| @000000000001/((c & y)/@/e & z) |])
+  it "refuses when some way to take the sides of a | copies one" do
+    refuses [path| ((a & b) | z)/((c & y)/@/e & d) |]
+    refuses [path| (p & q)/(x/@ | s)/((c & y)/@/e & d) |]
+    refuses [path| (x/@ | (p & q)/s)/((c & y)/@/e & d) |]
+    refuses [path| ((a & b) | (u & v))/((c & y)/@/e & d) |]
+    refuses [path| ((a & b) | @000000000003)/((c & y)/@/e & d) |]
+    refuses [path| (x/@/(m & n) & q)/((a & b) | z) |]
+    -- no merging of equal conjuncts
+    refuses [path| ((a & a) | z)/((c & y)/@/e & d) |]
+    ((.readings) <$> either Just (const Nothing) (checkCopies [path| ((a & b) | z)/((c & y)/@/e & d) |]))
+      `shouldBe` Just [SideInPlace [path| (a & b) | z |] [path| a & b |]]
+  it "a | keeps no two groups apart, whatever joins its sides have" do
+    refuses [path| (p & q)/(x/@ | w/@)/((c & y)/@/e & d) |]
+    refuses [path| (p & q)/(@000000000001 | @000000000002)/((c & y)/@/e & d) |]
+    ((.readings) <$> either Just (const Nothing) (checkCopies [path| (p & q)/(x/@ | w/@)/((c & y)/@/e & d) |]))
+      `shouldBe` Just [AsOneStep [path| x/@ | w/@ |]]
+    -- a side written twice is two sides, for the check as for the
+    -- compiler: p and q may take one each, and then pass the union as a
+    -- step
+    refuses [path| (p & q)/(x/@ | x/@)/((c & y)/@/e & d) |]
+    ((.readings) <$> either Just (const Nothing) (checkCopies [path| (p & q)/(x/@ | x/@)/((c & y)/@/e & d) |]))
+      `shouldBe` Just [AsOneStep [path| x/@ | x/@ |]]
+    copiesMeetingPoint [path| (p & q)/(x/@ | x/@)/((c & y)/@/e & d) |] `shouldBe` True
+    -- so are two sides that compile to the same thing in place (the
+    -- check refused this while the compiler had one side: no more)
+    refuses [path| (p & q)/(x/@/y/z/@ | x/@/y/@/z/@)/((c & y)/@/e & d) |]
+    copiesMeetingPoint [path| (p & q)/(x/@/y/z/@ | x/@/y/@/z/@)/((c & y)/@/e & d) |]
+      `shouldBe` True
+    -- %never is no side, and a union of one side is that side
+    runsQuietly [path| (p & q)/(x/@ | %never)/((c & y)/@/e & d) |]
+    runsQuietly [path| (p & q)/x/@/((c & y)/@/e & d) |]
+  it "a ++ is its choices: refused when one of them is" do
+    refuses [path| ((a & b) ++ z)/((c & y)/@/e & d) |]
+    refuses [path| (((a & b) | z) ++ w)/((c & y)/@/e & d) |]
+    -- every choice has a join of the chain between the groups
+    runsQuietly [path| (p & q)/(x/@ ++ w/@)/((c & y)/@/e & d) |]
+    runsQuietly [path| (p & q)/(@000000000001 ++ @000000000002)/((c & y)/@/e & d) |]
+  it "runs a path with a join of the chain between the groups" do
+    runsQuietly [path| (a/@/(b & c) & d)/@ |]
+    runsQuietly [path| (a/@/(b & c) & d)/@/(e & f) |]
+    runsQuietly [path| (p & q)/@/(a/@/(b & c) & d) |]
+    runsQuietly [path| (p & q)/@000000000001/(a/@/(b & c) & d) |]
+  it "runs a meeting point that nothing copies" do
+    runsQuietly [path| z/((c & y)/@/e & d) |]
+    runsQuietly [path| (a | z)/((c & y)/@/e & d) |]
+    runsQuietly [path| (x/@ | s)/((c & y)/@/e & d) |]
+    runsQuietly [path| q/(@/(a & b) & c) |]
+    runsQuietly [path| a/@/(a & b)/@/c |]
+    -- the product written out has it in a group that stands alone
+    runsQuietly [path| a/(c & y)/@/e & a/d & b/(c & y)/@/e & b/d |]
+  it "runs a join that is no meeting point, though copied" do
+    -- @N is one node for all copies
+    runsQuietly [path| (p & q)/(x/@000000000001/w & y) |]
+    runsQuietly [path| (p & q)/(x/@000000000001/(w & v) & y) |]
+    runsQuietly [path| a/(@000000000001 | @000000000002)/(x & y) |]
+    -- a join on one walk joins nothing
+    runsQuietly [path| (x/@/w & b)/(c & d) |]
+    runsQuietly [path| (p & q)/(x/@ | s)/(m/@/e & d) |]
+    runsQuietly [path| (x/@ | zz)/(c & d) |]
+    -- !{…} on one walk is a filter
+    runsQuietly [path| (x/!{@000000000001} & b)/(c & d) |]
+    runsQuietly [path| (!{@000000000001}/x & b)/(c & d) |]
+  it "the leading @ of a conjunct that forks is refused where it is copied" do
+    refuses [path| (@/(a & b) & c)/(d & e) |]
+    -- also inside a side of a union
+    refuses [path| (((a & b) | @/(a & b)) & c)/(@/f & e) |]
+    refuses [path| ((@/(c & @) | (c & @)) & g)/(@000000000001 & d) |]
+  it "warns of an @ at an end of a copied conjunct that is a plain walk" do
+    runsWarning [path| (x/@ & b)/(c & d) |]
+    runsWarning [path| (a & b)/(@/c & d) |]
+    checkCopies [path| (x/@ & b)/(c & d) |]
+      `shouldBe` Right
+        [ IdleJoin
+            { conjunct = [path| x/@ |],
+              begins = False,
+              ends = True,
+              copier = [path| c & d |],
+              readings = [],
+              pinned = Just [path| x/@/(c & d) & b/(c & d) |]
+            }
+        ]
+    ((\j -> (j.begins, j.ends, j.pinned)) <$$> checkCopies [path| (a & b)/(@/c & d) |])
+      `shouldBe` Right [(True, False, Just [path| (a & b)/@/c & (a & b)/d |])]
+    -- one for each such conjunct
+    (length <$> checkCopies [path| (x/@ & y/@)/(c & d) |]) `shouldBe` Right 2
+    -- at both ends, and at an end of a walk that has an @ inside too
+    ((\j -> (j.begins, j.ends)) <$$> checkCopies [path| (@/x/@ & b)/(c & d) |])
+      `shouldBe` Right [(True, True)]
+    ((\j -> (j.begins, j.ends)) <$$> checkCopies [path| (x/@/w/@ & b)/(c & d) |])
+      `shouldBe` Right [(False, True)]
+    -- the copier may stand past steps and past unions without a join
+    runsWarning [path| (x/@ & b)/k/(m | n)/(c & d) |]
+    runsWarning [path| (x/@ & b)/(m/@ ++ n)/(c & d) |]
+    -- a group in a conjunct without a join is a group of the stretch
+    -- its conjunct's group is in, and is copied as that one is
+    runsWarning [path| (b & c)/(a/(@/x & b) & w) |]
+    runsQuietly [path| q/(a/(@/x & b) & w) |]
+  it "does not warn where the @ is inside, is not copied, or is a test" do
+    runsQuietly [path| (x/@/w & b)/(c & d) |]
+    runsQuietly [path| q/(x/@ & b) |]
+    runsQuietly [path| (x/@ & b)/@/(c & d) |]
+    runsQuietly [path| (x/!{@000000000001} & b)/(c & d) |]
+    runsQuietly [path| (x/@000000000001 & b)/(c & d) |]
+    runsQuietly [path| (x/@/@000000000001 & b)/(c & d) |]
+    -- nor before an @N in a side of a union, which the @ makes a test
+    runsQuietly [path| (@/(@000000000002 | a/a) & b)/(c & d) |]
+    -- nor where the conjunct is not copied itself but lies in a copied
+    -- one, past a join of that
+    runsQuietly [path| (p & q)/(m/@000000000001/(x/@ & z) & y) |]
+  it "does not warn unless the @ can be left out whatever is around it" do
+    -- a conjunct that is only @ cannot be written without it
+    runsQuietly [path| (a & @)/(@000000000001 & d) |]
+    runsQuietly [path| (a & b)/(@ & c) |]
+    -- a union in the conjunct: a side may begin with an @N, which the @
+    -- makes a test, or have a group
+    runsQuietly [path| ((x | y)/@ & z)/(c1 & c2 & c3) |]
+    runsQuietly [path| (p & q)/((x/@ | zz) & z) |]
+    runsQuietly [path| (@/(x | @000000000001/b) & a)/(c & d) |]
+    runsQuietly [path| ((@/(x | @000000000001/b) | y) & a)/(c & d) |]
+    runsQuietly [path| ((@/(x | @000000000001/b) ++ y) & a)/(c & d) |]
+    -- an @N or a !{…} in the walk
+    runsQuietly [path| (x/@000000000001/w/@ & b)/(c & d) |]
+    runsQuietly [path| (@/x/!{@000000000001}/w & b)/(c & d) |]
+    -- a group in the conjunct (held together by an @N, so that the
+    -- path is run)
+    runsQuietly [path| ((a & b)/@000000000001/w/@ & c)/(d & e) |]
+    -- a | union with a join in a side, anywhere in the path: routes
+    -- that took different sides of it are listed by the joins they pass
+    runsQuietly [path| (x/@ & b)/(m/@ | n)/(c & d) |]
+    runsQuietly [path| (m/@ | n)/q/@/(x/@ & b)/(c & d) |]
+    runsQuietly [path| a/(@000000000001 | @000000000002)/(x/@ & b)/(c & d) |]
+    -- How far that looks: the join may be in a ++ that is a side of
+    -- the |, the | may be a side of a ++, and the | may be in a conjunct
+    -- of a group. Without the join in the side, each is warned about.
+    runsQuietly [path| (x/@ & b)/((m/@ ++ k) | n)/(c & d) |]
+    runsWarning [path| (x/@ & b)/((m ++ k) | n)/(c & d) |]
+    runsQuietly [path| (x/@ & b)/((m/@ | j) ++ n)/(c & d) |]
+    runsWarning [path| (x/@ & b)/((m | j) ++ n)/(c & d) |]
+    runsQuietly [path| (x/@ & b)/(c & (m/@ | n)/d) |]
+    runsWarning [path| (x/@ & b)/(c & (m | n)/d) |]
+    -- The false warning the review found. With the @ the @1 tests the
+    -- node the path starts at, and without it the @1 is a root.
+    let g = [(1, "b", 5), (5, "c", 9), (5, "d", 9), (0, "a", 6), (6, "c", 9), (6, "d", 9)]
+    reaches g [path| ((@/(x | @000000000001/b) | y) & a)/(c & d) |] `shouldBe` []
+    reaches g [path| (((x | @000000000001/b) | y) & a)/(c & d) |] `shouldBe` [Just 9]
+  it "the side with a join of its own is one walk, whatever is before the join" do
+    -- (a & b)/@ is one joined walk as x/@ is (the build had a special
+    -- case for a side with a group)
+    runsQuietly [path| ((a & b)/@ | z)/((c & y)/@/e & d) |]
+    let g =
+          graphOf
+            [0, 1, 3, 4, 6, 9]
+            [ (0, "a", 1),
+              (0, "b", 1),
+              (0, "x", 1),
+              (1, "c", 4),
+              (4, "e", 9),
+              (0, "z", 3),
+              (3, "y", 6),
+              (6, "e", 9),
+              (3, "d", 9)
+            ]
+        found surface =
+          foldMap
+            targets
+            (resolveFrom (smallNID 0) g (compilePath (surface P.:/ P.One))).resolutions
+    found [path| (x/@ | z)/((c & y)/@/e & d) |] `shouldBe` mempty
+    found [path| ((a & b)/@ | z)/((c & y)/@/e & d) |] `shouldBe` mempty
+  it "is the same for a path and its reverse" do
+    let verdict p = bimap (const ()) (not . null) (checkCopies p)
+        cases = unGen (vectorOf 3000 (choose (2, 9) >>= genScoped False)) (mkQCGen 20261101) 30
+    length (filter (isLeft . verdict) cases) `shouldSatisfy` (> 200)
+    length (filter ((== Right True) . verdict) cases) `shouldSatisfy` (> 150)
+    forM_ cases \p ->
+      (show p, verdict (P.Backwards p)) `shouldBe` (show p, verdict p)
+  it "is the hand rule, with every way to read the unions written out" do
+    let cases =
+          unGen
+            ( (<>)
+                <$> vectorOf 2500 (choose (2, 10) >>= genScoped True)
+                <*> vectorOf 2000 genPlanted
+            )
+            (mkQCGen 20261102)
+            30
+        -- each path with what the rule says, and what the quick test
+        -- of the docs says
+        worked = [(p, handRefuses p, shortcutRefuses p) | p <- cases]
+        refused = [p | (p, True, _) <- worked]
+    length refused `shouldSatisfy` (> 800)
+    length [() | (_, False, _) <- drop 2500 worked] `shouldSatisfy` (> 300)
+    length (filter (any (\case P.Union {} -> True; _ -> False) . universe') refused)
+      `shouldSatisfy` (> 200)
+    -- the quick test is no definition: it misses some and refuses others
+    length [() | (_, True, False) <- worked] `shouldSatisfy` (> 80)
+    length [() | (_, False, True) <- worked] `shouldSatisfy` (> 20)
+    forM_ worked \(p, refuse, _) ->
+      (show p, isLeft (checkCopies p)) `shouldBe` (show p, refuse)
+  it "refuses a meeting point in a side of a union, and one deep in a copied conjunct" do
+    -- (each tells a wrong check from the right one where the random
+    -- paths did not)
+    refuses [path| (p & q)/(((c & y)/@/e & d) | z) |]
+    refuses [path| (p & q)/(x/@000000000001/(u/((c & y)/@/e & d) & z) & w) |]
+    runsQuietly [path| q/(((c & y)/@/e & d) | z) |]
+    runsQuietly [path| q/(x/@000000000001/(u/((c & y)/@/e & d) & z) & w) |]
+  it "refuses a join that a neighbouring conjunct brings several walks to" do
+    -- @1/(c & e) holds c and e together; in its copy of x/@/w they meet
+    -- at the @, which the conjunct b has a copy of too
+    refuses [path| (@000000000001/(c & e) & b)/(x/@/w & d) |]
+    refuses [path| (q/@000000000001/(c & e) & b)/(x/@/w & d) |]
+    -- the mirror image: c and e leave the @ of a/@ (and of a/!{…}, which
+    -- is no filter there)
+    refuses [path| (a/@ & b)/((c & e)/@000000000001/f & d) |]
+    refuses [path| (a/!{@000000000007} & b)/((c & e)/@000000000001/f & d) |]
+    -- through a union, whose side forks or not
+    refuses [path| (@000000000001/(c & e) & m)/((a & b) | z)/(x/@/w & d) |]
+    -- the conjunct that holds the walks may lie deeper
+    refuses [path| (m/(@000000000001/(c & e) & z) & b)/(x/@/w & d) |]
+    refuses [path| (@000000000001/(u/@000000000002/(c & e) & v) & b)/(m/(x/@/w & z)/@000000000003 & d) |]
+    let refusal = either Just (const Nothing) . checkCopies
+    ((\r -> (r.meeting, r.join, r.across)) <$> refusal [path| (@000000000001/(c & e) & b)/(x/@/w & d) |])
+      `shouldBe` Just
+        ( [path| x/@/w |],
+          P.One,
+          Just (WalksAcross [path| @000000000001/(c & e) |] True)
+        )
+    ((.across) <$> refusal [path| (a/@ & b)/((c & e)/@000000000001/f & d) |])
+      `shouldBe` Just (Just (WalksAcross [path| (c & e)/@000000000001/f |] False))
+    -- what the error says to write is run
+    for_
+      [ [path| (@000000000001/(c & e) & b)/(x/@/w & d) |],
+        [path| (a/@ & b)/((c & e)/@000000000001/f & d) |]
+      ]
+      \p -> case refusal p of
+        Just CopiedMeetingPoint {joinedFirst = Just joined, writtenApart = Just apart} -> do
+          isRight (checkCopies joined) `shouldBe` True
+          isRight (checkCopies apart) `shouldBe` True
+          compilePath apart `shouldBe` compilePath p
+        other -> expectationFailure (show (p, other))
+    -- run: the fork is not held together (its walks are copies), a join
+    -- of the conjunct stands between, or no open join is copied
+    runsQuietly [path| (q/(c & e) & b)/(x/@/w & d) |]
+    runsQuietly [path| (@000000000001/(c & e)/@000000000002 & b)/(x/@/w & d) |]
+    runsQuietly [path| (@000000000001/(c & e) & b)/(x/@000000000002/@/w & d) |]
+    runsQuietly [path| (@000000000001/(c & e) & b)/(x/w & d) |]
+    runsQuietly [path| ((a & b) | z)/((c & y)/@000000000001/e & d) |]
+    runsQuietly [path| (@000000000001/(c & e) & b)/(x/@000000000002/w & d) |]
+    -- the @ is not at the end of its conjunct that faces the fork
+    runsQuietly [path| (@000000000001/(c & e) & b)/(x/@000000000002/w/@/v & d) |]
+    -- the @ is in a conjunct of a group inside the copied conjunct: c & e
+    -- and that group are chosen together, so each of c and e has its own
+    -- copy of the @ (in both directions)
+    runsQuietly [path| (@000000000001/(c & e) & b)/(m/(x/@/w & z)/@000000000003 & d) |]
+    runsQuietly [path| (d & @000000000003/(z & w/@/x)/m)/(b & (c & e)/@000000000001) |]
+    refuses [path| (d & @000000000003/(z & w/@/x)/m)/(b & (v & (c & e)/@000000000002/u)/@000000000001) |]
+  it "looks at where the walks are, not at how the conjunct is written" do
+    -- c and y are made one walk by the @4 before the @: one walk comes
+    -- into the @ and one goes out, in every copy
+    runsQuietly [path| (a & b)/((c & y)/@000000000004/w/@/e & d) |]
+    runsQuietly [path| (a & b)/(e/@/w/@000000000004/(c & y) & d) |]
+    -- two walks leave this @, through w
+    refuses [path| (a & b)/(c/@/w/(e & d) & d) |]
+    refuses [path| (a & b)/((e & d)/w/@/c & d) |]
+    -- a conjunct inside a copied conjunct is copied with it
+    refuses [path| (p & q)/(x/@000000000001/((c & y)/@/e & z) & w) |]
+    runsQuietly [path| (p & q)/(x/@000000000001/((c & y)/@000000000004/w/@/e & z) & w) |]
+  it "reads a | union as one step inside a conjunct too" do
+    -- The routes through m and n may take a side each. Each side ends at
+    -- a node of its own, so with either side in place the @N stands
+    -- between the fork and the @; but the walks w and v of the two
+    -- routes meet at the @.
+    let meets = [path| (p & q)/((m & n)/(x/@000000000001/w | y/@000000000002/v)/@ & d) |]
+        -- x and y, of two routes, both leave this @
+        leaves' = [path| (p & q)/(@/(x/@000000000001 | y/@000000000002)/(m & n) & d) |]
+        -- walks that a neighbouring conjunct holds together come to a
+        -- join that is the first of its conjunct only past the union
+        arrives = [path| (u/@000000000007/(m & n) & z)/((x/@000000000001/w | y/@000000000002/v)/@/s & b) |]
+        departs = [path| (s/@/(w/@000000000001/x | v/@000000000002/y) & b)/((m & n)/@000000000007/u & z) |]
+    for_ [meets, leaves', arrives, departs] \p -> do
+      refuses p
+      -- and it is no over-refusal: what the compiler makes of it has a
+      -- join in two copies with a fork at one
+      (show p, copiesMeetingPoint p) `shouldBe` (show p, True)
+    -- a ++ is chosen once: every route has the same @N before the @
+    runsQuietly [path| (p & q)/((m & n)/(x/@000000000001/w ++ y/@000000000002/v)/@ & d) |]
+    runsQuietly [path| (u/@000000000007/(m & n) & z)/((x/@000000000001/w ++ y/@000000000002/v)/@/s & b) |]
+  it "refuses a | of two joined sides before walks that an @N holds, though nothing is copied" do
+    -- An over-refusal that the spec lists (docs/path-pattern-ir.md,
+    -- Meeting points), pinned here so that relaxing it is a change that
+    -- shows. The check reads the | as one step, past which the group
+    -- after it copies p/@. In what the compiler makes, no alternative
+    -- has p/@ in two copies with a fork at one: the walks through c and
+    -- y are held together by the @1, and the union has only two sides.
+    let two = [path| (p/@ & q)/(x/@ | w/@)/((c & y)/@000000000001/e & f) |]
+    refuses two
+    length (alternativeRoutes two) `shouldBe` 64
+    copiesMeetingPoint two `shouldBe` False
+    -- also with one side written twice
+    let twice = [path| (p/@ & q)/(x/@ | x/@)/((c & y)/@000000000001/e & f) |]
+    refuses twice
+    copiesMeetingPoint twice `shouldBe` False
+    -- with a third joined side the copy is there, and the refusal is
+    -- none too many
+    let three = [path| (p/@ & q)/(x/@ | w/@ | v/@)/((c & y)/@000000000001/e & f) |]
+    refuses three
+    length (alternativeRoutes three) `shouldBe` 729
+    copiesMeetingPoint three `shouldBe` True
+    -- a ++ there is chosen once, and one joined side is a join of the
+    -- chain: both are run
+    runsQuietly [path| (p/@ & q)/(x/@ ++ w/@)/((c & y)/@000000000001/e & f) |]
+    runsQuietly [path| (p/@ & q)/x/@/((c & y)/@000000000001/e & f) |]
+  it "the results that made the rule: an @ on one walk that is no no-op" do
+    let found edges surface =
+          map smallNIDIndex . toList $
+            foldMap
+              targets
+              ( resolveFrom
+                  (smallNID 0)
+                  (graphOf (ordNub (0 : concat [[a, b] | (a, _, b) <- edges])) edges)
+                  (compilePath (surface P.:/ P.One))
+              ).resolutions
+        g =
+          [ (1, "c", 2),
+            (1, "e", 3),
+            (2, "x", 4),
+            (3, "x", 5),
+            (4, "w", 9),
+            (5, "w", 9),
+            (0, "b", 6),
+            (6, "x", 7),
+            (7, "w", 9),
+            (6, "d", 9),
+            (2, "d", 9),
+            (3, "d", 9)
+          ]
+    -- the compiler makes the product, in which c and e meet at the @
+    found g [path| (@000000000001/(c & e) & b)/(x/@/w & d) |] `shouldBe` []
+    found g [path| (@000000000001/(c & e) & b)/(x/w & d) |] `shouldBe` [Just 9]
+  it "no alternative of a path that is run has a join in two copies with a fork at one" do
+    -- every /@ and !{…} is marked, and the routes of every alternative
+    -- looked at: a path is flagged when one written join is two vertices
+    -- or more, and at one of them routes arrive by different steps or
+    -- leave by different steps
+    let cases =
+          unGen
+            ( (<>)
+                <$> vectorOf 1500 (choose (2, 9) >>= genScoped True)
+                <*> vectorOf 1500 genPlanted
+            )
+            (mkQCGen 20261104)
+            30
+        -- explicitly: only paths that are run, and that are within a
+        -- limit that keeps the test short
+        run' = [p | p <- cases, runs p, isRight (checkAlternatives (limitedTo 200 (marked p)))]
+        flagged p = any (not . null . copiedJoins True) (alternativeRoutes (marked p))
+        written' p = any (not . null . copiedJoins False) (alternativeRoutes (marked p))
+    length run' `shouldSatisfy` (> 1500)
+    -- the oracle does flag what the rule refuses
+    length (filter flagged [p | p <- drop 1500 cases, not (runs p), isRight (checkAlternatives (limitedTo 200 (marked p)))])
+      `shouldSatisfy` (> 200)
+    flagged [path| (@000000000001/(c & e) & b)/(x/@/w & d) |] `shouldBe` True
+    flagged [path| (a & b)/((c & y)/@/e & d) |] `shouldBe` True
+    forM_ run' \p -> (show p, flagged p) `shouldBe` (show p, False)
+    -- and the check is that definition, with the copies counted as they
+    -- are written: on every path within the limit, run or not
+    -- (paths in which no node tests contradict each other: where they
+    -- do, an alternative that the check reads is not compiled, and the
+    -- check refuses more than is compiled)
+    let plain =
+          unGen (vectorOf 1500 (choose (2, 9) >>= genScoped False)) (mkQCGen 20261107) 30
+            <> drop 1500 cases
+        within = [p | p <- plain, isRight (checkAlternatives (limitedTo 200 (marked p)))]
+    length within `shouldSatisfy` (> 2400)
+    length (filter (not . runs) within) `shouldSatisfy` (> 500)
+    forM_ within \p ->
+      (show p, written' p) `shouldBe` (show p, not (runs p))
+    -- with contradicting tests: what is compiled as a copied meeting
+    -- point is refused
+    forM_ [p | p <- take 1500 cases, isRight (checkAlternatives (limitedTo 200 (marked p)))] \p ->
+      when (written' p) ((show p, runs p) `shouldBe` (show p, False))
+    -- where the two ways to count differ, the copies are one node: the
+    -- leading @ of a forking conjunct whose group starts its stretch
+    -- (refused all the same)
+    let p8 = [path| (@/(a & b) & c)/(d & e) |]
+    (flagged p8, written' p8, runs p8) `shouldBe` (False, True, False)
+  it "an @ that is warned about does nothing: without it the path compiles the same" do
+    -- Paths with unions, @N and !{…} anywhere, as the reviewer of the
+    -- warning made them, and the shapes the warning is for in contexts.
+    -- For EVERY path that is warned about, and every @ in it whose
+    -- removal takes a warning away, the path without that @ compiles to
+    -- the same alternatives, routes in the same order.
+    let cases =
+          -- (an @ written twice in a row is written once, so that
+          -- taking one @ out takes the join out)
+          map onceEach $
+            unGen
+              ( concat
+                  <$> sequence
+                    [ vectorOf 5000 genStretchy,
+                      vectorOf 1500 (choose (2, 9) >>= genScoped True),
+                      vectorOf 1000 genPlanted,
+                      map fst <$> vectorOf 1500 genIdle
+                    ]
+              )
+              (mkQCGen 20261105)
+              30
+        warnings p =
+          either
+            (const Nothing)
+            (Just . sum . map (\j -> fromEnum j.begins + fromEnum j.ends))
+            (checkCopies p)
+        within p = isRight (checkAlternatives (limitedTo 200 p))
+        warned = [(p, n) | p <- cases, Just n <- [warnings p], n > 0, within p]
+    length warned `shouldSatisfy` (> 400)
+    -- among them paths with unions, with @N, and from each generator
+    length [() | (p, _) <- warned, any isUnion (universe' p)] `shouldSatisfy` (> 80)
+    length [() | (p, _) <- warned, any isFixed (universe' p)] `shouldSatisfy` (> 80)
+    length [() | p <- take 5000 cases, maybe False (> 0) (warnings p), within p]
+      `shouldSatisfy` (> 100)
+    forM_ warned \(p, n) -> do
+      let without = [p' | p' <- removals p, Just n' <- [warnings p'], n' < n]
+      -- each @ that is warned about can be taken out
+      (show p, length without >= n) `shouldBe` (show p, True)
+      forM_ without \p' ->
+        (show (p, p'), compilePath p') `shouldBe` (show (p, p'), compilePath p)
+    -- the pairs of a walk with an @ at an end and without it
+    let pairs = unGen (vectorOf 1500 genIdle) (mkQCGen 20261105) 30
+    forM_ pairs \(with', without) ->
+      when (maybe False (> 0) (warnings with')) $
+        (show with', compilePath with') `shouldBe` (show with', compilePath without)
+  it "does bounded work, and comes before the alternatives limit" do
+    -- 2^40 alternatives and 2^40 choices: the path is read as written
+    let wide = foldl1Ex' (P.:/) (replicate 40 [path| (a ++ b)/(c | d) |] :: [P.Path])
+        long = [path| (p & q) |] P.:/ wide P.:/ [path| ((c & y)/@/e & d) |]
+    result <- timeout 1000000 (evaluate (isLeft (checkCopies long)))
+    result `shouldBe` Just True
+    -- many routes: what to write instead is only worked out for few
+    let many = foldl1Ex' (P.:/) (replicate 30 [path| (a & b) |] :: [P.Path])
+    result' <-
+      timeout 1000000 . evaluate . either (isNothing . (.writtenApart)) (const False) $
+        checkCopies (many P.:/ [path| ((c & y)/@/e & d) |])
+    result' `shouldBe` Just True
+    -- too many alternatives, and refused whatever the limit is
+    let both = [path| (a & b)/(x | y | z)/(c1 & c2 & c3 & c4 & c5 & c6 & c7)/((c & y)/@/e & d) |]
+    checkAlternatives both `shouldSatisfy` isLeft
+    refuses both
+    refuses (limitedTo 1000000 both)
+  where
+    (<$$>) = fmap . fmap
+    isUnion = \case
+      P.Union {} -> True
+      _ -> False
+    isFixed = \case
+      P.Absolute _ -> True
+      _ -> False
+    -- what `ls` finds from node 0 on a graph given by its edges
+    reaches edges surface =
+      map smallNIDIndex . toList $
+        foldMap
+          targets
+          ( resolveFrom
+              (smallNID 0)
+              (graphOf (ordNub (0 : concat [[a, b] | (a, _, b) <- edges])) edges)
+              (compilePath (surface P.:/ P.One))
+          ).resolutions
+    -- a path with every run of @ in a sequence written as one @
+    onceEach :: P.Path -> P.Path
+    onceEach = \case
+      p@(_ P.:/ _) ->
+        foldl1Ex' (P.:/) . map headEx . groupBy (\a b -> a == P.One && b == P.One) $
+          map onceEach (sequenceOf p)
+      l P.:& r -> onceEach l P.:& onceEach r
+      P.Union k l r -> P.Union k (onceEach l) (onceEach r)
+      P.Backwards x -> P.Backwards (onceEach x)
+      P.WithLimits v lim x -> P.WithLimits v lim (onceEach x)
+      p -> p
+    sequenceOf = \case
+      l P.:/ r -> sequenceOf l <> sequenceOf r
+      p -> [p]
+    -- the path with one @ taken out, for every @ that stands in a
+    -- sequence
+    removals :: P.Path -> [P.Path]
+    removals = \case
+      l P.:/ r ->
+        [r | l == P.One]
+          <> [l | r == P.One]
+          <> [l' P.:/ r | l' <- removals l]
+          <> [l P.:/ r' | r' <- removals r]
+      l P.:& r -> [l' P.:& r | l' <- removals l] <> [l P.:& r' | r' <- removals r]
+      P.Union k l r -> [P.Union k l' r | l' <- removals l] <> [P.Union k l r' | r' <- removals r]
+      P.Backwards x -> P.Backwards <$> removals x
+      P.WithLimits v lim x -> P.WithLimits v lim <$> removals x
+      _ -> []
+    universe' :: P.Path -> [P.Path]
+    universe' p =
+      p : case p of
+        P.Backwards q -> universe' q
+        a P.:/ b -> universe' a <> universe' b
+        a P.:& b -> universe' a <> universe' b
+        P.Union _ a b -> universe' a <> universe' b
+        P.WithLimits _ _ q -> universe' q
+        _ -> []
+
+-- | Random paths for the meeting-point rule: every step has a label of
+-- its own, so that no two sides of a union are the same, and a side has
+-- a step. With the argument, also @N and !{…}; without, the path is
+-- relative and has no @N.
+genScoped :: Bool -> Int -> Gen P.Path
+genScoped tests size = S.evalStateT (chain' (2 :: Int) (max 2 (size `div` 2))) (0 :: Int)
+  where
+    step = do
+      i <- S.state \n -> (n, n + 1)
+      back <- lift (frequency [(5, pure id), (1, pure P.Backwards)])
+      pure (back (P.Literal ("s" <> tshow i)))
+    joinOf =
+      lift . frequency $
+        [(6, pure P.One), (1, pure (P.ExcludingNIDs (singletonSet (smallNID 1))))]
+          <> [(2, pure (P.Absolute (smallNID 1))) | tests]
+    -- a chain of segments: steps, joins, groups and unions
+    chain' depth len = do
+      n <- lift (choose (1, len))
+      foldl1Ex' (P.:/) <$> for [1 .. n :: Int] (const (segment depth))
+    segment depth = do
+      k <- lift (choose (0, if depth > 0 then 11 else 4 :: Int))
+      case k of
+        _ | k < 3 -> step
+        _ | k < 5 -> joinOf
+        _ | k < 9 -> do
+          n <- lift (elements [2, 2, 2, 3])
+          foldl1Ex' (P.:&) <$> for [1 .. n :: Int] (const (chain' (depth - 1) 3))
+        9 -> P.Backwards <$> chain' (depth - 1) 3
+        _ -> do
+          kind <- lift (frequency [(4, pure (P.:||)), (1, pure (P.:++))])
+          n <- lift (elements [2, 2, 3])
+          foldl1Ex' kind <$> for [1 .. n :: Int] (const (side depth))
+    -- a side has a step somewhere
+    side depth = do
+      p <- chain' (depth - 1) 3
+      if hasStep p then pure p else (p P.:/) <$> step
+    hasStep = \case
+      P.Literal _ -> True
+      P.Backwards p -> hasStep p
+      a P.:/ b -> hasStep a || hasStep b
+      a P.:& b -> hasStep a || hasStep b
+      P.Union _ a b -> hasStep a || hasStep b
+      _ -> False
+
+-- | Random paths with a meeting point planted in them: a conjunct with
+-- one (or two conjuncts of neighbouring groups, of which one holds
+-- several walks together with an @N and the other has an open join
+-- facing it), wrapped in conjuncts, sides and sequences, with a group
+-- next to it or not.
+genPlanted :: Gen P.Path
+genPlanted = S.evalStateT go (0 :: Int)
+  where
+    step = S.state \n -> (P.Literal ("s" <> tshow n), n + 1)
+    fork = (P.:&) <$> step <*> step
+    fixed = P.Absolute (smallNID 1)
+    open = lift (elements [P.One, P.One, P.ExcludingNIDs (singletonSet (smallNID 2))])
+    pick xs = join (lift (elements xs))
+    kernel =
+      pick
+        [ (\f j x -> f P.:/ j P.:/ x) <$> fork <*> open <*> step,
+          (\f j -> j P.:/ f) <$> fork <*> open,
+          (\f j x -> x P.:/ j P.:/ f) <$> fork <*> open <*> step,
+          (\f j -> f P.:/ j) <$> fork <*> open,
+          -- a fork and an open join with a join of the conjunct between
+          (\f j x y -> f P.:/ fixed P.:/ x P.:/ j P.:/ y) <$> fork <*> open <*> step <*> step,
+          (\f j x y -> y P.:/ j P.:/ x P.:/ fixed P.:/ f) <$> fork <*> open <*> step <*> step,
+          -- walks held together before an open join, and after one
+          (\f x j y z w -> (fixed P.:/ f P.:& z) P.:/ (x P.:/ j P.:/ y P.:& w))
+            <$> fork
+            <*> step
+            <*> open
+            <*> step
+            <*> step
+            <*> step,
+          (\f x j y z w -> (x P.:/ j P.:& z) P.:/ (f P.:/ fixed P.:/ y P.:& w))
+            <$> fork
+            <*> step
+            <*> open
+            <*> step
+            <*> step
+            <*> step,
+          (\f x j z w -> (x P.:/ fixed P.:/ f P.:& z) P.:/ (j P.:/ x P.:& w))
+            <$> fork
+            <*> step
+            <*> open
+            <*> step
+            <*> step,
+          -- an open join in a group of a conjunct with a join, next to
+          -- walks held together, or to walks held together a level deeper
+          (\f x j y z w v u -> (fixed P.:/ f P.:& z) P.:/ (u P.:/ (x P.:/ j P.:/ y P.:& w) P.:/ fixed P.:& v))
+            <$> fork
+            <*> step
+            <*> open
+            <*> step
+            <*> step
+            <*> step
+            <*> step
+            <*> step,
+          (\f x j y z w v u t -> (fixed P.:/ (t P.:/ fixed P.:/ f P.:& t) P.:& z) P.:/ (u P.:/ (x P.:/ j P.:/ y P.:& w) P.:/ fixed P.:& v))
+            <$> fork
+            <*> step
+            <*> open
+            <*> step
+            <*> step
+            <*> step
+            <*> step
+            <*> step
+            <*> step,
+          (\f x j y z w v u -> (v P.:& fixed P.:/ (w P.:& y P.:/ j P.:/ x) P.:/ u) P.:/ (z P.:& f P.:/ fixed))
+            <$> fork
+            <*> step
+            <*> open
+            <*> step
+            <*> step
+            <*> step
+            <*> step
+            <*> step,
+          -- an open join on one walk, with nothing held together
+          (\x j y z w v -> (x P.:& z) P.:/ (y P.:/ j P.:/ w P.:& v))
+            <$> step
+            <*> open
+            <*> step
+            <*> step
+            <*> step
+            <*> step
+        ]
+    wrap x =
+      pick
+        [ (x P.:&) <$> step,
+          (P.:& x) <$> step,
+          (\a b -> a P.:/ (x P.:& b)) <$> step <*> step,
+          (\a b -> a P.:/ fixed P.:/ (x P.:& b)) <$> step <*> step,
+          (\a b -> (x P.:& b) P.:/ fixed P.:/ a) <$> step <*> step,
+          (x P.:||) <$> step,
+          (\a -> (a P.:/ P.One) P.:|| x) <$> step,
+          (P.:/ x) <$> step,
+          (x P.:/) <$> step,
+          (\a b -> (x P.:& a) P.:/ b) <$> step <*> step,
+          (x P.:++) <$> step
+        ]
+    around x =
+      pick
+        [ pure x,
+          (P.:/ x) <$> fork,
+          (x P.:/) <$> fork,
+          (\f a -> f P.:/ a P.:/ x) <$> fork <*> step,
+          (\f -> f P.:/ P.One P.:/ x) <$> fork,
+          (\f -> x P.:/ fixed P.:/ f) <$> fork,
+          (\f a b -> f P.:/ ((a P.:/ P.One) P.:|| (b P.:/ P.One)) P.:/ x)
+            <$> fork
+            <*> step
+            <*> step,
+          (\f a b -> f P.:/ ((a P.:/ P.One) P.:++ (b P.:/ P.One)) P.:/ x)
+            <$> fork
+            <*> step
+            <*> step,
+          (\f a -> (f P.:|| a) P.:/ x) <$> fork <*> step,
+          (\f a -> x P.:/ ((a P.:/ P.One) P.:|| f)) <$> fork <*> step
+        ]
+    go = do
+      k <- kernel
+      n <- lift (choose (0, 3 :: Int))
+      wrapped <- foldM (\x _ -> wrap x) k [1 .. n]
+      around wrapped
+
+-- | Random paths as the second reviewer of the warning made them
+-- (@h/gen.py@ of that review, profile "mixed"): mostly two or three
+-- groups in one stretch with steps, unions and joins between them, so
+-- that conjuncts are often copied; and unions (@|@ and @++@), @\@N@,
+-- @!{…}@ and @~@ anywhere, with few labels, so that sides are often
+-- written alike.
+genStretchy :: Gen P.Path
+genStretchy = frequency [(4, stretchy), (1, sequence' 0)] `suchThat` ((<= 16) . leaves)
+  where
+    -- (that review kept paths of up to 70 characters)
+    leaves :: P.Path -> Int
+    leaves = \case
+      l P.:/ r -> leaves l + leaves r
+      l P.:& r -> leaves l + leaves r
+      P.Union _ l r -> leaves l + leaves r
+      P.Backwards p -> leaves p
+      P.WithLimits _ _ p -> leaves p
+      _ -> 1
+    chance :: Double -> Gen Bool
+    chance p = (< p) <$> choose (0, 1)
+    step = do
+      label <- elements ["a", "b", "c", "d", "e", "x", "y", "w"]
+      wild <- chance 0.04
+      back <- chance 0.05
+      pure ((if back then P.Backwards else id) (if wild then P.Wild else P.Literal label))
+    join' =
+      frequency
+        [ (25, P.Absolute . smallNID <$> elements [1, 2, 3]),
+          (10, pure (P.ExcludingNIDs (singletonSet (smallNID 7)))),
+          (65, pure P.One)
+        ]
+    union' = chance 0.3 <&> \shared -> if shared then (P.:++) else (P.:||)
+    sequence' :: Int -> Gen P.Path
+    sequence' depth = do
+      n <- choose (1, 3)
+      foldl1Ex' (P.:/) <$> vectorOf n (item depth)
+    item depth = do
+      joins <- chance 0.3
+      x <- choose (0, 1 :: Double)
+      segment depth joins x
+    segment :: Int -> Bool -> Double -> Gen P.Path
+    segment depth joins x
+      | joins = join'
+      | depth < 3 && x < 0.3 = do
+          n <- frequency [(4, pure 2), (1, pure 3)]
+          group' <- foldl1Ex' (P.:&) <$> vectorOf n (sequence' (depth + 1))
+          back <- chance 0.05
+          pure (if back then P.Backwards group' else group')
+      | depth < 3 && x < 0.55 = do
+          n <- frequency [(4, pure 2), (1, pure 3)]
+          kind <- union'
+          foldl1Ex' kind <$> vectorOf n (sequence' (depth + 1))
+      | otherwise = step
+    optional p gen = chance p >>= \yes -> if yes then (: []) <$> gen else pure []
+    stretchy = do
+      n <- choose (2, 3 :: Int)
+      parts <- for [1 .. n] \_ -> do
+        size <- frequency [(17, pure 2), (3, pure 3)]
+        group' <- foldl1Ex' (P.:&) <$> vectorOf size (sequence' 1)
+        inUnion <- chance 0.25
+        grouped <-
+          if inUnion
+            then union' <*> pure group' <*> sequence' 1
+            else pure group'
+        between <- optional 0.4 step
+        unions <- optional 0.2 (union' <*> sequence' 2 <*> sequence' 2)
+        joins <- optional 0.08 join'
+        pure ([grouped] <> between <> unions <> joins)
+      first' <- optional 0.3 step
+      root <- optional 0.15 join'
+      last' <- optional 0.2 step
+      pure (foldl1Ex' (P.:/) (root <> first' <> concat parts <> last'))
+
+-- | A conjunct that is one walk with an @ at an end, in a context, and
+-- the same without the @.
+genIdle :: Gen (P.Path, P.Path)
+genIdle = do
+  steps <-
+    choose (1, 2) >>= \n ->
+      vectorOf n . elements $
+        [ [path| a |],
+          [path| b |],
+          [path| ~a |],
+          [path| * |],
+          [path| (a | b) |],
+          [path| (a | b/c) |],
+          [path| a/@000000000002/b |],
+          [path| !{@000000000003}/c |]
+        ]
+  leading <- arbitrary
+  let walk = foldl1Ex' (P.:/) steps
+      with' = if leading then P.One P.:/ walk else walk P.:/ P.One
+  ctx <-
+    elements
+      [ \x -> (x P.:& [path| b |]) P.:/ [path| c & a |],
+        \x -> [path| a & b |] P.:/ (x P.:& [path| c |]),
+        \x -> [path| a & b |] P.:/ (x P.:& [path| c |]) P.:/ [path| a & c |],
+        \x -> [path| a |] P.:/ (x P.:& [path| b |]),
+        \x -> (x P.:& [path| b |]) P.:/ [path| @/(c & a) |],
+        \x -> ((x P.:& [path| b |]) P.:/ [path| c & a |] P.:& [path| a |]) P.:/ [path| b & c |],
+        \x -> [path| a | c |] P.:/ (x P.:& [path| b |]) P.:/ [path| c & a |],
+        \x -> [path| a & b |] P.:/ ((x P.:|| [path| c |]) P.:& [path| b |]),
+        \x -> [path| a/@ | c |] P.:/ (x P.:& [path| b |]) P.:/ [path| c & a |],
+        \x -> (x P.:& x) P.:/ [path| a & b |],
+        \x -> [path| a & b |] P.:/ (x P.:& x),
+        \x -> (x P.:& [path| b |]) P.:/ [path| (c & a)/@000000000001/b & c |],
+        \x -> [path| @000000000001/(c & a) & b |] P.:/ (x P.:& [path| c |]),
+        \x -> [path| b/@000000000001/(c & a) & b |] P.:/ [path| c |] P.:/ (x P.:& [path| c |]),
+        \x -> (x P.:& [path| b |]) P.:/ [path| c/@000000000001/b & c |],
+        \x -> [path| p & q |] P.:/ ([path| b/@000000000001 |] P.:/ (x P.:& [path| c |]) P.:& [path| a |]),
+        \x -> [path| (a & b) | c |] P.:/ (x P.:& [path| c |]),
+        \x -> (x P.:& [path| c |]) P.:/ [path| (a & b)/@000000000001/c | c |]
+      ]
+  pure (ctx with', ctx walk)
+
+-- | A path with every @\@@ and @!{…}@ marked by a node of its own that
+-- it excludes, so that the copies of each written join can be told in
+-- what the path compiles to.
+marked :: P.Path -> P.Path
+marked p0 = S.evalState (go p0) (100 :: Int)
+  where
+    next = S.state \i -> (smallNID i, i + 1)
+    go = \case
+      P.One -> next <&> \n -> P.ExcludingNIDs (singletonSet n)
+      P.ExcludingNIDs ns -> next <&> \n -> P.ExcludingNIDs (insertSet n ns)
+      P.Backwards p -> P.Backwards <$> go p
+      a P.:/ b -> (P.:/) <$> go a <*> go b
+      a P.:& b -> (P.:&) <$> go a <*> go b
+      P.Union k a b -> P.Union k <$> go a <*> go b
+      P.WithLimits v l p -> P.WithLimits v l <$> go p
+      p -> pure p
+
+-- | The marked joins ('marked') of an alternative that have two copies
+-- or more, at one copy of which several routes arrive by different
+-- steps or leave by different steps: a meeting point that was copied.
+-- This looks only at what the compiler made, and shares nothing with
+-- 'checkCopies'.
+--
+-- Copies are counted as the product written out has them (the routes
+-- go through the join under two names or more), or, with the first
+-- argument, only when they are also two vertices or more in the
+-- pattern: the copies of an @ that starts a stretch, or stands right
+-- next to an @N, are written apart and are one node.
+copiedJoins :: Bool -> ([[Item Int]], PatternPath) -> [NID]
+copiedJoins asVertices (routes, p) =
+  [ m
+  | m <- ordNub [m | (m, _, _, _) <- passes],
+    not asVertices || length (findWithDefault [] m byMarker) >= 2,
+    let copies =
+          foldr
+            (\(k, pr, nx) -> insertWith (<>) k (singletonSet pr, singletonSet nx))
+            (mempty :: Map Int (Set (Maybe Int), Set (Maybe Int)))
+            [(k, pr, nx) | (m', k, pr, nx) <- passes, m' == m],
+    length copies >= 2,
+    any (\(a, b) -> length a >= 2 || length b >= 2) (toList copies)
+  ]
+  where
+    isMarker n = maybe False (>= 100) (smallNIDIndex n)
+    byMarker :: Map NID [PVertex]
+    byMarker =
+      foldr
+        (\(m, v) -> insertWith (<>) m [v])
+        mempty
+        [(m, v) | (v, Except ns) <- mapToList p.tests, m <- toList ns, isMarker m]
+    passes :: [(NID, Int, Maybe Int, Maybe Int)]
+    passes = concatMap (go Nothing) routes
+    -- each marked join on a route, with the step or join before it and
+    -- the one after it
+    go :: Maybe Int -> [Item Int] -> [(NID, Int, Maybe Int, Maybe Int)]
+    go prev = \case
+      [] -> []
+      Along k _ _ : rest -> go (Just (2 * k)) rest
+      Meet k test _ : rest ->
+        let next = case rest of
+              Along k' _ _ : _ -> Just (2 * k')
+              Meet k' _ _ : _ -> Just (2 * k' + 1)
+              [] -> Nothing
+         in [(m, k, prev, next) | Except ns <- [test], m <- toList ns, isMarker m]
+              <> go (Just (2 * k + 1)) rest
+
+-- | Whether some alternative of a path has a join that was copied with a
+-- fork at one of its copies ('copiedJoins', copies counted as vertices).
+copiesMeetingPoint :: P.Path -> Bool
+copiesMeetingPoint p =
+  any (not . null . copiedJoins True) (alternativeRoutes (marked p))
+
+-- | What is written at one level of a path: a step, a join with its
+-- test, a group of conjuncts, or a union of sides (and whether it is a |
+-- union).
+data Written
+  = WStep
+  | WJoin NodeTest
+  | WGroup [[Written]]
+  | WUnion Bool [[Written]]
+
+-- | The rule of docs/path-pattern-ir.md (Meeting points), worked the
+-- long way: the path is written once for every way to read its unions
+-- (each side in its place, and a | union as one step), and for each the
+-- product is written out: the path is refused when a @/\@@ or @!{…}@
+-- written once has two copies or more and, in one of them, more than
+-- one walk comes into it or goes out of it.
+--
+-- Node tests written right after one another are one join, and where
+-- they contradict each other there is nothing to read: a side with such
+-- a join is no side.
+--
+-- The rule is worked on the product written out, round by round
+-- ('product'').
+handRefuses :: P.Path -> Bool
+handRefuses = handRule False
+
+-- | The quick test of the docs, which is no definition: two groups next
+-- to each other, and in one of them a conjunct with a join of its own
+-- that has, at any depth, a conjunct with a @/\@@ or @!{…}@ and a fork.
+-- It misses walks that a conjunct of the other group holds together,
+-- and refuses where a join of the conjunct stands between the fork and
+-- the @/\@@.
+shortcutRefuses :: P.Path -> Bool
+shortcutRefuses = handRule True
+
+handRule :: Bool -> P.Path -> Bool
+handRule shortcut =
+  maybe False (any (if shortcut then chain' else product' . map (False,)) . readings)
+    . written
+    . pushBackwards
+  where
+    -- The product written out, round by round. A chain, each segment
+    -- with whether it comes from a conjunct that is copied. Refused
+    -- when a /@ or !{…} that comes from a copied conjunct has a group
+    -- left in the stretch before it or after it: several walks meet at
+    -- that copy of it, or leave it. Otherwise each stretch with groups
+    -- is written out every way: a conjunct of each group is chosen (a
+    -- conjunct without a join is written into the stretch, and chooses
+    -- in its groups too; a chosen conjunct with a join is written whole
+    -- in its group's place). A conjunct is copied when it is chosen in
+    -- two ways or more, or its group comes from a copied conjunct. What
+    -- is written is a chain again: the next round.
+    product' :: [(Bool, Written)] -> Bool
+    product' c = held c || any round' (stretchesOf c)
+    held c =
+      or
+        [ any (isGroup . snd) (takeWhile (not . isJoin . snd) (reverse before))
+            || any (isGroup . snd) (takeWhile (not . isJoin . snd) after)
+        | (before, (True, WJoin (Except _)) : after) <- zip (inits c) (tails c)
+        ]
+    stretchesOf c = case break (isJoin . snd) c of
+      (s, []) -> [s]
+      (s, _ : rest) -> s : stretchesOf rest
+    round' s =
+      let ways = choices [] s
+          copies key = length [() | way <- ways, key `elem` mapMaybe (fst . fst) way]
+       in any (isGroup . snd) s
+            && or
+              [ product'
+                  [ (inherited || maybe False ((>= 2) . copies) key, x)
+                  | ((key, inherited), x) <- way
+                  ]
+              | way <- ways
+              ]
+    -- each segment with the conjunct it is written from in this round,
+    -- if it is, and whether what it comes from was copied before
+    choices :: [Int] -> [(Bool, Written)] -> [[((Maybe [Int], Bool), Written)]]
+    choices at xs =
+      map concat . traverse id $
+        [ case x of
+            WGroup cs ->
+              [ picked
+              | (j, k) <- zip [0 ..] cs,
+                let key = at <> [i, j],
+                picked <-
+                  if any isJoin k
+                    then [map ((Just key, copied),) k]
+                    else choices key (map (copied,) k)
+              ]
+            _ -> [[((Nothing, copied), x)]]
+        | (i, (copied, x)) <- zip [0 ..] xs
+        ]
+    isGroup = \case
+      WGroup _ -> True
+      _ -> False
+    written :: P.Path -> Maybe [Written]
+    written p = traverse part (sequenceOf p) >>= merged . concat
+    sequenceOf = \case
+      a P.:/ b -> sequenceOf a <> sequenceOf b
+      P.WithLimits _ _ p -> sequenceOf p
+      p -> [p]
+    part :: P.Path -> Maybe [Written]
+    part = \case
+      P.One -> Just [WJoin anyNode]
+      P.Zero -> Nothing
+      P.ExcludingNIDs ns -> Just [WJoin (Except ns)]
+      P.Absolute n -> Just [WJoin (Exactly n)]
+      p@(_ P.:& _) -> do
+        cs <- traverse written (conjunctionOf p)
+        Just [WGroup (concatMap flat cs)]
+      p@(P.Union kind _ _) -> case mapMaybe written (sidesOf kind p) of
+        [] -> Nothing
+        [side] -> Just side
+        sides -> Just [WUnion (kind == P.Relational) sides]
+      _ -> Just [WStep]
+    conjunctionOf = \case
+      a P.:& b -> conjunctionOf a <> conjunctionOf b
+      p -> [p]
+    sidesOf kind = \case
+      P.Union kind' a b | kind' == kind -> sidesOf kind a <> sidesOf kind b
+      p -> [p]
+    -- joins written right after one another are one join
+    merged :: [Written] -> Maybe [Written]
+    merged = \case
+      WJoin a : WJoin b : rest -> do
+        both <- meetTests a b
+        merged (WJoin both : rest)
+      x : rest -> (x :) <$> merged rest
+      [] -> Just []
+    flat = \case
+      [WGroup cs] -> cs
+      c -> [c]
+    readings :: [Written] -> [[Written]]
+    readings = \case
+      [] -> [[]]
+      x : rest -> [here <> after | here <- reading x, after <- readings rest]
+    reading = \case
+      -- nested groups are one group
+      WGroup cs -> [[WGroup (concatMap flat ks)] | ks <- traverse readings cs]
+      WUnion relational sides -> concatMap readings sides <> [[WStep] | relational]
+      x -> [[x]]
+    -- a chain apart: each of its stretches, with no group around it
+    chain' :: [Written] -> Bool
+    chain' = any (stretch False) . stretches
+    stretches c = case break isJoin c of
+      (s, []) -> [s]
+      (s, _ : rest) -> s : stretches rest
+    isJoin = \case
+      WJoin _ -> True
+      _ -> False
+    -- a stretch, and whether a group is around it
+    stretch around s =
+      let groups = [cs | WGroup cs <- s]
+          copied = around || length groups >= 2
+       in or
+            [ if any isJoin k
+                then (copied && meeting k) || chain' k
+                else stretch copied k
+            | cs <- groups,
+              k <- cs
+            ]
+    meeting k =
+      (or [True | WJoin (Except _) <- k] && or [True | WGroup _ <- k])
+        || or [meeting k' | WGroup cs <- k, k' <- cs]
+
+-- | Every side of a union that is written is a side of its own, for @|@
+-- and for @++@: no two are one side, whether they are written the same,
+-- compile to the same thing, or differ in an @\@@ that does nothing. A
+-- route picks a side, routes that pick the same side of one copy of the
+-- union share that side's joins, and routes that pick different sides
+-- share nothing of them. So a union of n sides has at most n nodes for a
+-- join written once in each side.
+spec_compileEverySide :: Spec
+spec_compileEverySide = describe "every written side of a union is its own side" do
+  let same a b = compilePath a `shouldBe` compilePath b
+      count p = length (compilePath p).alternatives
+      found edges surface =
+        map smallNIDIndex . toList $
+          foldMap
+            targets
+            ( resolveFrom
+                (smallNID 0)
+                (graphOf (ordNub (0 : concat [[s, t] | (s, _, t) <- edges])) edges)
+                (compilePath (surface P.:/ P.One))
+            ).resolutions
+      -- two a, one before d and one before e
+      g = [(0, "a", 1), (0, "a", 2), (1, "d", 9), (2, "e", 9)]
+  it "routes that pick different sides share nothing of them" do
+    found g [path| a/@/(d & e) |] `shouldBe` []
+    found g [path| (a/@ | a/@)/(d & e) |] `shouldBe` [Just 9]
+    found g [path| (a/@ | @/a/@)/(d & e) |] `shouldBe` [Just 9]
+    found g [path| (@/a/@ | a/@)/(d & e) |] `shouldBe` [Just 9]
+    count [path| (a/@ | a/@)/(d & e) |] `shouldBe` 2
+    count [path| (a/@ | @/a/@)/(d & e) |] `shouldBe` 2
+    -- the two sides picked alike are a/@/(d & e), and picked apart they
+    -- are two walks
+    same [path| (a/@ | a/@)/(d & e) |] [path| a/@/(d & e) | a/@/d & a/@/e |]
+    -- a ++ is chosen once for the whole path: both sides are a/@/(d & e)
+    found g [path| (a/@ ++ a/@)/(d & e) |] `shouldBe` []
+    same [path| (a/@ ++ a/@)/(d & e) |] [path| a/@/(d & e) |]
+  it "routes that pick the same side share its joins: n sides, at most n nodes" do
+    let three = [(0, "a", 1), (0, "a", 2), (0, "a", 3), (1, "d", 9), (2, "e", 9), (3, "f", 9)]
+        two = [(0, "a", 1), (0, "a", 2), (1, "d", 9), (1, "e", 9), (2, "f", 9)]
+    -- d, e and f each need an a node of their own
+    found three [path| (a/@ | a/@)/(d & e & f) |] `shouldBe` []
+    found three [path| (a/@ | a/@ | a/@)/(d & e & f) |] `shouldBe` [Just 9]
+    -- two a nodes are enough
+    found two [path| (a/@ | a/@)/(d & e & f) |] `shouldBe` [Just 9]
+    found two [path| a/@/(d & e & f) |] `shouldBe` []
+    -- as with sides that are written differently
+    found
+      [(0, "a", 1), (0, "a", 2), (0, "b", 3), (1, "d", 9), (2, "e", 9), (3, "f", 9)]
+      [path| (a/@ | b/@)/(d & e & f) |]
+      `shouldBe` []
+    found
+      [(0, "a", 1), (0, "b", 3), (1, "d", 9), (1, "e", 9), (3, "f", 9)]
+      [path| (a/@ | b/@)/(d & e & f) |]
+      `shouldBe` [Just 9]
+    -- 2 sides for each of 3 routes, up to which side is which
+    count [path| (a/@ | a/@)/(d & e & f) |] `shouldBe` 4
+  it "a union written as a side is its sides, and %never is no side" do
+    same [path| (a/@ | (a/@ | b/@))/(d & e) |] [path| (a/@ | a/@ | b/@)/(d & e) |]
+    same [path| ((a/@ | a/@) | b/@)/(d & e) |] [path| (a/@ | a/@ | b/@)/(d & e) |]
+    found g [path| (b/@ | (a/@ | a/@))/(d & e) |] `shouldBe` [Just 9]
+    same [path| (a/@ | %never)/(d & e) |] [path| a/@/(d & e) |]
+    same [path| (%never | a/@ | %never)/(d & e) |] [path| a/@/(d & e) |]
+    same [path| (a/@ | %never | a/@)/(d & e) |] [path| (a/@ | a/@)/(d & e) |]
+    found g [path| (a/@ | %never)/(d & e) |] `shouldBe` []
+    -- so is a side whose node tests contradict each other
+    same
+      [path| (a/@ | x/@000000000001/@000000000002)/(d & e) |]
+      [path| a/@/(d & e) |]
+  it "p | p is p where p has no join of its chain, or one route goes through" do
+    -- no join of the chain the union is written in: the routes share
+    -- nothing of p, whichever side each takes
+    for_
+      [ [path| a |],
+        [path| a/b |],
+        [path| a & b |],
+        [path| a/(b & c) |],
+        [path| x/@/w & y |],
+        [path| a | b |]
+      ]
+      \p -> for_
+        [ (P.:/ [path| d & e |]),
+          ([path| p & q |] P.:/),
+          (\x -> [path| p & q |] P.:/ x P.:/ [path| d & e |]),
+          (\x -> [path| q/@ |] P.:/ x P.:/ [path| d & e |])
+        ]
+        \ctx -> (show (ctx p), compilePath (ctx (p P.:|| p))) `shouldBe` (show (ctx p), compilePath (ctx p))
+    -- Before a group with a conjunct whose walks an @N holds together,
+    -- that is so for a p that does not fork.
+    let held x = x P.:/ [path| (c & y)/@000000000001/e & d |]
+    for_ [[path| a |], [path| a/b |], [path| a | b |]] \p ->
+      (show (held p), compilePath (held (p P.:|| p)))
+        `shouldBe` (show (held p), compilePath (held p))
+    -- For a p that forks, p | p there has one alternative more. Where
+    -- the routes of p did not all take the same side, the e after the
+    -- @1 is one step for the copies of the conjunct made for them; where
+    -- they did, it is a step for each copy, as in p alone. The two paths
+    -- still find the same nodes.
+    let heldGraph extra =
+          [ (0, "a", 2),
+            (0, "b", 3),
+            (2, "c", 1),
+            (2, "y", 1),
+            (3, "c", 1),
+            (3, "y", 1),
+            (2, "d", 5),
+            (3, "d", 5)
+          ]
+            <> extra
+    for_ [[path| a & b |], [path| a/a & b |]] \p -> do
+      let twice = held (p P.:|| p)
+      (show p, count twice, count (held p)) `shouldBe` (show p, 2, 1)
+      (show p, (compilePath (held p)).alternatives `difference` (compilePath twice).alternatives)
+        `shouldBe` (show p, mempty)
+      for_ [[], [(1, "e", 5)], [(1, "e", 5), (1, "e", 6)], [(2, "a", 2)]] \extra ->
+        (show p, extra, found (heldGraph extra) twice)
+          `shouldBe` (show p, extra, found (heldGraph extra) (held p))
+    found (heldGraph [(1, "e", 5)]) (held [path| (a & b) | (a & b) |]) `shouldBe` [Just 5]
+    -- (likewise after such a conjunct, turned around; not where the
+    -- walks fork on the far side of the @1, or do not go on from it)
+    count [path| (e/@000000000001/(c & y) & d)/((a & b) | (a & b)) |] `shouldBe` 2
+    count [path| (e/@000000000001/(c & y) & d)/(a & b) |] `shouldBe` 1
+    same
+      [path| ((a & b) | (a & b))/(e/@000000000001/(c & y) & d) |]
+      [path| (a & b)/(e/@000000000001/(c & y) & d) |]
+    same
+      [path| ((a & b) | (a & b))/((c & y)/@000000000001 & d) |]
+      [path| (a & b)/((c & y)/@000000000001 & d) |]
+    -- no group in the stretch the union is in: one route goes through
+    -- each copy of it, and takes one side
+    for_
+      [ [path| a/@ |],
+        [path| @/a/@ |],
+        [path| a/@/b |],
+        [path| (a & b)/@ |]
+      ]
+      \p -> for_
+        [ id,
+          (P.:/ [path| c |]),
+          (\x -> [path| q |] P.:/ x P.:/ [path| c |]),
+          (\x -> [path| (p & q)/@ |] P.:/ x P.:/ [path| @/(d & e) |])
+        ]
+        \ctx -> (show (ctx p), compilePath (ctx (p P.:|| p))) `shouldBe` (show (ctx p), compilePath (ctx p))
+    -- and it is not p where routes that fork, after the union or before
+    -- it, can take one side each
+    compilePath [path| (a/@ | a/@)/(d & e) |] `shouldNotBe` compilePath [path| a/@/(d & e) |]
+    compilePath [path| (p & q)/(a/@ | a/@) |] `shouldNotBe` compilePath [path| (p & q)/a/@ |]
+    -- nor where p has a ++: written twice it is two unions, which are
+    -- chosen apart, so the two sides may be x and y
+    same
+      [path| ((x ++ y) | (x ++ y))/(d & e) |]
+      [path| (x ++ y)/(d & e) | x/d & y/e | y/d & x/e |]
+    count [path| ((x ++ y) | (x ++ y))/(d & e) |] `shouldBe` 4
+    count [path| (x ++ y)/(d & e) |] `shouldBe` 2
+    -- (p ++ p is p whatever p is: either choice is p)
+    same [path| ((x | y)/@ ++ (x | y)/@)/(d & e) |] [path| (x | y)/@/(d & e) |]
+  it "the review's examples give one result in every order and grouping of their sides" do
+    -- (they gave different results as the sides were ordered, grouped,
+    -- or followed by more unions, while sides that compile to the same
+    -- thing in place were merged within bounds)
+    let everyWay name edges expected p = do
+          let ways = orderings p
+          (name, length ways > 1) `shouldBe` (name, True)
+          forM_ ways \way -> do
+            (name, show way, compilePath way) `shouldBe` (name, show way, compilePath p)
+            (name, show way, found edges way) `shouldBe` (name, show way, expected)
+        g2a =
+          [(0, "n", 1), (1, "c", 2), (1, "c", 3), (2, "e", 4), (3, "e", 5), (4, "f", 9), (5, "g", 9)]
+    everyWay "D2a" g2a [Just 9] [path| (m/@ | n)/(c/@ | c/@/@ | @/c/@)/(d/@ | e)/(f & g) |]
+    found g2a [path| (m/@ | n)/c/@/(d/@ | e)/(f & g) |] `shouldBe` []
+    everyWay "D2b flat" g [Just 9] [path| (a/@ | @/a/@ | @/c)/(d & e) |]
+    everyWay "D2b nested" g [Just 9] [path| (a/@ | @/(a/@ | c))/(d & e) |]
+    everyWay "D2b with c" g [Just 9] [path| (a/@ | c | @/(a/@ | c))/(d & e) |]
+    -- what follows the union does not change what its sides are
+    let g3 = g <> [(9, "x", 9)]
+        following k = foldl' (P.:/) [path| @ |] (replicate k [path| x | y |] :: [P.Path])
+    for_ [0 .. 8 :: Int] \k -> do
+      (k, found g3 ([path| (a/@ | @/a/@)/(d & e) |] P.:/ following k)) `shouldBe` (k, [Just 9])
+      (k, found g3 ([path| a/@/(d & e) |] P.:/ following k)) `shouldBe` (k, [])
+    everyWay "D3" g3 [Just 9] ([path| (a/@ | @/a/@)/(d & e) |] P.:/ following 4)
+    -- Unions of two such sides in a row are each two sides, however
+    -- many there are (they were one side each up to four in a row, and
+    -- two from five on). The two routes share the walk up to the first
+    -- union they take different sides of: k + 2 alternatives.
+    let pairs k = foldl1Ex' (P.:/) (replicate k [path| x/@ | @/x/@ |] :: [P.Path])
+    for_ [1 .. 6 :: Int] \k ->
+      (k, count (pairs k P.:/ [path| (a/@ | @/a/@)/(d & e) |])) `shouldBe` (k, k + 2)
+  it "the order and the grouping of sides never matter" do
+    -- random paths with unions anywhere, each also with one label for
+    -- every step, so that sides are often written alike
+    let cases =
+          unGen
+            ( (<>)
+                <$> vectorOf 700 (choose (2, 9) >>= genScoped True)
+                <*> vectorOf 700 genStretchy
+            )
+            (mkQCGen 20261108)
+            30
+        within p = isRight (checkAlternatives (limitedTo 200 p))
+        -- and each with a side of every union written twice
+        twinned = [q | p <- take 500 cases, hasUnion p, let q = withTwin p, within q]
+        unions = [p | p <- cases <> map oneLabel cases, hasUnion p, within p] <> twinned
+    length unions `shouldSatisfy` (> 600)
+    length twinned `shouldSatisfy` (> 100)
+    -- the side written twice is often no side written once
+    length [() | q <- twinned, compilePath (dropTwins q) /= compilePath q] `shouldSatisfy` (> 20)
+    forM_ unions \p -> do
+      (show p, compilePath (reorder reverse p)) `shouldBe` (show p, compilePath p)
+      (show p, compilePath (reorder rotate p)) `shouldBe` (show p, compilePath p)
+      (show p, compilePath (regroup p)) `shouldBe` (show p, compilePath p)
+  where
+    hasUnion = \case
+      P.Union {} -> True
+      l P.:/ r -> hasUnion l || hasUnion r
+      l P.:& r -> hasUnion l || hasUnion r
+      P.Backwards p -> hasUnion p
+      P.WithLimits _ _ p -> hasUnion p
+      _ -> False
+    sidesOf kind = \case
+      P.Union kind' l r | kind' == kind -> sidesOf kind l <> sidesOf kind r
+      p -> [p]
+    -- a path with each union rebuilt from its sides
+    rebuilt :: (P.UnionKind -> [P.Path] -> P.Path) -> P.Path -> P.Path
+    rebuilt build = \case
+      p@(P.Union kind _ _) -> build kind (map (rebuilt build) (sidesOf kind p))
+      l P.:/ r -> rebuilt build l P.:/ rebuilt build r
+      l P.:& r -> rebuilt build l P.:& rebuilt build r
+      P.Backwards p -> P.Backwards (rebuilt build p)
+      P.WithLimits v l p -> P.WithLimits v l (rebuilt build p)
+      p -> p
+    reorder f = rebuilt \kind sides -> foldl1Ex' (P.Union kind) (f sides)
+    rotate xs = drop 1 xs <> take 1 xs
+    -- grouped from the right: p | (q | r)
+    regroup = rebuilt \kind sides -> foldr1Ex (P.Union kind) sides
+    -- with the sides that are written like one before them left out
+    dropTwins = rebuilt \kind sides -> foldl1Ex' (P.Union kind) (ordNub sides)
+    -- with the first side of every union written again after the others
+    withTwin = rebuilt \kind sides -> foldl1Ex' (P.Union kind) (sides <> take 1 sides)
+    -- the sides of every union in every order, grouped from the left and
+    -- from the right
+    orderings :: P.Path -> [P.Path]
+    orderings = \case
+      p@(P.Union kind _ _) -> ordNub do
+        sides <- traverse orderings (sidesOf kind p)
+        ordered <- permutations sides
+        [foldl1Ex' (P.Union kind) ordered, foldr1Ex (P.Union kind) ordered]
+      l P.:/ r -> (P.:/) <$> orderings l <*> orderings r
+      l P.:& r -> (P.:&) <$> orderings l <*> orderings r
+      P.Backwards p -> P.Backwards <$> orderings p
+      P.WithLimits v l p -> P.WithLimits v l <$> orderings p
+      p -> [p]
+    -- every step with the same label
+    oneLabel = \case
+      P.Literal _ -> P.Literal "a"
+      l P.:/ r -> oneLabel l P.:/ oneLabel r
+      l P.:& r -> oneLabel l P.:& oneLabel r
+      P.Union k l r -> P.Union k (oneLabel l) (oneLabel r)
+      P.Backwards q -> P.Backwards (oneLabel q)
+      P.WithLimits v l q -> P.WithLimits v l (oneLabel q)
+      q -> q

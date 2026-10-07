@@ -114,7 +114,9 @@ its implementation.
    distribution makes of it: `a/(b & c) & d` is `a/b & a/c & d`. A join
    in its own chain is the only thing that keeps a conjunct together as
    one chain, which is then copied whole (1); a leading `@` is such a
-   join (2).
+   join (2). Not every path that has a normal form is run: one in which
+   the product (1) would copy a meeting point is refused (*Meeting
+   points* below).
 1. *Adjacent groups are their product.* When groups follow one another
    in a chain with only steps between them (a *stretch*: a chain is cut
    into stretches by its joins), each choice of a conjunct in every one
@@ -131,10 +133,12 @@ its implementation.
    is only `@` is the join it is in `@/…` and `…/@`: `(a & @)/(@1 & d)`
    is `a/@1 & a/d & @/@1 & @/d`, where `@/@1` tests that the current
    node is `1`. So such a conjunct can find less than it did before
-   chain-scoped joins: `q/(@ & b)/((c & d)/@ & e)` has the term
-   `q/@/(c & d)/@`, in which `c` and `d` leave from one `q` target,
-   where each had a `q` of its own. There is no way to write a conjunct
-   without a step that does not join.
+   chain-scoped joins: the product of `q/(@ & b)/((c & d)/@ & e)` has
+   the term `q/@/(c & d)/@`, in which `c` and `d` leave from one `q`
+   target, where each had a `q` of its own. (That path itself is now
+   refused, since `(@ & b)` would copy `(c & d)/@`, where `c` and `d`
+   meet; its product written out is run. See *Meeting points*.) There
+   is no way to write a conjunct without a step that does not join.
 2. *A join governs the chain it is written in.* A join is `@`, `@N` or
    `!{…}`.
    - Arriving: the routes that arrive along the join's chain meet at
@@ -162,14 +166,19 @@ its implementation.
      merges nothing, but it is a join of its chain, so the conjunct it
      starts is one chain, copied whole, and the groups in it are not
      groups of the stretch around it (0).
-     `(@/(a & b) & c)/(@/f & e)` has the term `@/(a & b)/@/f`, in which
-     `a` and `b` meet before `f`; `(a & b & c)/(@/f & e)` has `a/@/f`
-     and `b/@/f` apart. With `0 -a-> 1`, `0 -b-> 2`, `0 -c-> 3`, and an
-     `f` and an `e` edge from each of `1`, `2` and `3` to `9`, `ls` finds
-     nothing for the first and `9` for the second. When the group that
-     follows has no join the two are the same six walks (in another
-     order). Where nothing forks between the `@` and the next join of
-     its chain it changes nothing: `@/a` is `a`, also as a conjunct, and
+     After a prefix that shows: `q/(@/(a & b) & c)` is
+     `q/@/(a & b) & q/c`, one `q` for `a` and `b`, where
+     `q/(a & b & c)` has three. With `0 -q-> 1 -a-> 9`, `0 -q-> 2 -b-> 9`
+     and `0 -q-> 3 -c-> 9`, `ls` finds nothing for the first and `9` for
+     the second. Where another group stands next to the conjunct's
+     group, as in `(@/(a & b) & c)/(@/f & e)`, the product would copy
+     the `@` that `a` and `b` leave, and the path is refused (*Meeting
+     points*); its product written out,
+     `@/(a & b)/@/f & @/(a & b)/e & c/@/f & c/e`, is run, and in its
+     first term `a` and `b` meet before `f`, where
+     `(a & b & c)/(@/f & e)` has `a/@/f` and `b/@/f` apart. Where
+     nothing forks between the `@` and the next join of its chain it
+     changes nothing: `@/a` is `a`, also as a conjunct, and
      `@/(a & b)/(c & d)` at the root is `(a & b)/(c & d)`.
 
 The routes of a path are listed as its product written out lists them:
@@ -177,8 +186,450 @@ conjunct by conjunct, the first choice varying slowest
 (`(a & b)/(c & d)`: `a/c`, `a/d`, `b/c`, `b/d`), the routes through a
 join being every route up to it with every route from it on.
 
+**Meeting points.** The product (1) copies a conjunct whole, with the
+joins in it. Where such a join is a node that several walks meet at or
+leave from, the copies have no clear meaning (do the walks of one copy
+meet those of the other?), so a path in which that would happen is
+*refused*: every command (`ls`, `cd`, `mk`, `rm`, `mv`, `cp`, `rn`,
+`tag`, `at`, `mg`, and the query of a `%targets(…)`) fails before it
+does anything with the path, with an error that names the conjunct, the
+join and the group that would copy it, and says what to write instead
+(`CopiedMeetingPoint`). The whole path is refused, not only the part of
+it that is unclear. What has happened by then stays: the directives of
+the path are expanded before it is checked, so a URL in it is imported
+already, and the commands before this one on the line have run (the
+error says that this command was not run, not that nothing was). `checkCopies` in `Models.PathPattern.Compile` is the
+check, and `Graph.Command.checkPath` runs it where a command expands its
+path; `compilePath` itself still compiles every path, which is what the
+laws below are about.
+
+The rule is about the product written out (equivalently, about the
+routes of each alternative the path compiles to):
+
+- A `/@` or `!{…}` that is written once has a *copy* for every term of
+  the product it comes to stand in: `(x/@/w & b)/(c & d)` is
+  `x/@/w/c & x/@/w/d & b/c & b/d`, two copies of the `@`.
+- A copy is a *meeting point* when more than one walk comes into it or
+  more than one goes out of it. In `(a & b)/((c & y)/@/e & d)` =
+  `a/(c & y)/@/e & a/d & b/(c & y)/@/e & b/d`, `c` and `y` come into
+  each copy of the `@`. A walk that an `@N` has already made one is one
+  walk: in `(c & y)/@4/w/@/e` one walk comes into the `@` and one goes
+  out.
+- A path is refused when some `/@` or `!{…}` written once has two
+  copies or more and at least one of them is a meeting point, in any
+  alternative: any way for the copies of its `|` unions to take their
+  sides, any choice of its `++` unions.
+- An `@N` is never one: all its copies are node `N`.
+
+By hand: write the product out, or picture it. If an `@` or `!{…}` that
+you wrote once appears more than once, and in some copy more than one
+walk comes into it or goes out of it, the path is refused.
+
+Copies are counted as they are written, not as they end up: the copies
+of an `@` that starts a stretch are all the node the stretch starts at,
+and `(@/(a & b) & c)/(d & e)` is refused all the same (the designer's
+ruling; counted as nodes of the compiled pattern it would be run, and
+it is the one kind of path on which the two ways to count differ: an
+`@` whose copies are one node because the stretch starts there, or
+because an `@N` stands right next to it).
+
+How `checkCopies` decides it, without writing the product out. When is
+a `/@` or `!{…}` copied, and when do several walks come into a copy?
+
+- *Copied.* A conjunct is copied when its group has another group as a
+  neighbour in its stretch: only steps and unions between the two, no
+  join of their chain (`@`, `@N` or `!{…}`). Each conjunct of either
+  group is then copied once for every conjunct of the other, with
+  everything in it, also the conjuncts inside it. A conjunct without a
+  join of its own is no chain apart (0), so the groups in it stand where
+  its own group stands: in `((p & q)/x & z)/(K & d)` both `(p & q)` and
+  the group it is in are neighbours of `(K & d)`, and in
+  `(m/(K & z)/(e & f) & d)` the group `(e & f)` is a neighbour of
+  `(K & z)`.
+- *Several walks, from its own conjunct.* The conjunct has an `&` at its
+  own level in the stretch right before the join or right after it,
+  with no other join of the conjunct between the two (not inside a
+  conjunct of that `&`, but possibly inside a side of a union, read in
+  the union's place). In `(c & y)/@/e` the walks `c` and `y` come in;
+  in `x/@/(w & v)` and `@/(a & b)` two go out; in `c/@/w/(e & d)` two
+  go out through `w`.
+- *Several walks, from the conjunct it is copied for.* The join is the
+  first join of its conjunct (nothing of the conjunct keeps what is
+  before it out), and a conjunct of the neighbouring group before it
+  has a join of its own and an `&` after its last join: it holds
+  several walks together and brings them along. In
+  `(@1/(c & e) & b)/(x/@/w & d)` the product has the terms
+  `@1/(c & e)/x/@/w` and `b/x/@/w`: two copies of the `@`, and in the
+  first `c/x` and `e/x` come into it. Likewise for the last join of a
+  conjunct and a conjunct after it with an `&` before its first join:
+  in `(a/@ & b)/((c & e)/@1/f & d)`, `c` and `e` go out of the copy of
+  the `@` in `a/@/(c & e)/@1/f`. A conjunct without a join of its own
+  brings nothing along: `q/(c & e)` is `q/c & q/e`, and each of its
+  walks has a copy of its own.
+
+The common case, as a quick test (a shortcut, not the definition):
+
+1. Find two `&` groups with nothing but steps and unions between them:
+   no `/@`, `@N` or `!{…}` of the chain they are written in. (A group
+   inside a conjunct that has no join of its own counts as standing
+   where that conjunct's group stands. A side of a union with an `&` at
+   the end that faces the other group counts as a group; a join of the
+   side between its `&` and that end keeps it from counting.) No such
+   pair: the path is run.
+2. In either group, find a conjunct with a `/@` or `!{…}` and an `&`
+   next to it (in the same conjunct, at its level, no join between
+   them). Found: the path is refused.
+3. Not found: the path is run, unless a conjunct of one group holds
+   walks together behind an `@N` and a conjunct of the other has a `/@`
+   or `!{…}` facing it, which is the case the quick test misses:
+   `(@1/(c & e) & b)/(x/@/w & d)`. Write those out to see.
+
+With `K = (c & y)/@/e` (the expanded forms are the product written out,
+which is what the compiler makes of the path and what the error says to
+write):
+
+| path | | why |
+|---|---|---|
+| `(a & b)/(K & d)` = `a/K & a/d & b/K & b/d` | refused | the `@` of `K`, where `c` and `y` meet, is copied for `a` and for `b` |
+| `(x/@/(w & v) & b)/(c & d)` = `x/@/(w & v)/c & x/@/(w & v)/d & b/c & b/d` | refused | its mirror image: `w` and `v` leave the `@`, copied for `c` and `d` |
+| `(@/(a & b) & c)/(@/f & e)`, `(x & y)/(@/(a & b) & c)` | refused | two walks leave the leading `@` |
+| `(a/@/(b & c) & d)/(e & f)`, `(p & q)/(a/@/(b & c) & d)` | refused | same |
+| `(@/(a & b) & c)/(d & e)` | refused | same, although every copy of this `@` is the node the path starts at; this could be allowed later, as `@N` is |
+| `(a/@/(b & c) & d)/@`, `(a/@/(b & c) & d)/@/(e & f)`, `(p & q)/@/(a/@/(b & c) & d)` | run | a join of the chain stands between the groups: nothing is copied |
+| `z/(K & d)`, `q/(@/(a & b) & c)` | run | one group: the meeting point is not copied. The second is `q/@/(a & b) & q/c` |
+| `(x/@/w & b)/(c & d)` = `x/@/w/c & x/@/w/d & b/c & b/d` | run | `x/@/w` is one walk; its `@` does nothing, and there are two `x` |
+| `(p & q)/(x/@1/w & y)`, `(p & q)/(x/@1/(w & v) & y)` | run | `@N` is no meeting point |
+| `(x/@ & b)/(c & d)` = `x/c & x/d & b/c & b/d`, `(a & b)/(@/c & d)` | run, with a warning | the `@` begins or ends a conjunct that is a plain walk: it does nothing, and looks as if it pinned |
+| `(a & @)/(@1 & d)`, `((x \| y)/@ & z)/(c & d)` | run | no warning: a conjunct that is only `@` cannot be written without it, and a conjunct with a union is not a plain walk (below) |
+| `(@1/(c & e) & b)/(x/@/w & d)` = `@1/(c & e)/x/@/w & @1/(c & e)/d & b/x/@/w & b/d`, `(q/@1/(c & e) & b)/(x/@/w & d)` | refused | `x/@/w` is one walk, but in its copy for `@1/(c & e)` the walks `c/x` and `e/x` meet at the `@` |
+| `(a/@ & b)/((c & e)/@1/f & d)`, `(a/!{@7} & b)/((c & e)/@1/f & d)` | refused | the mirror image: in the copy for `(c & e)/@1/f`, `c` and `e` leave the `@` (or the `!{@7}`, which is no filter there) |
+| `(@1/(c & e) & m)/((a & b) \| z)/(x/@/w & d)` | refused | the same through a union |
+| `(q/(c & e) & b)/(x/@/w & d)`, `(@1/(c & e)/@2 & b)/(x/@/w & d)`, `(@1/(c & e) & b)/(x/@2/w/@/v & d)` | run | `q/(c & e)` holds nothing together (it is `q/c & q/e`); a join stands after the `&`; the `@` is not the first join of its conjunct |
+| `(a & b)/((c & y)/@4/w/@/e & d)` | run | `c` and `y` are one walk after `@4`: one walk comes into each copy of the `@` |
+| `(a & b)/(c/@/w/(e & d) & d)` | refused | two walks go out of each copy of the `@`, through `w` |
+
+What looking only inside the conjunct missed (run on a build that did
+only that). With
+`1 -c-> 2`, `1 -e-> 3`, `2 -x-> 4`, `3 -x-> 5`, `4 -w-> 9`, `5 -w-> 9`,
+`0 -b-> 6`, `6 -x-> 7`, `7 -w-> 9`, `6 -d-> 9`, `2 -d-> 9` and
+`3 -d-> 9`, `ls (@1/(c & e) & b)/(x/@/w & d)` found nothing and
+`ls (@1/(c & e) & b)/(x/w & d)` found `9`: the `@` on one walk was no
+no-op. With `0 -a-> 2`, `0 -a-> 3`, `2 -c-> 1`, `3 -e-> 1`, `1 -f-> 9`,
+`0 -b-> 4`, `4 -c-> 1`, `4 -e-> 1`, and `d` from each of `2`, `3` and
+`4` to `9`, `ls (a/@ & b)/((c & e)/@1/f & d)` found nothing, with a
+warning that the `@` did nothing, and `ls (a & b)/((c & e)/@1/f & d)`
+found `9`. And `(@1/(c & e) & m)/((a & b) | z)/(x/@/w & d)` was the
+question the rule exists to close (which copy is a walk at that took no
+branch), on a path that was run.
+
+What to write instead of a refused path: a join between the two groups
+if the walks of the first should meet before the second,
+`(a & b)/@/(K & d)`; or the copies written out, each conjunct for each
+pair, `a/K & a/d & b/K & b/d`, where every `K` is in a group that stands
+alone. The two differ: with `0 -a-> 1`, `1 -b-> 2`, `1 -c-> 2`,
+`0 -d-> 3`, and `e` and `f` from each of `2` and `3` to `9`, the refused
+`(a/@/(b & c) & d)/(e & f)` written out,
+`a/@/(b & c)/e & a/@/(b & c)/f & d/e & d/f`, finds `9`, and
+`(a/@/(b & c) & d)/@/(e & f)` finds nothing (the two ends are `2` and
+`3`). The error gives both for the path at hand where the two groups
+stand in one chain (one of them may be written inside a conjunct of a
+group of that chain, as in `(p & q)/(x/(K & d) & b)`, for which it gives
+`(p & q)/@/(x/(K & d) & b)` and `p/x/(K & d) & p/b & q/x/(K & d) & q/b`);
+the written-out form only when the path has no union and few routes.
+
+Unions. The rule is about what the product would copy, however it is
+written, so a union is read every way it can be taken (the operators
+are defined in *Unions* below):
+
+- A `|` union is each of its sides written in its place, and also one
+  step: two routes that chose different sides pass it as a step (rule 3
+  there), so a `|` never keeps two groups apart, whatever joins its
+  sides have. The path is refused when some way of reading its `|`
+  unions is: `((a & b) | z)/(K & d)`, `(p & q)/(x/@ | s)/(K & d)`,
+  `(x/@ | (p & q)/s)/(K & d)`, `((a & b) | (u & v))/(K & d)`,
+  `((a & b) | @3)/(K & d)` and `(x/@/(m & n) & q)/((a & b) | z)` for a
+  side in place; `(p & q)/(x/@ | w/@)/(K & d)` and
+  `(p & q)/(@1 | @2)/(K & d)` for the union as a step (so
+  `(p & q)/%targets(t)/(K & d)` is refused when `t` has two targets or
+  more, and run when it has one). Equal conjuncts are not merged:
+  `((a & a) | z)/(K & d)` is refused. Neither are sides: a side
+  written twice is two sides (*Unions*, 6), so
+  `(p & q)/(x/@ | x/@)/(K & d)` is refused as
+  `(p & q)/(x/@ | w/@)/(K & d)` is (`p` and `q` may take one each),
+  where `(p & q)/x/@/(K & d)` is run.
+- Run: `(a | z)/(K & d)` and `(x/@ | s)/(K & d)` (no group next to
+  `K`'s); `a/(@1 | @2)/(x & y)`, each copy choosing its node;
+  `(x/@ | zz)/(c & d)`; `(p & q)/(x/@ | s)/(m/@/e & d)`, where `m/@/e`
+  is one walk; `((a & b)/@ | z)/(K & d)`, where the side's own join
+  stands between its `&` and `K`; and
+  `((x | y)/@ & z)/(c1 & … & cn)`, with its `2^n` alternatives.
+- A `++` union is the side chosen: the path is refused when one choice
+  of its `++` unions is, since otherwise that choice would vanish
+  without a word. `((a & b) ++ z)/(K & d)` is refused;
+  `(p & q)/(x/@ ++ w/@)/(K & d)` is run.
+- A `+` is checked as what it is lowered to for the command. Where it
+  is `|` the path is refused exactly when it would be with `|` written;
+  where it is `++`, as in `mk`, it is checked as `++`. The error shows
+  the union as it is lowered and says so where the union it names was
+  written `+` ("written with +, which is | in this command"), with `++`
+  and `%override({plus = shared}, …)` as the way out where they are one;
+  a `+` elsewhere in the path is not mentioned. Where the `+` is inside
+  an `%override({plus = …}, …)` already, as in
+  `mk %override({plus = relational}, (p & q)/(x/@ + w/@)/(K & d))`, the
+  error says that the override makes it what it is ("which is | by the
+  %override({plus = …}, …) around it") and that the way out is to say
+  `plus = shared` in that override, not to wrap the path in another.
+  Nothing falls
+  back from one to the other: `ls (p & q)/(x/@ + w/@)/(K & d)` is
+  refused and `mk` of the same path is not.
+- So "adding a side never removes a result" (*Unions*) has an
+  exception: adding a side can make a path refused.
+
+An `@` that does nothing. A `/@` in a copied conjunct that is one walk
+is run and does nothing, since each copy has its own walk through it:
+`(x/@ & b)/(c & d)` has two `x`, where `x/@/(c & d)` has one. Where such
+an `@` begins or ends the conjunct it looks like the pin it is in
+`x/@/(c & d)` and `(a & b)/@/c`, and the command warns on stderr before
+it runs (`JoinDoesNothing`). The warning says that the `@` can be left
+out, so it is given only where that is certain, whatever is written
+around the conjunct. Exactly when all of these hold:
+
+1. The path is run (not refused).
+2. The `@` is the first or the last segment of a conjunct of a group,
+   and that conjunct is a *plain walk*: at its own level it has nothing
+   but steps and `@`, and at least one step. So no `@N`, no `!{…}`, no
+   union and no group in the conjunct. (`@/x`, `x/@`, `@/x/@`, `x/@/w/@`
+   are plain walks; in the last only the `@` at the end is warned
+   about.)
+3. A product copies the conjunct: its group has another group next to
+   it in its stretch (steps and unions between them, no join of their
+   chain), in some way of reading the unions between them. A group in a
+   conjunct without a join counts as a group of the stretch that
+   conjunct's group is in (*Sequencing* 0), so the `@` of
+   `(b & c)/(a/(@/x & b) & w)` is warned about.
+4. No `|` union anywhere in the path has a join in a side (at the
+   side's own level, through unions written in the side): no
+   `(m/@ | n)`, no `(@1 | @2)`. A `++` union with a join in a side is
+   no obstacle.
+
+Why each condition is there (each excludes something that is no no-op,
+or that is not known to be one):
+
+- For 2: an `@` before an `@N` makes the `@N` a test of the node the
+  route is at, where it would be a root (*Sequencing* 2), and a side of
+  a union may begin with an `@N`. With `1 -b-> 5`, `5 -c-> 9`,
+  `5 -d-> 9`, `0 -a-> 6`, `6 -c-> 9` and `6 -d-> 9`,
+  `ls ((@/(x | @1/b) | y) & a)/(c & d)` finds nothing and
+  `ls (((x | @1/b) | y) & a)/(c & d)` finds `9` (the warning was given
+  for this path while it had fewer conditions). A conjunct that is only
+  `@` (`(a & @)/(@1 & d)`) is a
+  join that cannot be written out of the path. A conjunct with a group
+  is copied whole only because of its join.
+- For 4: where routes chose different sides of a `|` union with a join
+  in a side, the routes of the alternative are listed in an order that
+  goes by the joins they pass (*Unions*, 7), and it is not shown that
+  an `@` that joins nothing never changes that order. The order is
+  what a command acts on (§3), so no warning is given.
+- In a plain walk of a path that is run and has no such union, the `@`
+  can be left out: the check has made sure that no copy of the `@` has
+  more than one walk coming in or going out; the steps of a plain walk
+  are copied by the choices of its stretch with the `@` and without it;
+  and routes are listed by the conjuncts they choose, which the `@`
+  does not change.
+
+The test for it (`spec_compileCopiedMeetingPoints`, "an @ that is
+warned about does nothing"): on random paths with unions, `@N` and
+`!{…}` anywhere, for every path that is warned about and every `@` in
+it whose removal takes a warning away, the path without that `@`
+compiles to the same alternatives, routes in the same order.
+
+The warning names the conjunct and the group that copies it, and says
+what to write for one shared node (`x/@/(c & d) & b/(c & d)`) where the
+two are written in one chain and the `@` faces the group. It is given
+once for a path in a command line (also when `at` runs the command at
+many nodes), for every command, and not while completing with TAB (a
+refused path completes to nothing). Not warned about, though they do
+nothing either: an `@` strictly inside a walk (`(x/@/w & b)/(c & d)`);
+an `@` whose conjunct is not copied itself but lies inside a copied
+one (`(p & q)/(m/@1/(x/@ & z) & y)`); and most of the `@` that
+conditions 2 and 4 leave out (`((x | y)/@ & z)/(c & d)`,
+`(x/@ & b)/(m/@ | n)/(c & d)`). A `!{…}` is a filter and is never
+warned about. Warning about every `@` that does nothing is left for
+later.
+
+What the check reads. It reads the path as written, with no union
+chosen and no route listed: each group looks along its chain in both
+directions, through the sides of the unions on the way, and into the
+conjuncts of the groups it meets. So it takes at most the length of the
+path times its depth for each group, whatever the path would compile
+to, and it comes before the alternatives limit: a path that is both
+refused and over its limit is reported as refused, which no higher
+limit cures. It follows the path as the compiler reads it in two
+respects: node tests written right after one another are one join
+(`@/@1` is one join, which tests that the node is `1`, and is no
+meeting point), and a side that is `%never` or has such tests that
+contradict each other (`@1/@2`) is no side; every other side that is
+written is a side of its own, also one written twice (*Unions*, 6). So
+the check and the compiler read the same unions.
+
+Refused though no meeting point would be copied apart (each is
+something the designer may relax; none of them runs a path that should
+be refused):
+
+- The leading `@` of a forking conjunct whose group starts its stretch
+  (`(@/(a & b) & c)/(d & e)`), or an `@` right next to an `@N` reached
+  through a union side
+  (`(p & q)/((m & n)/(x/@1 | y/@2)/@ & d)`): every copy is one node
+  (above). That second case comes from reading a `|` union in a
+  conjunct as one step, which is needed: with a step between the `@N`
+  and the `@`, as in `(p & q)/((m & n)/(x/@1/w | y/@2/v)/@ & d)`, the
+  routes through `m` and `n` may take a side each, and then `w` and `v`
+  meet at the `@`, which is copied for `p` and for `q`. No side read in
+  place shows that (the `@N` stands between the `&` and the `@` in
+  each), and what the compiler makes of the path has that copied
+  meeting point (a test).
+- A side that cannot be chosen because its tests contradict something
+  further away still counts as a side, and a conjunct that can never
+  match (`@1/…/!{@1}`) is still read: where tests contradict each
+  other the check refuses more than is compiled (in the tests: on
+  paths without such tests the check and the compiled routes agree
+  exactly; with them, what is compiled as a copied meeting point is
+  always refused).
+- A `|` union of exactly two sides, both with a join, between a
+  conjunct that ends with an `@` and a group with a conjunct whose
+  walks an `@N` holds together:
+  `(p/@ & q)/(x/@ | w/@)/((c & y)/@1/e & f)` is refused, with
+  `((c & y)/@1/e & f)` named as what would copy `p/@`, though the
+  compiler lists 64 alternatives for it (62 once equal ones are
+  merged) and in none of them is `p/@` two copies with a fork at one
+  (a test, `spec_compileCopiedMeetingPoints`). The check reads the `|`
+  as one step, and past one step the group does copy `p/@`. The
+  review that found this reasoned, and did not prove, that with only
+  two sides the route through `f` has to share a side with the route
+  through `c` or the one through `y`, which the `@1` holds together,
+  so that `p/@` stays one copy. With a third joined side,
+  `(x/@ | w/@ | v/@)`, the copy is there (729 alternatives listed,
+  the same test), so the refusal cannot simply be dropped for such
+  unions. It is the same with a side written twice,
+  `(p/@ & q)/(x/@ | x/@)/((c & y)/@1/e & f)`: refused, and nothing
+  copied in what compiles. With a `++` for the `|`, or with one side
+  (`x/@`, a join of the chain), the path is run.
+
+Measured (the scratch commands are in `cli/tmp/impl-mp2/h/`, which is
+not part of the repository: `runall.sh` and `runev.sh` run them and
+`measured.py` prints the numbers. `t` is a tool built against this
+compiler and `hb/tb` the same tool built against the state before
+every written side became a side of its own and before the warning was
+narrowed, commit `31ebc6db`. The path sets are the design's,
+`cli/tmp/impl-mp/qpaths.txt`, `k0paths.txt`, `k1paths.txt` and
+`k2paths.txt`, and the second review's, `cli/tmp/review-mp2/h/sets/`.)
+"Before" is that earlier state:
+
+| paths | refused before | refused | warned before | warned |
+|---|---|---|---|---|
+| 590 distinct paths of the tests of the compiler, the matcher, residuation and suggestions, as they were before the rule | 16 | 16 (2.7%) | 38 | 13 (2.2%) |
+| 13,819 random without unions | 1,349 | 1,349 (9.8%) | 1,587 | 1,199 (8.7%) |
+| 35,958 random with a `\|`, no node tests | 2,446 | 2,451 (6.8%) | 3,989 | 530 (1.5%) |
+| 15,491 random with a `\|` and node tests | 1,658 | 1,658 (10.7%) | 2,025 | 161 (1.0%) |
+| 355,994 random of the second review, nine profiles, stretch-heavy | 61,872 | 61,928 (17.4%) | 90,240 | 39,154 (11.0%) |
+| 299,992 of that review with a meeting point planted | 160,858 | 160,858 (53.6%) | 71,791 | 29,416 (9.8%) |
+| 33,632 of that review made for sides (unions of a side written several ways) | 2,838 | 2,848 (8.5%) | 6,983 | 247 (0.7%) |
+
+(`hb/tb tab` and `t tab` on each set. Random paths are far more tangled
+than written ones.)
+
+- Verdicts against before (`measured.py`, with `t4 dup` to tell which
+  paths have a union with a side written twice): every path that was
+  refused is refused. 71 paths that were run are refused now (5, 56
+  and 10 in the third, fifth and seventh rows), and each of them has a
+  union with a side written twice, which the check read as one side
+  (as in `(p/@ & q)/(c/@ | c/@)/((d & e)/@ & f)`). No other verdict
+  changed.
+- Warnings against before: every path that is warned about was warned
+  about before, but for one, `(w/@ & @3)/((@3 ++ @3)/@1 & *)/@`, which
+  compiles to nothing with the `@` and without it (the two `@3` were
+  one side, right before an `@1` that contradicts it, and the path
+  had no chain to read).
+- The verdict is the same for a path and its reverse on all 292,129
+  paths it was tried on (`t5 tabr`: the first four sets and seven of
+  the review's).
+- The check and the rule worked by writing the product out
+  (`handRefuses` in the tests) agree on 7,000 random and planted paths,
+  of which 1,770 are refused (`cost/hand 20261102 3500`). The quick
+  test above misses 1,098 of those and refuses 146 that are run; these
+  generators are made to hit the rule and say nothing about how often
+  that happens.
+- The check and the compiled routes (same command; `copiedJoins` in the
+  tests: every `/@` and `!{…}` marked, a join flagged when the routes
+  of an alternative go through it under two names or more and at one
+  of them arrive by different steps or leave by different steps): of
+  the 6,299 of those paths within an alternatives limit of 300, 1,356
+  are flagged, and the check differs on 39, each refused and not
+  flagged; those looked at have node tests that contradict each other
+  (`@1/…/!{@1}`), so that the alternative the check reads is not
+  compiled. No path that is run is flagged.
+- The second review's two evaluators, which share no code with the
+  check (`ev chk 300`: its own product expander, each union read with
+  a side in place; and the compiled routes with every `/@` and `!{…}`
+  marked): of that review's 688,000 paths (388,000 random in nine
+  profiles and 300,000 with a meeting point planted), 222,832 are
+  refused and 465,168 are run, and neither evaluator flags a path that
+  is run. For 70,552 of them the compiled routes are over that
+  evaluator's limit of 300 alternatives, and only the first spoke
+  (45,241 before: sides written alike now multiply the ways to
+  choose); 25,921 of those are run. (With the limit at 1,500, tried
+  on 7,111 of those: 3,098 compile within it and none is flagged; the
+  run was stopped there.) Of the refused paths within the limit, 1,836
+  are flagged by neither evaluator; each has an `@N`, as the
+  over-refusals listed above do.
+- A warned `@` does nothing (`t idle`, all the sets above and the
+  24,609 paths that review found warned): every `@` whose removal takes
+  a warning away was taken out, 106,107 times. 101,465 times the path
+  compiles to the same alternatives in the same order, 174 times to
+  the same alternatives listed in another order (the routes of each in
+  the same order; in those looked at the `@` was in a side of a union,
+  and sides are taken in an order that goes by what they are made of),
+  and never to anything else; 4,468 were over an alternatives limit of
+  400 and were not compared. With the conditions the warning had
+  before, 6 of the 24,609 compiled to something else, each with a
+  union in the conjunct of the `@`.
+- What condition 4 of the warning leaves out (`t2 idlex`: the paths
+  that would be warned about without it), on sixteen of the sets: an
+  `@` that only condition 4 keeps a warning from was taken out 28,399
+  times. 20,530 times the path compiles to the same alternatives, and
+  never to anything else; 7,869 were over the limit of 400 and were
+  not compared. So no path is known on which such an `@` does
+  something. The condition stands because the argument for the warning
+  does not cover the order of routes there, not because of a
+  counterexample.
+- An earlier measure (`ref sound` of `cli/tmp/impl-mp/`: no alternative
+  puts together two routes that chose alike beyond what the sides in
+  place give) was not run again. As measured then it held on all
+  31,820 paths with a `|` and no node test that are run, and failed on
+  19 of the 12,678 with node tests: all through an `@N`, as in
+  `((a & b) | z)/((c & y)/@1/e & d)`, where the `e` after `@1` is one
+  step for the copies made for `a` and for `b`. No `/@` or `!{…}` is a
+  copied meeting point in them; whether such a path can find something
+  that the copies written apart do not is not known.
+- Cost (`cost/cost`, optimised build, a machine doing other work): the
+  check takes 4 to 16 microseconds a path on the first four sets and
+  on the first review's 46,000, the same as before (for instance 15.7
+  against 16.7 on the 46,000). Every path with a group is looked at the
+  same way; there is no slower path to fall into, and a path without a
+  group is only read. The work is at most quadratic in the length of
+  the path: the worst case found is `n` groups in one stretch, each
+  with a conjunct `x/@` (each looks along the whole stretch): about
+  50 ms for 320 groups (960 steps and joins). Forty `++` unions of
+  joined sides before a meeting point (`2^40` choices), 320 `|` unions
+  along one route, and nesting 320 deep each take under 20 ms. Nothing
+  in it depends on the alternatives limit. Compiling no longer compares
+  sides, so nothing is compiled before a command but what the command
+  runs.
+
 Laws of sequencing (for paths without `|`; each is a test in
-`Models.PathPattern.CompileSpec`):
+`Models.PathPattern.CompileSpec`). They are laws of what `compilePath`
+makes, also of a path that is refused; where one of the paths in a law
+is refused, the law says what its product written out means:
 
 - *`/` associates*: a sequence is its flat chain, whatever its
   parentheses.
@@ -190,20 +641,52 @@ Laws of sequencing (for paths without `|`; each is a test in
   before. The routes are in the same order when no conjunct has several
   routes. It holds for a conjunct that starts with `@` and forks, since
   the `@` is kept (2): `(@/(c & d) & a)/(@/e & y)` has
-  `@/(c & d)/@/e`, which merges `c` and `d`.
-- *Reversal* (`spec_compileReversal`): for a relative path without an
-  `@N`, `ls P` from `c` finds `t` exactly when `ls ~P` from `t` finds
-  `c`. (An `@N` is a root on one side and a test on the other.) The
-  reverse of a conjunct that forks and then joins, `(c & d)/@`, starts
-  with an `@` and forks; it is the converse because that `@` is kept:
-  `(x & c/@)/((c & d)/@ & a)` and `(@/(~c & ~d) & ~a)/(~x & @/~c)`
-  both need `c` and `d` between the same two nodes.
-- *A conjunct written twice* (`spec_compileRepeatedConjunct`):
-  `P/(q & q)` reaches what `P/q` reaches when `q` has no `@` or `!{…}`
-  in its own chain (nor in the own chain of a side of a union there, as
-  `q = (@/c | d)` has), or `P` has one output. Otherwise `P/q` merges
-  the outputs of `P` at that join and `P/(q & q)` does not (2):
-  `(a & b)/@/c` and `(a & b)/(@/c & @/c)` differ.
+  `@/(c & d)/@/e`, which merges `c` and `d`. For a conjunct with a
+  meeting point the left side is refused, and the law says that the
+  right side, which the error tells to write, is what it compiled to;
+  it is a statement about paths a command runs only for conjuncts
+  without meeting points.
+- *Reversal* (`spec_compileReversal`): for a relative path `P` without
+  an `@N`, node `t` is among the targets of `ls P` from node `c`
+  exactly when `c` is among the targets of `ls ~P` from `t`. It is a
+  statement about whole queries, which are sealed at both ends: every
+  route of a relative path starts at the current node, as if `@/` were
+  written before the path, and `ls` appends `/@`; reversing swaps the
+  two. It does not hold with an `@N` (which is a root one way and a
+  test the other: `ls @1` from `0` finds `1`, and `ls ~@1` from `1`
+  does not find `0`), and it is not a statement about pieces of a path
+  with their leading `@` left out: the reverse of a conjunct that forks
+  and then joins, `(a & b)/@`, starts with an `@` and forks, and is the
+  converse only because that `@` is kept (2). With `0 -a-> 1`,
+  `0 -b-> 3`, `0 -c-> 2`, and `q` from each of `1`, `2` and `3` to `9`,
+  `((a & b)/@ & c)/q` finds nothing from `0` (`a` and `b` end apart),
+  and `~q/(@/(~a & ~b) & ~c)` finds nothing from `9`; without its `@`,
+  `~q/(~a & ~b & ~c)` finds `0`. A path is refused exactly when its
+  reverse is (`spec_compileCopiedMeetingPoints`), so the law loses no
+  path on one side only: `(x & c/@)/((c & d)/@ & a)` and
+  `(@/(~c & ~d) & ~a)/(~x & @/~c)` are both refused.
+- *A conjunct written twice* (`spec_compileRepeatedConjunct`): writing
+  a conjunct twice changes nothing when both paths are sealed. To seal
+  a path is to write `@/` before it and `/@` after it: then nothing
+  around it copies into its joins, and its joins hold nothing around it
+  together. `@/(q & q)/@` and `@/q/@` are interchangeable everywhere:
+  for any relative `q`, in any path, the compiler makes of the one what
+  a query finds with the other. (Where one of the two is run and the
+  other refused there is nothing to compare: in a group that another
+  group copies, `@/(q & q)/@` is a meeting point and `@/q/@`, for a `q`
+  that is one walk, is not.) A whole query is sealed already, as under
+  *Reversal*, so `ls (q & q)` finds what `ls q` finds.
+  Without the seal the two can differ only when `q` has an `@` or
+  `!{…}` in its own chain (or in the own chain of a side of a union
+  there, as `q = (@/c | d)` has) and a group stands next to it:
+  `P/(q & q)` reaches what `P/q` reaches when `q` has no such join, or
+  `P` has one output. Otherwise `P/q` merges the outputs of `P` at that
+  join and `P/(q & q)` does not (2): `(a & b)/@/c` and
+  `(a & b)/(@/c & @/c)` differ, and sealed, `(a & b)/@/@/c/@` and
+  `(a & b)/@/(@/c & @/c)/@`, they do not. With `0 -a-> 1 -b-> 9` and
+  `0 -a-> 2 -c-> 9`, `(a/@ & a/@)/(b & c)` finds `9` (and warns) and
+  `a/@/(b & c)` nothing; sealed, `@/(a/@ & a/@)/@/(b & c)` and
+  `@/a/@/@/(b & c)` both find nothing.
 - *Not a law:* left distribution `(A & B)/C = A/C & B/C` when `A`
   contains a join and `C` forks. `(x/@ & b)/(c & d)` has two `x`, and
   `x/@/(c & d) & b/(c & d)` one. It was given up for the product.
@@ -229,7 +712,11 @@ the same steps in them too:
    `q/@/(c & d)/@`, with one `q` where there were two. A conjunct that
    starts with `@` and then forks was its conjuncts (the `@` was left
    out) and is now one chain: `(@/(c & d) & a)/(@/e & y)` merges `c`
-   and `d` before `e`. The class is wide for such conjuncts: of 480
+   and `d` before `e`. (These two examples are refused now, *Meeting
+   points*: what is said of them holds for their products written out.
+   Of the paths in this class, those whose conjunct with the join also
+   forks are refused; those where it is one walk are run, and warn when
+   the `@` begins or ends it.) The class is wide for such conjuncts: of 480
    paths made of them, 400 compile to something else than they did
    (all in the class, and all to what the product written out gives);
    of 9,883 random paths without `|`, 20 do.
@@ -245,9 +732,12 @@ and is now a no-op; with `0 -x-> 1 -c-> 9`, `0 -x-> 2 -d-> 9`,
 nothing and now removes `1 -c-> 9`. On an empty graph `mk` creates what
 it did for a join after a step (hops created from one node are
 identified, §5), but not for a conjunct that starts with `@` and
-forks: `mk (@/(a & b) & c)/(@/f & e)` now has to end `a` and `b` at
-one node, since they meet before `f`. Goldens:
-`test/golden/ge/path/chain-scoped-*.golden`.
+forks: `mk @/(a & b)/@/f & @/(a & b)/e & c/@/f & c/e` has to end `a`
+and `b` at one node, since they meet before `f` (written as the group
+`(@/(a & b) & c)/(@/f & e)` it is refused). Goldens:
+`test/golden/ge/path/chain-scoped-*.golden`, and for the refusal and
+the warning `copied-meeting-point.golden` and
+`join-does-nothing.golden`.
 
 The `@` in a union: an `@` that is one side of a union is the same join
 written in the union's place, so `(@ + a)/@N` is `@/@N + a/@N`, which
@@ -353,13 +843,17 @@ be routes of one alternative, `sharing` puts that together):
      `2 -c-> 5 -e-> 9`, `2 -d-> 9`, `0 -c-> 3 -a-> 4`, `4 -c-> 6 -e-> 9`
      and `4 -d-> 9`, `ls` finds `9`, as it does without the `/@` after
      `c`.
-   - A side with a group that one of the two chose copies its chain for
-     that route: in `((a & b) | z)/((c & y)/@ & d)` the copy before `c`
-     choosing `a & b` gives `a/c` and `b/c`, each in the copy of the
-     conjunct that `(a & b)/((c & y)/@ & d)` has for it, so the two do
-     not meet, and do not meet a `z/y` either. (Read after the union is
-     copied they would all meet at one join; that reading is not
-     `a & b` written in place when every copy chooses it.)
+   - That is so whatever the sides are: a side with a group and a join
+     of its own after it, `(a & b)/@`, is one walk after its join as
+     `x/@` is, so `((a & b)/@ | z)/((c & y)/@/e & d)` finds what
+     `(x/@ | z)/((c & y)/@/e & d)` finds where `x` leads to where `a`
+     and `b` meet. (The compiler had a case of its own for a side with
+     a group anywhere in it, by which the first found more.) A side
+     whose group faces the conjunct, as in `((a & b) | z)/((c & y)/@ & d)`,
+     would copy the conjunct for the routes that chose it and not for
+     the others, which has no clear meaning: such a path is refused
+     (*Meeting points*), and so is every path in which two routes that
+     chose different sides could be at two copies of one meeting point.
    - What a route shares with a second and the second with a third is
      one step or join for all three.
 4. *An alternative is a way for every route to choose.* Every route of
@@ -398,41 +892,142 @@ be routes of one alternative, `sharing` puts that together):
    (it had 2 before chain-scoped joins), where `(x | y)/@/(c1 & … & cn)`
    has 2; and `((x | y)/@ & z)/(m/@ | n)/(c & d)` has 56, among them the
    one in which the route through `c` takes `x` and `m/@` and the route
-   through `d` takes `y` and `n`.
-6. *Sides are compared as they are read in place.* Sides that are the
-   same chain, whatever they are written like, are one side, and the
-   order sides are written in never matters. A join of a join is one
-   join with both tests (`a/@/@` is `a/@`, `a/@1/!{@2}` is `a/@1`), and
-   a union with a shared union in a side is compared by what it is for
-   each choice of that. So `p | p = p`, `(p | q) | p = p | q`, and
-   `(a/@ | a/@/@)/(d & e)` is `a/@/(d & e)`. Four things keep sides
-   apart:
-   - A leading `@`, which is kept as written (*Sequencing* 2): `p` and
-     `@/p` are two sides. Where the two are the same walks this adds
-     nothing a query finds unless they have a join: `(a | @/a)/(d & e)`
-     is `a/(d & e)`, but `(a/@ | @/a/@)/(d & e)` has, besides
-     `a/@/(d & e)`, the alternative in which the two copies chose one
-     side each, `a/@/d & a/@/e`, as any two sides give. When `p` forks
-     the two differ by themselves:
-     `(((a & b) | @/(a & b)) & c)/(@/f & e)` has three alternatives.
-   - A joined side and an unjoined one: `(a | a/@)/(d & e)` is
-     `a/(d & e) | a/@/(d & e)`.
-   - The order of conjuncts, since it is the order of the routes, which
-     decides the edge a command acts on (§3): `c & *` and `* & c` are two
-     sides. With joins the two sides are two walks: with `0 -a-> 1`,
-     `0 -b-> 1`, `0 -a-> 2`, `0 -b-> 2`, `1 -c-> 9` and `2 -d-> 9`,
-     `((a & b)/@ | (b & a)/@)/(c & d)` reaches `9` and `(a & b)/@/(c & d)`
-     nothing.
-   - A root and a test: `@/@1` (the current node is `1`) and `@1` are
-     two sides.
+   through `d` takes `y` and `n`. (In both the `@` after `(x | y)` ends
+   a conjunct that is one walk: it does nothing there. No warning says
+   so, since the conjunct has a union, *Meeting points*. For one choice
+   of `x` or `y`, write `(x | y)/@/(c1 & … & cn) & z/(c1 & … & cn)`.)
+6. *Every side that is written is a side of its own.* A union has as
+   many sides as are written in it, for `|` and for `++`. Nothing makes
+   two sides one: not being written the same (`a/@ | a/@` is two
+   sides), not compiling to the same thing in the union's place, not
+   differing only in an `@` that does nothing there (`a/@ | @/a/@`,
+   `a/@ | a/@/@`). A union is not a set of its sides: `p | p` is not
+   always `p`.
+   - What this gives. A route picks a side. Routes that pick the same
+     side of one copy of the union share that side's joins (2), and
+     routes that pick different sides share nothing of them (3). So
+     for a join written once in each side, a union of `n` sides has at
+     most `n` nodes, however many routes pick them. With `0 -a-> 1`,
+     `0 -a-> 2`, `1 -d-> 9` and `2 -e-> 9`:
+
+     | command | finds | why |
+     |---|---|---|
+     | `ls a/@/(d & e)` | nothing | one `a` node for `d` and `e` |
+     | `ls (a/@ \| a/@)/(d & e)` | `9` | the routes through `d` and `e` pick one side each: two `a` nodes |
+     | `ls (a/@ \| @/a/@)/(d & e)` | `9` | the same; the leading `@` does nothing here, and its side is a side all the same |
+     | `ls (a/@ ++ a/@)/(d & e)` | nothing | a `++` is chosen once for the whole path, and either choice is `a/@/(d & e)` |
+
+     `(a/@ | a/@)/(d & e)` has two alternatives: `a/@/(d & e)` (both
+     pick the same side) and `a/@/d & a/@/e` (one each). With a third
+     route, `(a/@ | a/@)/(d & e & f)` finds nothing where `d`, `e` and
+     `f` each need an `a` node of their own (`0 -a-> 1`, `0 -a-> 2`,
+     `0 -a-> 3`, `1 -d-> 9`, `2 -e-> 9`, `3 -f-> 9`), and `9` where two
+     `a` nodes are enough; with three sides, `(a/@ | a/@ | a/@)`, it
+     finds `9` in both. It is the same for sides written differently:
+     `(a/@ | b/@)/(d & e & f)` finds nothing when `d` and `e` need two
+     different `a` nodes.
+   - A union written as a side is its sides: `p | (q | r)` and
+     `(p | q) | r` are the three sides `p`, `q`, `r`, and nothing is
+     merged. `%never` is no side, and neither is a side whose node
+     tests contradict each other right where they are written
+     (`x/@1/@2`): `p | %never` is `p`.
+   - The order sides are written in never matters, and neither does
+     how they are grouped: the path compiles to the same alternatives,
+     each with its routes in the same order (a test, on random paths,
+     and on every order and grouping of the examples below).
+   - A side is kept as written: a leading `@` is still literal in what
+     the path compiles to (*Sequencing* 2), `@/@1` (the current node is
+     `1`) is not the root `@1`, and `c & *` and `* & c` are two sides
+     with their routes in two orders.
+   - When `p | p` is `p`. Where no group stands in the union's
+     stretch, so that one route goes through each copy of the union,
+     the two compile to the same alternatives: `q/(a/@ | a/@)/c`,
+     `(p & q)/@/(a/@ | a/@)/@/(d & e)`. With groups in the stretch,
+     where `p` has no join of the chain the union is written in and no
+     `++` union, the two compile to the same alternatives but for one
+     case that is known, and in that case they still find the same
+     nodes. The same alternatives: `(a | a)/(d & e)` is `a/(d & e)`
+     (the routes share nothing of `p` whichever side each picks; a
+     join inside a conjunct of `p` is no join of that chain). The
+     case: `p` forks, and a group in the stretch has a conjunct in
+     which walks that fork on the union's side meet at an `@N` and go
+     on from it as one walk (`(c & y)/@1/e` after the union,
+     `e/@1/(c & y)` before it). Then `p | p` has one alternative more:
+     `((a & b) | (a & b))/((c & y)/@1/e & d)` has 2 alternatives where
+     `(a & b)/((c & y)/@1/e & d)` has 1. In the one more, the routes
+     through `c` and through `y` took different sides of the union,
+     and the `e` after `@1` is one step for the copy of `(c & y)/@1/e`
+     made for `a` and the copy made for `b`; in the other, which is
+     the alternative of `p` alone, each copy has an `e` of its own.
+     The one more finds nothing the other does not find, as far as
+     was tried: the review that found the pair compared what the two
+     paths find and found the same targets on every graph it tried,
+     and `mk` of either created the same one edge. (Tests,
+     `spec_compileEverySide`: the counts 2 and 1 for `p` being `a & b`
+     and `a/a & b`; the alternative of `p` is one of `p | p`; the two
+     find the same nodes on four graphs; and for a `p` that does not
+     fork, `a`, `a/b` and `a | b`, the two compile the same there
+     too. Whether another such case exists is not known: on 12,760
+     random paths with no group in the stretch and 1,327 with a `p`
+     without joins the same review found the two identical.)
+     Otherwise it may not be: `(a/@ | a/@)/(d & e)` above;
+     `(p & q)/(a/@ | a/@)`, in which `p` and `q` need not meet; and
+     `((x ++ y) | (x ++ y))/(d & e)`, which has `x/d & y/e`, since a
+     `++` written twice is two unions, each chosen once, and one may be
+     `x` and the other `y` (`(x ++ y)/(d & e)` is `x/(d & e)` or
+     `y/(d & e)`). Sides that are one fixed node are one node whichever
+     is picked: `(@1 | @1)/(d & b)` is `@1/(d & b)`.
+   - `p ++ p` is `p`, whatever `p` is: the side is chosen once for the
+     whole path, either choice is `p`, and equal alternatives are one
+     alternative (below). So for a `++`, a side being a side of its own
+     changes nothing a command can see.
+   - The check for meeting points reads the same sides (*Meeting
+     points*): a side written twice is two sides there too, so the
+     union is also read as one step.
+   - The alternatives limit (below) counts ways to choose before it
+     knows which of them come to the same alternative, so a row of
+     unions of sides written alike is over it sooner than its
+     alternatives suggest: `(x/@ | @/x/@)/` five times before
+     `(a/@ | @/a/@)/(d & e)` has 7 alternatives and is refused
+     (`TooLargeToCount`) at the default limit; four times it runs.
+
+   (Before, sides that compiled to the same thing in place were one
+   side, within bounds on how much was compiled to find out. That made
+   `(a/@ | @/a/@)/(d & e)` find nothing above, and it made results
+   depend on the order of sides, on their grouping, on a side being
+   added, and on how many unions followed. Graph `0 -n-> 1`,
+   `1 -c-> 2`, `1 -c-> 3`, `2 -e-> 4`, `3 -e-> 5`, `4 -f-> 9`,
+   `5 -g-> 9`: `ls (m/@ | n)/(c/@ | c/@/@ | @/c/@)/(d/@ | e)/(f & g)`
+   found nothing and found `9` with the sides of the second union in
+   another order; it finds `9` now in every order and grouping. On the
+   graph of the table, `ls (a/@ | @/(a/@ | c))/(d & e)` found `9` and
+   `ls (a/@ | c | @/(a/@ | c))/(d & e)` nothing; both find `9`. And
+   with `9 -x-> 9` added, `ls (a/@ | @/a/@)/(d & e)/@` followed by
+   `/(x | y)` four times found nothing and followed by five found `9`;
+   it finds `9` whether none follows or eight (with nine the path has
+   1024 alternatives and is over the default limit). These are tests,
+   `spec_compileEverySide`.)
 7. *The routes of an alternative, and its spelling.* Rules 1 to 6 say
    what the routes of an alternative are and what they share; they fix
    no order for them beyond that of a path without unions. The order
    matters for what a command acts on (the first route, §3) and for
    whether the alternative is, routes in order, what some path without
-   unions compiles to. The routes are listed by the conjuncts they
+   unions compiles to.
+   The alternatives themselves have no order that a path decides. A
+   query is the set of its alternatives: alternatives that compile to
+   the same pattern (same routes in the same order) are one, so the
+   four ways the two routes of `(a/@ | a/@)/(d & e)` pick sides are two
+   alternatives. Commands go through the set in the order of the
+   compiled patterns, which has nothing to do with how the sides are
+   written, and none of them takes "the first alternative" for
+   anything. (`compileAlternatives`, which `mk` uses to find a path
+   that spells a given repair, lists them as they are made, and an
+   alternative may be listed more than once there; it is searched for
+   the alternative wanted, not read from the front.)
+   The routes of one alternative are listed by the conjuncts they
    choose, as the routes of a path without unions are, so the first
-   route is the first route of every side written alone. When all
+   route is the first route of every side written alone, and the order
+   does not depend on the order of the sides. When all
    routes chose alike that is the order of the path with those sides.
    When routes chose different sides, the routes that are connected by
    the joins they share are put next to each other, where the first of
@@ -472,7 +1067,9 @@ be routes of one alternative, `sharing` puts that together):
    looked at share a walk as described.
 
 These laws hold for paths with unions (each a test in
-`Models.PathPattern.CompileSpec`, on random paths with joins):
+`Models.PathPattern.CompileSpec`, on random paths with joins). Like the
+laws of sequencing they are laws of the compiler, tested on every path
+it compiles, also on those no command runs:
 
 - *`/` associates* on the alternatives, and not only on what they
   reach: `(c & e)/(x & y)/(d | @)` and `(c & e)/((x & y)/(d | @))` are
@@ -492,8 +1089,26 @@ These laws hold for paths with unions (each a test in
 - So *adding a side never removes an alternative* (so never a target),
   up to the order of its routes, for unions of any number of sides, and
   for `|` and `++`
-  (`spec_compileSubUnions`, `spec_compileUnionMonotoneRandom`);
-  `p | %never = p` and `p | p = p`.
+  (`spec_compileSubUnions`, `spec_compileUnionMonotoneRandom`). This is
+  a law of the compiler. For commands it has one exception: adding a
+  side can make the path refused (*Meeting points*), as `z/(K & d)` is
+  run and `((a & b) | z)/(K & d)` is not.
+- *The order and the grouping of sides never matter*: a union with its
+  sides in another order, or with `p | (q | r)` for `(p | q) | r`,
+  compiles to the same alternatives, each with its routes in the same
+  order (`spec_compileEverySide`, `spec_compileUnionMonotoneRandom`).
+- *`p | %never = p`.*
+- *`p | p = p` is not a law.* `p | p` has every alternative of `p`, and
+  may have more: `(a/@ | a/@)/(d & e)` has the alternative
+  `a/@/d & a/@/e`, which `a/@/(d & e)` has not (6, with the graph on
+  which it finds more). It is `p` where no group stands in the union's
+  stretch. Where `p` has no join of the chain the union is written in
+  and no `++` union it compiles to the same alternatives as `p`, but
+  for one known case in which it has one alternative more and still
+  finds the same nodes: a `p` that forks, next to a conjunct in which
+  walks meet at an `@N` and go on as one (6, with
+  `((a & b) | (a & b))/((c & y)/@1/e & d)`; `spec_compileEverySide`,
+  `spec_compileUnionMonotoneRandom`). `p ++ p = p` always.
 - *Conjunctions may be written out*: replacing adjacent segments without
   unions or joins by their product changes no alternative
   (`spec_compileSharedWalks`): `(x/*/@ | y)/(c & d)/(a & b)` is
@@ -508,7 +1123,8 @@ These laws hold for paths with unions (each a test in
   with the same first routes (`spec_compileInterchangeablePrefixes`):
   `(a & b) & c` and `a & (b & c)`, or `x/(a & b)` and `x/a & x/b`,
   before `(y | d/@)/e`. A leading `@` before a fork makes another prefix
-  (`@/(a & b) & c` is not `a & b & c` before `@/m & n`), and a conjunct
+  (`@/(a & b) & c` is not `a & b & c` before `@/m & n`; that is a path
+  no command runs, since `@/m & n` would copy `@/(a & b)`), and a conjunct
   it keeps together has its routes next to each other in every
   alternative, which is where the order can differ. The exception this
   law had, a conjunct that is only `@` before an `@N`, is gone
@@ -688,12 +1304,15 @@ phase; it carries the `max-repairs` of the override as well, §5), which
 each `%targets(…)` query); it does not otherwise change what the path
 means: wherever such nodes are, and however many are nested, the path
 compiles to what it compiles to without them (`withoutLimits`). TAB completion lowers `+` as `|` like a query and runs the same
-check: a prefix beyond its limit offers no completions.
+check: a prefix beyond its limit offers no completions. A path that is
+also refused for copying a meeting point (*Meeting points*) is reported
+as that, before its alternatives are counted: no limit cures it.
 
 Implementation (`Models.PathPattern.Compile`): `structuresWithin`
 writes the path as chains, one for each choice of its shared unions, in
-a normal form in which sides that mean the same are the same
-(`normal`). `routesOf` lists the routes of a chain with its unions not
+a normal form (`normal`: joins written right after one another are one
+join, and the sides of a union stand in a fixed order, every side that
+is written being a side of its own). `routesOf` lists the routes of a chain with its unions not
 chosen, and `resolveWithin` lets each of them choose its unions
 (`chosen`) and takes every way to do so for all of them in which any two
 routes can be together, depth first, dropping a way whose routes

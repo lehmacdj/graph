@@ -18,7 +18,7 @@ import Models.LegacyPartialPath
 import Models.NID
 import Models.Node
 import Models.Path.Simple qualified as Simple
-import Models.PathPattern.Compile (checkAlternatives)
+import Models.PathPattern.Compile (checkAlternatives, checkCopies)
 import MyPrelude
 import System.Console.Haskeline
 import System.Random (mkStdGen)
@@ -119,12 +119,13 @@ completePathHandling handling env (i, _) =
                 p0 : rest -> foldl' (Simple.:/) p0 rest
           nid <- currentLocation
           -- a prefix beyond its alternatives limit completes to nothing,
-          -- rather than hanging on TAB
-          octs <- case checkAlternatives p of
-            Left _ -> pure []
-            Right () ->
+          -- rather than hanging on TAB, and so does one that no command
+          -- runs; an @ that does nothing is not warned about here
+          octs <- case (checkCopies p, checkAlternatives p) of
+            (Right _, Right ()) ->
               map unpack . toList
                 <$> provideList_ @GraphEditing (completionTransitions nid p)
+            _ -> pure []
           pure (fromMaybe i (stripPrefix (reverse end) i), mkCompleter octs end)
 
 completeNID :: Env -> (String, String) -> IO (String, [Completion])

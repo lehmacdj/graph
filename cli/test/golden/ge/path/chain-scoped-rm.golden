@@ -11,6 +11,7 @@ rm (x/@ & b)/(c & d)
 ==========stdout==========
 g> g> Goodbye!
 ==========stderr==========
+Warning: the @ that ends `x/@` does nothing here: `(c & d)` copies `x/@` whole, once for each of its conjuncts, so the @ joins nothing and pins nothing. If one node was meant, write `x/@/(c & d) & b/(c & d)`; otherwise leave the @ out. (JoinDoesNothing)
 ==========graph-dump==========
 @000000000000{out=[@000000000003 via "b", @000000000001 via "x", @000000000002 via "x"], in=[@0daCJjMrQel8 via "origin"]}
 @000000000001{out=[], in=[@000000000000 via "x"]}
