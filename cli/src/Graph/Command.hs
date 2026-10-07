@@ -341,6 +341,17 @@ checkAlternativesLimit p = case checkAlternatives p of
         ++ " copy shares, wrap the path in %override({plus = shared}, …),"
         ++ " narrow it, or raise the limit with"
         ++ " %override({max-alternatives = …}, …). (TooLargeToCount)"
+  Left (TooManyRoutes n) ->
+    throwError . OtherError $
+      "This path has too many routes to count the alternatives its | unions"
+        ++ " make (the limit is "
+        ++ tshow n
+        ++ ", but its conjunctions alone multiply to more routes than are"
+        ++ " listed to count, so no higher number helps). Write ++ for a"
+        ++ " union whose side every copy shares, wrap the path in"
+        ++ " %override({plus = shared}, …), narrow it, or lift the limit"
+        ++ " with %override({max-alternatives = unlimited}, …), which"
+        ++ " compiles it however long that takes. (TooManyRoutes)"
 
 type CommandEffects effs =
   ( Members [DisplayImage, Echo, Error UserError, SetLocation, GetLocation, Dualizeable] effs,

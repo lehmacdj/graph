@@ -1,0 +1,29 @@
+==========graph==========
+0
+==========input==========
+mk (x/@/w & b)/(c & d)
+==========stdout==========
+g> g> Goodbye!
+==========stderr==========
+==========graph-dump==========
+@000000000000{out=[@w4VxcgSm0Js6 via "b", @O8OhMSVtjevt via "x"], in=[@0daCJjMrQel8 via "origin"]}
+@0daCJjMrQel8{out=[@zsBuPkn5mh8F via "file-extensions", @AhQufiPzgyRf via "file-hashes", @3JJvxFUHGAA1 via "historical-special-nodes", @S00KkOYoVpFu via "import-dates", @a0fVkm0kR7KE via "import-urls", @927u9Xyky2pC via "mime-types", @000000000000 via "origin", @pbYxBO6fzBQV via "tags"], in=[]}
+@3JJvxFUHGAA1{out=[@VEfLhuTgZ88Z via "sequence-ids"], in=[@0daCJjMrQel8 via "historical-special-nodes"]}
+@927u9Xyky2pC{out=[], in=[@0daCJjMrQel8 via "mime-types"]}
+@AhQufiPzgyRf{out=[], in=[@0daCJjMrQel8 via "file-hashes"]}
+@DQ1KCJgauHiV{out=[], in=[@G0jfyCCfKT1D via "00:00:00.000000000000", @Pqf7kGOdKJIr via "c"]}
+@G0jfyCCfKT1D{out=[@DQ1KCJgauHiV via "00:00:00.000000000000", @O8OhMSVtjevt via "00:00:00.000000000000", @OBlFGnwL1N3D via "00:00:00.000000000000", @Pqf7kGOdKJIr via "00:00:00.000000000000", @sYumkceKpoAh via "00:00:00.000000000000", @w4P7BSd8jU2v via "00:00:00.000000000000", @w4VxcgSm0Js6 via "00:00:00.000000000000"], in=[@p6ykXTkqFtOo via "01"]}
+@O8OhMSVtjevt{out=[@Pqf7kGOdKJIr via "w"], in=[@G0jfyCCfKT1D via "00:00:00.000000000000", @000000000000 via "x"]}
+@OBlFGnwL1N3D{out=[], in=[@G0jfyCCfKT1D via "00:00:00.000000000000", @w4VxcgSm0Js6 via "d"]}
+@Pqf7kGOdKJIr{out=[@DQ1KCJgauHiV via "c", @sYumkceKpoAh via "d"], in=[@G0jfyCCfKT1D via "00:00:00.000000000000", @O8OhMSVtjevt via "w"]}
+@S00KkOYoVpFu{out=[@sSvdmA080xFk via "1970"], in=[@0daCJjMrQel8 via "import-dates"]}
+@VEfLhuTgZ88Z{out=[], in=[@3JJvxFUHGAA1 via "sequence-ids"]}
+@a0fVkm0kR7KE{out=[], in=[@0daCJjMrQel8 via "import-urls"]}
+@p6ykXTkqFtOo{out=[@G0jfyCCfKT1D via "01"], in=[@sSvdmA080xFk via "01"]}
+@pbYxBO6fzBQV{out=[], in=[@0daCJjMrQel8 via "tags"]}
+@sSvdmA080xFk{out=[@p6ykXTkqFtOo via "01"], in=[@S00KkOYoVpFu via "1970"]}
+@sYumkceKpoAh{out=[], in=[@G0jfyCCfKT1D via "00:00:00.000000000000", @Pqf7kGOdKJIr via "d"]}
+@w4P7BSd8jU2v{out=[], in=[@G0jfyCCfKT1D via "00:00:00.000000000000", @w4VxcgSm0Js6 via "c"]}
+@w4VxcgSm0Js6{out=[@w4P7BSd8jU2v via "c", @OBlFGnwL1N3D via "d"], in=[@G0jfyCCfKT1D via "00:00:00.000000000000", @000000000000 via "b"]}
+@zsBuPkn5mh8F{out=[], in=[@0daCJjMrQel8 via "file-extensions"]}
+==========data==========

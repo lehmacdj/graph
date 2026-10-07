@@ -1,0 +1,44 @@
+==========graph==========
+0 -x-> 1
+1 -w-> 2
+2 -c-> 9
+0 -x-> 3
+3 -w-> 4
+4 -d-> 9
+0 -b-> 5
+5 -c-> 9
+5 -d-> 9
+==========input==========
+mk (x/@/w & b)/(c & d)/@
+ls (x/@/w & b)/(c & d)
+mk x/@/w/(c & d) & b/(c & d)
+==========stdout==========
+g> g> [0mx/w/[0;1mc[0m[0m [0;34m@000000000009[0m [0m[0m
+g> g> Goodbye!
+==========stderr==========
+This path has 2 possible repairs. Nothing was changed. Pin a node with @N or exclude one with !{@N} to choose.
+  1. @000000000000 -"x"-> @000000000001 -"w"-> @000000000002 -"c"-> @000000000009 & @000000000000 -"x"-> @000000000001 -"w"-> @000000000002 -"d"-> new1 & @000000000000 -"b"-> @000000000005 -"c"-> @000000000009 & @000000000000 -"b"-> @000000000005 -"d"-> @000000000009
+    creates: @000000000002 -"d"-> new1
+    use: mk x/@/w/@000000000002/(c & d) & b/@000000000005/(c & d)
+  2. @000000000000 -"x"-> @000000000003 -"w"-> @000000000004 -"c"-> new1 & @000000000000 -"x"-> @000000000003 -"w"-> @000000000004 -"d"-> @000000000009 & @000000000000 -"b"-> @000000000005 -"c"-> @000000000009 & @000000000000 -"b"-> @000000000005 -"d"-> @000000000009
+    creates: @000000000004 -"c"-> new1
+    use: mk x/@/w/@000000000004/(c & d) & b/@000000000005/(c & d)
+
+==========graph-dump==========
+@000000000000{out=[@000000000005 via "b", @000000000001 via "x", @000000000003 via "x"], in=[@0daCJjMrQel8 via "origin"]}
+@000000000001{out=[@000000000002 via "w"], in=[@000000000000 via "x"]}
+@000000000002{out=[@000000000009 via "c"], in=[@000000000001 via "w"]}
+@000000000003{out=[@000000000004 via "w"], in=[@000000000000 via "x"]}
+@000000000004{out=[@000000000009 via "d"], in=[@000000000003 via "w"]}
+@000000000005{out=[@000000000009 via "c", @000000000009 via "d"], in=[@000000000000 via "b"]}
+@000000000009{out=[], in=[@000000000002 via "c", @000000000005 via "c", @000000000004 via "d", @000000000005 via "d"]}
+@0daCJjMrQel8{out=[@zsBuPkn5mh8F via "file-extensions", @AhQufiPzgyRf via "file-hashes", @3JJvxFUHGAA1 via "historical-special-nodes", @S00KkOYoVpFu via "import-dates", @a0fVkm0kR7KE via "import-urls", @927u9Xyky2pC via "mime-types", @000000000000 via "origin", @pbYxBO6fzBQV via "tags"], in=[]}
+@3JJvxFUHGAA1{out=[@VEfLhuTgZ88Z via "sequence-ids"], in=[@0daCJjMrQel8 via "historical-special-nodes"]}
+@927u9Xyky2pC{out=[], in=[@0daCJjMrQel8 via "mime-types"]}
+@AhQufiPzgyRf{out=[], in=[@0daCJjMrQel8 via "file-hashes"]}
+@S00KkOYoVpFu{out=[], in=[@0daCJjMrQel8 via "import-dates"]}
+@VEfLhuTgZ88Z{out=[], in=[@3JJvxFUHGAA1 via "sequence-ids"]}
+@a0fVkm0kR7KE{out=[], in=[@0daCJjMrQel8 via "import-urls"]}
+@pbYxBO6fzBQV{out=[], in=[@0daCJjMrQel8 via "tags"]}
+@zsBuPkn5mh8F{out=[], in=[@0daCJjMrQel8 via "file-extensions"]}
+==========data==========

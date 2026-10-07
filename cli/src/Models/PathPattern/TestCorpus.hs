@@ -123,11 +123,13 @@ corpusLargeEquivalences =
       [path| (a | b)/a & (a | b)/b & a/a & a/b |]
     ),
     ( [path| ((a & b) | a)/((a & b) | b) |],
-      -- the prefix chooses first and each copy of the suffix chooses, or
-      -- the suffix chooses first and each copy of the prefix chooses
-      [path| (a & b)/(a & b) | (a & b)/a & (a & b)/b | (a & b)/b
+      -- the prefix chooses and each copy of the suffix chooses, or the
+      -- suffix chooses and each copy of the prefix chooses; an
+      -- alternative is its routes, listed by the conjuncts they go
+      -- through, whichever union chose first
+      [path| (a & b)/(a & b) | (a & b)/b
              | a/(a & b) | a/b | a/(a & b) & b/b | a/b & b/(a & b)
-             | (a & b)/a & a/b | a/a & (a & b)/b |]
+             | a/a & a/b & b/a |]
     )
   ]
 

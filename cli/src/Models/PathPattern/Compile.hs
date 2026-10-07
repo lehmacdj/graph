@@ -1,42 +1,50 @@
 -- | Compile surface paths to route patterns (docs/path-pattern-ir.md §2).
 --
--- Compilation has three steps:
+-- Compilation has four steps:
 --
 -- 1. push @~@ down to the steps, reversing sequences;
--- 2. build a small expression term and distribute unjoined sequencing over
---    conjunction, so that every prefix that is not joined is copied; a
---    shared union (@++@) is chosen before, once for the whole path, and a
---    relational one (@|@) after, independently for each copy, with the
---    copies that choose a side with a join sharing one walk of it;
--- 3. glue the term into routes: every step occurrence gets a fresh variable
---    and edge id, @/@ identifies an output with an input, and a join merges
---    outputs.
+-- 2. choose every shared union (@++@), once for the whole path, and write
+--    what is left as chains of segments ('Chain'): steps, joins, groups
+--    (@&@) and relational unions (@|@);
+-- 3. list the routes of each chain, stretch by stretch between its own
+--    joins, each route choosing a conjunct of every group it goes
+--    through and a side of every relational union, and name every step
+--    and join on a route by the copy of it the route goes through
+--    ('annotate'): that decides what routes share;
+-- 4. glue the routes into a pattern: steps with the same name are one
+--    edge, and joins with the same name are one vertex.
 module Models.PathPattern.Compile
   ( compilePath,
     compileAlternatives,
     checkAlternatives,
     TooManyAlternatives (..),
     defaultMaxAlternatives,
-    Expr (..),
     pushBackwards,
-    surfaceExprs,
-    glueExpr,
+    checkSpending,
   )
 where
 
 import Control.Monad.State.Strict qualified as S
+import Data.IntMap.Strict qualified as IntMap
+import Data.Map.Strict qualified as Map
 import Models.Path.Simple
 import Models.PathPattern
-import MyPrelude hiding (fragment)
+import MyPrelude
 
 compilePath :: Path -> PathQuery
-compilePath =
-  PathQuery
-    . setFromList
-    . mapMaybe (fmap canonicalize . glueExpr)
-    . toList
-    . surfaceExprs
-    . pushBackwards
+compilePath = PathQuery . setFromList . map snd . alternatives
+
+-- | The alternatives of a path: the routes of each, and what they glue
+-- to.
+alternatives :: Path -> [([[Item Int]], PatternPath)]
+alternatives p =
+  [ (routes, pattern')
+  | chain <- runIdentity (structuresWithin freely p'),
+    routes <- runIdentity (resolveWithin freely chain),
+    Just pattern' <- [glueRoutes routes]
+  ]
+  where
+    p' = pushBackwards (withoutLimits p)
 
 -- | A path without the nodes that carry its limits. A limit says how much
 -- compiling or residuating the path may make, not what the path means, so
@@ -76,195 +84,102 @@ pushBackwards = \case
       WithLimits v l p -> WithLimits v l (invert p)
       p -> p
 
--- * Expressions
+-- * Chains
 
--- | A transient term. 'Stay' continues at its input, a 'Join' merges every
--- output of its child into one, 'Sequence' feeds its prefix's single
--- output to the continuation, and 'Alt' is a relational union whose side
--- is not chosen yet. A side of it that has a join is a 'Held' walk: the
--- union it is a side of (numbered in the path), the walk itself, and
--- the conjunct without a step (@\@@, @\@N@, @!{…}@) this copy of it
--- follows, if it follows one: the conjunct's place in its conjunction,
--- which tells two such conjuncts apart, as the places of their steps do
--- for the others.
---
--- While the unions of a term are chosen its steps are 'Written' ones: a
--- step with the place it is written at in the path. Distribution copies
--- a step with its place, so two parts of a term are equal exactly when
--- they are copies of the same part of the path, and that is how copies
--- are told apart from what was written twice. An alternative has plain
--- 'Step's ('untagged').
-data Expr
-  = Source PVertex
-  | Stay
-  | Step Direction Matcher
-  | Written Int Direction Matcher
-  | Both Expr Expr [Expr]
-  | Join Expr NodeTest
-  | Sequence Expr Expr
-  | Alt [Expr]
-  | Held Int Expr (Maybe Int)
+-- | A segment of a chain, with the place it is written at in the path
+-- (which names it): a step; a join (@\@@, @\@N@, @!{…}@), which merges
+-- the routes that arrive along its chain, and whether it is an @\@N@
+-- that is a root when nothing precedes it on a route; a group of
+-- conjuncts, each a chain of its own; a relational union of sides, each
+-- a chain that is written in the union's place once it is chosen.
+data Seg
+  = SStep Int Direction Matcher
+  | SJoin Int NodeTest Bool
+  | SGroup Int [Chain]
+  | SUnion Int [Chain]
   deriving stock (Eq, Ord, Show)
 
--- | The alternatives of a path, rooted and distributed.
-surfaceExprs :: Path -> Set Expr
-surfaceExprs =
-  setFromList . map supplyRoot . concatMap resolved . fragment . withoutLimits
-  where
-    resolved = toList . resolve
+-- | A sequence at one nesting level. Parentheses without @&@ do not make
+-- a chain of their own, and neither does a side of a union.
+type Chain = [Seg]
 
--- | The distributed terms of a path, one for each choice of its shared
--- unions, with its relational unions not yet chosen. Distribution copies a
--- relational union like any other segment, so that 'resolve' chooses a
--- side for each copy independently.
-fragment :: Path -> [Expr]
-fragment = runIdentity . fragmentWithin freely
-
--- | What making terms and alternatives spends, so that a limit can stop
+-- | What making chains and alternatives spends, so that a limit can stop
 -- it early ('checkAlternatives').
 data Spend m = Spend
-  { -- | the size of a set of terms or alternatives, as it grows
-    sized :: Int -> m (),
-    -- | a term, before anything is done with it
-    termMade :: Expr -> m (),
-    -- | anything else made on the way to an alternative
-    made :: Expr -> m ()
+  { -- | something made, by its size
+    made :: Int -> m (),
+    -- | the routes of an alternative, once they are found
+    found :: [[Item Int]] -> m ()
   }
 
 -- | Without a limit.
 freely :: (Applicative m) => Spend m
-freely = Spend (\_ -> pure ()) (\_ -> pure ()) (\_ -> pure ())
+freely = Spend (\_ -> pure ()) (\_ -> pure ())
 
--- | 'fragment' within what may be spent.
-fragmentWithin :: forall m. (Monad m) => Spend m -> Path -> m [Expr]
-fragmentWithin spend path = toList . mapSet atRoot <$> go True 0 path
+-- | The chains of a path, one for each choice of its shared unions, in
+-- normal form ('norm').
+structuresWithin :: forall m. (Monad m) => Spend m -> Path -> m [Chain]
+structuresWithin spend path =
+  ordNub . mapMaybe normal . toList <$> go 0 path
   where
-    -- without a conjunction nothing is copied
-    copies = hasConj path
     total = leaves path
-    -- The terms of a part of the path: whether it starts at the root of
-    -- the whole path, and the place it is written at (the leaves of the
-    -- path before it), which numbers its steps and its unions.
-    go :: Bool -> Int -> Path -> m (Set Expr)
-    go root pos = \case
-      One -> one Stay
+    -- a name for a group or a union: no two start at the same leaf and
+    -- have as many leaves
+    named pos p = pos * (total + 1) + leaves p
+    go :: Int -> Path -> m (Set Chain)
+    go pos = \case
+      One -> one (SJoin pos anyNode False)
       Zero -> pure mempty
-      Wild -> step Out MWild
-      Literal t -> step Out (MLiteral t)
-      RegexMatch r -> step Out (MRegex r)
-      Backwards Wild -> step In MWild
-      Backwards (Literal t) -> step In (MLiteral t)
-      Backwards (RegexMatch r) -> step In (MRegex r)
-      Backwards _ -> error "fragment: pushBackwards leaves ~ only on steps"
-      Absolute nid -> one (Join Stay (Exactly nid))
-      ExcludingNIDs ns -> one (Join Stay (Except ns))
-      p@(_ :++ _) -> whole root [(pos, p)]
-      p@(_ :|| _) -> whole root [(pos, p)]
-      p :& q ->
-        join $
-          combine (\a b -> pure (conjoin a [b]))
-            <$> go root pos p
-            <*> go root (pos + leaves p) q
-      WithLimits _ _ p -> go root pos p
-      p@(_ :/ _) -> whole root (placed pos (sequenceSegments p))
-      where
-        step d m = one (Written pos d m)
-    whole root segments = fromMaybe mempty <$> chain root Nothing segments []
-    -- The terms of some segments of a sequence, after the terms so far and
-    -- before the segments that follow. A shared union chooses first: each
-    -- of its sides continues the sequence with its own segments, as it
-    -- would alone. So does a relational union, which also stays a union
-    -- in a term, to be copied by what surrounds it; its sides with a join
-    -- become 'Held' walks, which are copied like a step too and put
-    -- together again once the copies have chosen ('resolve').
-    chain ::
-      Bool ->
-      Maybe (Set Expr) ->
-      [(Int, Path)] ->
-      [(Int, Path)] ->
-      m (Maybe (Set Expr))
-    chain _ acc [] _ = pure acc
-    chain _ acc@(Just terms) _ _ | null terms = pure acc
-    chain root acc ((pos, segment) : rest) after
-      | shared@(_ : _ : _) <- placed pos (sharedSides segment) =
-          merge (map alone (distinctOn snd shared)) >>= continue
-      | written@(_ : _ : _) <- placed pos (unionSides segment) = do
-          -- sides that give the same terms are one side, so that a union
-          -- of a path with itself (or another way to write it) is it
-          sides <-
-            firstBySet . filter (not . null . snd)
-              <$> for written \side ->
-                (side,) . sideTerms <$> go here (fst side) (snd side)
-          continue =<< case sides of
-            [] -> pure (Just mempty)
-            [(side, _)] -> alone side
-            _ -> do
-              let union' = pos * (total + 1) + leaves segment
-                  walk e
-                    | hasJoin e = Held union' e Nothing
-                    | otherwise = e
-                  -- sides that all give the same term are that term
-                  lone = \case
-                    Held _ e _ -> e
-                    e -> e
-                  together =
-                    unionOf (map (mapSet walk . snd) sides)
-                      >>= after' . mapSet lone
-              -- The union is chosen after it is copied, by each copy, or
-              -- before, as each of its sides written alone. That is the
-              -- same unless something copies the union (a conjunction)
-              -- and a side is more than a chain of steps.
-              if copies && any (joinOrConj . snd) written
-                then merge (together : map (alone . fst) sides)
-                else together
-      | otherwise = go here pos segment >>= after' >>= continue
-      where
-        following = rest ++ after
-        continue acc' = chain root acc' rest after
-        here = root && isNothing acc
-        alone (pos', side) =
-          chain root acc (placed pos' (sequenceSegments side)) following
-        merge parts = Just <$> (unionAll . catMaybes =<< sequence parts)
-        sequenced = isJust acc || not (null following)
-        after' terms =
-          Just <$> case acc of
-            Nothing ->
-              pure (if sequenced then mapSet atBoundary terms else terms)
-            Just before ->
-              combine
-                (sequenceWithin spend.made)
-                before
-                (mapSet atBoundary terms)
-        -- A side as the union has it: at a sequence boundary @ joins, and
-        -- at the root of the path a leading @ joins nothing, so that @/p
-        -- there is the side p ('rootKey').
-        sideTerms =
-          mapSet $
-            (if here then rootKey else id)
-              . (if sequenced then atBoundary else id)
-        firstBySet = unseen (mempty :: Set (Set Expr))
-        unseen seen = \case
-          [] -> []
-          x : xs
-            | key `member` seen -> unseen seen xs
-            | otherwise -> x : unseen (insertSet key seen) xs
-            where
-              key = mapSet renumbered (snd x)
-    unionAll = foldM (\acc xs -> collect acc (map pure (toList xs))) mempty
-    one = pure . singletonSet
-    combine f a b = collect mempty [f x y | x <- toList a, y <- toList b]
-    unionOf = \case
-      [] -> pure mempty
-      [a] -> pure a
-      sets ->
-        collect mempty (map (pure . altSorted) (traverse toList sets))
-    collect :: Set Expr -> [m Expr] -> m (Set Expr)
-    collect = foldM \acc making -> do
-      x <- making
-      spend.termMade x
-      let acc' = insertSet x acc
-      spend.sized (length acc')
-      pure acc'
+      Wild -> one (SStep pos Out MWild)
+      Literal t -> one (SStep pos Out (MLiteral t))
+      RegexMatch r -> one (SStep pos Out (MRegex r))
+      Backwards Wild -> one (SStep pos In MWild)
+      Backwards (Literal t) -> one (SStep pos In (MLiteral t))
+      Backwards (RegexMatch r) -> one (SStep pos In (MRegex r))
+      Backwards _ -> error "structures: pushBackwards leaves ~ only on steps"
+      Absolute nid -> one (SJoin pos (Exactly nid) True)
+      ExcludingNIDs ns -> one (SJoin pos (Except ns) False)
+      p :++ q -> do
+        a <- go pos p
+        b <- go (pos + leaves p) q
+        collect a (map (pure . Just) (toList b))
+      p@(_ :|| _) -> do
+        -- sides that give the same chains are one side, so that a union
+        -- of a path with itself is that path also when it has a shared
+        -- union, which each of the two would choose
+        sides <-
+          distinctOn (shapes . map (shape . sideOrder))
+            . filter (not . null)
+            <$> for (placed pos (unionSides p)) \(pos', side) ->
+              toList <$> go pos' side
+        collect mempty $
+          map (pure . unionOf (named pos p)) (traverse id sides)
+      p :& q -> do
+        a <- go pos p
+        b <- go (pos + leaves p) q
+        collect
+          mempty
+          [ pure (Just [SGroup (named pos (p :& q)) (conjuncts x <> conjuncts y)])
+          | x <- toList a,
+            y <- toList b
+          ]
+      WithLimits _ _ p -> go pos p
+      p :/ q -> do
+        a <- go pos p
+        if null a
+          then pure a
+          else do
+            b <- go (pos + leaves p) q
+            collect mempty [pure (sequenced x y) | x <- toList a, y <- toList b]
+    one = pure . singletonSet . (: [])
+    shapes = setFromList :: [Chain] -> Set Chain
+    collect :: Set Chain -> [m (Maybe Chain)] -> m (Set Chain)
+    collect = foldM \acc making ->
+      making >>= \case
+        Nothing -> pure acc
+        Just x -> do
+          spend.made (weight x)
+          pure (insertSet x acc)
 
 -- | Each of some parts of a path written one after the other with the
 -- place it is written at: the leaves of the path before it.
@@ -282,6 +197,86 @@ leaves = \case
   WithLimits _ _ p -> leaves p
   _ -> 1
 
+-- | The sides of a relational union, through nested ones.
+unionSides :: Path -> [Path]
+unionSides = \case
+  p :|| q -> unionSides p ++ unionSides q
+  WithLimits _ _ p@(_ :|| _) -> unionSides p
+  p -> [p]
+
+-- | The conjuncts a chain is in a group: nested groups are one group.
+conjuncts :: Chain -> [Chain]
+conjuncts = \case
+  [SGroup _ cs] -> cs
+  c -> [c]
+
+-- | A union of sides, which is its side when it has only one, and
+-- nothing when it has none.
+unionOf :: Int -> [Chain] -> Maybe Chain
+unionOf name sides = case ordNub (concatMap sidesOf sides) of
+  [] -> Nothing
+  [c] -> Just c
+  cs -> Just [SUnion name cs]
+  where
+    sidesOf = \case
+      [SUnion _ cs] -> cs
+      c -> [c]
+
+-- | One chain after another. A join right after a join is one join, with
+-- both tests; when they contradict each other there is no chain.
+sequenced :: Chain -> Chain -> Maybe Chain
+sequenced a b = case (reverse a, b) of
+  (SJoin pos test root : before, SJoin _ test' _ : after) -> do
+    both <- meetTests test test'
+    sequenced (reverse before <> [SJoin pos both root]) after
+  _ -> Just (a <> b)
+
+-- | The normal form of a chain, in which what means the same is written
+-- the same, so that the sides of a union can be compared ('shape'):
+--
+-- * joins right after one another are one join;
+-- * a union has each of its sides once, in a fixed order, and a union of
+--   one side is that side;
+-- * an @\@N@ is marked as a root only where it can start a route: an
+--   @\@N@ after anything, also after a leading @\@@, tests the node the
+--   route is at.
+--
+-- A leading @\@@ is a join like any other, also where the input is one
+-- node already (at the root of the path, right after another join, at
+-- the start of a conjunct or a side): it is kept as written. It merges
+-- nothing there, but it is a join of its chain, so it makes a conjunct it
+-- starts a chain apart, which is copied whole: @(\@/(a & b) & c)/(\@/f & e)@
+-- has the chain @\@/(a & b)/\@/f@, in which @a@ and @b@ meet before
+-- @f@, and @(a & b & c)/(\@/f & e)@ has not.
+--
+-- Nothing when the chain has contradictory joins, or a union without
+-- sides.
+normal :: Chain -> Maybe Chain
+normal c = do
+  c' <- norm True c
+  if c' == c then Just c else normal c'
+
+-- | 'normal' for a chain that starts its routes, or not.
+norm :: Bool -> Chain -> Maybe Chain
+norm atStart chain = do
+  parts <- for (zip (atStart : repeat False) chain) \case
+    (start, SGroup name cs) -> do
+      cs' <- traverse (norm start) cs
+      pure [SGroup name (concatMap conjuncts cs')]
+    (start, SUnion name cs) ->
+      unionOf name
+        . distinctOn shape
+        . sortOn shape
+        $ mapMaybe (norm start) cs
+    (False, SJoin pos test _) -> pure [SJoin pos test False]
+    (_, seg) -> pure [seg]
+  foldM sequenced [] parts
+
+isJoin :: Seg -> Bool
+isJoin = \case
+  SJoin {} -> True
+  _ -> False
+
 -- | The first of the elements with each key.
 distinctOn :: forall k a. (Ord k) => (a -> k) -> [a] -> [a]
 distinctOn key = go (mempty :: Set k)
@@ -294,579 +289,993 @@ distinctOn key = go (mempty :: Set k)
         where
           k = key x
 
--- | The sides of a shared union, through nested ones.
-sharedSides :: Path -> [Path]
-sharedSides = \case
-  p :++ q -> sharedSides p ++ sharedSides q
-  p -> [p]
+-- | What a chain is made of, whatever places it is written at.
+shape :: Chain -> Chain
+shape = map \case
+  SStep _ d m -> SStep 0 d m
+  SJoin _ test root -> SJoin 0 test root
+  SGroup _ cs -> SGroup 0 (map shape cs)
+  SUnion _ cs -> SUnion 0 (map shape cs)
 
--- | The sides of a relational union, through nested ones.
-unionSides :: Path -> [Path]
-unionSides = \case
-  p :|| q -> unionSides p ++ unionSides q
-  p -> [p]
+-- | A chain with the sides of every union in it in a fixed order.
+sideOrder :: Chain -> Chain
+sideOrder = map \case
+  SGroup name cs -> SGroup name (map sideOrder cs)
+  SUnion name cs -> SUnion name (sortOn shape (map sideOrder cs))
+  seg -> seg
 
--- | The segments of a sequence, however it is nested: sequencing
--- associates, so the terms are built from the flat chain, left to right,
--- and grouping cannot matter.
-sequenceSegments :: Path -> [Path]
-sequenceSegments = \case
-  p :/ q -> sequenceSegments p ++ sequenceSegments q
-  p -> [p]
-
--- | A term without the leading joins of its input, which at the root of a
--- path join nothing. A join that an @\@N@ can follow is kept, since it
--- makes the @\@N@ a test of the current node instead of a root: one
--- before an @\@N@, and one before a term with an output at its own input
--- (as @c & \@@ has), which an @\@N@ written after the term would follow.
-rootKey :: Expr -> Expr
-rootKey e = case e of
-  Sequence (Join Stay test) q
-    | test == anyNode, not (hasFixed q), not (staysPut q) -> rootKey q
-  Sequence p q -> sequenceExpr (rootKey p) q
-  Join p test | p /= Stay -> joinOf (rootKey p) test
-  Both a b rest -> conjoin (rootKey a) (map rootKey (b : rest))
-  Alt es -> altSorted (map rootKey es)
-  _ -> e
+-- | A chain with its segments named in the order they occur in it.
+renamed :: Chain -> Chain
+renamed c = S.evalState (chain' c) 0
   where
-    hasFixed = \case
-      Join p test -> isExactly test || hasFixed p
-      Sequence p q -> hasFixed p || hasFixed q
-      Both a b rest -> any hasFixed (a : b : rest)
-      Alt es -> any hasFixed es
-      Held _ walk _ -> hasFixed walk
-      _ -> False
-    isExactly = \case
-      Exactly _ -> True
-      Except _ -> False
-    -- whether an output of the term is its input
-    staysPut = \case
-      Stay -> True
-      Both a b rest -> any staysPut (a : b : rest)
-      Alt es -> any staysPut es
-      Sequence p q -> staysPut p && staysPut q
-      Held _ walk _ -> staysPut walk
-      _ -> False
+    chain' = traverse seg
+    next = S.state \i -> (i, i + 1 :: Int)
+    seg = \case
+      SStep _ d m -> next <&> \i -> SStep i d m
+      SJoin _ test root -> next <&> \i -> SJoin i test root
+      SGroup _ cs -> SGroup <$> next <*> traverse chain' cs
+      SUnion _ cs -> SUnion <$> next <*> traverse chain' cs
 
-hasConj :: Path -> Bool
-hasConj = \case
-  _ :& _ -> True
-  Backwards p -> hasConj p
-  p :/ q -> hasConj p || hasConj q
-  Union _ p q -> hasConj p || hasConj q
-  WithLimits _ _ p -> hasConj p
+-- | The steps and node specs of a chain, in all its conjuncts and union
+-- sides: what it costs to make or compare it.
+weight :: Chain -> Int
+weight =
+  sum . map \case
+    SGroup _ cs -> sum (map weight cs)
+    SUnion _ cs -> sum (map weight cs)
+    _ -> 1
+
+-- | The sides of every union in a chain, by the union's name.
+unionsIn :: Chain -> Map Int [Chain]
+unionsIn = foldMap \case
+  SGroup _ cs -> foldMap unionsIn cs
+  SUnion name cs -> insertMap name cs (foldMap unionsIn cs)
+  _ -> mempty
+
+-- | Whether some group in a chain, or in a side of a union in it, has a
+-- conjunct with a join of its own: only then are routes listed in
+-- another order than the conjuncts they choose from left to right
+-- ('listedBy').
+hasJoinedConjunct :: Chain -> Bool
+hasJoinedConjunct = any \case
+  SGroup _ cs -> any (any isJoin) cs || any hasJoinedConjunct cs
+  SUnion _ cs -> any hasJoinedConjunct cs
   _ -> False
 
--- | Whether a path has a join (@\@@, @\@N@ or @!{…}@) or a conjunction.
-joinOrConj :: Path -> Bool
-joinOrConj = \case
-  One -> True
-  Absolute _ -> True
-  ExcludingNIDs _ -> True
-  _ :& _ -> True
-  Backwards p -> joinOrConj p
-  p :/ q -> joinOrConj p || joinOrConj q
-  Union _ p q -> joinOrConj p || joinOrConj q
-  WithLimits _ _ p -> joinOrConj p
+-- | Whether a chain has a group, also in a side of a union in it: what
+-- follows or precedes it may then be copied.
+forks :: Chain -> Bool
+forks = any \case
+  SGroup {} -> True
+  SUnion _ cs -> any forks cs
   _ -> False
 
--- | At a sequence boundary @\@@ joins the preceding outputs, also when it
--- is one alternative of a union. Otherwise @(\@ + a)/\@N@ would lose the
--- @\@@ and root its @\@N@ alternative, instead of testing the current node
--- like @\@/\@N@.
-atBoundary :: Expr -> Expr
-atBoundary = \case
-  Stay -> Join Stay anyNode
-  Alt es -> alt (map atBoundary es)
-  e -> e
+-- * Routes
 
--- | 'alt', with the sides in a fixed order, so that the order they are
--- written in does not matter, and without sides written twice.
-altSorted :: [Expr] -> Expr
-altSorted =
-  alt . distinctOn renumbered . sortOn (\e -> (shape e, e)) . concatMap sidesOf
+-- | A segment of a route: a step, a join, the conjunct of a group the
+-- route goes through with its route through that conjunct, a union whose
+-- side is not chosen yet, or a union with the side chosen for this route
+-- and the route through that side.
+data RSeg
+  = RStep Int Direction Matcher
+  | RJoin Int NodeTest Bool
+  | RGroup Int Int [RSeg]
+  | RAtom Int
+  | RPicked Int Int [RSeg]
+  deriving stock (Eq, Ord, Show)
 
--- | A join; joining twice is joining once, with both tests. The joins of
--- the input itself have one form for each meaning, so that sides written
--- differently compare equal: @\@N@ followed by tests that accept @N@ is
--- @\@N@ (a root); tests without an @\@N@ are one test; and an @\@N@ after
--- another test stays a join of a join, since @\@/\@N@ tests the current
--- node where @\@N@ is a root.
-joinOf :: Expr -> NodeTest -> Expr
-joinOf (Join Stay test0) test = case (test0, test) of
-  -- a root stays that root when the test accepts it
-  (Exactly n, _) | testAccepts test n -> Join Stay test0
-  (Except _, Except _) | Just both <- meetTests test0 test -> Join Stay both
-  -- the current node is tested to be that node, whatever was excluded
-  (Except _, Exactly n) | testAccepts test0 n -> Join (Join Stay anyNode) test
-  _ -> Join (Join Stay test0) test
-joinOf (Join p test') test
-  | Just both <- meetTests test' test = Join p both
-joinOf p test = Join p test
+-- | The routes of a chain, with its unions not chosen: a conjunct of
+-- each group, the first segment's choice varying slowest.
+routesOf :: Chain -> [[RSeg]]
+routesOf = \case
+  [] -> [[]]
+  seg : rest -> [here <> after | here <- segment seg, after <- routesOf rest]
+  where
+    segment = \case
+      SStep pos d m -> [[RStep pos d m]]
+      SJoin pos test root -> [[RJoin pos test root]]
+      SGroup name cs ->
+        [[RGroup name j r] | (j, c) <- zip [0 ..] cs, r <- routesOf c]
+      SUnion name _ -> [[RAtom name]]
 
--- | A unit for every side of every union in a term, lazily, so that
--- counting up to a bound makes no more of the term than that.
-unionSidesIn :: Expr -> [()]
-unionSidesIn = \case
-  Alt es -> concatMap (\e -> () : unionSidesIn e) es
-  Both a b rest -> concatMap unionSidesIn (a : b : rest)
-  Join p _ -> unionSidesIn p
-  Sequence p q -> unionSidesIn p ++ unionSidesIn q
+-- | How many routes a chain has, and how many segments they have in all.
+routesSize :: Chain -> (Int, Int)
+routesSize = \case
+  [] -> (1, 0)
+  seg : rest ->
+    let (r, s) = case seg of
+          SGroup _ cs ->
+            let sizes = map routesSize cs
+             in (sum (map fst sizes), sum (map (\(n, k) -> n + k) sizes))
+          _ -> (1, 1)
+        (r', s') = routesSize rest
+     in (capped (r * r'), capped (s * r' + r * s'))
+  where
+    capped = min 1000000000
+
+-- | How many steps, joins and unions not chosen a route has, through
+-- the conjuncts and the sides it chose: what it costs to go along it.
+segmentsOf :: [RSeg] -> Int
+segmentsOf =
+  sum . map \case
+    RGroup _ _ body -> segmentsOf body
+    RPicked _ _ body -> segmentsOf body
+    _ -> 1
+
+-- | A route with the chosen sides written in their unions' places.
+written :: [RSeg] -> [RSeg]
+written = concatMap \case
+  RPicked _ _ body -> written body
+  seg -> [seg]
+
+-- | The conjuncts a route chooses in the groups of one stretch, each
+-- group by its name.
+type Choices = [(Int, Int)]
+
+-- | A step or a join on a route, with what tells its copy from the
+-- others: routes share exactly the steps and joins that have the same.
+data Item k
+  = Along k Direction Matcher
+  | Meet k NodeTest Bool
+  deriving stock (Eq, Ord, Show, Functor)
+
+-- | The copy of a step or a join, as the route that goes through it sees
+-- it: where it is written, and the choices that copy it, stretch within
+-- stretch.
+type Name = (Int, [Choices])
+
+-- | The steps and joins of a route whose unions are chosen, each named by
+-- its copy. This is where the meaning of sequencing is.
+--
+-- A chain is cut into stretches by its joins. Within a stretch every
+-- group copies everything else: @(a & b)/(c & d)@ is
+-- @a/c & a/d & b/c & b/d@, each of the four written apart. So a stretch
+-- with groups is, for a route, the chain it gets when each group is
+-- replaced by the conjunct the route chooses there, written in the
+-- group's place; that chain is named by those choices, and it is a chain
+-- like any other: the joins of the conjuncts cut it, and the groups
+-- within its stretches copy again. A step is named by the choices of all
+-- the stretches it is in, from the outermost on, and so is a join, which
+-- the routes that made the same choices up to its chain go through
+-- together.
+--
+-- So a conjunct is copied whole, with the joins in it: in
+-- @(x/\@/w & b)/(c & d)@ the choice between @c@ and @d@ names the chain
+-- @x/\@/w/c@ that the join is in, and there are two @x@. A join of the
+-- chain itself ends the stretch: in @x/\@/w/(c & d)@ only @w@ is in the
+-- stretch that has the group, and the @x@ before the join is one for
+-- both. A join in a conjunct of the later group, as in
+-- @(p & q)/(x/\@/(c & d) & b)@, is in the chain @p/x/\@/(c & d)@, where it
+-- likewise keeps @c & d@ from copying @p/x@.
+--
+-- A chosen side of a union is read where the union is written: its
+-- segments are segments of the union's chain, and a join among them cuts
+-- that chain like any other. That is what the side means for two routes
+-- that both chose it; what two routes share that chose different sides
+-- is not decided by their names ('sharedBy').
+annotate :: [RSeg] -> [Item Name]
+annotate = chain' [] . written
+  where
+    chain' :: [Choices] -> [RSeg] -> [Item Name]
+    chain' name segments =
+      let (stretch, rest) = break joinsHere segments
+       in stretch' name stretch <> case rest of
+            RJoin pos test root : more ->
+              Meet (pos, name) test root : chain' name more
+            _ -> []
+    stretch' name segments =
+      let (chosen', segments') = flattened segments
+       in if null chosen'
+            then [Along (pos, name) d m | RStep pos d m <- segments']
+            else chain' (name <> [chosen']) (conjunctsWritten segments')
+
+-- | The unions on a route that are not chosen, each with its copy as
+-- 'annotate' names a step written in its place.
+openCopies :: [RSeg] -> [(Int, [Choices])]
+openCopies = chain' [] . written
+  where
+    chain' name segments =
+      let (stretch, rest) = break joinsHere segments
+       in stretch' name stretch <> case rest of
+            _ : more -> chain' name more
+            [] -> []
+    stretch' name segments =
+      let (chosen', segments') = flattened segments
+       in if null chosen'
+            then [(union'', name) | RAtom union'' <- segments']
+            else chain' (name <> [chosen']) (conjunctsWritten segments')
+
+-- | The groups of a stretch, with the conjunct the route chooses in
+-- each, and the stretch without those that are no chain apart. A
+-- conjunct without a join of its own is none: its segments are in the
+-- stretch too, and its groups are groups of the stretch
+-- (@(a/(b & c) & d)/…@ is @(a/b & a/c & d)/…@).
+flattened :: [RSeg] -> (Choices, [RSeg])
+flattened = foldMap \case
+  RGroup name' j body
+    | not (any joinsHere body') ->
+        let (chosen', segments') = flattened body'
+         in ((name', j) : chosen', segments')
+    | otherwise -> ([(name', j)], [RGroup name' j body])
+    where
+      body' = written body
+  seg -> ([], [seg])
+
+-- | A stretch with each group replaced by the conjunct chosen in it.
+conjunctsWritten :: [RSeg] -> [RSeg]
+conjunctsWritten = concatMap \case
+  RGroup _ _ body -> written body
+  seg -> [seg]
+
+joinsHere :: RSeg -> Bool
+joinsHere = \case
+  RJoin {} -> True
+  _ -> False
+
+-- | Where a route is listed among the routes of its alternative: by the
+-- conjuncts it chooses, stretch by stretch and, within a stretch, the
+-- groups of the stretch before those of the chain the choice gives. So
+-- the routes are listed as the path written out lists them, conjunct by
+-- conjunct, the first choice varying slowest: @a/c@, @a/d@, @b/c@, @b/d@
+-- for @(a & b)/(c & d)@; and a conjunct with a join, which is copied
+-- whole, has its routes together for each copy.
+listedBy :: [RSeg] -> [Int]
+listedBy = chain' . written
+  where
+    chain' [] = []
+    chain' segments =
+      let (stretch, rest) = break joinsHere segments
+       in stretch' stretch <> chain' (drop 1 rest)
+    stretch' segments =
+      let (chosen', segments') = flattened segments
+       in if null chosen'
+            then []
+            else map snd chosen' <> chain' (conjunctsWritten segments')
+
+-- | The side a route chose of each union it goes through.
+sidesOn :: [RSeg] -> Map Int Int
+sidesOn = foldMap \case
+  RGroup _ _ body -> sidesOn body
+  RPicked name i body -> insertMap name i (sidesOn body)
+  _ -> mempty
+
+-- | The unions on a route that are not chosen.
+openOn :: [RSeg] -> [Int]
+openOn = concatMap \case
+  RGroup _ _ body -> openOn body
+  RPicked _ _ body -> openOn body
+  RAtom name -> [name]
   _ -> []
 
--- | A union, flattened and without repeated sides.
-alt :: [Expr] -> Expr
-alt es = case ordNub (concatMap sidesOf es) of
-  [e] -> e
-  es' -> Alt es'
+-- | A route with the side chosen for it written in a union's place.
+replaced :: Int -> Int -> [RSeg] -> [RSeg] -> [RSeg]
+replaced name i body = map \case
+  RAtom name' | name' == name -> RPicked name i body
+  RGroup g j inner -> RGroup g j (replaced name i body inner)
+  RPicked u k inner -> RPicked u k (replaced name i body inner)
+  seg -> seg
 
-sidesOf :: Expr -> [Expr]
-sidesOf = \case
-  Alt xs -> xs
-  e -> [e]
+-- * Two routes
 
--- | The term of a whole path, with the joins that have nothing to share
--- written for each of their continuations. A join of the input itself
--- (@\@@, @\@N@, @!{…}@ with nothing before it) has no prefix: where the
--- input is one node (the root of the path, and what follows another
--- join) it only says where its continuations start, and each of them can
--- say so. @\@1/(a & b)@ is @\@1/a & \@1/b@, @\@/(a & b) & c@ is
--- @\@/a & \@/b & c@, and @x/\@/(\@/(a & b) & c)@ is
--- @x/\@/(\@/a & \@/b & c)@: the same routes. Written like that, the
--- copies of a union after @a@, @b@ and @c@ are conjuncts of one
--- conjunction, which is what lets them share a walk ('placeShared'), as
--- they do after @a & b & c@.
---
--- Only a whole term can be written so: in a part of one that is still to
--- be sequenced, such a join takes the outputs of what comes before it.
-atRoot :: Expr -> Expr
-atRoot e = conjoin' (concatMap flat (conjuncts e))
+-- | Two routes of one chain, segment by segment: a step or a join both go
+-- through, a group with the conjunct each chooses and its route there, a
+-- conjunct both chose that has a join of its own (once its groups are
+-- found to agree), or a union they chose different sides of, and whether
+-- one of those sides has a group that copies what is next to the union.
+-- A union they chose the same side of is that side, read in place.
+data Aligned
+  = BothStep Int
+  | BothJoin Int
+  | BothGroup Int Int [RSeg] [RSeg]
+  | Within [Aligned]
+  | Differ Bool
+
+aligned :: [RSeg] -> [RSeg] -> [Aligned]
+aligned xs ys = case (xs, ys) of
+  ([], []) -> []
+  (RStep p _ _ : xs', RStep q _ _ : ys')
+    | p == q -> BothStep p : aligned xs' ys'
+  (RJoin p _ _ : xs', RJoin q _ _ : ys')
+    | p == q -> BothJoin p : aligned xs' ys'
+  (RGroup n j b : xs', RGroup m k c : ys')
+    | n == m -> BothGroup j k b c : aligned xs' ys'
+  (RPicked n i b : xs', RPicked m k c : ys')
+    | n == m ->
+        if i == k
+          then aligned b c <> aligned xs' ys'
+          else Differ (copies b || copies c) : aligned xs' ys'
+  _ -> error "aligned: routes of different chains"
   where
-    flat = \case
-      Sequence (Join p test) q ->
-        -- what the join merges starts where the join does, and what
-        -- follows it starts at one node again
-        let j = joinOf (if p == Stay then Stay else atRoot p) test
-            q' = atRoot q
-         in case q' of
-              Both {}
-                | atInput j ->
-                    concatMap (flat . sequenceExpr j) (conjuncts q')
-              _ -> [sequenceExpr j q']
-      Join p test | p /= Stay -> [joinOf (atRoot p) test]
-      c -> [c]
-
--- | Whether a term is joins of its input and nothing else.
-atInput :: Expr -> Bool
-atInput = \case
-  Join Stay _ -> True
-  Join p _ -> atInput p
-  _ -> False
-
--- | Whether a term has a join, outside the shared walks in it.
-hasJoin :: Expr -> Bool
-hasJoin = \case
-  Join _ _ -> True
-  Both a b rest -> any hasJoin (a : b : rest)
-  Sequence p q -> hasJoin p || hasJoin q
-  Alt es -> any hasJoin es
-  _ -> False
-
--- | Whether a term has a shared walk that is not chosen yet or not put in
--- its place yet.
-hasShared :: Expr -> Bool
-hasShared = \case
-  Held {} -> True
-  Both a b rest -> any hasShared (a : b : rest)
-  Join p _ -> hasShared p
-  Sequence p q -> hasShared p || hasShared q
-  Alt es -> any hasShared es
-  _ -> False
-
--- | Whether a term has a conjunction anywhere, also in the sides of its
--- unions and in its shared walks.
-hasBoth :: Expr -> Bool
-hasBoth = \case
-  Both {} -> True
-  Join p _ -> hasBoth p
-  Sequence p q -> hasBoth p || hasBoth q
-  Alt es -> any hasBoth es
-  Held _ walk _ -> hasBoth walk
-  _ -> False
-
--- | A term that follows a conjunct without a step: its shared walks say
--- which.
-afterLone :: Int -> Expr -> Expr
-afterLone = flagged . Just
-
--- | A term whose shared walks follow something else.
-unflagged :: Expr -> Expr
-unflagged = flagged Nothing
-
-flagged :: Maybe Int -> Expr -> Expr
-flagged flag = go
-  where
-    go e | not (hasShared e) = e
-    go e = case e of
-      Held n walk _ -> Held n walk flag
-      Both a b rest -> Both (go a) (go b) (map go rest)
-      Join p test -> Join (go p) test
-      Sequence p q -> Sequence (go p) (go q)
-      Alt es -> Alt (map go es)
-      _ -> e
-
--- | A term with plain steps: an alternative.
-untagged :: Expr -> Expr
-untagged = \case
-  Written _ d m -> Step d m
-  Both a b rest -> Both (untagged a) (untagged b) (map untagged rest)
-  Join p test -> Join (untagged p) test
-  Sequence p q -> Sequence (untagged p) (untagged q)
-  Alt es -> Alt (map untagged es)
-  Held n walk flag -> Held n (untagged walk) flag
-  e -> e
-
--- | What a term is made of, whatever places it was written at.
-shape :: Expr -> Expr
-shape = \case
-  Written _ d m -> Step d m
-  Both a b rest -> Both (shape a) (shape b) (map shape rest)
-  Join p test -> Join (shape p) test
-  Sequence p q -> Sequence (shape p) (shape q)
-  Alt es -> Alt (map shape es)
-  Held _ walk _ -> Held 0 (shape walk) Nothing
-  e -> e
-
--- | A term with its steps and unions numbered in the order they occur in
--- it instead of by their place in the path, so that the same thing
--- written at two places compares equal.
-renumbered :: Expr -> Expr
-renumbered e0 = S.evalState (go e0) (mempty, mempty)
-  where
-    go :: Expr -> S.State (Map Int Int, Map Int Int) Expr
-    go e = case e of
-      Written t d m -> do
-        (steps, unions') <- S.get
-        case lookup t steps of
-          Just t' -> pure (Written t' d m)
-          Nothing -> do
-            let t' = length steps
-            S.put (insertMap t t' steps, unions')
-            pure (Written t' d m)
-      Held n walk flag -> do
-        (steps, unions') <- S.get
-        n' <- case lookup n unions' of
-          Just n' -> pure n'
-          Nothing -> do
-            let n' = length unions'
-            S.put (steps, insertMap n n' unions')
-            pure n'
-        walk' <- go walk
-        pure (Held n' walk' flag)
-      Both a b rest -> Both <$> go a <*> go b <*> traverse go rest
-      Join p test -> (`Join` test) <$> go p
-      Sequence p q -> Sequence <$> go p <*> go q
-      Alt es -> Alt <$> traverse go es
-      _ -> pure e
-
--- | Choose a side of every relational union, independently for each copy
--- distribution made of it, and put the shared walks in their place.
---
--- A union is chosen in all its copies at once: each copy becomes one of
--- its sides, the term is distributed again where a side has several
--- outputs or inputs (which copies the unions not chosen yet), and the
--- copies that chose the same shared walk are put together as one walk
--- ('placeShared'). Which union is chosen first changes what the others
--- are copied by, so every order that can make a difference is taken: the
--- alternatives are what any order of choosing ends with.
---
--- Two unions can be chosen in either order with the same result when
--- neither is ever sequenced with the other (no copy of one is before or
--- after a copy of the other), since choosing a union changes only the
--- conjuncts it is in; and when the sides of both are single chains of
--- steps, since choosing such a union only writes a chain in its place,
--- which copies nothing and puts nothing together. So the unions of a term
--- fall into groups ('dependent'), and only the orders within the first
--- group are taken; the others are chosen after it, in the same way. In a
--- term without a conjunction nothing is copied, and one order is all
--- there is. (A union of single chains cannot simply go first or last
--- when it is sequenced with a union that has other sides: chosen while it
--- is copied, its copies may differ, and still follow one shared walk once
--- the other union's copies choose that.)
-resolve :: Expr -> Set Expr
-resolve = runIdentity . resolveWithin freely
-
--- | 'resolve' within what may be spent.
-resolveWithin :: forall m. (Monad m) => Spend m -> Expr -> m (Set Expr)
-resolveWithin spend start = go [start] (singletonSet start) mempty
-  where
-    go :: [Expr] -> Set Expr -> Set Expr -> m (Set Expr)
-    go [] _ done = pure done
-    go (e : todo) seen done = case openUnions e of
-      (_, []) -> do
-        let done' = insertSet (untagged e) done
-        spend.sized (length done')
-        go todo seen done'
-      (which, unions') -> do
-        -- finding the unions goes through the whole term
-        spend.made e
-        let first' = case unions' of
-              _ : _ : _ | hasBoth e -> dependent e which unions'
-              _ -> take 1 unions'
-        (todo', seen') <-
-          foldM
-            choose
-            (todo, seen)
-            [ (union', picks)
-            | (union', copies, sides, _) <- first',
-              picks <- traverse (const [0 .. sides - 1]) [1 .. copies]
-            ]
-        go todo' seen' done
-        where
-          choose (todo', seen') (union', picks) = do
-            e' <- chosen which union' picks e
-            spend.made e'
-            pure
-              if e' `member` seen'
-                then (todo', seen')
-                else (e' : todo', insertSet e' seen')
-    -- the term with each copy of a union replaced by the side it chose
-    chosen :: [Int] -> Int -> [Int] -> Expr -> m Expr
-    chosen which union' picks e = do
-      e' <- S.evalStateT (replace e) (which, picks)
-      atRoot
-        <$> if hasOpenShared e' then placeShared spend.made e' else pure e'
-      where
-        replace :: Expr -> S.StateT ([Int], [Int]) m Expr
-        replace x = case x of
-          Alt es ->
-            S.state \case
-              (this : others, i : more)
-                | this == union' -> (es `indexEx` i, (others, more))
-              (_ : others, more) -> (x, (others, more))
-              ([], _) -> error "resolve: a union that was not found"
-          Both a b rest -> conjoin' <$> traverse replace (a : b : rest)
-          Join p test -> (`joinOf` test) <$> replace p
-          Sequence p q -> do
-            p' <- replace p
-            q' <- replace q
-            lift (sequenceWithin spend.made p' q')
-          _ -> pure x
-
--- | The unions of a term that can be chosen (those not inside a side of
--- another). Copies of one union are equal, but for the conjunct without
--- a step they may follow. The unions are numbered: which one each
--- occurrence is, in the order 'resolve' goes through the term, and for
--- each how many copies of it there are, how many sides it has, and
--- whether every side is a single chain of steps.
-openUnions :: Expr -> ([Int], [(Int, Int, Int, Bool)])
-openUnions e0 =
-  ( map number found,
-    [ (n, length (filter (== union') found), length es, all isChain es)
-    | (n, union'@(Alt es)) <- zip [0 ..] distinct
-    ]
-  )
-  where
-    found = map unflagged (go e0 [])
-    distinct = ordNub found
-    numbers = mapFromList (zip distinct [0 ..]) :: Map Expr Int
-    number union' = findWithDefault 0 union' numbers
-    go e acc = case e of
-      Alt _ -> e : acc
-      Both a b rest -> foldr go acc (a : b : rest)
-      Join p _ -> go p acc
-      Sequence p q -> go p (go q acc)
-      _ -> acc
-    isChain = \case
-      Written {} -> True
-      Step {} -> True
-      Sequence p q -> isChain p && isChain q
+    -- whether a chosen side has a group outside its joins: it then adds
+    -- a choice to the stretch the union is in
+    copies body =
+      let top = written body
+          (first', rest) = break isJoin' top
+          last' = takeWhile (not . isJoin') (reverse top)
+       in any isGroup first' || (not (null rest) && any isGroup last')
+    isJoin' = \case
+      RJoin {} -> True
+      _ -> False
+    isGroup = \case
+      RGroup {} -> True
       _ -> False
 
--- | The unions that have to be chosen in every order with the first one:
--- those it is sequenced with in the term, unless both have only single
--- chains for sides, and the ones those are sequenced with in turn.
-dependent ::
-  Expr -> [Int] -> [(Int, Int, Int, Bool)] -> [(Int, Int, Int, Bool)]
-dependent e which unions' = filter (\(n, _, _, _) -> n `member` linked) unions'
+-- | What two routes of a chain share: the steps and the joins that are
+-- the same copy for both, by where they are written. Nothing when the
+-- two cannot be routes of one alternative: when they go through the same
+-- copy of a union and chose different sides of it.
+--
+-- This is 'annotate' for two routes at once. A union the two chose the
+-- same side of is that side read in place, as it is for either. A union
+-- they chose different sides of is, for the two, a segment that is not
+-- chosen: it cuts nothing and chooses nothing, and what the two share
+-- around it is what they would share around a step written there. So
+-- two routes that chose different sides are in one copy of the union
+-- exactly when nothing else tells them apart in its stretch, and the
+-- joins inside the sides they chose do not put them in one copy of what
+-- follows: in @(a & c)/(a/\@ | b/\@)/(c/\@/e & d)@ the route through
+-- @a@ then @a/\@@ and the one through @c@ then @b/\@@ are apart from
+-- the first group on.
+sharedBy :: [RSeg] -> [RSeg] -> Maybe ([Int], [Int])
+sharedBy a b = chain' (aligned a b)
   where
-    chains = setFromList [n | (n, _, _, True) <- unions'] :: Set Int
-    links :: Set (Int, Int)
-    links = snd (S.execState (go e) (which, mempty))
-    -- the unions in a term, having noted which are sequenced with which
-    go :: Expr -> S.State ([Int], Set (Int, Int)) (Set Int)
+    chain' :: [Aligned] -> Maybe ([Int], [Int])
+    chain' items =
+      let (stretch, rest) = break isJoin' items
+       in do
+            here <- stretch' stretch
+            case rest of
+              BothJoin p : more -> do
+                later <- chain' more
+                pure (here <> ([], [p]) <> later)
+              _ -> pure here
+    stretch' items = case agreeing items of
+      -- different conjuncts of a group of the stretch: written apart
+      Nothing -> Just ([], [])
+      Just (items', False)
+        | or [True | Differ _ <- items'] -> Nothing
+        | otherwise -> Just ([p | BothStep p <- items'], [])
+      Just (items', True)
+        -- a side with a group, chosen by one of the two, copies the
+        -- chain for that one: the two share nothing of it, but still
+        -- have to be routes of one alternative
+        | or [fork | Differ fork <- items'] -> ([], []) <$ chain' (within items')
+        | otherwise -> chain' (within items')
+    within = concatMap \case
+      Within body -> body
+      item -> [item]
+    -- the groups of a stretch, with whether there are any: nothing when
+    -- the two choose different conjuncts of one
+    agreeing :: [Aligned] -> Maybe ([Aligned], Bool)
+    agreeing = \case
+      [] -> Just ([], False)
+      BothGroup j k x y : more
+        | j /= k -> Nothing
+        | otherwise ->
+            let body = aligned x y
+             in if any isJoin' body
+                  then do
+                    (later, _) <- agreeing more
+                    Just (Within body : later, True)
+                  else do
+                    (here, _) <- agreeing body
+                    (later, _) <- agreeing more
+                    Just (here <> later, True)
+      item : more -> do
+        (later, grouped) <- agreeing more
+        Just (item : later, grouped)
+    isJoin' = \case
+      BothJoin _ -> True
+      _ -> False
+
+-- | Whether two routes that chose different sides of a union can be
+-- routes of one alternative: they go through no copy of a union with
+-- different sides of it ('sharedBy'), and the node tests on what they
+-- share do not contradict each other, as when both are at one joined
+-- node and one chose @\@1@ there and the other @\@2@. Routes that cannot
+-- be glued two by two cannot be glued with others either, so a way to
+-- choose that has such a pair is dropped as it is made, before the ways
+-- of the other routes are tried with it.
+--
+-- The two are routes of a chain without a join of its own, so they
+-- start at one node; and when a join of the chain it is a stretch of
+-- follows, they end at that join, with its test.
+gluesWith :: Maybe NodeTest -> [RSeg] -> [RSeg] -> Bool
+gluesWith ending a b = case sharedBy a b of
+  Nothing -> False
+  Just (steps, joins)
+    | tests a && tests b ->
+        isJust (glueRoutes [items (0 :: Int) a, items 1 b])
+    | otherwise -> True
+    where
+      shared = (setFromList steps, setFromList joins) :: (Set Int, Set Int)
+      items side route' =
+        [ case item of
+            Along (pos, _) d m -> Along (key (fst shared) side pos) d m
+            Meet (pos, _) test root -> Meet (key (snd shared) side pos) test root
+        | item <- annotate route'
+        ]
+          <> [Meet (-1) test False | test <- toList ending]
+      key among side pos
+        | pos `member` among = 3 * pos
+        | otherwise = 3 * pos + 1 + side
+  where
+    tests route' =
+      or [test /= anyNode | Meet _ test _ <- annotate route']
+        || any (/= anyNode) ending
+
+-- | Whether the node tests on a route do not contradict each other.
+gluesAlone :: Maybe NodeTest -> [RSeg] -> Bool
+gluesAlone ending route' =
+  and [test == anyNode | Meet _ test _ <- named]
+    || isJust
+      ( glueRoutes
+          [ concat (numbered [named])
+              <> [Meet (-1) test False | test <- toList ending]
+          ]
+      )
+  where
+    named = annotate route'
+
+-- * Choosing
+
+-- | The alternatives of a chain: every way to choose a side of each
+-- relational union for each route, as the routes of the alternative.
+--
+-- Every route of the chain (a conjunct of each group, its unions not
+-- chosen) chooses its unions on its own: a side for each, and where a
+-- side has a group, a conjunct of it for each of the routes it then is,
+-- which choose the unions that are left on their own in turn
+-- ('chosen'). An alternative is a way to choose for every route of the
+-- chain in which any two routes can be together ('sharedBy'): no two go
+-- through one copy of a union with different sides of it. What its
+-- routes share is what any two of them share.
+--
+-- A join of the chain itself is gone through by every route, and what is
+-- before it is copied by nothing after it: so the chain is its stretches
+-- between those joins, each with alternatives of its own, and an
+-- alternative of the chain is one of each, every route of a stretch
+-- going on with every route of the next. Only the routes of one stretch
+-- are compared two by two.
+resolveWithin :: forall m. (Monad m) => Spend m -> Chain -> m [[[Item Int]]]
+resolveWithin spend chain = case ownStretches chain of
+  (single, []) -> resolveStretch spend Nothing single
+  (first', more) -> do
+    -- each stretch ends at the join that follows it
+    let endings =
+          [Just test | (SJoin _ test _, _) <- more] <> [Nothing]
+    parts <-
+      for (zip endings (first' : map snd more)) \(ending, stretch) ->
+        resolveStretch (Spend spend.made (\_ -> pure ())) ending stretch
+    let width = length parts
+        -- the steps and joins of each stretch numbered apart, and the
+        -- joins between them
+        apart i = map (map (fmap (\k -> k * width + i)))
+        joins =
+          [ Meet (negate j) test root
+          | (j, (SJoin _ test root, _)) <- zip [1 ..] more
+          ]
+        through [] _ = [[]]
+        through [a] _ = a
+        through (a : as) js =
+          [r <> take 1 js <> r' | r <- a, r' <- through as (drop 1 js)]
+    for (traverse (\(i, alts) -> map (apart i) alts) (zip [0 ..] parts)) \alts -> do
+      let counts = map length alts
+          routes' = product (map (min 1000000) counts)
+          segments =
+            sum
+              [ (sum (map length a) + n) * (routes' `div` max 1 n)
+              | (a, n) <- zip alts counts
+              ]
+      spend.made (min 1000000000 segments)
+      let routes = through alts joins
+      spend.found routes
+      pure routes
+
+-- | A chain at its own joins: what is before the first, and each join
+-- with what follows it.
+ownStretches :: Chain -> (Chain, [(Seg, Chain)])
+ownStretches chain =
+  let (first', rest) = break isJoin chain
+   in (first', go rest)
+  where
     go = \case
-      Alt _ ->
-        S.state \case
-          (this : others, found) -> (singletonSet this, (others, found))
-          ([], _) -> error "dependent: a union that was not found"
-      Both a b rest -> unions <$> traverse go (a : b : rest)
-      Join p _ -> go p
-      Sequence p q -> do
-        before <- go p
-        after <- go q
-        unless (null before || null after) $ S.modify' \(left', found) ->
-          ( left',
-            foldl'
-              (flip insertSet)
-              found
-              [ (x, y)
-              | x <- toList before,
-                y <- toList after,
-                x /= y,
-                not (x `member` chains && y `member` chains)
+      [] -> []
+      j : rest ->
+        let (stretch, rest') = break isJoin rest
+         in (j, stretch) : go rest'
+
+-- | 'resolveWithin' for a chain without a join of its own, and the test
+-- of the join that follows it, if one does.
+resolveStretch ::
+  forall m.
+  (Monad m) =>
+  Spend m ->
+  Maybe NodeTest ->
+  Chain ->
+  m [[[Item Int]]]
+resolveStretch spend ending chain = do
+  let (count, size) = routesSize chain
+  spend.made (count + size)
+  if null sides
+    then do
+      let routes = numbered (map annotate (sortOn listedBy (routesOf chain)))
+      spend.made size
+      spend.found routes
+      pure [routes]
+    else do
+      each <- for (routesOf chain) \r -> (openCopies r,) <$> chosen r
+      ways <- narrowed each
+      -- a route with no way to choose is a route of no alternative,
+      -- whatever the others choose
+      if any (null . snd) ways
+        then pure []
+        else combine ways [] mempty mempty
+  where
+    sides = unionsIn chain
+    joinedConjunct = hasJoinedConjunct chain
+    -- the joins in the own chain of a side, by the union
+    sideJoins :: Map Int [Int]
+    sideJoins =
+      map (\sides' -> [pos | side' <- sides', SJoin pos _ _ <- side']) sides
+    sideRoutes :: Map Int [([[RSeg]], Bool)]
+    sideRoutes = map (map \side' -> (routesOf side', forks side')) sides
+    -- The ways one route can choose its unions: each a set of routes
+    -- with every union chosen. A union whose sides have no group is
+    -- chosen when no other is left to choose first, since choosing it
+    -- changes nothing for the others; of those with a group in a side
+    -- each may be the first, since a side with a group makes the route
+    -- several routes, which choose the other unions apart.
+    chosen :: [RSeg] -> m [[[RSeg]]]
+    chosen route' = case ordNub (openOn route') of
+      []
+        | gluesAlone ending route' -> pure [[route']]
+        -- its node tests contradict each other: it is a route of no
+        -- alternative
+        | otherwise -> pure []
+      open -> do
+        let forking = filter (any snd . sidesOf) open
+            first' = if null forking then take 1 open else forking
+        ways <-
+          concat <$> for first' \name ->
+            concat <$> for (zip [0 ..] (sidesOf name)) \(i, (bodies, _)) -> do
+              spend.made (length bodies * segmentsOf route')
+              parts <- traverse (chosen . (\body -> replaced name i body route')) bodies
+              -- every way of one is compared with every way of the
+              -- next
+              foldM
+                ( \before next -> do
+                    spend.made
+                      ( checkPair
+                          * length before
+                          * length next
+                          * segmentsOf route'
+                      )
+                    pure (together' before next)
+                )
+                [[]]
+                parts
+        pure (distinctOn sort ways)
+    sidesOf name = findWithDefault [] name sideRoutes
+    -- The ways of each route without those that choose, for a copy of a
+    -- union that all its routes have to choose alike ('settles'), a side
+    -- that some route through the copy has no way to choose: so a route
+    -- that can only choose one side there is not found to be without a
+    -- way after every way of the routes before it has been tried.
+    narrowed ::
+      [([(Int, [Choices])], [[[RSeg]]])] -> m [([(Int, [Choices])], [[[RSeg]]])]
+    narrowed ways
+      | all (null . fst) settling = pure ways
+      | otherwise = do
+          spend.made (sum [length settled * length ws | (settled@(_ : _), ws) <- settling])
+          map (second (map fst)) <$> narrow [(c, s', ws) | ((c, _), (s', ws)) <- zip ways settling]
+      where
+        -- for each route, the copies it has to choose as the others do,
+        -- and its ways with the sides they choose
+        settling =
+          [ ( settles copies,
+              [(way, foldMap sidesOn (take 1 way)) | way <- ws]
+            )
+          | (copies, ws) <- ways
+          ]
+    narrow ::
+      [([(Int, [Choices])], [(Int, [Choices])], [([[RSeg]], Map Int Int)])] ->
+      m [([(Int, [Choices])], [([[RSeg]], Map Int Int)])]
+    narrow ways = do
+      let possible :: Map (Int, [Choices]) (Set Int)
+          possible =
+            Map.fromListWith
+              intersection
+              [ (copy', setFromList [i | (_, picks') <- ws, Just i <- [lookup name picks']])
+              | (_, settled, ws) <- ways,
+                copy'@(name, _) <- settled
+              ]
+          keeps settled (_, picks') =
+            and
+              [ i `member` findWithDefault mempty copy' possible
+              | copy'@(name, _) <- settled,
+                Just i <- [lookup name picks']
+              ]
+          ways' =
+            [ (copies, settled, if null settled then ws else filter (keeps settled) ws)
+            | (copies, settled, ws) <- ways
+            ]
+          sizes made = [length ws | (_, settled, ws) <- made, not (null settled)]
+      if sizes ways' == sizes ways
+        then pure [(copies, ws) | (copies, _, ws) <- ways]
+        else do
+          spend.made (sum [length settled * length ws | (_, settled@(_ : _), ws) <- ways'])
+          narrow ways'
+    -- every way to take one set of routes of each, the routes of which
+    -- can all be together
+    together' :: [[[RSeg]]] -> [[[RSeg]]] -> [[[RSeg]]]
+    together' before next =
+      [ a <> b
+      | a <- before,
+        b <- next,
+        and [isJust (sharedBy x y) | x <- a, y <- b]
+      ]
+    -- The alternatives, depth first: the ways of the first route, each
+    -- with the ways of the others that can be together with it. The
+    -- routes so far are kept by the side they chose of each union, since
+    -- only two routes that chose different sides of a union may be
+    -- unable to be together.
+    -- Two routes that go through one copy of a union before any union
+    -- is chosen have to choose the same side of it, whatever the other
+    -- unions on them choose, when no side of those has a group (which
+    -- could tell the two apart). So the side chosen for each such copy
+    -- is kept, and a later route of the copy is not tried with another.
+    settles copies =
+      [ copy'
+      | copy'@(name, _) <- copies,
+        and [not (any snd (sidesOf other)) | (other, _) <- copies, other /= name]
+      ]
+    combine ::
+      [([(Int, [Choices])], [[[RSeg]]])] ->
+      [[RSeg]] ->
+      Map (Int, Int) [[RSeg]] ->
+      Map (Int, [Choices]) Int ->
+      m [[[Item Int]]]
+    combine [] routes _ _ = do
+      let (differing, size) = differingPairs routes
+          segments = sum (map segmentsOf routes)
+      -- what working out what the routes share costs, before it is done
+      spend.made (checkPair * differing * size + (checkShare + 1) * segments)
+      let listed
+            -- Without a conjunct that has a join, and without a side
+            -- with a group chosen, the routes are in order as they are.
+            | joinedConjunct || any (any chooses) routes =
+                sortOn listedBy (reverse routes)
+            | otherwise = reverse routes
+          -- the joins of the sides of the unions that the routes chose
+          -- different sides of: where every route chose one side, the
+          -- routes are listed as that side written there lists them
+          mixed =
+            keysSet . Map.filter ((> 1) . length) $
+              ( Map.fromListWith
+                  (<>)
+                  [ (name, singletonSet i)
+                  | r <- routes,
+                    (name, i) <- mapToList (sidesOn r)
+                  ] ::
+                  Map Int (Set Int)
+              )
+          joins =
+            setFromList (concat (toList (Map.restrictKeys sideJoins mixed)))
+          items = uncurry together (sharing joins differing listed)
+      spend.found items
+      pure [items]
+    combine ((copies, ways) : rest) routes bySide settled = go allowed
+      where
+        allowed =
+          [ way
+          | way <- ways,
+            and
+              [ all ((== Just i) . lookup name . sidesOn) way
+              | copy'@(name, _) <- settles copies,
+                Just i <- [lookup copy' settled]
+              ]
+          ]
+        settledBy way =
+          foldl'
+            (\acc (copy', i) -> insertMap copy' i acc)
+            settled
+            [ (copy', i)
+            | copy'@(name, _) <- settles copies,
+              r <- take 1 way,
+              Just i <- [lookup name (sidesOn r)]
+            ]
+        go [] = pure []
+        go (way : more) = do
+          let picked = [(r, mapToList (sidesOn r)) | r <- way]
+          fits <- allM fitsIn picked
+          if fits
+            then do
+              here <-
+                combine
+                  rest
+                  (reverse way <> routes)
+                  ( foldl'
+                      (\acc (r, picks') -> foldl' (\acc' k -> Map.insertWith (<>) k [r] acc') acc picks')
+                      bySide
+                      picked
+                  )
+                  (settledBy way)
+              later <- go more
+              pure (here <> later)
+            else go more
+        fitsIn (route', picks') = do
+          let others =
+                [ other
+                | (name, i) <- picks',
+                  (i', _) <- zip [0 ..] (sidesOf name),
+                  i' /= i,
+                  other <- findWithDefault [] (name, i') bySide
+                ]
+          spend.made (1 + checkPair * length others * segmentsOf route')
+          pure (all (gluesWith ending route') others)
+    -- whether a segment is a side with a group that a route chose
+    chooses = \case
+      RPicked _ _ body -> any isGroup' body || any chooses body
+      RGroup _ _ body -> any chooses body
+      _ -> False
+    isGroup' = \case
+      RGroup {} -> True
+      RPicked _ _ body -> any isGroup' body
+      _ -> False
+    allM f = foldM (\ok x -> if ok then f x else pure False) True
+
+-- | How many pairs of routes chose different sides of some union, and the
+-- length of the longest route: what working out what they share costs.
+differingPairs :: [[RSeg]] -> (Int, Int)
+differingPairs routes =
+  ( sum
+      [ length a * length b
+      | (p, a) : rest <- tails (mapToList grouped),
+        (q, b) <- rest,
+        differ p q
+      ],
+    maximumEx (1 : map segmentsOf routes)
+  )
+  where
+    grouped :: Map (Map Int Int) [()]
+    grouped = Map.fromListWith (<>) [(sidesOn r, [()]) | r <- routes]
+
+-- | Whether two routes chose different sides of some union.
+differ :: Map Int Int -> Map Int Int -> Bool
+differ p q = or (Map.intersectionWith (/=) p q)
+
+-- | The routes of an alternative, each step and join with a number that
+-- is the same for the routes that share it.
+--
+-- Two routes that chose the same side of every union both go through
+-- share what has the same name for both ('annotate'): each union is
+-- read in place for the two. Two routes that chose different sides of a
+-- union share what 'sharedBy' says. What a route shares with a second
+-- and the second with a third is one step or join for all three.
+sharing :: Set Int -> Int -> [[RSeg]] -> (Set Int, [[Item Int]])
+sharing sideJoins differing routes =
+  ( if null sideJoins
+      then mempty
+      else
+        setFromList
+          [ k
+          | (r, r') <- zip named items,
+            (Meet (pos, _) _ _, Meet k _ _) <- zip r r',
+            pos `member` sideJoins
+          ],
+    items
+  )
+  where
+    named = map annotate routes
+    byName = numbered named
+    picks = map sidesOn routes
+    items
+      -- no two routes chose different sides: every union is read in
+      -- place
+      | differing == 0 = byName
+      | otherwise =
+          [ [ case item of
+                Along _ d m -> Along (number node) d m
+                Meet _ test root -> Meet (number node) test root
+            | (node, item) <- r
+            ]
+          | r <- nodes
+          ]
+    -- every step and join of every route, numbered
+    nodes :: [[(Int, Item Int)]]
+    nodes =
+      S.evalState
+        (traverse (traverse (\item -> S.state \n -> ((n, item), n + 1))) byName)
+        (0 :: Int)
+    -- by name: the routes that chose alike, and those that chose
+    -- compatibly
+    alike :: [(Int, Int)]
+    alike =
+      [ (node, node')
+      | byPicks <- toList inName,
+        (p, node : more) : later <- tails (mapToList byPicks),
+        node' <- more <> [k | (q, k : _) <- later, not (differ p q)]
+      ]
+    inName :: Map (Bool, Int) (Map (Map Int Int) [Int])
+    inName =
+      Map.fromListWith
+        (Map.unionWith (flip (<>)))
+        [ (key item, singletonMap p [node])
+        | (p, r) <- zip picks nodes,
+          (node, item) <- r
+        ]
+    key = \case
+      Along k _ _ -> (False, k)
+      Meet k _ _ -> (True, k)
+    -- by two routes that chose different sides: where each step and
+    -- join of a route is written, and the routes by what they chose
+    written' :: [(Map Int Int, ([RSeg], Map (Bool, Int) Int))]
+    written' =
+      [ ( p,
+          ( route',
+            mapFromList
+              [ (place, node)
+              | ((node, _), place) <- zip r (map placeOf names')
               ]
           )
-        pure (before <> after)
-      _ -> pure mempty
-    linked :: Set Int
-    linked = reach (singletonSet first') [first']
-    first' = case unions' of
-      (n, _, _, _) : _ -> n
-      [] -> 0
-    reach :: Set Int -> [Int] -> Set Int
-    reach seen = \case
-      [] -> seen
-      x : todo ->
-        let next =
-              [ y
-              | (a, b) <- toList links,
-                (x', y) <- [(a, b), (b, a)],
-                x' == x,
-                y `notMember` seen
-              ]
-         in reach (foldr insertSet seen next) (next ++ todo)
+        )
+      | (p, route', r, names') <- zip4 picks routes nodes named
+      ]
+    placeOf = \case
+      Along (pos, _) _ _ -> (False, pos)
+      Meet (pos, _) _ _ -> (True, pos)
+    apart :: [(Int, Int)]
+    apart =
+      [ (node, node')
+      | (p, as) : later <- tails (mapToList (Map.fromListWith (flip (<>)) [(p, [x]) | (p, x) <- written'])),
+        (q, bs) <- later,
+        differ p q,
+        (a, placesA) <- as,
+        (b, placesB) <- bs,
+        Just (steps, joins) <- [sharedBy a b],
+        place <- map (False,) steps <> map (True,) joins,
+        Just node <- [lookup place placesA],
+        Just node' <- [lookup place placesB]
+      ]
+    parents :: IntMap Int
+    parents = foldl' union' mempty (alike <> apart)
+    union' parent (x, y) =
+      let rx = find' parent x
+          ry = find' parent y
+       in if rx == ry then parent else IntMap.insert (max rx ry) (min rx ry) parent
+    find' parent x = maybe x (find' parent) (IntMap.lookup x parent)
+    numbers :: IntMap Int
+    numbers =
+      IntMap.fromList
+        (zip (ordNub [find' parents node | r <- nodes, (node, _) <- r]) [0 ..])
+    number node = IntMap.findWithDefault 0 (find' parents node) numbers
 
--- | Whether a term has a shared walk that was chosen and is to be put in
--- its place.
-hasOpenShared :: Expr -> Bool
-hasOpenShared = \case
-  Held {} -> True
-  Both a b rest -> any hasOpenShared (a : b : rest)
-  Join p _ -> hasOpenShared p
-  Sequence p q -> hasOpenShared p || hasOpenShared q
-  _ -> False
+-- | Routes with their names as numbers.
+numbered :: [[Item Name]] -> [[Item Int]]
+numbered routes = map (map (fmap number)) routes
+  where
+    numbers :: Map Name Int
+    numbers =
+      mapFromList
+        (zip (ordNub [name | r <- routes, item <- r, name <- toList' item]) [0 ..])
+    toList' = \case
+      Along name _ _ -> [name]
+      Meet name _ _ -> [name]
+    number name = findWithDefault 0 name numbers
 
--- | A conjunct that is a prefix, a shared walk and a continuation: the
--- walk, and the conjuncts of the prefix and of the continuation. A prefix
--- that is a conjunct without a step has which one it is, so that two of
--- them are two prefixes.
-data Led = Led
-  { walk :: (Int, Expr),
-    prefixes :: [(Maybe Int, Expr)],
-    continuations :: [Expr]
-  }
-
--- | Put the chosen shared walks of a term in their place. The copies
--- that chose a walk are conjuncts of one conjunction, each a prefix, the
--- walk and a continuation (as distributing a step in the walk's place
--- made them). They become one conjunct: the walk written once, after the
--- conjunction of their prefixes and before the conjunction of their
--- continuations, where it is sequenced as it would be written there
--- alone. A prefix or a continuation that distribution copied (once for
--- each of the others) is taken once: copies are equal, since a step is
--- copied with the place it is written at, and what was written twice is
--- not. The conjunct is put where the first of the copies was.
+-- | The routes of an alternative in which routes chose different sides
+-- of a union, listed as a path without unions lists them, if it is one.
 --
--- A copy whose prefix is a lone @\@@ conjunct follows that @\@@ as in
--- @\@/p@, where it is a join: an @\@N@ at the start of the walk tests the
--- current node there. With other prefixes the @\@@ stays a conjunct, as
--- in @(c & \@)/p@.
-placeShared :: forall m. (Monad m) => (Expr -> m ()) -> Expr -> m Expr
-placeShared made = fmap conjoin' . scope . conjuncts
+-- Such a path lists the routes that share a join next to each other
+-- (they are in one conjunct, or in one chain), and those that all go
+-- through one join as every route up to it with every route from it on,
+-- those up to it varying slowest. The routes come listed by the
+-- conjuncts they choose ('listedBy'), with the unions in place: that is
+-- the order of a path without unions only where the sides that were
+-- chosen have no join that routes share. So the routes are put together
+-- here: those that are connected by the joins they share, where the
+-- first of them is; and among them, those through a join that all of
+-- them go through, as that join lists them, the routes up to it and
+-- those from it on put together in turn. The first route stays first.
+--
+-- Where the routes that chose a side with a join differ before and
+-- after it, this adds the routes that cross over: the route up to the
+-- join of each with the route from it on of the other. They are made of
+-- steps the alternative has, so they change nothing a query finds or
+-- @mk@ creates. Where one of them would end with a step no route ends
+-- with (the last step of a route is what tags and file types read),
+-- the routes are left as they are, and the alternative is no path
+-- without unions.
+--
+-- Nothing but the order of the routes, and the routes that cross over,
+-- is decided here: what the routes share is decided before
+-- ('sharing'). An alternative in which every route chose alike is
+-- listed as its path lists it already, and is left as it is.
+together :: Set Int -> [[Item Int]] -> [[Item Int]]
+together sideJoins
+  | null sideJoins = id
+  | otherwise = listed
   where
-    sequenced = sequenceWithin made
-    scope :: [Expr] -> m [Expr]
-    scope [] = pure []
-    scope (c : more) = case led c of
-      Nothing -> do
-        c' <- inside c
-        (conjuncts c' ++) <$> scope more
-      Just l -> do
-        let (same, others) =
-              partitionEithers
-                [ case led x of
-                    Just l' | l'.walk == l.walk -> Left l'
-                    _ -> Right x
-                | x <- more
-                ]
-            members = l : same
-            pres = ordNub (concatMap (.prefixes) members)
-            -- what follows the walk follows no conjunct without a step
-            conts = ordNub (map unflagged (concatMap (.continuations) members))
-        pres' <- traverse (inside . snd) pres
-        conts' <- scope (concatMap conjuncts conts)
-        let prefix = case pres of
-              [(Just _, Stay)] -> Join Stay anyNode
-              _ -> conjoin' pres'
-            continuation = case conts' of
-              [] -> Stay
-              _ -> conjoin' conts'
-        whole <- sequenced prefix (snd l.walk) >>= (`sequenced` continuation)
-        made whole
-        (conjuncts whole ++) <$> scope others
-    -- the shared walks inside a conjunct that is not led by one
-    inside :: Expr -> m Expr
-    inside c | not (hasOpenShared c) = pure c
-    inside c = case c of
-      Sequence p q -> do
-        p' <- within p
-        q' <- within q
-        sequenced p' q'
-      Join p test -> (`joinOf` test) <$> within p
-      Both {} -> within c
-      _ -> pure c
-    within e = conjoin' <$> scope (conjuncts e)
-
--- | A conjunct as a prefix, a shared walk and a continuation, if it is
--- one.
-led :: Expr -> Maybe Led
-led = \case
-  Held n w lone -> Just (Led (n, w) [(lone, Stay)] [Stay])
-  Sequence (Held n w lone) r -> Just (Led (n, w) [(lone, Stay)] [r])
-  Sequence j@(Join x test) r
-    -- the walk is before the join: the join is in its continuation
-    | Just l <- ledAll x ->
-        Just l {continuations = [joined l test (Just r)]}
-    -- the walk is after the join: the join is in its prefix
-    | not (hasOpenShared x),
-      Just l <- ledAll r ->
-        Just
-          l
-            { prefixes =
-                [ case ordNub l.prefixes of
-                    -- the join is the conjunct without a step
-                    [(which, Stay)] -> (which, j)
-                    several ->
-                      (Nothing, Sequence j (conjoin' (map snd several)))
-                ]
-            }
-    | otherwise -> Nothing
-  Sequence h r
-    | not (hasOpenShared h) ->
-        (\l -> l {prefixes = map (after h . snd) l.prefixes}) <$> led r
-  Join x test ->
-    (\l -> l {continuations = [joined l test Nothing]}) <$> ledAll x
-  _ -> Nothing
-  where
-    after h = \case
-      Stay -> (Nothing, h)
-      more -> (Nothing, Sequence h more)
-    joined l test r =
-      let j = joinOf (conjoin' (ordNub l.continuations)) test
-       in maybe j (Sequence j) r
-
--- | A term all of whose conjuncts are led by the same shared walk.
-ledAll :: Expr -> Maybe Led
-ledAll e = case traverse led (conjuncts e) of
-  Just (l : ls)
-    | all ((== l.walk) . (.walk)) ls ->
-        Just
-          l
-            { prefixes = concatMap (.prefixes) (l : ls),
-              continuations = concatMap (.continuations) (l : ls)
-            }
-  _ -> Nothing
+    listed :: [[Item Int]] -> [[Item Int]]
+    listed rs = concatMap connected (components rs)
+    -- the routes that go through a join one before them goes through; a
+    -- join that every route through it starts with joins nothing
+    components :: [[Item Int]] -> [[[Item Int]]]
+    components rs = go rs
+      where
+        later = setFromList (concatMap (meetsOf . drop 1) rs) :: Set Int
+        keysOf r = setFromList [k | k <- meetsOf r, k `member` later] :: Set Int
+        go = \case
+          [] -> []
+          r : rest ->
+            let (same, others) = grow (keysOf r) rest
+             in (r : same) : go others
+        grow ks rest
+          | null ks = ([], rest)
+          | otherwise =
+              case partition (any (`member` ks) . meetsOf) rest of
+                ([], _) -> ([], rest)
+                (more, others) ->
+                  let (further, others') =
+                        grow (ks <> foldMap keysOf more) others
+                   in (more <> further, others')
+    connected :: [[Item Int]] -> [[Item Int]]
+    connected rs = case rs of
+      first' : rest@(_ : _)
+        | k : _ <- [k | k <- meetsOf first', all (passes k) rest] ->
+            let parts = map (splitOn k) rs
+                befores = ordNub (map fst parts)
+                afters = ordNub (map (drop 1 . snd) parts)
+                meet = take 1 (dropWhile (not . isMeet k) first')
+                rs' = [b <> meet <> a | b <- listed befores, a <- listed afters]
+             in -- (the two parts may have routes that cross over added)
+                if length befores * length afters == length (ordNub rs)
+                  || (k `member` sideJoins && lastSteps rs' == lastSteps rs)
+                  then rs'
+                  else rs
+        | otherwise -> crossed (10 :: Int) rs
+      _ -> rs
+    isMeet k = \case
+      Meet k' _ _ -> k' == k
+      _ -> False
+    -- routes that no one join connects: put together at each join of a
+    -- side in turn
+    crossed :: Int -> [[Item Int]] -> [[Item Int]]
+    crossed 0 rs = rs
+    crossed n rs =
+      let rs' =
+            foldl'
+              (flip regroup)
+              rs
+              ( filter
+                  (\k -> k `member` sideJoins && k `member` later)
+                  (ordNub (concatMap meetsOf rs))
+              )
+          later = setFromList (concatMap (meetsOf . drop 1) rs) :: Set Int
+       in if rs' == rs then rs else crossed (n - 1) rs'
+    regroup k rs =
+      let through = [splitOn k r | r <- rs, passes k r]
+          crossing =
+            [b <> a | b <- ordNub (map fst through), a <- ordNub (map snd through)]
+          place = \case
+            [] -> []
+            r : more
+              | passes k r -> crossing <> filter (not . passes k) more
+              | otherwise -> r : place more
+          rs' = place rs
+       in if length through < 2 || lastSteps rs' /= lastSteps rs
+            then rs
+            else rs'
+    lastSteps :: [[Item Int]] -> Set (Maybe Int)
+    lastSteps rs = setFromList [lastMay [k | Along k _ _ <- r] | r <- rs]
+    passes k = any \case
+      Meet k' _ _ -> k' == k
+      _ -> False
+    splitOn k = break \case
+      Meet k' _ _ -> k' == k
+      _ -> False
+    meetsOf r = [k | Meet k _ _ <- r]
 
 -- * Budget
 
@@ -882,6 +1291,10 @@ data TooManyAlternatives
   | -- | its alternatives cannot be counted within what the limit allows
     -- to be made on the way, however many they are
     TooLargeToCount {limit :: Int}
+  | -- | its routes alone, listed once with no union chosen, are more than
+    -- are listed to count alternatives ('checkRoutes'), whatever the
+    -- limit is: only no limit at all lets it through
+    TooManyRoutes {limit :: Int}
   deriving stock (Eq, Show)
 
 -- | The largest limit in effect at a relational union of the path: the one
@@ -900,323 +1313,336 @@ pathLimit = go (AtMostAlternatives defaultMaxAlternatives)
       Backwards p -> go l p
       _ -> Nothing
 
+hasConj :: Path -> Bool
+hasConj = \case
+  _ :& _ -> True
+  Backwards p -> hasConj p
+  p :/ q -> hasConj p || hasConj q
+  Union _ p q -> hasConj p || hasConj q
+  WithLimits _ _ p -> hasConj p
+  _ -> False
+
 -- | Whether compiling the path stays within its alternatives limit. The
 -- alternatives are counted as 'compilePath' makes them, after
--- contradictory ones are dropped and the same ones are merged, so the
--- count is exact ('TooManyAlternatives'). Three bounds make the check
--- always finish fast, without repeating a long compilation; a path beyond
--- one of them is over the limit too, however many alternatives it would
--- come to ('TooLargeToCount'):
+-- contradictory ones are dropped and the same ones are merged, one after
+-- the other, so the count is exact and stops at the first beyond the
+-- limit ('TooManyAlternatives').
 --
--- * the terms (one for each choice of the shared unions, and for each
---   relational union chosen before it is copied), the sides of the unions
---   in one term, and the alternatives one term resolves to before they
---   are glued, may each be four times the limit (contradictory
---   alternatives, and ones that glue to the same pattern, do not count in
---   the end);
--- * making the terms and the alternatives that are new may take
---   'checkWork' steps for each alternative allowed (a step is a term, or
---   an alternative resolved or glued);
--- * everything made may have 'checkSteps' in size for each alternative
---   allowed: every term, every copy of a term with a shared walk, every
---   term gone through to choose a union and every term a choice gives, by
---   its steps and node specs ('weight'), and every new alternative again
---   by the routes and hops it glues to ('gluedSize').
+-- Two bounds make the check finish in a bounded time, without repeating
+-- a long compilation; a path beyond either is over the limit too,
+-- however many alternatives it would come to:
+--
+-- * the routes of the path, listed once with no union chosen, may come
+--   to 'checkRoutes' ('routesSize'): a path with more is refused before
+--   anything is made ('TooManyRoutes');
+-- * everything made on the way is counted by its size, before it is
+--   made, and may come to 'checkSteps' for each alternative allowed and
+--   to 'checkOnce' times what the routes of the path come to listed
+--   once ('TooLargeToCount'). What is counted: every chain by its steps and node specs
+--   ('weight'); the routes of a stretch by their segments; every way a
+--   route chooses a union by the routes it then is; every two routes
+--   that chose different sides of a union and are compared, by the
+--   length of a route, 'checkPair' times; every way of a route that is
+--   tried with those of the routes before it, also when it does not go
+--   with them, by one; every way to choose that is
+--   found for a stretch, by the segments of its routes, once and
+--   'checkShare' times more; and every alternative of a chain with
+--   joins of its own by the segments of its routes.
+--
+-- A route is counted by all its segments, through the conjuncts and the
+-- sides it chose ('segmentsOf'). Ways to choose that contradict each
+-- other are not listed: a route whose choice cannot be glued with that
+-- of a route before it is dropped as it is made ('gluesWith'), a route
+-- with no way to choose ends the count before any other is tried, and a
+-- side that some route through a copy cannot choose is not tried for
+-- the others ('narrowed').
 --
 -- A path without a relational union has no limit, and neither has one
 -- without a conjunction: nothing copies its unions, so it compiles as it
 -- would with shared unions.
 checkAlternatives :: Path -> Either TooManyAlternatives ()
-checkAlternatives p = case pathLimit p of
+checkAlternatives = bimap fst (const ()) . checkSpending
+
+-- | 'checkAlternatives', with what it spent, also when it refuses the
+-- path: the size of what it made, and the steps it took.
+checkSpending ::
+  Path -> Either (TooManyAlternatives, (Int, Int)) (Int, Int)
+checkSpending p = case pathLimit p of
   Just (AtMostAlternatives n) | hasConj p -> do
-    let tooMany, tooLarge :: S.StateT CheckBudget (Either TooManyAlternatives) a
-        tooMany = lift (Left (TooManyAlternatives n))
-        tooLarge = lift (Left (TooLargeToCount n))
-        -- anything made, new or not, costs its size
+    let refuse ::
+          TooManyAlternatives ->
+          S.StateT CheckBudget (Either (TooManyAlternatives, (Int, Int))) a
+        refuse why = do
+          budget <- S.get
+          lift (Left (why, (budget.spent, budget.found)))
+        -- refused before what is counted is made
         spent k = do
           budget <- S.get
-          when (budget.steps >= checkSteps * n) tooLarge
-          S.put budget {steps = budget.steps + k}
-        made = spent . weight
-        sized allowed k = when (k > allowed) tooLarge
-        -- something made that was not made before
-        work = do
+          when (budget.spent + k > budget.allowed) $
+            refuse (TooLargeToCount n)
+          S.put budget {spent = budget.spent + k}
+        found routes = do
           budget <- S.get
-          when (budget.work >= checkWork * n) tooLarge
-          S.put budget {work = budget.work + 1}
-        -- the unions of one term may have four times the limit in sides
-        term e = do
-          when (not (null (drop (4 * n) (unionSidesIn e)))) tooLarge
-          made e
-          work
-        spend = Spend (sized (4 * n)) term made
-    flip S.evalStateT (CheckBudget 0 0) do
-      es <- fragmentWithin spend (pushBackwards (withoutLimits p))
-      void $
-        foldM
-          ( \seen e -> do
-              new <- resolveWithin spend e
-              foldM
-                ( \(exprs, patterns) x ->
-                    if x `member` exprs
-                      then pure (exprs, patterns)
-                      else do
-                        spent (gluedSize x) *> work *> work
-                        let patterns' =
-                              maybe
-                                patterns
-                                ((`insertSet` patterns) . canonicalize)
-                                (glueExpr (supplyRoot x))
-                        when (length patterns' > n) tooMany
-                        pure (insertSet x exprs, patterns')
-                )
-                seen
-                (toList new)
-          )
-          (mempty :: Set Expr, mempty :: Set PatternPath)
-          es
-  _ -> pure ()
+          let patterns =
+                maybe id insertSet (glueRoutes routes) budget.patterns
+          when (length patterns > n) (refuse (TooManyAlternatives n))
+          S.put budget {found = budget.found + 1, patterns = patterns}
+        spend = Spend spent found
+    flip S.evalStateT (CheckBudget (checkSteps * n) 0 0 mempty) do
+      chains <- structuresWithin spend (pushBackwards (withoutLimits p))
+      -- what listing the routes of the path once costs is allowed some
+      -- times over, whatever the limit
+      let once = sum [count + size | (count, size) <- map routesSize chains]
+      when (once > checkRoutes) (refuse (TooManyRoutes n))
+      S.modify' \budget -> budget {allowed = budget.allowed + checkOnce * once}
+      for_ chains (resolveWithin spend)
+      budget <- S.get
+      pure (budget.spent, budget.found)
+  _ -> pure (0, 0)
 
--- | What 'checkAlternatives' has spent.
-data CheckBudget = CheckBudget {steps :: Int, work :: Int}
-
--- | Steps 'checkAlternatives' may take for each alternative allowed, to
--- make terms and alternatives it has not made before.
-checkWork :: Int
-checkWork = 20
+-- | What 'checkAlternatives' may spend and has spent, the ways to choose
+-- it has found, and what they glue to.
+data CheckBudget = CheckBudget
+  { allowed :: Int,
+    spent :: Int,
+    found :: Int,
+    patterns :: Set PatternPath
+  }
 
 -- | The size of everything 'checkAlternatives' may make, for each
--- alternative allowed. Measured in an unoptimized build, this keeps the
--- check to roughly half a second at the default limit (0.44s on an idle
--- machine and 0.56s on a loaded one at most, which is a measurement and
--- not a guarantee); of
--- 1872 random unions of up to 45 targets and other sides before a
--- conjunction, it refuses six that compile to fewer alternatives than the
--- limit (in 0.2s to 2.0s).
+-- alternative allowed. With 'checkRoutes' this bounds the check at the
+-- default limit to 400,000 and twice 150,000; the slowest check measured
+-- in an unoptimized build (docs/path-pattern-ir.md, Alternatives limit)
+-- is a measurement and not a guarantee.
 checkSteps :: Int
-checkSteps = 500
+checkSteps = 400
 
--- | Each alternative a path compiles to, with a path without unions (with
--- @~@ pushed down to the steps) that compiles to just that alternative.
--- When every copy of each union chose the same side, that is the path with
--- one side of each union kept ('uniformChoices'); otherwise the copies are
--- written out ('exprPath'), as in @a/c & b/d@ for @(a | b)/(c & d)@. The
--- alternatives are exactly those of 'compilePath'. This costs about twice
--- as much as 'compilePath'; the list is lazy, so finding some alternatives
--- may cost less. An alternative may occur more than once.
+-- | How many times over 'checkAlternatives' may spend what listing the
+-- routes of the path once costs, besides 'checkSteps': a path with few
+-- alternatives is not refused for having many routes, which it has
+-- without its unions too.
+checkOnce :: Int
+checkOnce = 2
+
+-- | The most the routes of a path may come to, listed once with no union
+-- chosen, for 'checkAlternatives' to count its alternatives at all: a
+-- path with more is refused before anything is made. With 'checkSteps'
+-- this bounds what the check makes whatever the path, and so the time it
+-- takes.
+checkRoutes :: Int
+checkRoutes = 150000
+
+-- | What working out what the routes of an alternative of a union share
+-- costs 'checkAlternatives', for each segment of the routes: it takes
+-- about that many times as long as listing the routes does.
+checkShare :: Int
+checkShare = 3
+
+-- | What comparing two routes that chose different sides of a union
+-- costs 'checkAlternatives', for each segment of a route.
+checkPair :: Int
+checkPair = 4
+
+-- * Alternatives as paths
+
+-- | Each alternative of a path for which a path without unions is found
+-- that compiles to it, routes in order, with that path (with @~@ pushed
+-- down to the steps). When every route chose the same side of each
+-- union, that is the path with one side of each union kept
+-- ('uniformChoices'); otherwise the routes are written out
+-- ('writtenOut'), as in @a/c & b/d@ for @(a | b)/(c & d)@, and the
+-- result is kept if it compiles to the alternative. An alternative for
+-- which none is found is left out: one in which a walk is shared by a
+-- route inside a joined conjunct and a route outside it has none, as
+-- when in @(x/\@ | s)/((c & y)/\@/e & d)@ the routes through @c@ and
+-- @d@ choose @x/\@@ and the one through @y@ chooses @s@. The list is
+-- lazy, so finding some alternatives may cost less than compiling the
+-- path. An alternative may occur more than once.
 compileAlternatives :: Path -> [(PatternPath, Path)]
 compileAlternatives p =
-  [ (pattern', fromMaybe (exprPath e) (lookup pattern' uniform))
-  | e <- concatMap (toList . resolve) (fragment p'),
-    Just pattern' <- [canonicalize <$> glueExpr (supplyRoot e)]
+  [ (pattern', choice)
+  | (routes, pattern') <- alternatives p,
+    Just choice <- [lookup pattern' uniform <|> spelled routes pattern']
   ]
   where
     p' = pushBackwards (withoutLimits p)
     uniform :: Map PatternPath Path
     uniform =
       mapFromList . reverse $
-        [ (canonicalize pattern', choice)
-        | (e, choice) <- mapToList (uniformChoices p'),
-          Just pattern' <- [glueExpr (supplyRoot e)]
+        [ (pattern', choice)
+        | (chain, choice) <- mapToList (uniformChoices p'),
+          Just chain' <- [normal (renamed chain)],
+          Just pattern' <-
+            [glueRoutes (numbered (map annotate (sortOn listedBy (routesOf chain'))))]
+        ]
+    spelled routes pattern' =
+      headMay
+        [ choice
+        | choice <- writtenOut routes,
+          (compilePath choice).alternatives == singletonSet pattern'
         ]
 
--- | A path without unions that compiles to an expanded expression.
-exprPath :: Expr -> Path
-exprPath = \case
-  Stay -> One
-  Written _ d m -> exprPath (Step d m)
-  Step d m -> (case d of Out -> id; In -> Backwards) case m of
-    MLiteral t -> Literal t
-    MWild -> Wild
-    MRegex r -> RegexMatch r
-  Both a b rest -> foldl' (:&) (exprPath a) (map exprPath (b : rest))
-  Join Stay test -> testPath test
-  Join p test -> exprPath p :/ testPath test
-  Sequence p q -> exprPath p :/ exprPath q
-  Source _ -> error "exprPath: a rooted expression"
-  Alt _ -> error "exprPath: an unexpanded union"
-  Held {} -> error "exprPath: a shared walk not put in its place"
+-- | Paths without unions that have the given routes, if they are those
+-- of one: a single route is its steps and joins; routes that all go
+-- through one join are those up to it, the join, and those from it on;
+-- and routes that fall into groups with no join in common are a
+-- conjunction. Whether a path compiles to the alternative is for the
+-- caller to check.
+--
+-- An @\@@ that every route through it starts with merges nothing, but
+-- written at the start of a conjunct it keeps the conjunct together
+-- ('norm'), which the routes may or may not be: so the routes are tried
+-- as they are and without it.
+writtenOut :: [[Item Int]] -> [Path]
+writtenOut routes0 =
+  ordNub (mapMaybe writtenAs [routes0, map withoutStart routes0])
   where
+    withoutStart = \case
+      Meet k test False : rest@(_ : _)
+        | test == anyNode, k `notMember` later -> rest
+      r -> r
+    later :: Set Int
+    later = setFromList [k | r <- routes0, Meet k _ _ <- drop 1 r]
+
+writtenAs :: [[Item Int]] -> Maybe Path
+writtenAs = \case
+  [] -> Nothing
+  [single] -> Just (chainPath single)
+  routes
+    | k : _ <- common routes -> do
+        let (before, after) = unzip (map (splitOn k) routes)
+            befores = ordNub before
+            afters = ordNub (map (drop 1) after)
+            join' = take 1 (concatMap (take 1) after)
+        guard (length routes == length befores * length afters)
+        l <- if befores == [[]] then Just Nothing else Just <$> writtenAs befores
+        r <- if afters == [[]] then Just Nothing else Just <$> writtenAs afters
+        let j = chainPath join'
+        pure case (l, r) of
+          (Nothing, Nothing) -> j
+          (Just x, Nothing) -> x :/ testOnly join'
+          (Nothing, Just y) -> j :/ y
+          (Just x, Just y) -> x :/ testOnly join' :/ y
+    | otherwise -> case groups routes of
+        [_] -> Nothing
+        parts -> foldl1Ex' (:&) <$> traverse writtenAs parts
+  where
+    common routes = case routes of
+      [] -> []
+      r : rest -> [k | Meet k _ _ <- r, all (passes k) rest]
+    passes k = any \case
+      Meet k' _ _ -> k' == k
+      _ -> False
+    splitOn k = break \case
+      Meet k' _ _ -> k' == k
+      _ -> False
+    -- runs of routes that share a join with one before them
+    groups :: [[Item Int]] -> [[[Item Int]]]
+    groups = \case
+      [] -> []
+      r : rest ->
+        let (same, others) = grow (meetsOf r) rest
+         in (r : same) : groups others
+    grow ks rest =
+      case span (\r -> any (`elem` ks) (meetsOf r)) rest of
+        ([], _) -> ([], rest)
+        (more, others) ->
+          let (further, others') = grow (ks <> concatMap meetsOf more) others
+           in (more <> further, others')
+    meetsOf r = [k | Meet k _ _ <- r]
+    -- a join after something is written as its test
+    testOnly = \case
+      [Meet _ test _] -> testPath test
+      _ -> One
     testPath = \case
       Exactly n -> Absolute n
       Except ns
         | null ns -> One
         | otherwise -> ExcludingNIDs ns
+    chainPath :: [Item Int] -> Path
+    chainPath items = case concatMap itemPath (zip (True : repeat False) items) of
+      [] -> One
+      x : xs -> foldl' (:/) x xs
+    itemPath (first', item) = case item of
+      Along _ d m ->
+        [ (case d of Out -> id; In -> Backwards) case m of
+            MLiteral t -> Literal t
+            MWild -> Wild
+            MRegex r -> RegexMatch r
+        ]
+      -- an @N that tests the current node is written after an @
+      Meet _ test@(Exactly _) False | first' -> [One, testPath test]
+      Meet _ test _ -> [testPath test]
 
 -- | The alternatives as if each union were chosen once for all its copies,
--- with a representative choice for each expression.
-uniformChoices :: Path -> Map Expr Path
+-- with a representative choice for each chain (by its 'shape').
+uniformChoices :: Path -> Map Chain Path
 uniformChoices = \case
-  p@One -> one Stay p
+  p@One -> one (SJoin 0 anyNode False) p
   Zero -> mempty
-  p@Wild -> step Out MWild p
-  p@(Literal t) -> step Out (MLiteral t) p
-  p@(RegexMatch r) -> step Out (MRegex r) p
-  p@(Backwards Wild) -> step In MWild p
-  p@(Backwards (Literal t)) -> step In (MLiteral t) p
-  p@(Backwards (RegexMatch r)) -> step In (MRegex r) p
+  p@Wild -> one (SStep 0 Out MWild) p
+  p@(Literal t) -> one (SStep 0 Out (MLiteral t)) p
+  p@(RegexMatch r) -> one (SStep 0 Out (MRegex r)) p
+  p@(Backwards Wild) -> one (SStep 0 In MWild) p
+  p@(Backwards (Literal t)) -> one (SStep 0 In (MLiteral t)) p
+  p@(Backwards (RegexMatch r)) -> one (SStep 0 In (MRegex r)) p
   Backwards _ -> error "uniformChoices: pushBackwards leaves ~ only on steps"
-  p@(Absolute nid) -> one (Join Stay (Exactly nid)) p
-  p@(ExcludingNIDs ns) -> one (Join Stay (Except ns)) p
+  p@(Absolute nid) -> one (SJoin 0 (Exactly nid) True) p
+  p@(ExcludingNIDs ns) -> one (SJoin 0 (Except ns) False) p
   -- left-biased, so the first choice written is kept
   Union _ p q -> uniformChoices p <> uniformChoices q
   WithLimits _ _ p -> uniformChoices p
   p :& q ->
     combine
-      (\a b -> conjoin a [b])
+      (\a b -> Just [SGroup 0 (conjuncts a <> conjuncts b)])
       (:&)
       (uniformChoices p)
       (uniformChoices q)
-  p :/ q ->
-    combine sequenceExpr (:/) (boundaryChoices p) (boundaryChoices q)
+  p :/ q -> combine sequenced (:/) (uniformChoices p) (uniformChoices q)
   where
-    one = singletonMap
-    step d m = one (Step d m)
-    boundaryChoices :: Path -> Map Expr Path
-    boundaryChoices p = flip mapKeysFirst (uniformChoices p) \case
-      Stay -> Join Stay anyNode
-      e -> e
-    -- on a collision, the first choice is kept
-    mapKeysFirst :: (Expr -> Expr) -> Map Expr Path -> Map Expr Path
-    mapKeysFirst f m =
-      mapFromList (reverse [(f k, v) | (k, v) <- mapToList m])
+    one seg = singletonMap [seg]
     combine ::
-      (Expr -> Expr -> Expr) ->
+      (Chain -> Chain -> Maybe Chain) ->
       (Path -> Path -> Path) ->
-      Map Expr Path ->
-      Map Expr Path ->
-      Map Expr Path
+      Map Chain Path ->
+      Map Chain Path ->
+      Map Chain Path
     combine f g a b =
+      -- on a collision, the first choice is kept
       mapFromList . reverse $
-        [ (f x y, g px py)
+        [ (chain, g px py)
         | (x, px) <- mapToList a,
-          (y, py) <- mapToList b
+          (y, py) <- mapToList b,
+          Just chain <- [f x y]
         ]
 
--- | Relative paths start at the current node; an @\@N@ root is that node.
-supplyRoot :: Expr -> Expr
-supplyRoot = \case
-  Source s -> Source s
-  Stay -> Source Current
-  s@(Step {}) -> sequenceExpr (Source Current) s
-  s@(Written {}) -> sequenceExpr (Source Current) s
-  Both a b rest -> conjoin (supplyRoot a) (map supplyRoot (b : rest))
-  Alt _ -> error "supplyRoot: an unexpanded union"
-  Held {} -> error "supplyRoot: a shared walk not put in its place"
-  Join Stay (Exactly nid) -> Source (Fixed nid)
-  Join p test -> Join (supplyRoot p) test
-  Sequence p q -> sequenceExpr (supplyRoot p) q
-
-conjuncts :: Expr -> [Expr]
-conjuncts (Both a b rest) = a : b : rest
-conjuncts p = [p]
-
--- | Flatten associative conjunction, keeping every occurrence.
-conjoin :: Expr -> [Expr] -> Expr
-conjoin p0 ps = case concatMap conjuncts (p0 : ps) of
-  [p] -> p
-  a : b : more -> Both a b more
-  [] -> error "conjoin: a nonempty input produced no branches"
-
-conjoin' :: [Expr] -> Expr
-conjoin' = \case
-  p0 : ps -> conjoin p0 ps
-  [] -> error "conjoin': empty conjunction"
-
--- | Compose without inventing a shared midpoint. Right-side joins absorb the
--- complete prefix. A left-side join stays outside a branching continuation,
--- so all its continuations share one binding of that joined prefix. A
--- relational union is copied like a step, and so are its shared walks;
--- one that follows a conjunct without a step says which ('afterLone').
-sequenceExpr :: Expr -> Expr -> Expr
-sequenceExpr p q = runIdentity (sequenceWithin (\_ -> pure ()) p q)
-
--- | 'sequenceExpr', running the action on every copy it makes of a term
--- with a shared walk, so that a budget can stop it early.
-sequenceWithin ::
-  forall m. (Monad m) => (Expr -> m ()) -> Expr -> Expr -> m Expr
-sequenceWithin made = sequenced
-  where
-    sequenced, prefixed :: Expr -> Expr -> m Expr
-    sequenced Stay q = pure q
-    sequenced p Stay = pure p
-    sequenced p (Join q test) = (`joinOf` test) <$> sequenced p q
-    sequenced p (Sequence q r) = sequenced p q >>= (`sequenced` r)
-    sequenced (Sequence p q) r = sequenced q r >>= prefixed p
-    sequenced p@(Both {}) q =
-      conjoin' <$> for (zip [0 ..] (conjuncts p)) \(i, c) ->
-        sequenced c
-          =<< copy (if c == Stay || atInput c then afterLone i q else q)
-    sequenced p q = prefixed p q
-
-    -- Prefix a single segment; 'sequenced' reassociates longer prefixes.
-    prefixed Stay q = pure q
-    prefixed p Stay = pure p
-    prefixed p (Join q test) = (`joinOf` test) <$> prefixed p q
-    prefixed p (Sequence (Join q test) r) = do
-      joined <- sequenced p q
-      prefixed (joinOf joined test) r
-    -- a join before a union stays outside it, one instance for every side
-    prefixed p@(Join {}) q = pure (Sequence p q)
-    prefixed p q@(Both {}) =
-      conjoin' <$> for (conjuncts q) \c -> (`prefixed` c) =<< copy p
-    prefixed p q = pure (Sequence p q)
-
-    copy e
-      | hasShared e = e <$ made e
-      | otherwise = pure e
-
--- | The steps and node specs of a term, in all its conjuncts and union
--- sides: what it costs to make or compare it.
-weight :: Expr -> Int
-weight = \case
-  Both a b rest -> sum (map weight (a : b : rest))
-  Join p _ -> weight p
-  Sequence p q -> weight p + weight q
-  Alt es -> sum (map weight es)
-  _ -> 1
-
--- | The routes an alternative glues to, and their hops: what it costs to
--- glue it. A sequence has a route for every pair of a route of its prefix
--- and one of its continuation.
-gluedSize :: Expr -> Int
-gluedSize e = let (routes, hops) = size e in routes + hops
-  where
-    size :: Expr -> (Int, Int)
-    size = \case
-      Step {} -> (1, 1)
-      Written {} -> (1, 1)
-      Both a b rest ->
-        let sizes = map size (a : b : rest)
-         in (sum (map fst sizes), sum (map snd sizes))
-      Join p _ -> size p
-      Sequence p q ->
-        let (pr, ph) = size p
-            (qr, qh) = size q
-         in (pr * qr, ph * qr + pr * qh)
-      _ -> (1, 0)
-
 -- * Gluing
-
-data Walk = Walk {root :: PVertex, hops :: [Hop], end :: PVertex}
 
 data GlueState = GlueState
   { nextVar :: Int,
     nextEdge :: Int,
     parents :: Map PVertex PVertex,
-    vertexTests :: Map PVertex NodeTest
+    vertexTests :: Map PVertex NodeTest,
+    hops :: Map Int (EdgeId, PVertex),
+    meets :: Map Int PVertex
   }
 
 type Glue = S.StateT GlueState Maybe
 
--- | Glue one rooted alternative into a pattern. 'Nothing' if its node
--- tests contradict each other.
-glueExpr :: Expr -> Maybe PatternPath
-glueExpr expr = do
-  (walks, st) <- S.runStateT (glue Nothing expr) (GlueState 0 0 mempty mempty)
+-- | Glue the routes of one alternative into a pattern: every step is an
+-- edge to a variable, steps with the same name being the same edge, and
+-- the routes that go through a join meet there. A relative route starts
+-- at the current node, and one that starts with an @\@N@ at that node.
+-- 'Nothing' if the node tests contradict each other.
+glueRoutes :: [[Item Int]] -> Maybe PatternPath
+glueRoutes items = do
+  (walks, st) <-
+    S.runStateT
+      (traverse glueRoute items)
+      (GlueState 0 0 mempty mempty mempty mempty)
   let rep v = findRep st.parents v
-      goHop (Hop e d m t) = Hop e d m (rep t)
-      routes = [Route (rep w.root) (map goHop w.hops) | w <- walks]
+      goHop (Hop' e d m t) = Hop e d m (rep t)
+      routes = [Route (rep root) (map goHop hops') | (root, hops') <- walks]
       tests =
         mapFromList
           [ (v, t)
@@ -1226,57 +1652,40 @@ glueExpr expr = do
           ]
   case routes of
     [] -> Nothing
-    r : rs -> Just (PatternPath tests (r :| rs))
+    r : rs -> Just (canonicalize (PatternPath tests (r :| rs)))
 
-glue :: Maybe PVertex -> Expr -> Glue [Walk]
-glue input = \case
-  Source v -> do
-    guard (isNothing input)
-    pure [Walk v [] v]
-  Stay -> do
-    i <- maybe (error "glue: Stay without an input") pure input
-    pure [Walk i [] i]
-  Written _ d m -> glue input (Step d m)
-  Step d m -> do
-    i <- maybe (error "glue: Step without an input") pure input
-    v <- freshVar
-    e <- freshEdge
-    pure [Walk i [Hop e d m v] v]
-  Both a b rest -> concat <$> traverse (glue input) (a : b : rest)
-  Join p test -> do
-    walks <- glue input p
-    case map (.end) walks of
-      [] -> error "glue: a join over no walks"
-      e : es -> do
-        traverse_ (unify e) es
-        constrain e test
-    pure walks
-  Alt _ -> error "glue: an unexpanded union"
-  Held {} -> error "glue: a shared walk not put in its place"
-  Sequence p q -> do
-    walks <- glue input p
-    ends <- ordNub <$> traverse (findM . (.end)) walks
-    j <- case ends of
-      [j] -> pure j
-      _ -> error "glue: a sequence prefix with several outputs"
-    continuations <- glue (Just j) q
-    pure
-      [ Walk w.root (w.hops ++ c.hops) c.end
-      | w <- walks,
-        c <- continuations
-      ]
+data Hop' = Hop' EdgeId Direction Matcher PVertex
 
-freshVar :: Glue PVertex
-freshVar = do
-  st <- S.get
-  S.put st {nextVar = st.nextVar + 1}
-  pure (Var (VarId st.nextVar))
-
-freshEdge :: Glue EdgeId
-freshEdge = do
-  st <- S.get
-  S.put st {nextEdge = st.nextEdge + 1}
-  pure (EdgeId st.nextEdge)
+glueRoute :: [Item Int] -> Glue (PVertex, [Hop'])
+glueRoute items = do
+  let root = case items of
+        Meet _ (Exactly n) True : _ -> Fixed n
+        _ -> Current
+  (hops', _) <- foldM step ([], root) items
+  pure (root, reverse hops')
+  where
+    step (hops', v) = \case
+      Along name d m -> do
+        st <- S.get
+        (e, t) <- case lookup name st.hops of
+          Just known -> pure known
+          Nothing -> do
+            let made = (EdgeId st.nextEdge, Var (VarId st.nextVar))
+            S.put
+              st
+                { nextEdge = st.nextEdge + 1,
+                  nextVar = st.nextVar + 1,
+                  hops = insertMap name made st.hops
+                }
+            pure made
+        pure (Hop' e d m t : hops', t)
+      Meet name test _ -> do
+        st <- S.get
+        case lookup name st.meets of
+          Just first' -> unify first' v
+          Nothing -> S.put st {meets = insertMap name v st.meets}
+        constrain v test
+        pure (hops', v)
 
 findRep :: Map PVertex PVertex -> PVertex -> PVertex
 findRep parents v = case lookup v parents of

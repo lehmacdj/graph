@@ -2,7 +2,7 @@
 0 -a-> 1
 1 -d-> 2
 ==========input==========
-ls (a | b)/(c | d)/(e | f)/(g | h)/(i | j)/(k | l)/(m & n)
+ls (x | y)/(a & b & c)/(a & b & c)/(a & b & c)/(a & b & c)/(a & b & c)/(a & b & c)/(a & b & c)
 ls (a | b)/(c | d)/(e | f)/(g | h)/(i | j)/(m & n)
 ls %override({max-alternatives = 5000}, (a | b)/(c | d)/(e | f)/(g | h)/(i | j)/(k | l)/(m & n))
 ==========stdout==========
