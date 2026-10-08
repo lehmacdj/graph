@@ -83,6 +83,23 @@ Nodes are `smallNID`s (node 0 is the origin). Such tests also show every
 node's data in a trailing `data` section. Regenerate expectations with
 `--ta '-p integration --accept'` and review the diff.
 
+The `graph` section can also describe a graph that `ge` cannot produce,
+to test what happens on a damaged one:
+
+```
+0 -b-> 2 !out     only node 0's outgoing record of the edge
+0 -b-> 2 !in      only node 2's incoming record of the edge
+missing 2         no file for node 2
+raw 2 "{not json" the file of node 2 holds exactly this text
+id 2 3            the file of node 2 says its id is 3
+```
+
+`missing`, `raw` and `id` are applied in order after every node's file is
+written. An `exit-code` section follows `stderr` when `ge` did not exit
+with 0, and output that does not end with a newline is followed by a
+`<no newline at the end>` line. Each run of `ge` gets its own
+`XDG_DATA_HOME`, so the tests do not touch the history file of the REPL.
+
 ## Avoiding Cyclic Imports
 
 When writing tests in MyPrelude modules:
