@@ -32,6 +32,7 @@ import MyPrelude
 import System.Console.Haskeline qualified as H
 import System.Directory (createDirectoryIfMissing, doesDirectoryExist)
 import System.Environment.XDG.BaseDir (getUserDataDir)
+import System.Exit (ExitCode (..), exitWith)
 import System.Random (initStdGen, mkStdGen)
 import Utils.Testing
 
@@ -148,16 +149,29 @@ geMain = withOptions $ \options -> do
         if options.dryRun
           then filesystemBehaviorDryRun
           else filesystemBehaviorIO
-  bracket (initializeInput env.replSettings) cancelInput \inputState ->
-    runAppEffects
-      (runReadlineHaskeline inputState)
-      printingErrorsAndWarnings
-      timeBehavior
-      filesystemBehavior
-      env
-      do
-        provideList_ @GraphEditing createSystemNodes
-        maybe repl interpretCommand options.executeExpression
+  exitCode <-
+    bracket (initializeInput env.replSettings) cancelInput \inputState ->
+      runAppEffects
+        (runReadlineHaskeline inputState)
+        exitCodeOfErrors
+        timeBehavior
+        filesystemBehavior
+        env
+        do
+          provideList_ @GraphEditing createSystemNodes
+          maybe repl interpretCommand options.executeExpression
+          pure ExitSuccess
+  exitWith exitCode
+
+-- | Print warnings and errors like 'printingErrorsAndWarnings'; an error
+-- makes the exit code 1, so that whoever ran @ge -e@ can tell that the
+-- command failed. Warnings don't change the exit code. (The REPL reports the
+-- errors of its commands itself, so only a failure outside of them, at
+-- startup, makes it exit with 1.)
+exitCodeOfErrors :: ErrorHandlingBehavior ExitCode
+exitCodeOfErrors =
+  printWarnings
+    >>> (`handleError` \e -> liftIO (eprint e) $> ExitFailure 1)
 
 spec_reportingFailure :: Spec
 spec_reportingFailure = do
@@ -186,3 +200,16 @@ spec_reportingFailure = do
     message `shouldContain` "broken invariant"
   it "leaves an interrupt to the REPL" $
     reports (throwIO H.Interrupt) `shouldThrow` \H.Interrupt -> True
+
+spec_exitCodeOfErrors :: Spec
+spec_exitCodeOfErrors = do
+  let exitCodeOf :: Eff [Warn UserError, Error UserError, IOE] () -> IO ExitCode
+      exitCodeOf command = runEff . exitCodeOfErrors $ command $> ExitSuccess
+  it "is 0 for a command that succeeds" $
+    exitCodeOf (pure ()) `shouldReturn` ExitSuccess
+  it "is 1 for a command that fails" $
+    exitCodeOf (throwText "(expected test output) failed")
+      `shouldReturn` ExitFailure 1
+  it "is 0 for a command that only warns" $
+    exitCodeOf (warnText "(expected test output) warned")
+      `shouldReturn` ExitSuccess

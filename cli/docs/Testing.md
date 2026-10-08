@@ -100,6 +100,10 @@ with 0, and output that does not end with a newline is followed by a
 `<no newline at the end>` line. Each run of `ge` gets its own
 `XDG_DATA_HOME`, so the tests do not touch the history file of the REPL.
 
+The input is fed to the REPL. To run one command line as `ge -e` does
+(which is where the exit code tells whether the command failed), head the
+section `expression` instead of `input`.
+
 ## Avoiding Cyclic Imports
 
 When writing tests in MyPrelude modules:

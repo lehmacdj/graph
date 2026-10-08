@@ -34,7 +34,10 @@ data GoldenTest = GoldenTest
     -- | Relative path (from the root of the project) to a graph to use as a
     -- template for the temporary graph that the test is run on.
     template :: Maybe ByteString,
-    -- | input to be fed to @ge@ via stdin
+    -- | Whether the input is one command line given to @ge -e@ (the section
+    -- is then headed @expression@) instead of the REPL's standard input
+    oneShot :: Bool,
+    -- | input to be fed to @ge@ via stdin, or the command line for @-e@
     input :: ByteString,
     stdOut :: ByteString,
     stdErr :: ByteString,
@@ -51,10 +54,11 @@ data GoldenTest = GoldenTest
 pathForTemplate :: ByteString -> FilePath
 pathForTemplate = ("../examples" </>) . unpack . decodeUtf8
 
-pInputHeader :: Parser (Maybe ByteString)
+-- | Whether the test is one-shot and its template
+pInputHeader :: Parser (Bool, Maybe ByteString)
 pInputHeader = (<?> "input header") $ do
-  _ <- string "input"
-  optional $ string "@example:" *> takeTill isEqualsSign
+  oneShot <- (string "input" $> False) <|> (string "expression" $> True)
+  (oneShot,) <$> optional (string "@example:" *> takeTill isEqualsSign)
   where
     isEqualsSign = (== 61)
 
@@ -88,9 +92,9 @@ pBody strict section next end = go []
         go (l : acc)
 
 pGoldenTest :: Parser GoldenTest
-pGoldenTest =
-  GoldenTest
-    <$> optional
+pGoldenTest = (<?> "golden test") do
+  baseGraph <-
+    optional
       ( pSectionHeader (void $ string "graph")
           *> pBody
             False
@@ -98,8 +102,9 @@ pGoldenTest =
             "an input header"
             (void . lookAhead $ pSectionHeader pInputHeader)
       )
-    <*> (pSectionHeader pInputHeader <?> "input header")
-    <*> body "input" "stdout"
+  (oneShot, template) <- pSectionHeader pInputHeader <?> "input header"
+  GoldenTest baseGraph template oneShot
+    <$> body (if oneShot then "expression" else "input") "stdout"
     <*> (unterminated <$> body "stdout" "stderr")
     <*> ( unterminated
             <$> pBody
@@ -117,7 +122,6 @@ pGoldenTest =
       (lookAhead dataHeader <|> endOfInput)
     <*> optional (dataHeader *> takeByteString)
     <* endOfInput
-    <?> "golden test"
   where
     dataHeader = pSectionHeader (void $ string "data")
     exitCodeHeader = pSectionHeader (void $ string "exit-code")
@@ -161,10 +165,8 @@ renderGoldenTest GoldenTest {..} =
   concat
     [ maybe "" ((sectionHeader "graph" <>) . fromStrict) baseGraph,
       sectionHeader
-        ( maybe
-            "input"
-            ("input@example:" <>)
-            template
+        ( (if oneShot then "expression" else "input")
+            <> maybe "" ("@example:" <>) template
         ),
       fromStrict input,
       sectionHeader "stdout",
@@ -194,12 +196,18 @@ runGraphEditor test@GoldenTest {..} =
         readProcess $
           proc
             "ge"
-            [ "--test-only-nid-generation-seed",
-              "0",
-              "--test-only-monotonic-increasing-deterministic-time",
-              tmpGraph
-            ]
-            & setStdin (byteStringInput (fromStrict input))
+            ( [ "--test-only-nid-generation-seed",
+                "0",
+                "--test-only-monotonic-increasing-deterministic-time",
+                tmpGraph
+              ]
+                <> ( if oneShot
+                       then ["-e", unpack (T.strip (decodeUtf8 input))]
+                       else []
+                   )
+            )
+            & setStdin
+              (byteStringInput (if oneShot then "" else fromStrict input))
             & setEnv
               ( ("XDG_DATA_HOME", dataHome)
                   : filter ((/= "XDG_DATA_HOME") . fst) environment
@@ -363,6 +371,7 @@ test_parseGoldenTest =
             GoldenTest
               { baseGraph = Just "0 -a-> 1\n",
                 template = Nothing,
+                oneShot = False,
                 input = "rn a b\n",
                 stdOut = "out\n",
                 stdErr = "",
@@ -388,6 +397,7 @@ test_parseGoldenTest =
               GoldenTest
                 { baseGraph = Nothing,
                   template = Just "small",
+                  oneShot = False,
                   input = "ls\n",
                   stdOut = "g> ok\n",
                   stdErr = "oops\n",
@@ -401,6 +411,7 @@ test_parseGoldenTest =
               GoldenTest
                 { baseGraph = Nothing,
                   template = Nothing,
+                  oneShot = False,
                   input = "ls\n",
                   stdOut = "g> ",
                   stdErr = "ge: failed",
@@ -422,6 +433,7 @@ test_parseGoldenTest =
           GoldenTest
             { baseGraph = Nothing,
               template = Nothing,
+              oneShot = False,
               input = "ls\n",
               stdOut = "",
               stdErr = "",
@@ -433,6 +445,23 @@ test_parseGoldenTest =
           <> "==========stdout==========\n"
           <> "==========stderr==========\n"
           <> "==========graph-dump==========\n",
+      testCase "round-trips a one-shot test" do
+        let golden =
+              GoldenTest
+                { baseGraph = Just "0 -a-> 1\n",
+                  template = Just "small",
+                  oneShot = True,
+                  input = "rm b\n",
+                  stdOut = "",
+                  stdErr = "oops\n",
+                  exitCode = 1,
+                  graphDump = "",
+                  dataDump = Nothing
+                }
+        "==========expression@example:small==========\nrm b\n"
+          `isInfixOf` toStrict (renderGoldenTest golden)
+          @? "the command is not in an expression section"
+        parseGoldenTest (toStrict (renderGoldenTest golden)) @?= Right golden,
       rejects "an exit code that is not a number" $
         wellFormed
           <> "==========exit-code==========\none\n"
