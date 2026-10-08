@@ -5,9 +5,11 @@ module Models.PathPattern.MatchSpec where
 import Effectful.State.Dynamic
 import Graph.GraphMetadataEditing (runInMemoryGraphMetadataEditing)
 import Graph.PathPattern.Resolve
+import Models.Connect
 import Models.Edge
 import Models.Graph (Graph, edgeSet, nidSet)
 import Models.NID
+import Models.Node
 import Models.Path.TH (path)
 import Models.PathPattern
 import Models.PathPattern.Compile (compilePath)
@@ -146,8 +148,13 @@ componentsReference p =
 -- | Routes that share prefixes, meet at variables and pass through bound
 -- vertices. Edge ids follow first appearance, as the compiler numbers them.
 genRoutes :: Gen PatternPath
-genRoutes = do
-  count <- chooseInt (1, 6)
+genRoutes = genRoutesOf 6 4
+
+-- | 'genRoutes' with at most this many routes, each adding at most this
+-- many steps of its own.
+genRoutesOf :: Int -> Int -> Gen PatternPath
+genRoutesOf maxRoutes maxExtra = do
+  count <- chooseInt (1, maxRoutes)
   routes <- foldlM (\rs _ -> (rs <>) . pure <$> genRoute rs) [] [1 .. count]
   pure (pat routes)
   where
@@ -168,7 +175,7 @@ genRoutes = do
             then (,[]) <$> genRoot
             else pure (r.root, take shared r.hops)
       let used = length (ordNub [h.edge | r <- earlier, h <- r.hops])
-      extra <- chooseInt (0, 4)
+      extra <- chooseInt (0, maxExtra)
       hops <- for [used .. used + extra - 1] \e ->
         Hop (EdgeId e)
           <$> elements [Out, In]
@@ -187,6 +194,165 @@ spec_patternComponents = describe "patternComponents" do
       forAll genRoutes \p ->
         patternComponents p === componentsReference p
 
+-- * Projections and steps against their definitions before indexing
+
+-- | The witnesses of only the components the given edges belong to, by
+-- scanning every component for every edge.
+witnessesForReference :: [EdgeId] -> Resolution -> [Witness]
+witnessesForReference es r =
+  witnesses
+    Resolution
+      { patternPath = r.patternPath,
+        current = r.current,
+        components =
+          [(c, ps) | (c, ps) <- r.components, any (`elem` c.edges) es]
+      }
+
+targetsReference :: Resolution -> Set NID
+targetsReference r = foldMap endValues r.patternPath.routes
+  where
+    endValues rt = case routeEnd rt of
+      Var v ->
+        setFromList
+          [ n
+          | (c, ps) <- r.components,
+            v `member` c.vars,
+            p <- ps,
+            Just n <- [lookup v p.nodes]
+          ]
+      bound -> singletonSet (vertexValue r (Witness mempty mempty) bound)
+
+selectedRoutesReference :: Resolution -> [ConcreteRoute]
+selectedRoutesReference r =
+  ordNub
+    [ fromJustEx (headMay (concreteRoutes r w))
+    | w <- witnessesForReference (map (.edge) selected.hops) r
+    ]
+  where
+    selected :| _ = r.patternPath.routes
+
+routeLastEdgesReference :: Resolution -> Map Int (Set (Edge Text))
+routeLastEdgesReference r =
+  mapFromList
+    [ (i, setFromList [lastEdge w | w <- witnessesForReference [h.edge] r])
+    | (i, rt) <- zip [0 ..] (toList r.patternPath.routes),
+      Just h <- [lastMay rt.hops],
+      let concrete w = fromJustEx (index (concreteRoutes r w) i)
+          lastEdge w = case lastMay (concrete w).hops of
+            Just ch -> concreteEdge (penultimate w rt) ch
+            Nothing -> error "routeLastEdgesReference: unreachable"
+    ]
+  where
+    penultimate w rt = case reverse rt.hops of
+      _ : before : _ -> vertexValue r w before.target
+      _ -> vertexValue r w rt.root
+
+-- | Everything commands read off a resolution, in the order they read it.
+data Projections = Projections
+  { targetNodes :: Set NID,
+    selected :: [ConcreteRoute],
+    lastEdges :: Map Int (Set (Edge Text)),
+    firstWitness :: [ConcreteRoute]
+  }
+  deriving stock (Eq, Show)
+
+projections :: Resolution -> Projections
+projections r =
+  Projections
+    { targetNodes = targets r,
+      selected = firstSelectedRoute r : selectedRoutes r,
+      lastEdges = routeLastEdges r,
+      firstWitness = firstWitnessKey r
+    }
+
+projectionsReference :: Resolution -> Projections
+projectionsReference r =
+  Projections
+    { targetNodes = targetsReference r,
+      selected = case selectedRoutesReference r of
+        rs@(chosen : _) -> chosen : rs
+        [] -> [],
+      lastEdges = routeLastEdgesReference r,
+      firstWitness = maybe [] (concreteRoutes r) (headMay (witnesses r))
+    }
+
+-- | A graph over nodes 1 to 3 with about a third of the possible edges
+-- labelled a or b.
+genGraph :: Gen (Graph Text ())
+genGraph = do
+  let possible = [edge' s t d | s <- [1 .. 3], d <- [1 .. 3], t <- ["a", "b"]]
+  kept <- filterM (const ((== 0) <$> chooseInt (0, 2))) possible
+  pure (graphWithEdges (edge' 1 "a" 1 : edge' 2 "b" 3 : kept))
+
+spec_projections :: Spec
+spec_projections = describe "projections agree with scanning every component" do
+  it "on the corpus" do
+    forM_ corpusQueries \surface -> do
+      let q = compilePath surface
+      forM_ corpusGraphs \g -> do
+        let pure' =
+              mapMaybe
+                (matchPattern (lookupIn g) (Just corpusCurrent))
+                (toList q.alternatives)
+        forM_ (pure' <> (resolveIn g q).resolutions) \r ->
+          projections r `shouldBe` projectionsReference r
+  it "on random patterns" $
+    withMaxSuccess 3000 $
+      forAll ((,) <$> genRoutesOf 4 2 <*> genGraph) \(p, g) ->
+        -- compared when it matches with few enough witnesses to list
+        let matched = do
+              r <- matchPattern (lookupIn g) (Just corpusCurrent) p
+              r <$ guard (product (map (size . snd) r.components) <= 200)
+            size = length . take 201
+            several = any ((> 1) . size . snd) . (.components)
+         in checkCoverage
+              . cover 60 (isJust matched) "compared"
+              . cover 30 (any several matched) "with several solutions"
+              $ case matched of
+                Nothing -> property True
+                Just r -> projections r === projectionsReference r
+
+-- | 'stepEdges' by trying every edge of the node.
+stepEdgesReference :: Lookup -> NID -> EdgeSpec -> [(Text, NID)]
+stepEdgesReference lookupNode source spec = case lookupNode source of
+  Nothing -> []
+  Just n ->
+    [ (c.transition, c.node)
+    | c <- toList case spec.direction of
+        Out -> n.outgoing
+        In -> n.incoming,
+      matcherAccepts spec.matcher c.transition
+    ]
+
+spec_stepEdges :: Spec
+spec_stepEdges = describe "stepEdges" do
+  it "agrees with trying every edge, in the same order" $
+    withMaxSuccess 3000 $
+      forAll ((,) <$> genNode <*> genSpec) \(n, spec) ->
+        stepEdges (const (Just n)) n.nid spec
+          === stepEdgesReference (const (Just n)) n.nid spec
+  it "finds nothing from a node that is absent" do
+    stepEdges (const Nothing) (smallNID 1) (EdgeSpec current Out MWild (var 0))
+      `shouldBe` []
+  where
+    names = ["", "a", "a ", "aa", "ab", "b", "B", "\233"] :: [Text]
+    genConnect = Connect <$> elements names <*> (smallNID <$> chooseInt (0, 3))
+    genConnects = setFromList <$> listOf genConnect
+    genNode :: Gen (Node Text ())
+    genNode = do
+      incoming <- genConnects
+      outgoing <- genConnects
+      pure Node {nid = smallNID 0, incoming, outgoing, augmentation = ()}
+    genSpec =
+      EdgeSpec current
+        <$> elements [Out, In]
+        <*> oneof
+          [ MLiteral <$> elements ("c" : "a\0" : names),
+            pure MWild,
+            elements [MRegex [re|a|], MRegex [re|^b$|]]
+          ]
+        <*> pure (var 0)
+
 -- | Bytes this thread allocates while running an action. Unlike time, this
 -- does not depend on the load of the machine.
 allocatedBy :: IO a -> IO Int64
@@ -199,6 +365,15 @@ allocatedBy action = do
 -- | One route of this many steps from the current node: one component.
 chainPattern :: Int -> PatternPath
 chainPattern n = pat [route current [out i "a" (var i) | i <- [1 .. n]]]
+
+-- | The same chain with its variables numbered from the far end.
+backwardChainPattern :: Int -> PatternPath
+backwardChainPattern n =
+  pat [route current [out i "a" (var (n - i)) | i <- [1 .. n]]]
+
+-- | This many routes of one step each: as many components.
+fanPattern :: Int -> PatternPath
+fanPattern n = pat [route current [out i "a" (var i)] | i <- [1 .. n]]
 
 -- | Loading and matching a pattern must not cost time quadratic in its
 -- steps. Both sizes below differ by a factor of 16; work that is linear up
@@ -220,16 +395,53 @@ spec_matchingIsNotQuadratic = describe "allocation grows about linearly" do
     grows \n -> do
       let matched = matchPattern (lookupIn g) (Just cur) (chainPattern n)
       fmap (map (length . (.labels)) . witnesses) matched `shouldBe` Just [n]
+  it "patternComponents, variables numbered backwards" do
+    grows \n -> do
+      let cs = patternComponents (backwardChainPattern n)
+      sum (map (\c -> length c.vars + length c.edges) cs) `shouldBe` 2 * n
+  it "routeLastEdges, one component per route" do
+    grows \n -> do
+      let matched = matchPattern (lookupIn g) (Just cur) (fanPattern n)
+      fmap (sum . map length . toList . routeLastEdges) matched
+        `shouldBe` Just n
+  it "targets, one component per route" do
+    grows \n -> do
+      let matched = matchPattern (lookupIn g) (Just cur) (fanPattern n)
+      fmap targets matched `shouldBe` Just (singletonSet cur)
+  it "a literal step does not visit the other edges of its node" do
+    -- 16 times the edges: visiting them all allocates 16 times as much,
+    -- finding the label in the ordered set hardly more
+    let wide :: Map Int (Node Text ())
+        wide = mapFromList [(n, wideNode n) | n <- [small, 16 * small]]
+    _ <- evaluate (force wide)
+    growsLessThan 4 \n -> do
+      let step i =
+            stepEdges
+              (const (lookup n wide))
+              cur
+              (EdgeSpec current Out (MLiteral (tshow i)) (var 0))
+      map step [1 .. 100 :: Int]
+        `shouldBe` [[(tshow i, cur)] | i <- [1 .. 100 :: Int]]
   where
     cur = smallNID 1
     g = graphWithEdges [edge' 1 "a" 1] :: Graph Text ()
+    wideNode :: Int -> Node Text ()
+    wideNode n =
+      Node
+        { nid = cur,
+          incoming = mempty,
+          outgoing = setFromList [Connect (tshow i) cur | i <- [1 .. n]],
+          augmentation = ()
+        }
     small = 250 :: Int
     grows :: (Int -> IO ()) -> IO ()
-    grows run = do
+    grows = growsLessThan 64
+    growsLessThan :: Double -> (Int -> IO ()) -> IO ()
+    growsLessThan limit run = do
       lesser <- allocatedBy (run small)
       greater <- allocatedBy (run (16 * small))
       let ratio = fromIntegral greater / fromIntegral lesser :: Double
-      unless (ratio < 64) do
+      unless (ratio < limit) do
         expectationFailure $
           "16 times the steps allocated "
             <> show ratio

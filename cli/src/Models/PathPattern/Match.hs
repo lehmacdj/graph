@@ -36,6 +36,7 @@ module Models.PathPattern.Match
 where
 
 import Data.Map.Strict qualified as Map
+import Data.Set qualified as Set
 import Models.Connect
 import Models.Edge
 import Models.Graph (Graph' (..))
@@ -105,15 +106,28 @@ patternComponents p =
     order = edgeOrder p
     edgeIndex :: Map EdgeId Int
     edgeIndex = mapFromList (zip order [0 :: Int ..])
-    -- union-find over variables linked by an edge between two variables
+    -- union-find over variables linked by an edge between two variables.
+    -- The smaller group goes under the root of the larger, which keeps
+    -- every walk to a root logarithmic; which variable of a group is its
+    -- root does not matter below.
     parents :: Map VarId VarId
-    parents = foldl' linkVars mempty (toList specs)
-    linkVars ps spec = case (spec.source, spec.target) of
-      (Var a, Var b) ->
-        let ra = findRoot ps a
-            rb = findRoot ps b
-         in if ra == rb then ps else insertMap (max ra rb) (min ra rb) ps
-      _ -> ps
+    parents = fst (foldl' linkVars (mempty, mempty) (toList specs))
+    linkVars ::
+      (Map VarId VarId, Map VarId Int) ->
+      EdgeSpec ->
+      (Map VarId VarId, Map VarId Int)
+    linkVars (!ps, !sizes) spec = case (spec.source, spec.target) of
+      (Var a, Var b)
+        | ra /= rb ->
+            ( insertMap child root ps,
+              insertMap root (sizeOf ra + sizeOf rb) sizes
+            )
+        where
+          ra = findRoot ps a
+          rb = findRoot ps b
+          sizeOf v = findWithDefault (1 :: Int) v sizes
+          (child, root) = if sizeOf ra < sizeOf rb then (ra, rb) else (rb, ra)
+      _ -> (ps, sizes)
     findRoot ps v = maybe v (findRoot ps) (lookup v ps)
     keyOf e spec = case (spec.source, spec.target) of
       (Var a, _) -> Left (findRoot parents a)
@@ -263,16 +277,24 @@ loadPattern getNode cur p = do
         (reverse ordered)
 
 -- | The edges a pattern edge can take from a node, in label/node order.
+--
+-- A literal label is looked up rather than tried against every edge of the
+-- node: the edges of a node are ordered by label first.
 stepEdges :: Lookup -> NID -> EdgeSpec -> [(Text, NID)]
 stepEdges lookupNode source spec = case lookupNode source of
   Nothing -> []
-  Just n ->
-    [ (c.transition, c.node)
-    | c <- toList case spec.direction of
-        Out -> n.outgoing
-        In -> n.incoming,
-      matcherAccepts spec.matcher c.transition
-    ]
+  Just n -> map pairOfConnect (accepted (connects n))
+  where
+    connects n = case spec.direction of
+      Out -> n.outgoing
+      In -> n.incoming
+    accepted :: Set (Connect Text) -> [Connect Text]
+    accepted = case spec.matcher of
+      MLiteral l ->
+        Set.toAscList
+          . Set.takeWhileAntitone (\c -> c.transition == l)
+          . Set.dropWhileAntitone (\c -> c.transition < l)
+      m -> filter (\c -> matcherAccepts m c.transition) . Set.toAscList
 
 -- * Witnesses and projections
 
@@ -310,25 +332,38 @@ concreteRoutes :: Resolution -> Witness -> [ConcreteRoute]
 concreteRoutes r w = map (concreteRoute r w) (toList r.patternPath.routes)
 
 -- | The witnesses of only the components the given edges belong to.
-witnessesFor :: [EdgeId] -> Resolution -> [Witness]
+witnessesFor :: Set EdgeId -> Resolution -> [Witness]
 witnessesFor es r =
-  combine [ps | (c, ps) <- r.components, any (`elem` c.edges) es]
+  combine [ps | (c, ps) <- r.components, any (`member` es) c.edges]
 
-routeEndValues :: Resolution -> Route -> Set NID
-routeEndValues r rt = case routeEnd rt of
-  Var v ->
-    setFromList
-      [ n
-      | (c, ps) <- r.components,
-        v `member` c.vars,
-        p <- ps,
-        Just n <- [lookup v p.nodes]
-      ]
-  bound -> singletonSet (vertexValue r (Witness mempty mempty) bound)
+-- | The solutions of the component each pattern edge belongs to. An edge
+-- belongs to exactly one component. Built once for a resolution, so that
+-- its routes need not each look through every component.
+solutionsByEdge :: Resolution -> Map EdgeId [Partial]
+solutionsByEdge r =
+  mapFromList [(e, ps) | (c, ps) <- r.components, e <- c.edges]
+
+-- | Likewise for each variable, which also belongs to one component.
+solutionsByVar :: Resolution -> Map VarId [Partial]
+solutionsByVar r =
+  mapFromList [(v, ps) | (c, ps) <- r.components, v <- toList c.vars]
 
 -- | Every node an output can be.
 targets :: Resolution -> Set NID
-targets r = foldMap (routeEndValues r) r.patternPath.routes
+targets r = foldMap endValues ends
+  where
+    -- many routes may end at one vertex
+    ends :: Set PVertex
+    ends = setFromList (map routeEnd (toList r.patternPath.routes))
+    byVar = solutionsByVar r
+    endValues = \case
+      Var v ->
+        setFromList
+          [ n
+          | p <- findWithDefault [] v byVar,
+            Just n <- [lookup v p.nodes]
+          ]
+      bound -> singletonSet (vertexValue r (Witness mempty mempty) bound)
 
 -- | Every concrete version of route 0, in witness order.
 selectedRoutes :: Resolution -> [ConcreteRoute]
@@ -336,7 +371,7 @@ selectedRoutes r =
   ordNub [concreteRoute r w selected | w <- witnessesFor edges r]
   where
     selected :| _ = r.patternPath.routes
-    edges = map (.edge) selected.hops
+    edges = setFromList (map (.edge) selected.hops)
 
 firstSelectedRoute :: Resolution -> ConcreteRoute
 firstSelectedRoute r = case selectedRoutes r of
@@ -348,17 +383,30 @@ firstSelectedRoute r = case selectedRoutes r of
 routeLastEdges :: Resolution -> Map Int (Set (Edge Text))
 routeLastEdges r =
   mapFromList
-    [ (i, setFromList [lastEdge w | w <- witnessesFor [h.edge] r])
+    [ (i, setFromList (map lastEdge (solutions h.edge)))
     | (i, rt) <- zip [0 ..] (toList r.patternPath.routes),
       Just h <- [lastMay rt.hops],
-      let lastEdge w = case lastMay (concreteRoute r w rt).hops of
-            Just ch -> concreteEdge (penultimate r w rt) ch
-            Nothing -> error "routeLastEdges: unreachable"
+      -- both ends of the edge are bound or in its component
+      let origin = case reverse rt.hops of
+            _ : before : _ -> before.target
+            _ -> rt.root
+          lastEdge p =
+            let w = Witness p.nodes p.labels
+             in concreteEdge
+                  (vertexValue r w origin)
+                  ConcreteHop
+                    { direction = h.direction,
+                      label = labelIn p h.edge,
+                      target = vertexValue r w h.target
+                    }
     ]
   where
-    penultimate res w rt = case reverse rt.hops of
-      _ : before : _ -> vertexValue res w before.target
-      _ -> vertexValue res w rt.root
+    byEdge = solutionsByEdge r
+    solutions e =
+      fromMaybe (error "routeLastEdges: edge outside every component") $
+        lookup e byEdge
+    labelIn p e =
+      fromMaybe (error "routeLastEdges: unlabelled edge") (lookup e p.labels)
 
 -- | The stored edge for a hop taken from a node.
 concreteEdge :: NID -> ConcreteHop -> Edge Text
