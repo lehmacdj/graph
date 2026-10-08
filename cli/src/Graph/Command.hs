@@ -22,6 +22,7 @@ import Graph.Augmentation
 import Graph.Check
 import Graph.Dualizeable
 import Graph.FreshNID
+import Graph.Fsck qualified as Fsck
 import Graph.GraphDataEditing
 import Graph.GraphEditing
 import Graph.GraphMetadataEditing
@@ -758,7 +759,7 @@ runCommand' = \case
       >>= echo . unpack . nshowWith (\x -> x {showAugmentation = Nothing})
     echo "history:"
     get @History >>= echo . show
-  Check -> editing $ reportToConsole @Text (fsck @Text)
+  Check -> Fsck.fsck
   Fix -> editing $ fixErrors @Text (fsck @Text)
   Move p0 q0 -> do
     p <- expandDirectives p0

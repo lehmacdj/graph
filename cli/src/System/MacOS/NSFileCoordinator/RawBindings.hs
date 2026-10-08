@@ -49,6 +49,66 @@ p_NSError_domain nsError = [C.exp| NSString *{ $(NSError *nsError).domain } |]
 p_NSError_code :: Ptr NSError -> IO NSInteger
 p_NSError_code nsError = [C.exp| NSInteger { $(NSError *nsError).code } |]
 
+-- | What an error means, in words. For the codes of @NSCocoaErrorDomain@
+-- that are about files this follows their documentation in
+-- @FoundationErrors.h@, which says more than the error does of itself; the
+-- codes are the SDK's constants, so the compiler checks them. Any other
+-- error is described as it describes itself.
+p_NSError_description :: Ptr NSError -> IO (Ptr NSString)
+p_NSError_description nsError =
+  [C.block| NSString *{
+    NSError *error = $(NSError *nsError);
+    if ([error.domain isEqualToString: NSCocoaErrorDomain]) {
+      switch (error.code) {
+        case NSFileNoSuchFileError:
+          return @"a filesystem operation was attempted on a file that does not exist";
+        case NSFileLockingError:
+          return @"the file could not be locked";
+        case NSFileReadUnknownError:
+          return @"the file could not be read, for unknown reasons";
+        case NSFileReadNoPermissionError:
+          return @"the file could not be read because of a permission problem";
+        case NSFileReadInvalidFileNameError:
+          return @"the file could not be read because its name is invalid";
+        case NSFileReadCorruptFileError:
+          return @"the file could not be read because it is corrupted, in a bad format, or similar";
+        case NSFileReadNoSuchFileError:
+          return @"the file could not be read because no such file was found";
+        case NSFileReadTooLargeError:
+          return @"the file could not be read because it is too large";
+        case NSFileWriteUnknownError:
+          return @"the file could not be written, for unknown reasons";
+        case NSFileWriteNoPermissionError:
+          return @"the file could not be written because of a permission problem";
+        case NSFileWriteInvalidFileNameError:
+          return @"the file could not be written because its name is invalid";
+        case NSFileWriteFileExistsError:
+          return @"the operation could not be performed because the destination file already exists";
+        case NSFileWriteOutOfSpaceError:
+          return @"the file could not be written because of a lack of disk space";
+        case NSFileWriteVolumeReadOnlyError:
+          return @"the file could not be written because the volume is read-only";
+        case NSUserCancelledError:
+          return @"the operation was cancelled";
+        case NSFeatureUnsupportedError:
+          return @"the feature is not supported, because the file system lacks it, required libraries are missing, or similar";
+      }
+    }
+    return error.localizedDescription;
+  } |]
+
+-- | An error with this domain and code, for the tests
+nsError_init :: CString -> NSInteger -> IO (Ptr NSError)
+nsError_init domain code =
+  [C.exp| NSError *{
+    [[NSError alloc]
+      initWithDomain: [NSString stringWithUTF8String: $(char *domain)]
+      code: $(NSInteger code)
+      userInfo: nil
+    ]
+  }
+  |]
+
 packNSString :: Ptr NSString -> IO Text
 packNSString nsString = do
   cString <- [C.exp| const char *{ [$(NSString *nsString) UTF8String] } |]

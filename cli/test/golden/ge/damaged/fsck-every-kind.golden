@@ -1,0 +1,41 @@
+==========graph==========
+0 -a-> 1
+0 -b-> 1 !out
+0 -c-> 1 !in
+0 -gone-> 2
+missing 2
+0 -bad-> 3
+raw 3 "{not json"
+4
+id 4 5
+6 data "left behind"
+missing 6
+==========input==========
+fsck
+nid
+==========stdout==========
+g> the edge @000000000000 -"c"-> @000000000001 is among the incoming edges in 000000000001.json but not among the outgoing edges in 000000000000.json
+the edge @000000000000 -"b"-> @000000000001 is among the outgoing edges in 000000000000.json but not among the incoming edges in 000000000001.json
+the edge @000000000000 -"gone"-> @000000000002 is among the outgoing edges in 000000000000.json but there is no 000000000002.json
+000000000004.json says it is the node @000000000005
+000000000003.json cannot be read as a node: Error in $: object key > 34: Failed reading: satisfy
+g> @000000000000
+g> Goodbye!
+==========stderr==========
+the graph is damaged (damage-found): fsck found 5 problems, listed above; fix repairs what it can and says what it can't
+==========graph-dump==========
+@000000000000{out=[@000000000001 via "a", @000000000001 via "b", @000000000003 via "bad", @000000000002 via "gone"], in=[@0daCJjMrQel8 via "origin"]}
+@000000000001{out=[], in=[@000000000000 via "a", @000000000000 via "c"]}
+couldn't deserialize node @000000000003; failed with error Error in $: Failed reading: satisfy. Expecting object key at 'notjson'
+@000000000005{out=[], in=[]}
+@0daCJjMrQel8{out=[@zsBuPkn5mh8F via "file-extensions", @AhQufiPzgyRf via "file-hashes", @3JJvxFUHGAA1 via "historical-special-nodes", @S00KkOYoVpFu via "import-dates", @a0fVkm0kR7KE via "import-urls", @927u9Xyky2pC via "mime-types", @000000000000 via "origin", @pbYxBO6fzBQV via "tags"], in=[]}
+@3JJvxFUHGAA1{out=[@VEfLhuTgZ88Z via "sequence-ids"], in=[@0daCJjMrQel8 via "historical-special-nodes"]}
+@927u9Xyky2pC{out=[], in=[@0daCJjMrQel8 via "mime-types"]}
+@AhQufiPzgyRf{out=[], in=[@0daCJjMrQel8 via "file-hashes"]}
+@S00KkOYoVpFu{out=[], in=[@0daCJjMrQel8 via "import-dates"]}
+@VEfLhuTgZ88Z{out=[], in=[@3JJvxFUHGAA1 via "sequence-ids"]}
+@a0fVkm0kR7KE{out=[], in=[@0daCJjMrQel8 via "import-urls"]}
+@pbYxBO6fzBQV{out=[], in=[@0daCJjMrQel8 via "tags"]}
+@zsBuPkn5mh8F{out=[], in=[@0daCJjMrQel8 via "file-extensions"]}
+==========data==========
+000000000006.data: "left behind"

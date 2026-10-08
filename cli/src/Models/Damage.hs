@@ -87,6 +87,15 @@ describeDamage = \case
       IncomingRecord -> "incoming"
       OutgoingRecord -> "outgoing"
 
+-- | The nodes whose files a piece of damage is about
+damagedNodes :: Damage -> [NID]
+damagedNodes = \case
+  OneSidedEdge _ e -> [e.source, e.sink]
+  EdgeToMissingNode _ e -> [e.source, e.sink]
+  FileSaysOtherId name claimed -> [name, claimed]
+  UnparsableNodeFile name _ -> [name]
+  MissingOriginFile -> [nilNID]
+
 otherSide :: RecordSide -> RecordSide
 otherSide = \case
   IncomingRecord -> OutgoingRecord

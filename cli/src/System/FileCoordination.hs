@@ -23,6 +23,7 @@ module System.FileCoordination
     NullResultException (..),
     NSErrorException (..),
     spec_coordinatedBodyThrows,
+    spec_peekNSError,
   )
 where
 
@@ -87,9 +88,12 @@ defaultWritingOptions =
 data NullResultException = NullResultException
   deriving (Show, Exception)
 
+-- | An error that file coordination gave: its domain and code as they are,
+-- and what it means in words
 data NSErrorException = NSErrorException
   { domain :: Text,
-    code :: Int
+    code :: Int,
+    description :: Text
   }
   deriving stock (Show, Generic)
   deriving anyclass (NFData, Exception)
@@ -128,7 +132,8 @@ peekNSError nsError = withEarlyReturnIO do
   when (nsError == nullPtr) $ returnEarly Nothing
   domain <- liftIO $ p_NSError_domain nsError >>= packNSString
   code <- liftIO $ p_NSError_code nsError
-  pure . Just $ NSErrorException domain (fromIntegral code)
+  description <- liftIO $ p_NSError_description nsError >>= packNSString
+  pure . Just $ NSErrorException domain (fromIntegral code) description
 
 throwNonNullNSError :: Ptr NSError -> IO ()
 throwNonNullNSError nsError = peekNSError nsError >>= maybe (pure ()) throwIO
@@ -382,6 +387,36 @@ coordinateAccessing FilesToCoordinate{..} action =
   let readingAccessors = readingPaths <&> \(path, _) -> WrappedReader \_ readingAction -> readingAction path
       writingAccessors = writingPaths <&> \(path, _) -> WrappedWriter \_ writingAction -> writingAction path
    in action readingAccessors writingAccessors
+#endif
+
+-- | An error from file coordination comes with what it means in words.
+spec_peekNSError :: Spec
+spec_peekNSError = do
+#ifdef darwin_HOST_OS
+  let peeked :: String -> Int -> IO (Maybe NSErrorException)
+      peeked domain code = runResourceT do
+        (_, nsError) <-
+          allocate
+            (withCString domain \d -> nsError_init d (fromIntegral code))
+            m_release
+        liftIO (peekNSError nsError)
+      described domain code =
+        fmap (\e -> (e.domain, e.code, e.description)) <$> peeked domain code
+  it "describes a file error of Cocoa as the SDK documents it" do
+    described "NSCocoaErrorDomain" 3072
+      `shouldReturn` Just ("NSCocoaErrorDomain", 3072, "the operation was cancelled")
+    described "NSCocoaErrorDomain" 257
+      `shouldReturn` Just
+        ( "NSCocoaErrorDomain",
+          257,
+          "the file could not be read because of a permission problem"
+        )
+  it "describes any other error as the error describes itself" do
+    Just e <- peeked "NSPOSIXErrorDomain" 13
+    (e.domain, e.code) `shouldBe` ("NSPOSIXErrorDomain", 13)
+    e.description `shouldNotBe` ""
+#else
+  pure ()
 #endif
 
 -- | A body that throws must not end the process (on macOS the body runs in

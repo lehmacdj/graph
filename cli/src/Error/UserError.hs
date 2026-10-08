@@ -12,7 +12,7 @@ import Models.Damage
 import Models.NID (NID)
 import MyPrelude
 import Network.HTTP.Conduit (HttpException)
-import System.FileCoordination (NSErrorException)
+import System.FileCoordination (NSErrorException (..))
 
 -- | Blanket error type used by the app. This is called @UserError@ because
 -- generally we only want to intercept it when propagating errors to the user.
@@ -47,6 +47,8 @@ data UserError
     -- node file: each such target with the edges that led to it, as the
     -- damage that they are (none for a target that no edge led to)
     TargetsWithoutFile (NonEmpty (NID, [Damage]))
+  | -- | fsck found that many pieces of damage (and listed them)
+    DamageFound Int
   deriving stock (Generic)
 
 -- | A difference between the file of a node with a change applied to it and
@@ -114,7 +116,15 @@ instance Show UserError where
     nodeFileName nid
       ++ " is there but cannot be read (unreadable-node-file): "
       ++ show e
-  show (FileCoordinationError e) = "error while file coordinating: " ++ show e
+  show (FileCoordinationError e) =
+    "the system did not give access to a file of the graph"
+      ++ " (file-coordination-error): "
+      ++ unpack e.description
+      ++ " ("
+      ++ unpack e.domain
+      ++ " "
+      ++ show e.code
+      ++ ")"
   show (InconsistentNodeRecords mismatches) =
     intercalate "\n" $
       [ "this change was not written: the graph is damaged where it applies"
@@ -128,6 +138,11 @@ instance Show UserError where
       ]
         ++ map (("- " ++) . describeDamage) (toList damage)
         ++ [repairHint]
+  show (DamageFound count) =
+    "the graph is damaged (damage-found): fsck found "
+      ++ show count
+      ++ (if count == 1 then " problem" else " problems")
+      ++ ", listed above; fix repairs what it can and says what it can't"
   show (DamagedGraphWarning damage) =
     intercalate "\n" $
       ["warning: the graph is damaged where this command read it (damaged-graph)"]

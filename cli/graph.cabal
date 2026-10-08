@@ -58,6 +58,8 @@ library
       Graph.Dualizeable
       Graph.Export.FileSystem
       Graph.FreshNID
+      Graph.Fsck
+      Graph.FsckSpec
       Graph.GraphDataEditing
       Graph.GraphEditing
       Graph.GraphEditingSpec

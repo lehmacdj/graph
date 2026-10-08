@@ -9,12 +9,11 @@ fsck
 fix
 nid
 ==========stdout==========
-g> g> g> @000000000000
+g> 000000000002.json says it is the node @000000000003
+g> g> @000000000000
 g> Goodbye!
 ==========stderr==========
-warning: the graph is damaged where this command read it (damaged-graph)
-- 000000000002.json says it is the node @000000000003
-fsck lists all such damage; fix repairs it, or says why it can't
+the graph is damaged (damage-found): fsck found 1 problem, listed above; fix repairs what it can and says what it can't
 warning: the graph is damaged where this command read it (damaged-graph)
 - 000000000002.json says it is the node @000000000003
 fsck lists all such damage; fix repairs it, or says why it can't

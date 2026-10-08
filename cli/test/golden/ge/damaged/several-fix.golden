@@ -10,17 +10,13 @@ fsck
 fix
 nid
 ==========stdout==========
-g> @000000000000 has a outgoing edge "b" to @000000000002 but the corresponding incoming one doesn't exist
-node @000000000004 is missing from the graph
-@000000000003 has an incoming edge "c" from @000000000000 but the corresponding outgoing one doesn't exist
+g> the edge @000000000000 -"c"-> @000000000003 is among the incoming edges in 000000000003.json but not among the outgoing edges in 000000000000.json
+the edge @000000000000 -"b"-> @000000000002 is among the outgoing edges in 000000000000.json but not among the incoming edges in 000000000002.json
+the edge @000000000003 -"e"-> @000000000004 is among the outgoing edges in 000000000003.json but there is no 000000000004.json
 g> g> @000000000000
 g> Goodbye!
 ==========stderr==========
-warning: the graph is damaged where this command read it (damaged-graph)
-- the edge @000000000000 -"c"-> @000000000003 is among the incoming edges in 000000000003.json but not among the outgoing edges in 000000000000.json
-- the edge @000000000000 -"b"-> @000000000002 is among the outgoing edges in 000000000000.json but not among the incoming edges in 000000000002.json
-- the edge @000000000003 -"e"-> @000000000004 is among the outgoing edges in 000000000003.json but there is no 000000000004.json
-fsck lists all such damage; fix repairs it, or says why it can't
+the graph is damaged (damage-found): fsck found 3 problems, listed above; fix repairs what it can and says what it can't
 this change was not written: the graph is damaged where it applies (damaged-graph)
 - the edge @000000000000 -"c"-> @000000000003 is among the incoming edges in 000000000003.json but not among the outgoing edges in 000000000000.json
 - the edge @000000000000 -"b"-> @000000000002 is among the outgoing edges in 000000000000.json but not among the incoming edges in 000000000002.json
