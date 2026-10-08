@@ -22,13 +22,16 @@ module System.FileCoordination
     defaultWritingOptions,
     NullResultException (..),
     NSErrorException (..),
+    spec_coordinatedBodyThrows,
   )
 where
 
 import MyPrelude
+import Utils.Testing.External
 
 #ifdef darwin_HOST_OS
 
+import Control.Exception qualified as E
 import Control.Monad.Trans.Resource
 import Foreign
 import Foreign.C.String
@@ -149,6 +152,32 @@ allocateNSArray objects =
 
 -- * Relatively raw darwin wrappers
 
+-- | Where the body run by an accessor block leaves its result. The block is
+-- a Haskell callback that Objective-C calls, and an exception can't pass
+-- through the foreign frames: one that leaves the callback makes the runtime
+-- end the process. So the callback catches everything and the caller of the
+-- foreign function throws it again once that function has returned.
+newtype AccessorResult a = AccessorResult (IORef (Maybe (Either SomeException a)))
+
+newAccessorResult :: IO (AccessorResult a)
+newAccessorResult = AccessorResult <$> newIORef Nothing
+
+-- | Run the body of an accessor block; never throws.
+runAccessorBody :: AccessorResult a -> IO a -> IO ()
+runAccessorBody (AccessorResult ref) body =
+  -- not the @try@ of MyPrelude: asynchronous exceptions must not leave the
+  -- callback either
+  E.try body >>= writeIORef ref . Just
+
+-- | The result of the body, to be asked for once the foreign function that
+-- was given the accessor block has returned.
+accessorResult :: AccessorResult a -> IO a
+accessorResult (AccessorResult ref) =
+  readIORef ref >>= \case
+    Nothing -> throwIO NullResultException
+    Just (Left e) -> throwIO e
+    Just (Right result) -> pure result
+
 coordinateReading' ::
   Ptr NSFileCoordinator ->
   Ptr (Ptr NSError) ->
@@ -157,18 +186,17 @@ coordinateReading' ::
   (FilePath -> IO a) ->
   IO a
 coordinateReading' fileCoordinator errPtr url options action = do
-  resultRef <- newIORef Nothing
+  result <- newAccessorResult
   m_NSFileCoordinator_coordinateReadingItem
     fileCoordinator
     url
     (fromReadingOptions options)
     errPtr
-    $ \newUrl -> do
-      path <- filePathFromNSURL newUrl
-      result <- action path
-      writeIORef resultRef (Just result)
+    $ \newUrl ->
+      runAccessorBody result $
+        action =<< filePathFromNSURL newUrl
   when (errPtr /= nullPtr) $ peek errPtr >>= throwNonNullNSError
-  readIORef resultRef >>= maybe (throwIO NullResultException) pure
+  accessorResult result
 
 coordinateWriting' ::
   Ptr NSFileCoordinator ->
@@ -178,18 +206,17 @@ coordinateWriting' ::
   (FilePath -> IO a) ->
   IO a
 coordinateWriting' fileCoordinator errPtr url options action = do
-  resultRef <- newIORef Nothing
+  result <- newAccessorResult
   m_NSFileCoordinator_coordinateWritingItem
     fileCoordinator
     url
     (fromWritingOptions options)
     errPtr
-    $ \newUrl -> do
-      path <- filePathFromNSURL newUrl
-      result <- action path
-      writeIORef resultRef (Just result)
+    $ \newUrl ->
+      runAccessorBody result $
+        action =<< filePathFromNSURL newUrl
   when (errPtr /= nullPtr) $ peek errPtr >>= throwNonNullNSError
-  readIORef resultRef >>= maybe (throwIO NullResultException) pure
+  accessorResult result
 
 coordinateReadingThenWriting' ::
   Ptr NSFileCoordinator ->
@@ -201,7 +228,7 @@ coordinateReadingThenWriting' ::
   (FilePath -> FilePath -> IO a) ->
   IO a
 coordinateReadingThenWriting' fileCoordinator errPtr readingUrl readingOptions writingUrl writingOptions action = do
-  resultRef <- newIORef Nothing
+  result <- newAccessorResult
   m_NSFileCoordinator_coordinateReadingAndWritingItem
     fileCoordinator
     readingUrl
@@ -209,13 +236,12 @@ coordinateReadingThenWriting' fileCoordinator errPtr readingUrl readingOptions w
     writingUrl
     (fromWritingOptions writingOptions)
     errPtr
-    $ \newReadingUrl newWritingUrl -> do
+    $ \newReadingUrl newWritingUrl -> runAccessorBody result do
       readingPath <- filePathFromNSURL newReadingUrl
       writingPath <- filePathFromNSURL newWritingUrl
-      result <- action readingPath writingPath
-      writeIORef resultRef (Just result)
+      action readingPath writingPath
   when (errPtr /= nullPtr) $ peek errPtr >>= throwNonNullNSError
-  readIORef resultRef >>= maybe (throwIO NullResultException) pure
+  accessorResult result
 
 coordinateWritingAndWriting' ::
   Ptr NSFileCoordinator ->
@@ -227,25 +253,18 @@ coordinateWritingAndWriting' ::
   (FilePath -> FilePath -> IO a) ->
   IO a
 coordinateWritingAndWriting' fileCoordinator errPtr writingUrl1 writingOptions1 writingUrl2 writingOptions2 action = do
-  resultRef <- newIORef Nothing
+  result <- newAccessorResult
   m_NSFileCoordinator_coordinateWritingItem
     fileCoordinator
     writingUrl1
     (fromWritingOptions writingOptions1)
     errPtr
-    $ \newWritingUrl1 -> do
+    $ \newWritingUrl1 -> runAccessorBody result do
       writingPath1 <- filePathFromNSURL newWritingUrl1
-      m_NSFileCoordinator_coordinateWritingItem
-        fileCoordinator
-        writingUrl2
-        (fromWritingOptions writingOptions2)
-        errPtr
-        $ \newWritingUrl2 -> do
-          writingPath2 <- filePathFromNSURL newWritingUrl2
-          result <- action writingPath1 writingPath2
-          writeIORef resultRef (Just result)
+      coordinateWriting' fileCoordinator errPtr writingUrl2 writingOptions2 $
+        action writingPath1
   when (errPtr /= nullPtr) $ peek errPtr >>= throwNonNullNSError
-  readIORef resultRef >>= maybe (throwIO NullResultException) pure
+  accessorResult result
 
 #endif
 
@@ -347,7 +366,7 @@ coordinateAccessing FilesToCoordinate{..} action = runResourceT do
     let writingAccessors =
           writingUrls <&> \url -> WrappedWriter \writingOptions writingAction ->
             coordinateWriting' fileCoordinator errPtr url writingOptions writingAction
-    resultRef <- newIORef Nothing
+    result <- liftIO newAccessorResult
     liftIO $
       m_NSFileCoordinator_prepareForReadingAndWritingItems
         fileCoordinator
@@ -356,13 +375,83 @@ coordinateAccessing FilesToCoordinate{..} action = runResourceT do
         writingUrlsArray
         (fromWritingOptions blanketWritingOptions)
         errPtr
-        do
-          result <- action readingAccessors writingAccessors
-          writeIORef resultRef $ Just result
-    readIORef resultRef >>= maybe (throwIO NullResultException) pure
+        (runAccessorBody result $ action readingAccessors writingAccessors)
+    liftIO $ accessorResult result
 #else
 coordinateAccessing FilesToCoordinate{..} action =
   let readingAccessors = readingPaths <&> \(path, _) -> WrappedReader \_ readingAction -> readingAction path
       writingAccessors = writingPaths <&> \(path, _) -> WrappedWriter \_ writingAction -> writingAction path
    in action readingAccessors writingAccessors
 #endif
+
+-- | A body that throws must not end the process (on macOS the body runs in
+-- a callback called from Objective-C): its caller gets the exception.
+spec_coordinatedBodyThrows :: Spec
+spec_coordinatedBodyThrows = do
+  let throwing :: IO ()
+      throwing = throwIO (userError "thrown by the body")
+      isThrown :: IOError -> Bool
+      isThrown = (== userError "thrown by the body")
+      inTempFile :: (FilePath -> IO ()) -> IO ()
+      inTempFile test = withSystemTempDirectory "coordination" \dir -> do
+        writeFile (dir </> "file") "content"
+        test (dir </> "file")
+  it "passes on an exception thrown while reading" $ inTempFile \file ->
+    coordinateReading file False defaultReadingOptions (const throwing)
+      `shouldThrow` isThrown
+  it "passes on an exception thrown while writing" $ inTempFile \file ->
+    coordinateWriting file False defaultWritingOptions (const throwing)
+      `shouldThrow` isThrown
+  it "passes on an error call" $ inTempFile \file ->
+    coordinateReading file False defaultReadingOptions (\_ -> error "boom" :: IO ())
+      `shouldThrow` anyErrorCall
+  it "passes on an exception thrown while reading then writing" $
+    inTempFile \file ->
+      coordinateReadingThenWriting
+        file
+        False
+        defaultReadingOptions
+        (file <> ".other")
+        False
+        defaultWritingOptions
+        (\_ _ -> throwing)
+        `shouldThrow` isThrown
+  it "passes on an exception thrown while writing two files" $
+    inTempFile \file ->
+      coordinateWritingAndWriting
+        file
+        False
+        defaultWritingOptions
+        (file <> ".other")
+        False
+        defaultWritingOptions
+        (\_ _ -> throwing)
+        `shouldThrow` isThrown
+  it "passes on an exception thrown while accessing several files" $
+    inTempFile \file ->
+      coordinateAccessing
+        FilesToCoordinate
+          { readingPaths = [(file, False)],
+            blanketReadingOptions = defaultReadingOptions,
+            writingPaths = [(file <> ".other", False)],
+            blanketWritingOptions = defaultWritingOptions
+          }
+        (\_ _ -> throwing)
+        `shouldThrow` isThrown
+  it "passes on an exception thrown in a reader of several files" $
+    inTempFile \file ->
+      coordinateAccessing
+        FilesToCoordinate
+          { readingPaths = [(file, False)],
+            blanketReadingOptions = defaultReadingOptions,
+            writingPaths = [],
+            blanketWritingOptions = defaultWritingOptions
+          }
+        ( \readers _ -> for_ readers \reader ->
+            unwrappingReader reader defaultReadingOptions (const throwing)
+        )
+        `shouldThrow` isThrown
+  it "still returns the result of a body that doesn't throw" $
+    inTempFile \file ->
+      coordinateReading file False defaultReadingOptions readFile
+        `shouldReturn` "content"
