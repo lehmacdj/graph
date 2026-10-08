@@ -9,13 +9,16 @@ import DAL.RawGraph
 import Data.List.NonEmpty qualified as NonEmpty
 import Data.Map.Strict qualified as Map
 import Error.UserError
+import Error.Warn
 import Models.Augmentation.NodeEdits
 import Models.Connect
-import Models.Damage (damageAmong, damageNear, filesNewTo)
+import Models.Damage (damageAmong, damageNear, fileFailure, filesNewTo)
 import Models.NID
 import Models.Node
 import MyPrelude
+import System.Directory (removeFile)
 import System.FileCoordination
+import System.FilePath (takeFileName)
 
 data GraphMetadataFilesystemOperationsWriteDiff :: Effect where
   WriteGraphDiff ::
@@ -45,21 +48,30 @@ data GraphMetadataFilesystemOperationsWriteDiff :: Effect where
 makeEffect ''GraphMetadataFilesystemOperationsWriteDiff
 
 -- | Returns the file of each changed node as it was read here, and as it is
--- to be once the change is written.
+-- to be once the change is written; and the files that were kept of the
+-- deleted nodes' files (see 'keptNodeFilesOf') and could not be removed, with
+-- the reason.
 writeGraphDiff_ ::
   (Members [RawGraph, IOE, Error UserError] r) =>
   (NID -> FilePath -> Eff RawGraphUserErrorIO (Maybe (Node Text ()))) ->
   (FilePath -> Node Text () -> Eff RawGraphUserErrorIO ()) ->
   (FilePath -> Eff RawGraphUserErrorIO ()) ->
+  -- | remove a file that was kept of a deleted node's file
+  (FilePath -> Eff RawGraphUserErrorIO ()) ->
   Map NID (Maybe (Node Text ())) ->
   Map NID (NodeEdits Text) ->
   Map NID (Maybe (Node Text ())) ->
   Map NID (Maybe (Node Text ())) ->
-  Eff r (Map NID (Maybe (Node Text ()), Maybe (Node Text ())))
+  Eff
+    r
+    ( Map NID (Maybe (Node Text ()), Maybe (Node Text ())),
+      [(FilePath, IOError)]
+    )
 writeGraphDiff_
   readNodeMetadata'
   writeNodeMetadata'
   deleteNodeMetadata'
+  removeKeptFile'
   (force -> asLoaded)
   (force -> changes)
   changedNodes
@@ -175,7 +187,21 @@ writeGraphDiff_
             (Nothing, Nothing) ->
               -- node never existed and still doesn't exist
               pure ()
-        pure plannedWrites
+        -- What fix kept of the file of a node that is deleted goes with the
+        -- node. This comes after the change is written, and doesn't undo it:
+        -- a kept file that can't be removed is left over, which whoever
+        -- wrote the change says (fsck reports such a file, and fix removes
+        -- it).
+        let deleted =
+              [ path
+              | (nid, (path, _)) <- mapToList writingPaths,
+                Just (Just _, Nothing) <- [plannedWrites ^. at nid]
+              ]
+        fmap ((plannedWrites,) . concat) . for deleted $ \path -> do
+          kept <- keptNodeFilesOf path
+          fmap catMaybes . for kept $ \file ->
+            either (Just . (file,)) (const Nothing)
+              <$> try @IO @IOError (unliftIO (removeKeptFile' file))
 
 -- | How the node that applying a transaction's edits to the file of @nid@
 -- gives differs from the node the transaction computed. The two are the same
@@ -205,37 +231,64 @@ recordMismatches nid = curry \case
            | c <- toList (present.incoming `difference` absent.incoming)
            ]
 
+-- | Warns of each file kept of a deleted node's file that could not be
+-- removed: the change is written by then, and stays.
 runGraphMetadataFilesystemOperationsWriteDiffIO ::
-  (Members [RawGraph, IOE, Error UserError] effs) =>
+  (Members [RawGraph, IOE, Error UserError, Warn UserError] effs) =>
   Eff (GraphMetadataFilesystemOperationsWriteDiff ': effs) a ->
   Eff effs a
-runGraphMetadataFilesystemOperationsWriteDiffIO = interpret \_ -> \case
-  WriteGraphDiff asLoaded changes changedNodes others ->
-    fmap snd
-      <$> writeGraphDiff_
+runGraphMetadataFilesystemOperationsWriteDiffIO =
+  writingGraphDiffsRemovingKeptWith (liftIO . removeFile)
+
+-- | 'runGraphMetadataFilesystemOperationsWriteDiffIO', given how a file that
+-- was kept of a deleted node's file is removed (which the tests have fail).
+writingGraphDiffsRemovingKeptWith ::
+  (Members [RawGraph, IOE, Error UserError, Warn UserError] effs) =>
+  (FilePath -> Eff RawGraphUserErrorIO ()) ->
+  Eff (GraphMetadataFilesystemOperationsWriteDiff ': effs) a ->
+  Eff effs a
+writingGraphDiffsRemovingKeptWith removeKeptFile' = interpret \_ -> \case
+  WriteGraphDiff asLoaded changes changedNodes others -> do
+    (written, leftOver) <-
+      writeGraphDiff_
         (readNodeMetadata_ False)
         (writeNodeMetadata_ False)
         (deleteNodeMetadata_ False)
+        removeKeptFile'
         asLoaded
         changes
         changedNodes
         others
+    traverse_ (warnString . uncurry keptFileLeftOver) leftOver
+    pure (snd <$> written)
+
+-- | What is said of a file that was kept of a deleted node's file and could
+-- not be removed with the node.
+keptFileLeftOver :: FilePath -> IOError -> String
+keptFileLeftOver file e =
+  "warning: the node was deleted, but "
+    <> takeFileName file
+    <> ", which fix had kept of its file, could not be removed: "
+    <> fileFailure "remove" e
+    <> ". It is left over, and fsck will report it."
 
 runGraphMetadataFilesystemOperationsWriteDiffDryRun ::
   (Members [RawGraph, IOE, Error UserError] effs) =>
   Eff (GraphMetadataFilesystemOperationsWriteDiff ': effs) a ->
   Eff effs a
 runGraphMetadataFilesystemOperationsWriteDiffDryRun = interpret \_ -> \case
-  WriteGraphDiff asLoaded changes changedNodes others ->
+  WriteGraphDiff asLoaded changes changedNodes others -> do
+    let wouldDelete path = say $ "would delete at path: " <> tshow path
     -- Nothing is written, so each of these files stays as it was read for
     -- the change. The command has read it then, as it has in the real run:
     -- what a later step of it reads is compared with a file that only
     -- writing read (that of a neighbour of a deleted node, say) as well.
-    fmap fst
+    fmap fst . fst
       <$> writeGraphDiff_
         (readNodeMetadata_ False)
         (\path node -> say $ "would write: " <> tshow node <> " -> " <> tshow path)
-        (\path -> say $ "would delete at path: " <> tshow path)
+        wouldDelete
+        wouldDelete
         asLoaded
         changes
         changedNodes

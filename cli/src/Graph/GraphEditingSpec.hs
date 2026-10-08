@@ -33,6 +33,7 @@ import System.Directory
     getPermissions,
     listDirectory,
     pathIsSymbolicLink,
+    removeFile,
     renameFile,
     setPermissions,
   )
@@ -233,6 +234,81 @@ spec_runGraphEditingTransactionally = do
           reason `shouldStartWith` "it is not a file but a directory ("
         _ -> expectationFailure "the change was not refused"
       doesDirectoryExist (metadataFile dir n1) `shouldReturn` True
+  describe "the files that fix kept of a node's file" do
+    let kept dir nid suffix = metadataFile dir nid <> ".unparsable" <> suffix
+        hub dir = do
+          runOnDisk dir do
+            insertEdge (Edge nilNID "x" n1)
+            insertEdge (Edge n1 "y" n2)
+            writeRawData n1 "data"
+    it "are deleted with the node, and no file that is only named like one" $
+      withEmptyTempGraph \dir -> do
+        hub dir
+        for_ ["", "-2", "-3", "-5", ".txt", "-old"] \suffix ->
+          B.writeFile (kept dir n1 suffix) "{not json"
+        createDirectory (kept dir n1 "-4")
+        (result, warnings) <-
+          runCommandLine False dir (runGraphEditingTransactionally (deleteNode n1))
+        result `shouldSatisfy` isRight
+        warnings `shouldBe` []
+        -- their names are tried in order until one is no file, so the ones
+        -- after that are left over (fsck reports those)
+        (sort . filter ("000000000001." `isPrefixOf`) <$> listDirectory dir)
+          `shouldReturn` [ "000000000001.json.unparsable-4",
+                           "000000000001.json.unparsable-5",
+                           "000000000001.json.unparsable-old",
+                           "000000000001.json.unparsable.txt"
+                         ]
+    it "stay if the change is refused" $
+      withEmptyTempGraph \dir -> do
+        hub dir
+        B.writeFile (kept dir n1 "") "{not json"
+        B.writeFile (metadataFile dir n2) "{not json"
+        runOnDiskEither dir (deleteNode n1) >>= (`shouldSatisfy` isLeft)
+        doesFileExist (kept dir n1 "") `shouldReturn` True
+        doesFileExist (metadataFile dir n1) `shouldReturn` True
+    it "don't undo the change if one of them can't be removed: it warns" $
+      withEmptyTempGraph \dir -> do
+        hub dir
+        B.writeFile (kept dir n1 "") "{not json"
+        B.writeFile (kept dir n1 "-2") "{nor this"
+        warnings <- newIORef []
+        let collectWarnings = interpret \_ -> \case
+              Warn e -> liftIO $ modifyIORef warnings (show (e :: UserError) :)
+            -- the first one can't be removed
+            removing file
+              | ".unparsable" `isSuffixOf` file =
+                  liftIO . ioError $
+                    mkIOError permissionErrorType "removeLink" Nothing (Just file)
+              | otherwise = liftIO (removeFile file)
+        result <-
+          runEff
+            . runErrorNoCallStack @UserError
+            . collectWarnings
+            . evalStateLocal noDamageReadPast
+            . runRawGraphWithPath dir
+            . runGraphDataFilesystemOperationsIO
+            . writingGraphDiffsRemovingKeptWith removing
+            . runGraphMetadataFilesystemOperationsIO True
+            $ runGraphEditingTransactionally (deleteNode n1)
+        result `shouldSatisfy` isRight
+        -- the node, its data and its edges are gone
+        (sort <$> listDirectory dir)
+          `shouldReturn` [ "000000000000.json",
+                           "000000000001.json.unparsable",
+                           "000000000002.json"
+                         ]
+        runOnDisk dir (traverse getNodeMetadata [nilNID, n2])
+          `shouldReturn` [Just (emptyNode nilNID), Just (emptyNode n2)]
+        readIORef warnings
+          `shouldReturn` [ "warning: the node was deleted, but"
+                             <> " 000000000001.json.unparsable, which fix had"
+                             <> " kept of its file, could not be removed: there"
+                             <> " is no permission to remove it ("
+                             <> kept dir n1 ""
+                             <> ": removeLink: permission denied). It is left"
+                             <> " over, and fsck will report it."
+                         ]
   it "writes nothing if the action fails" do
     withEmptyTempGraph \dir -> do
       _ <- runOnDiskEither dir do

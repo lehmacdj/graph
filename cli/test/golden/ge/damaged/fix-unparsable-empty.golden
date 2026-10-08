@@ -1,0 +1,37 @@
+==========graph==========
+0 -a-> 1
+0 -c-> 3
+2 -d-> 1
+0 -b-> 2
+raw 2 ""
+==========input==========
+fix
+fsck
+ls
+nid
+==========stdout==========
+g> repairs:
+- keep 000000000002.json, which cannot be read as a node, as 000000000002.json.unparsable
+- rebuild 000000000002.json from the 2 edges that other nodes record with @000000000002 (any other edge it had is only in the file that is kept)
+g> no damage found in 13 node files
+g> [0m[0;1ma[0m[0m [0;34m@000000000001[0m [0m[0m
+[0m[0;1mb[0m[0m [0;34m@000000000002[0m [0m[0m
+[0m[0;1mc[0m[0m [0;34m@000000000003[0m [0m[0m
+g> @000000000000
+g> Goodbye!
+==========stderr==========
+==========graph-dump==========
+@000000000000{out=[@000000000001 via "a", @000000000002 via "b", @000000000003 via "c"], in=[@0daCJjMrQel8 via "origin"]}
+@000000000001{out=[], in=[@000000000000 via "a", @000000000002 via "d"]}
+@000000000002{out=[@000000000001 via "d"], in=[@000000000000 via "b"]}
+@000000000003{out=[], in=[@000000000000 via "c"]}
+@0daCJjMrQel8{out=[@zsBuPkn5mh8F via "file-extensions", @AhQufiPzgyRf via "file-hashes", @3JJvxFUHGAA1 via "historical-special-nodes", @S00KkOYoVpFu via "import-dates", @a0fVkm0kR7KE via "import-urls", @927u9Xyky2pC via "mime-types", @000000000000 via "origin", @pbYxBO6fzBQV via "tags"], in=[]}
+@3JJvxFUHGAA1{out=[@VEfLhuTgZ88Z via "sequence-ids"], in=[@0daCJjMrQel8 via "historical-special-nodes"]}
+@927u9Xyky2pC{out=[], in=[@0daCJjMrQel8 via "mime-types"]}
+@AhQufiPzgyRf{out=[], in=[@0daCJjMrQel8 via "file-hashes"]}
+@S00KkOYoVpFu{out=[], in=[@0daCJjMrQel8 via "import-dates"]}
+@VEfLhuTgZ88Z{out=[], in=[@3JJvxFUHGAA1 via "sequence-ids"]}
+@a0fVkm0kR7KE{out=[], in=[@0daCJjMrQel8 via "import-urls"]}
+@pbYxBO6fzBQV{out=[], in=[@0daCJjMrQel8 via "tags"]}
+@zsBuPkn5mh8F{out=[], in=[@0daCJjMrQel8 via "file-extensions"]}
+==========data==========

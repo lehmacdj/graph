@@ -56,8 +56,8 @@ data Command
     ImportUrl URI
   | -- | fsck
     Check
-  | -- | fix
-    Fix
+  | -- | fix [--dry-run]: repair the damage that fsck lists
+    Fix FixMode
   | -- | mv
     Move ParsedPath ParsedPath
   | -- | rn [--all-parents]
@@ -103,3 +103,20 @@ data DestinationParents
   = OneParent
   | AllParents
   deriving (Eq, Show, Ord, Generic)
+
+-- | Whether @fix@ makes its repairs or only lists them (@fix --dry-run@)
+data FixMode
+  = ApplyRepairs
+  | ListRepairs
+  deriving (Eq, Show, Ord, Generic)
+
+-- | Whether a command needs the graph opened: its origin and system nodes
+-- there. @fsck@ and @fix@ don't, so that they can run on a graph that is too
+-- damaged for that. A sequence doesn't either: each of its commands is asked
+-- when it runs, so that @fix ; ls@ repairs the graph and then lists it.
+needsOpenGraph :: Command -> Bool
+needsOpenGraph = \case
+  Check -> False
+  Fix _ -> False
+  Seq _ -> False
+  _ -> True

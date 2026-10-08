@@ -1,0 +1,44 @@
+==========graph==========
+no system nodes
+0 -a-> 1
+@0daCJjMrQel8 -tags-> @pbYxBO6fzBQV
+1 -t-> @pbYxBO6fzBQV
+missing @pbYxBO6fzBQV
+==========input==========
+ls
+fix
+ls
+at @pbYxBO6fzBQV ls ~*
+nid
+==========stdout==========
+g> g> repairs:
+- rebuild pbYxBO6fzBQV.json from the 2 edges that other nodes record with @pbYxBO6fzBQV (any other edge it had is lost, and so is its data if it had any)
+g> [0m[0;1ma[0m[0m [0;34m@000000000001[0m [0m[0m
+g> [0m[0;1mt[0m[0m [0;34m@000000000001[0m [0m[0m
+[0m[0;1mtags[0m[0m [0;34m@0daCJjMrQel8[0m [0m[0m
+g> @000000000000
+g> Goodbye!
+==========stderr==========
+a system node or an edge to one is missing and was not added: the graph is damaged where it goes (damaged-graph)
+- the edge @0daCJjMrQel8 -"tags"-> @pbYxBO6fzBQV is among the outgoing edges in 0daCJjMrQel8.json but there is no pbYxBO6fzBQV.json
+fsck lists all such damage; fix repairs it, or says why it can't
+the graph could not be opened (cannot-open-graph): only fsck and fix can run until this is repaired
+a system node or an edge to one is missing and was not added: the graph is damaged where it goes (damaged-graph)
+- the edge @0daCJjMrQel8 -"tags"-> @pbYxBO6fzBQV is among the outgoing edges in 0daCJjMrQel8.json but there is no pbYxBO6fzBQV.json
+fsck lists all such damage; fix repairs it, or says why it can't
+the graph could not be opened (cannot-open-graph): only fsck and fix can run until this is repaired
+warning: created the system nodes that had no file: @S00KkOYoVpFu, @AhQufiPzgyRf, @a0fVkm0kR7KE, @3JJvxFUHGAA1, @VEfLhuTgZ88Z, @927u9Xyky2pC, @zsBuPkn5mh8F
+warning: added the system edges that no node recorded: @0daCJjMrQel8 -"origin"-> @000000000000
+==========graph-dump==========
+@000000000000{out=[@000000000001 via "a"], in=[@0daCJjMrQel8 via "origin"]}
+@000000000001{out=[@pbYxBO6fzBQV via "t"], in=[@000000000000 via "a"]}
+@0daCJjMrQel8{out=[@zsBuPkn5mh8F via "file-extensions", @AhQufiPzgyRf via "file-hashes", @3JJvxFUHGAA1 via "historical-special-nodes", @S00KkOYoVpFu via "import-dates", @a0fVkm0kR7KE via "import-urls", @927u9Xyky2pC via "mime-types", @000000000000 via "origin", @pbYxBO6fzBQV via "tags"], in=[]}
+@3JJvxFUHGAA1{out=[@VEfLhuTgZ88Z via "sequence-ids"], in=[@0daCJjMrQel8 via "historical-special-nodes"]}
+@927u9Xyky2pC{out=[], in=[@0daCJjMrQel8 via "mime-types"]}
+@AhQufiPzgyRf{out=[], in=[@0daCJjMrQel8 via "file-hashes"]}
+@S00KkOYoVpFu{out=[], in=[@0daCJjMrQel8 via "import-dates"]}
+@VEfLhuTgZ88Z{out=[], in=[@3JJvxFUHGAA1 via "sequence-ids"]}
+@a0fVkm0kR7KE{out=[], in=[@0daCJjMrQel8 via "import-urls"]}
+@pbYxBO6fzBQV{out=[], in=[@000000000001 via "t", @0daCJjMrQel8 via "tags"]}
+@zsBuPkn5mh8F{out=[], in=[@0daCJjMrQel8 via "file-extensions"]}
+==========data==========

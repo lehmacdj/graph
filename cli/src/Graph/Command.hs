@@ -2,6 +2,7 @@ module Graph.Command where
 
 import Control.Monad (zipWithM_)
 import DAL.DirectoryFormat (legacyNodeDataFile)
+import DAL.FileSystemOperations.Metadata (GraphMetadataFilesystemOperations)
 import DAL.RawGraph
 import DAL.Serialization (doesNodeExist)
 import Data.List.NonEmpty qualified as NonEmpty
@@ -19,10 +20,10 @@ import Error.Missing
 import Error.UserError
 import Error.Warn
 import Graph.Augmentation
-import Graph.Check
 import Graph.Dualizeable
+import Graph.Fix (fix)
 import Graph.FreshNID
-import Graph.Fsck qualified as Fsck
+import Graph.Fsck (fsck)
 import Graph.GraphDataEditing
 import Graph.GraphEditing
 import Graph.GraphMetadataEditing
@@ -349,15 +350,32 @@ type CommandEffects effs =
     -- best way to do this is to allow commands to be defined as @stack@
     -- scripts, and then rewrite resolve and any other commands that
     -- require this outside of
-    Members [RawGraph, IOE, State DamageReadPast] effs
+    Members [RawGraph, IOE, State DamageReadPast] effs,
+    -- for fix, which repairs node files that no transaction accepts
+    GraphMetadataFilesystemOperations :> effs
   )
 
 -- | Run one command line. Damage that the commands of the line read past is
 -- warned of once, when the line is done (see 'warningOfDamageReadPast').
-interpretCommand :: (CommandEffects effs) => Command -> Eff effs ()
-interpretCommand command =
+--
+-- The first argument is asked to make the graph ready before each command
+-- that needs it open ('needsOpenGraph'), and fails if it can't. That is not
+-- done for the line as a whole: @fsck@ and @fix@ run on a graph that can't be
+-- opened, and a command after @fix@ finds the graph repaired.
+interpretCommand ::
+  (CommandEffects effs) => (Opening -> Eff effs ()) -> Command -> Eff effs ()
+interpretCommand open command =
   warningOfDamageReadPast $
-    evalStateLocal (ImportedUrls mempty) (runCommand command)
+    evalStateLocal (ImportedUrls mempty) (runCommand (raise . open) command)
+
+-- | What the commands ask of whoever opens the graph for them
+data Opening
+  = -- | Make the graph ready for commands, if that hasn't been done
+    EnsureOpen
+  | -- | Do so again for the next command that needs it: the node files were
+    -- repaired, and what opening adds to the graph may be missing again
+    OpenAgain
+  deriving stock (Eq, Show)
 
 -- | Run a command, noting in its error any @%targets(…)@ that it expanded
 -- to nothing (it then means @%never@, which is easy to miss).
@@ -366,10 +384,15 @@ interpretCommand command =
 -- in resolving its arguments or the targets of @at@, say, it writes nothing.
 runCommand ::
   (CommandEffects effs, State ImportedUrls :> effs) =>
+  -- | open the graph (see 'interpretCommand')
+  (Opening -> Eff effs ()) ->
   Command ->
   Eff effs ()
-runCommand c = evalStateLocal (EmptyTargets []) do
-  result <- tryError @UserError (deciding (runCommand' c))
+runCommand open c = evalStateLocal (EmptyTargets []) do
+  -- no part of the command's decision: the REPL has opened the graph before
+  -- it runs any command
+  when (needsOpenGraph c) (raise (open EnsureOpen))
+  result <- tryError @UserError (deciding (runCommand' (raise . open) c))
   EmptyTargets empties <- get
   case result of
     Right () -> pure ()
@@ -604,13 +627,23 @@ spec_targetsWithoutFile = do
       `shouldBe` damage
     damageRefusedBy (OtherError "another failure") `shouldBe` mempty
 
+-- | Whether an error is how @fsck@ or @fix@ says that it found or left
+-- damage. They fail for the exit code, having done all they do.
+isDamageReport :: UserError -> Bool
+isDamageReport = \case
+  DamageFound _ -> True
+  DamageNotRepaired _ -> True
+  _ -> False
+
 runCommand' ::
   ( CommandEffects effs,
     Members [State ImportedUrls, State EmptyTargets] effs
   ) =>
+  -- | open the graph (see 'interpretCommand')
+  (Opening -> Eff effs ()) ->
   Command ->
   Eff effs ()
-runCommand' = \case
+runCommand' open = \case
   ChangeNode p0 -> do
     p <- expandDirectives p0
     nid <- currentLocation
@@ -691,7 +724,7 @@ runCommand' = \case
         (subsumeUserError . taggingFreshNodesWithTime)
           (transitionsFreshVia nid t)
       writeRawData vNid (encodeUtf8 s)
-  Describe d -> runCommand' (Text "description" d)
+  Describe d -> runCommand' open (Text "description" d)
   At p0 c -> do
     p <- expandDirectives p0
     nid <- currentLocation
@@ -715,7 +748,7 @@ runCommand' = \case
     -- (and so the location) as it found it
     history <- get @History
     forM_ (zip (inits (toList locations)) (toList locations)) $ \(done, nid') -> do
-      result <- tryError @UserError $ local @NID (const nid') (runCommand c)
+      result <- tryError @UserError $ local @NID (const nid') (runCommand open c)
       put history
       case result of
         Right () -> pure ()
@@ -759,8 +792,15 @@ runCommand' = \case
       >>= echo . unpack . nshowWith (\x -> x {showAugmentation = Nothing})
     echo "history:"
     get @History >>= echo . show
-  Check -> Fsck.fsck
-  Fix -> editing $ fixErrors @Text (fsck @Text)
+  Check -> fsck
+  Fix mode -> do
+    result <- tryError @UserError (fix mode)
+    -- Neither the node files that a command which fix is part of read
+    -- before it nor the damage that it read past are as it read them: what
+    -- fix didn't repair is found again by a later step that reads its files.
+    startDecisionAfresh
+    open OpenAgain
+    either (throwError . snd) pure result
   Move p0 q0 -> do
     p <- expandDirectives p0
     q <- expandDirectives q0
@@ -809,23 +849,33 @@ runCommand' = \case
     -- already modifies the location and if we set the location we would end up
     -- adding duplicates to the history
     put @History history'
-  Seq ps ->
+  Seq ps -> do
+    -- fsck and fix fail when they find or leave damage, which is for the
+    -- exit code: it doesn't stop the line (fsck ; fix must reach fix), and
+    -- is kept for the end of it
+    reports <- newIORef []
     forM_ (zip [0 :: Int ..] (toList ps)) $ \(before, command) ->
       -- each command is a change of its own: what failed was not written,
       -- what the commands before it did stays
-      runCommand command `catchError` \_ e ->
-        throwError $
-          if before == 0
-            then e
-            else
-              e
-                <> OtherError
-                  ( "Note: the "
-                      ++ (if before == 1 then "command" else tshow before ++ " commands")
-                      ++ " before this one in the line had already run; what "
-                      ++ (if before == 1 then "it" else "they")
-                      ++ " did stays."
-                  )
+      runCommand open command `catchError` \_ e ->
+        if isDamageReport e
+          then modifyIORef reports (e :)
+          else do
+            earlier <- reverse <$> readIORef reports
+            throwError . sconcat . NonEmpty.prependList earlier . singleton $
+              if before == 0
+                then e
+                else
+                  e
+                    <> OtherError
+                      ( "Note: the "
+                          ++ (if before == 1 then "command" else tshow before ++ " commands")
+                          ++ " before this one in the line had already run; what "
+                          ++ (if before == 1 then "it" else "they")
+                          ++ " did stays."
+                      )
+    readIORef reports
+      >>= traverse_ (throwError . sconcat) . NonEmpty.nonEmpty . reverse
   Preview p -> do
     nid <- currentLocation
     p' <- expandDirectives p

@@ -109,6 +109,17 @@ setFilesReadByCommand ::
 setFilesReadByCommand files =
   modify @DamageReadPast (#inCommand . _Just . #files .~ files)
 
+-- | Start the decision of the command that is running afresh: it forgets the
+-- node files that it has read and the damage that it has read past, and its
+-- later steps are judged by what they read from here on. For @fix@, which
+-- writes node files outside of every transaction: neither those files nor
+-- that damage are as the command read them. (What it read past is still
+-- warned of when the line is done, as it is when @fix@ comes after the
+-- command in a line.) Does nothing outside of a command.
+startDecisionAfresh :: (State DamageReadPast :> r) => Eff r ()
+startDecisionAfresh =
+  modify @DamageReadPast (#inCommand . _Just .~ ReadByCommand mempty mempty)
+
 -- | Run a command line, or what else is one thing to whoever runs @ge@, and
 -- warn of the damage that it read past: once for each piece of it, however
 -- often it was read, and only when the line is done, however it ends (an

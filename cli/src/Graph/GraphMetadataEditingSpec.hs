@@ -28,7 +28,11 @@ runNodeFilesInMemory = interpret \_ -> \case
   ReadNodeMetadata nid -> gets @NodeFiles (lookup nid)
   WriteNodeMetadata n -> modify @NodeFiles (insertMap n.nid n)
   DeleteNodeMetadata nid -> modify @NodeFiles (deleteMap nid)
+  -- only node files are kept here
+  KeepNodeMetadataCopy _ _ -> pure ()
+  RemoveKeptNodeMetadata _ -> pure ()
   ListNodeMetadata -> gets @NodeFiles keysSet
+  OnlyDescribesWrites -> pure False
 
 -- | Writes a transaction's changes to node files kept in memory, with the
 -- checks that 'writeGraphDiff_' makes before it writes.

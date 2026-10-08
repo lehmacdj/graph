@@ -11,13 +11,21 @@ import Data.Attoparsec.Combinator (lookAhead)
 import Data.ByteString qualified as B
 import Data.ByteString.Lazy qualified as BL
 import Data.Text qualified as T
+import Graph.SystemNodes.Init (systemEdges)
 import Models.Connect
 import Models.Edge
 import Models.Graph
 import Models.NID
 import Models.Node (Node, Node' (..), emptyNode)
 import MyPrelude
-import System.Directory (listDirectory, removeFile)
+import System.Directory
+  ( createDirectory,
+    createFileLink,
+    doesPathExist,
+    listDirectory,
+    removeFile,
+    renameFile,
+  )
 import System.Environment (getEnvironment)
 import System.FilePath
 import System.FilePath.Glob
@@ -243,6 +251,8 @@ data BaseGraphLine
   | BaseData NID ByteString
   | BaseNode NID
   | BaseDamage Damage
+  | -- | The graph has none of the system nodes that @ge@ gives every graph
+    BaseNoSystemNodes
 
 -- | Which node's record of an edge
 data RecordSide = OutgoingRecord | IncomingRecord
@@ -258,18 +268,27 @@ data Damage
 -- the label may be a quoted string such as @0 -"a b"-> 1@), @1 data "text"@
 -- (node data) or @2@ (a node without edges).
 --
+-- The system nodes of @ge@ and the edges between them (the origin among
+-- them) are written as well, as every graph has them, unless there is a line
+-- @no system nodes@: then the graph is one that an old @ge@ made, or that
+-- lost them, and @ge@ creates them when it opens the graph.
+--
 -- A graph that @ge@ cannot produce is written with: @0 -a-> 1 !out@ (only
 -- node 0's outgoing record of the edge) and @0 -a-> 1 !in@ (only node 1's
 -- incoming record), @missing 2@ (no file for node 2), @raw 2 "text"@ (the
 -- file of node 2 holds exactly that text) and @id 2 3@ (the file of node 2
 -- says its id is 3). The last three are applied in order once every node's
--- file is written.
+-- file is written. A node is a small number or a whole id (@\@pbYxBO6fzBQV@),
+-- for damage to the system nodes.
 writeBaseGraph :: FilePath -> ByteString -> IO ()
 writeBaseGraph directory text = do
   items <-
     either (fail . ("invalid base graph: " <>)) pure $
       traverse parseLine (filter (not . null . words) (lines (decodeUtf8 text)))
-  let edges = [e | BaseEdge e <- items]
+  let systemParts
+        | null [() | BaseNoSystemNodes <- items] = systemEdges
+        | otherwise = []
+      edges = systemParts <> [e | BaseEdge e <- items]
       halfEdges = [(side, e) | BaseHalfEdge side e <- items]
       damages = [d | BaseDamage d <- items]
       dataByNID = mapFromList [(n, d) | BaseData n d <- items] :: Map NID ByteString
@@ -312,6 +331,7 @@ writeBaseGraph directory text = do
         ix sink . #incoming %~ insertSet (Connect label source)
     parseLine :: Text -> Either String BaseGraphLine
     parseLine line = case words line of
+      ["no", "system", "nodes"] -> Right BaseNoSystemNodes
       [n] -> BaseNode <$> nodeId n
       ["missing", n] -> BaseDamage . MissingFile <$> nodeId n
       ["id", n, claimed] ->
@@ -345,7 +365,331 @@ writeBaseGraph directory text = do
           then maybe (Left ("invalid label: " <> unpack rawLabel)) (Right . pack) (readMay (unpack rawLabel) :: Maybe String)
           else Right rawLabel
       (\a b -> Edge a label b) <$> nodeId (T.strip source) <*> nodeId (T.strip sink)
-    nodeId t = maybe (Left ("invalid node: " <> unpack t)) (Right . smallNID) (readMay t)
+    -- a small number, or a whole id such as that of a system node
+    nodeId t =
+      maybe (Left ("invalid node: " <> unpack t)) Right $
+        (smallNID <$> readMay t) <|> readMay t
+
+-- | Run @ge@ on a graph with a data directory of its own (see
+-- 'runGraphEditor'): its exit code, stdout and stderr.
+runGe :: FilePath -> [String] -> ByteString -> IO (Int, ByteString, ByteString)
+runGe graph arguments stdin =
+  withSystemTempDirectory "ge-data" $ \dataHome -> do
+    environment <- getEnvironment
+    (exitCode, out, err) <-
+      readProcess $
+        proc
+          "ge"
+          ( [ "--test-only-nid-generation-seed",
+              "0",
+              "--test-only-monotonic-increasing-deterministic-time",
+              graph
+            ]
+              <> arguments
+          )
+          & setStdin (byteStringInput (fromStrict stdin))
+          & setEnv (geEnvironment dataHome environment)
+    pure
+      ( case exitCode of
+          ExitSuccess -> 0
+          ExitFailure code -> code,
+        toStrict out,
+        toStrict err
+      )
+
+-- | Every message about damage ends by pointing to @fsck@ and @fix@. That
+-- advice has to be true for every damaged graph that the goldens start
+-- from: either @fix@ repairs the graph, after which @fsck@ finds nothing and
+-- the golden's own commands meet no damage, or @fix@ itself says what it
+-- did not repair.
+mkAdviceTest :: FilePath -> TestTree
+mkAdviceTest path = testCase (takeBaseName path) do
+  golden <- either (assertFailure . ((path <> ": ") <>)) pure . parseGoldenTest =<< B.readFile path
+  for_ golden.baseGraph \graph -> withTempGraph Nothing \directory -> do
+    writeBaseGraph directory graph
+    (fixed, fixOut, fixErr) <- runGe directory ["-e", "fix"] ""
+    if fixed /= 0
+      then do
+        ("not repaired:" `isInfixOf` fixOut)
+          @? ("fix failed without saying what it didn't repair: " <> show fixErr)
+        ("damage-not-repaired" `isInfixOf` fixErr)
+          @? ("fix failed for another reason: " <> show fixErr)
+      else do
+        (checked, fsckOut, fsckErr) <- runGe directory ["-e", "fsck"] ""
+        (checked == 0)
+          @? ("fsck still finds damage after fix: " <> show (fsckOut, fsckErr))
+        (_, _, err) <-
+          if golden.oneShot
+            then runGe directory ["-e", unpack (T.strip (decodeUtf8 golden.input))] ""
+            else runGe directory [] golden.input
+        for_ ["damaged-graph", "unparsable-node-file", "cannot-open-graph", "inconsistent-node-records"] \code ->
+          not ((code :: ByteString) `isInfixOf` err)
+            @? ("the commands still meet damage after fix: " <> show err)
+
+spec_dryRun :: Spec
+spec_dryRun =
+  it "says what opening the graph would add, and adds nothing" $
+    withTempGraph Nothing \directory -> do
+      -- a graph that has none of the system nodes, and a command that reads
+      writeBaseGraph directory "no system nodes\n0 -a-> 1\n"
+      before <- sort <$> listDirectory directory
+      (code, _, err) <- runGe directory ["--dry-run", "-e", "nid"] ""
+      code `shouldBe` 0
+      unpack (decodeUtf8 err)
+        `shouldContain` ( "warning: would create the system nodes that have no"
+                            <> " file: @0daCJjMrQel8, "
+                        )
+      unpack (decodeUtf8 err) `shouldNotContain` "created the system nodes"
+      (sort <$> listDirectory directory) `shouldReturn` before
+      -- and what it says when it does add them
+      (_, _, err') <- runGe directory ["-e", "nid"] ""
+      unpack (decodeUtf8 err')
+        `shouldContain` ( "warning: created the system nodes that had no file:"
+                            <> " @0daCJjMrQel8, "
+                        )
+
+-- | A directory as it is: the name of everything in it, with what each file
+-- holds (nothing for what can't be read as a file: a directory, a symbolic
+-- link to a file that isn't there)
+directoryAsItIs :: FilePath -> IO [(FilePath, Maybe ByteString)]
+directoryAsItIs directory = do
+  names <- sort <$> listDirectory directory
+  for names \name ->
+    (name,)
+      <$> (Just <$> B.readFile (directory </> name))
+        `catch` \(_ :: IOError) -> pure Nothing
+
+spec_oneDecision :: Spec
+spec_oneDecision = do
+  -- A command that resolves something in one step and changes something in
+  -- another one: the first step reads past the damage, and takes b/c + h for
+  -- the one node that h leads to
+  let graph =
+        "0 -a-> 1\n0 -b-> 2\n2 -c-> 3\n4 -d-> 2\n0 -e-> 4\n1 -f-> 2\n"
+          <> "0 -g-> 3\n0 -h-> 5\n0 -i-> 6\n1 data \"one\"\n2 data \"two\"\n"
+      commands =
+        [ "mg (b/c + h) i",
+          "mg i (b/c + h)",
+          "mg %targets(b/c + h) i",
+          "at (b/c + h) rmnf @",
+          "rmnf %targets(h + b/c)"
+        ]
+      damages =
+        [ ("a file that can't be parsed", "raw 2 \"{not json\"\n"),
+          ("a node without a file", "missing 2\n")
+        ]
+      writesNothing damaged command =
+        for_ [[], ["--dry-run"]] \mode ->
+          withTempGraph Nothing \directory -> do
+            writeBaseGraph directory damaged
+            before <- directoryAsItIs directory
+            (code, out, err) <- runGe directory (mode <> ["-e", command]) ""
+            code `shouldBe` 1
+            unpack (decodeUtf8 err)
+              `shouldStartWith` "this change was not written: the graph is damaged"
+            -- the refusal names the damage, so no warning does as well
+            unpack (decodeUtf8 err) `shouldNotContain` "warning:"
+            -- a dry run says what it would write
+            toLower (unpack (decodeUtf8 out)) `shouldNotContain` "would "
+            directoryAsItIs directory `shouldReturn` before
+  for_ damages \(name, damage) -> for_ commands \command ->
+    it (command <> " writes nothing past " <> name <> ", also in a dry run") $
+      writesNothing (graph <> damage) command
+  -- A lone record of which one step of the command reads one file (to find
+  -- the targets) and a later step the other one (at a target): the command
+  -- has read both files, like the one that does the same in one step (the
+  -- last of each)
+  let lone :: [(Text, [String])]
+      lone =
+        [ ("0 -b-> 2", ["at b rmnf @", "rmnf %targets(b)", "at b mk x", "at b vi", "rmnf b"]),
+          ( "2 -c-> 3",
+            ["at (b/c + h) rmnf @", "rmnf %targets(h + b/c)", "rmnf (h + b/c)"]
+          )
+        ]
+      -- the graph in which only the source of that edge records it
+      withLone edge =
+        encodeUtf8 $
+          T.replace (edge <> "\n") (edge <> " !out\n") (decodeUtf8 graph)
+  for_ lone \(edge, loneCommands) -> for_ loneCommands \command ->
+    it
+      ( command
+          <> " writes nothing once it has read both files of the lone record "
+          <> unpack edge
+          <> ", also in a dry run"
+      )
+      $ writesNothing (withLone edge) command
+  it "a command of several steps is not refused for what its own steps wrote" $
+    -- on an undamaged graph; in a dry run every step finds the files as they
+    -- were, so the commands there are ones whose steps don't build on each
+    -- other
+    for_ [False, True] \dry -> withTempGraph Nothing \directory -> do
+      writeBaseGraph directory graph
+      let several =
+            [ ("at (a + h) mk z", True),
+              ("at @ {mk x ; at x mk y ; mv x/y @ ; rmnf x}", False),
+              ("at (a + h) {mk p ; rm p ; mk q}", False),
+              ("at (a + h) {mk p ; mk q ; tag t @}", True),
+              ("mg h i", True),
+              ("at (b/c + h + e) rmnf @", True)
+            ]
+      for_ [command | (command, alsoDry) <- several, alsoDry || not dry] \command -> do
+        (code, _, err) <-
+          runGe directory (["--dry-run" | dry] <> ["-e", command]) ""
+        (command, code, err) `shouldBe` (command, 0, "")
+      (checked, _, _) <- runGe directory ["-e", "fsck"] ""
+      checked `shouldBe` 0
+  -- A lone record of which an earlier step reads one file only in writing
+  -- (that of a neighbour of the node that it deletes or merges away) and a
+  -- later step the other one. A dry run writes nothing and has read that
+  -- file all the same, so it ends as the real run does.
+  let neighbour = "0 -a-> 1\n0 -e-> 5\n5 -m-> 6\n6 -k-> 7 !out\n0 -d-> 4\n"
+      n :: Int -> String
+      n k = "@00000000000" <> show k
+      afterWriting :: [(String, Int)]
+      afterWriting =
+        [ ("at " <> n 1 <> " {rmnf " <> n 5 <> " ; at " <> n 7 <> " mk z}", 1),
+          ("at e {rmnf @ ; at " <> n 7 <> " mk z}", 1),
+          ("at " <> n 1 <> " {mg " <> n 4 <> " " <> n 5 <> " ; at " <> n 7 <> " mk z}", 1),
+          ("at " <> n 1 <> " {rmnf " <> n 5 <> " ; rmnf " <> n 7 <> "}", 1),
+          ("at " <> n 1 <> " {rmnf " <> n 5 <> " ; at " <> n 7 <> " rmnf @}", 1),
+          -- these only read after it, and warn
+          ("at " <> n 1 <> " {rmnf " <> n 5 <> " ; ls " <> n 7 <> "}", 0),
+          ("at " <> n 1 <> " {mg " <> n 5 <> " " <> n 4 <> " ; ls " <> n 7 <> "}", 0)
+        ]
+  for_ afterWriting \(command, expected) ->
+    it (command <> " ends in a dry run as it does in the real run") $
+      for_ [False, True] \dry -> withTempGraph Nothing \directory -> do
+        writeBaseGraph directory neighbour
+        before <- directoryAsItIs directory
+        (code, _, err) <-
+          runGe directory (["--dry-run" | dry] <> ["-e", command]) ""
+        (dry, code) `shouldBe` (dry, expected)
+        unpack (decodeUtf8 err)
+          `shouldStartWith` ( if expected == 1
+                                then "this change was not written: the graph is damaged"
+                                else "warning: the graph is damaged where this command read it"
+                            )
+        unpack (decodeUtf8 err)
+          `shouldContain` ( "- the edge @000000000006 -\"k\"-> @000000000007 is"
+                              <> " among the outgoing edges in 000000000006.json"
+                              <> " but not among the incoming edges in"
+                              <> " 000000000007.json"
+                          )
+        -- the real run has written its first step by then
+        afterwards <- directoryAsItIs directory
+        (dry, afterwards == before) `shouldBe` (dry, dry)
+
+spec_unusableNodeFiles :: Spec
+spec_unusableNodeFiles = do
+  -- what is under the name of a node file and is no file is a node file that
+  -- can't be used, as one that can't be parsed, for every command
+  let graph = "0 -a-> 1\n0 -b-> 2\n2 -c-> 3\n"
+      n2 = smallNID 2
+      forms :: [(String, FilePath -> NID -> IO (), String)]
+      forms =
+        [ ( "a directory",
+            \directory nid -> do
+              removeFile (metadataFile directory nid)
+              createDirectory (metadataFile directory nid),
+            "it is not a file but a directory"
+          ),
+          ( "a symbolic link to a file that isn't there",
+            \directory nid -> do
+              removeFile (metadataFile directory nid)
+              createFileLink
+                (directory </> "elsewhere" </> "target.json")
+                (metadataFile directory nid),
+            "as a symbolic link to a file that isn't there can't"
+          )
+        ]
+      ge directory command = do
+        (code, out, err) <- runGe directory ["-e", command] ""
+        pure (code, unpack (decodeUtf8 out), unpack (decodeUtf8 err))
+      warnsOf why err = do
+        err `shouldStartWith` "warning: the graph is damaged where this command read it"
+        err `shouldContain` why
+      refusedFor why (code, _, err) = do
+        code `shouldBe` (1 :: Int)
+        err `shouldStartWith` "this change was not written: the graph is damaged"
+        err `shouldContain` why
+        -- it is there, and no command says that it isn't
+        err `shouldNotContain` "there is no 000000000002.json"
+  for_ forms \(name, make, why) -> describe ("a node file that is " <> name) do
+    let damaged test = withTempGraph Nothing \directory -> do
+          writeBaseGraph directory graph
+          make directory n2
+          before <- directoryAsItIs directory
+          test directory
+          directoryAsItIs directory `shouldReturn` before
+    it "is read as a node without edges, with a warning" $ damaged \directory -> do
+      (code, out, err) <- ge directory "ls"
+      code `shouldBe` 0
+      out `shouldContain` "@000000000002"
+      warnsOf why err
+      -- cd goes there, and at runs its command there
+      (code', out', err') <- ge directory "cd b ; nid ; ls"
+      code' `shouldBe` 0
+      out' `shouldContain` "@000000000002"
+      warnsOf why err'
+      (code'', out'', err'') <- ge directory "at b nid"
+      (code'', out'') `shouldBe` (0, "@000000000002\n")
+      err'' `shouldNotContain` "at did nothing"
+    it "is not written, over or through" $ damaged \directory -> do
+      -- the node is there, so this has nothing to make: it only reads
+      (code, _, err) <- ge directory "mk --allow-orphans @000000000002"
+      code `shouldBe` 0
+      warnsOf why err
+      ge directory "mk x/@000000000002" >>= refusedFor why
+      ge directory "at @000000000002 mk y" >>= refusedFor why
+      ge directory "rmnf b" >>= refusedFor why
+      ge directory "rm b" >>= refusedFor why
+      doesPathExist (directory </> "elsewhere") `shouldReturn` False
+  for_ forms \(name, make, why) ->
+    it ("opens a graph whose origin is " <> name <> ", with a warning") $
+      withTempGraph Nothing \directory -> do
+        writeBaseGraph directory graph
+        make directory nilNID
+        (code, _, err) <- ge directory "nid"
+        code `shouldBe` 0
+        warnsOf why err
+        -- but changes nothing there
+        (code', _, err') <- ge directory "mk x"
+        code' `shouldBe` 1
+        err' `shouldContain` why
+        err' `shouldNotContain` "there is no 000000000000.json"
+  it "still uses a symbolic link to a node file as that node file" $
+    withTempGraph Nothing \directory -> do
+      writeBaseGraph directory graph
+      renameFile (metadataFile directory n2) (directory </> "elsewhere.json")
+      createFileLink (directory </> "elsewhere.json") (metadataFile directory n2)
+      (code, _, err) <- ge directory "at b mk x ; ls b/x"
+      (code, err) `shouldBe` (0, "")
+
+spec_keptFilesOfDeletedNode :: Spec
+spec_keptFilesOfDeletedNode =
+  it "lists the kept files that a dry run would delete with a node, and deletes them" $
+    withTempGraph Nothing \directory -> do
+      writeBaseGraph directory "0 -a-> 1\n0 -b-> 2\n2 -c-> 1\n"
+      let kept = map ((directory </>) . ("000000000002.json.unparsable" <>)) ["", "-2"]
+      for_ kept (`B.writeFile` "{not json")
+      before <- directoryAsItIs directory
+      (code, out, _) <- runGe directory ["--dry-run", "-e", "rmnf b"] ""
+      code `shouldBe` 0
+      for_ kept \file ->
+        unpack (decodeUtf8 out) `shouldContain` ("would delete at path: " <> show file)
+      directoryAsItIs directory `shouldReturn` before
+      (code', _, err') <- runGe directory ["-e", "rmnf b"] ""
+      (code', err') `shouldBe` (0, "")
+      (filter ("000000000002" `isPrefixOf`) <$> listDirectory directory)
+        `shouldReturn` []
+      (checked, _, _) <- runGe directory ["-e", "fsck"] ""
+      checked `shouldBe` 0
+
+test_adviceIsTrue :: IO TestTree
+test_adviceIsTrue =
+  testGroup "fix does what the messages about damage say"
+    . map mkAdviceTest
+    <$> globDir1 (compile "*.golden") "test/golden/ge/damaged"
 
 mkGoldenTest :: FilePath -> TestTree
 mkGoldenTest path =

@@ -53,10 +53,11 @@ library
       Executable.GraphEditor.Options
       Graph.AppInterpreters
       Graph.Augmentation
-      Graph.Check
       Graph.Command
       Graph.Dualizeable
       Graph.Export.FileSystem
+      Graph.Fix
+      Graph.FixSpec
       Graph.FreshNID
       Graph.Fsck
       Graph.FsckSpec
@@ -73,6 +74,7 @@ library
       Graph.Paths
       Graph.SystemNodes
       Graph.SystemNodes.Init
+      Graph.SystemNodes.InitSpec
       Graph.Time
       Graph.Utils
       Models.Augmentation.Bundled

@@ -1,0 +1,39 @@
+==========graph==========
+0 -a-> 1
+1 -up-> 0
+missing 0
+==========input==========
+ls
+fsck
+fix
+ls
+nid
+==========stdout==========
+g> g> the edge @000000000000 -"a"-> @000000000001 is among the incoming edges in 000000000001.json but there is no 000000000000.json
+the edge @000000000001 -"up"-> @000000000000 is among the outgoing edges in 000000000001.json but there is no 000000000000.json
+the edge @0daCJjMrQel8 -"origin"-> @000000000000 is among the outgoing edges in 0daCJjMrQel8.json but there is no 000000000000.json
+there is no 000000000000.json, the file of the origin node
+g> repairs:
+- rebuild 000000000000.json from the 3 edges that other nodes record with @000000000000 (any other edge it had is lost, and so is its data if it had any)
+g> [0m[0;1ma[0m[0m [0;34m@000000000001[0m [0m[0m
+g> @000000000000
+g> Goodbye!
+==========stderr==========
+the graph is damaged: there is no 000000000000.json, the file of the origin node
+the graph could not be opened (cannot-open-graph): only fsck and fix can run until this is repaired
+the graph is damaged: there is no 000000000000.json, the file of the origin node
+the graph could not be opened (cannot-open-graph): only fsck and fix can run until this is repaired
+the graph is damaged (damage-found): fsck found 4 problems, listed above; fix repairs what it can and says what it can't
+==========graph-dump==========
+@000000000000{out=[@000000000001 via "a"], in=[@0daCJjMrQel8 via "origin", @000000000001 via "up"]}
+@000000000001{out=[@000000000000 via "up"], in=[@000000000000 via "a"]}
+@0daCJjMrQel8{out=[@zsBuPkn5mh8F via "file-extensions", @AhQufiPzgyRf via "file-hashes", @3JJvxFUHGAA1 via "historical-special-nodes", @S00KkOYoVpFu via "import-dates", @a0fVkm0kR7KE via "import-urls", @927u9Xyky2pC via "mime-types", @000000000000 via "origin", @pbYxBO6fzBQV via "tags"], in=[]}
+@3JJvxFUHGAA1{out=[@VEfLhuTgZ88Z via "sequence-ids"], in=[@0daCJjMrQel8 via "historical-special-nodes"]}
+@927u9Xyky2pC{out=[], in=[@0daCJjMrQel8 via "mime-types"]}
+@AhQufiPzgyRf{out=[], in=[@0daCJjMrQel8 via "file-hashes"]}
+@S00KkOYoVpFu{out=[], in=[@0daCJjMrQel8 via "import-dates"]}
+@VEfLhuTgZ88Z{out=[], in=[@3JJvxFUHGAA1 via "sequence-ids"]}
+@a0fVkm0kR7KE{out=[], in=[@0daCJjMrQel8 via "import-urls"]}
+@pbYxBO6fzBQV{out=[], in=[@0daCJjMrQel8 via "tags"]}
+@zsBuPkn5mh8F{out=[], in=[@0daCJjMrQel8 via "file-extensions"]}
+==========data==========

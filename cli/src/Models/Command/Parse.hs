@@ -65,7 +65,7 @@ commandPaths = \case
   Import _ -> []
   ImportUrl _ -> []
   Check -> []
-  Fix -> []
+  Fix _ -> []
   Edit -> []
   Back _ -> []
 
@@ -139,7 +139,9 @@ pCheck :: Parser Command
 pCheck = command "fsck" $> Check
 
 pFix :: Parser Command
-pFix = command "fix" $> Fix
+pFix =
+  command "fix"
+    *> (Fix <$> (try (command "--dry-run" $> ListRepairs) <|> pure ApplyRepairs))
 
 pMove :: Parser Command
 pMove = (command "mv" $> Move) <*> path <*> path
@@ -233,6 +235,9 @@ test_parseCommand =
       "at * nid; si"
         `parsesTo` Seq (twoElemList (At Wild NodeId) ShowImage []),
       "{nid}" `parsesTo` NodeId,
+      "fsck" `parsesTo` Check,
+      "fix" `parsesTo` Fix ApplyRepairs,
+      "fix --dry-run" `parsesTo` Fix ListRepairs,
       "mk a" `parsesTo` Make (Literal "a"),
       "mk --allow-orphans a" `parsesTo` MakeAllowingOrphans (Literal "a"),
       "cp a b" `parsesTo` Copy (Literal "a") (Literal "b"),

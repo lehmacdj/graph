@@ -493,7 +493,10 @@ readingPastUnusableFiles =
               Nothing -> throwError e
           WriteNodeMetadata node -> writeNodeMetadata node
           DeleteNodeMetadata nid -> deleteNodeMetadata nid
+          KeepNodeMetadataCopy nid name -> keepNodeMetadataCopy nid name
+          RemoveKeptNodeMetadata name -> removeKeptNodeMetadata name
           ListNodeMetadata -> listNodeMetadata
+          OnlyDescribesWrites -> onlyDescribesWrites
       )
     . raise
 

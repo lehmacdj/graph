@@ -49,6 +49,11 @@ data UserError
     TargetsWithoutFile (NonEmpty (NID, [Damage]))
   | -- | fsck found that many pieces of damage (and listed them)
     DamageFound Int
+  | -- | fix left that many pieces of damage (and listed them)
+    DamageNotRepaired Int
+  | -- | The graph's origin and system nodes could not be made ready, which
+    -- every command but fsck and fix needs; with the reason
+    CannotOpenGraph UserError
   deriving stock (Generic)
 
 -- | A difference between the file of a node with a change applied to it and
@@ -143,6 +148,26 @@ instance Show UserError where
       ++ show count
       ++ (if count == 1 then " problem" else " problems")
       ++ ", listed above; fix repairs what it can and says what it can't"
+  show (DamageNotRepaired count) =
+    "the graph is still damaged (damage-not-repaired): fix did not repair "
+      ++ show count
+      ++ (if count == 1 then " problem" else " problems")
+      ++ ", listed above with the reasons"
+  show (CannotOpenGraph reason) =
+    ( case reason of
+        -- the change that was refused is the one that opening the graph
+        -- makes, which whoever ran a command that only reads didn't ask for
+        DamagedGraph damage ->
+          intercalate "\n" $
+            [ "a system node or an edge to one is missing and was not added:"
+                ++ " the graph is damaged where it goes (damaged-graph)"
+            ]
+              ++ map (("- " ++) . describeDamage) (toList damage)
+              ++ [repairHint]
+        _ -> show reason
+    )
+      ++ "\nthe graph could not be opened (cannot-open-graph): only fsck and"
+      ++ " fix can run until this is repaired"
   show (DamagedGraphWarning damage) =
     intercalate "\n" $
       ["warning: the graph is damaged where this command read it (damaged-graph)"]
@@ -172,6 +197,7 @@ damageRefusedBy :: UserError -> Set Damage
 damageRefusedBy = \case
   DamagedGraph damage -> setFromList (toList damage)
   TargetsWithoutFile targets -> setFromList (concatMap snd (toList targets))
+  CannotOpenGraph reason -> damageRefusedBy reason
   -- as when a command of a @;@ line is refused and the error says what the
   -- commands before it did
   Multiple errors -> foldMap damageRefusedBy errors

@@ -79,9 +79,10 @@ rn a b
 ==========stdout==========
 ```
 
-Nodes are `smallNID`s (node 0 is the origin). Such tests also show every
-node's data in a trailing `data` section. Regenerate expectations with
-`--ta '-p integration --accept'` and review the diff.
+Nodes are `smallNID`s (node 0 is the origin). The system nodes that `ge`
+gives every graph, and the edges between them, are written too. Such tests
+also show every node's data in a trailing `data` section. Regenerate
+expectations with `--ta '-p integration --accept'` and review the diff.
 
 The `graph` section can also describe a graph that `ge` cannot produce,
 to test what happens on a damaged one:
@@ -92,10 +93,13 @@ to test what happens on a damaged one:
 missing 2         no file for node 2
 raw 2 "{not json" the file of node 2 holds exactly this text
 id 2 3            the file of node 2 says its id is 3
+no system nodes   none of ge's system nodes (a graph made by an old ge)
 ```
 
 `missing`, `raw` and `id` are applied in order after every node's file is
-written. An `exit-code` section follows `stderr` when `ge` did not exit
+written. A node can also be given by its whole id (`raw @pbYxBO6fzBQV "{"`),
+which is how to damage a system node. With `no system nodes`, `ge` creates
+them when it opens the graph, and says so. An `exit-code` section follows `stderr` when `ge` did not exit
 with 0, and output that does not end with a newline is followed by a
 `<no newline at the end>` line. Each run of `ge` gets its own
 `XDG_DATA_HOME`, so the tests do not touch the history file of the REPL, and

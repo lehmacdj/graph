@@ -18,7 +18,8 @@ import Models.NID
 import Models.Node
 import MyPrelude
 import System.Directory
-  ( createFileLink,
+  ( createDirectory,
+    createFileLink,
     removeFile,
     setModificationTime,
   )
@@ -33,6 +34,7 @@ genUndamaged = do
     GraphFiles
       { nodes = map Right (Map.insertWith (\_ old -> old) nilNID (emptyNode nilNID) nodes),
         unread = mempty,
+        unreadable = mempty,
         others = mempty
       }
   where
@@ -53,6 +55,8 @@ data Plant
     Garble NID
   | -- | Add a data file for a node that has no file: this is no damage
     StrayData NID
+  | -- | Add a file that a fix kept of the node file of a node that has none
+    KeptFile NID
   deriving stock (Eq, Show)
 
 garbled :: String
@@ -60,6 +64,10 @@ garbled = "it is garbled"
 
 dataFileName :: NID -> FilePath
 dataFileName nid = unpack (nidRepresentation nid) <> ".data"
+
+-- | The name of the first copy that fix keeps of the node's file
+keptName :: NID -> FilePath
+keptName nid = nodeFileName nid <> ".unparsable"
 
 plant :: Plant -> GraphFiles -> GraphFiles
 plant = \case
@@ -70,7 +78,8 @@ plant = \case
   RemoveFile nid -> #nodes %~ deleteMap nid
   SayOtherId nid claimed -> #nodes . ix nid . _Right . #nid .~ claimed
   Garble nid -> #nodes . ix nid .~ Left garbled
-  StrayData nid -> #others . at nid ?~ singletonSet (dataFileName nid)
+  StrayData nid -> #others . at nid %~ Just . insertSet (dataFileName nid) . fold
+  KeptFile nid -> #others . at nid %~ Just . insertSet (keptName nid) . fold
 
 -- | Every record of an undamaged graph
 allRecords :: GraphFiles -> [(NID, RecordSide, Edge Text)]
@@ -96,6 +105,7 @@ expectedDamage files = \case
   SayOtherId nid claimed -> singletonSet (FileSaysOtherId nid claimed)
   Garble nid -> singletonSet (UnparsableNodeFile nid garbled)
   StrayData _ -> mempty
+  KeptFile nid -> singletonSet (KeptFileWithoutNode nid [keptName nid])
 
 -- | A piece of damage that can be done to these files (which may be damaged
 -- already)
@@ -114,7 +124,7 @@ genPlant files =
           ]
         | not (null nids)
         ]
-      <> [pure (StrayData (smallNID 5))]
+      <> [pure (StrayData (smallNID 5)), pure (KeptFile (smallNID 5))]
   where
     nids = keys files.nodes
     edges = ordNub [e | (_, _, e) <- allRecords files]
@@ -495,6 +505,48 @@ spec_fsck = do
                                 )
           _ -> expectationFailure ("printed " <> show printed)
         void (first show result) `shouldSatisfy` isLeft
+  it "reports what a fix kept of a node that has no file any more as left over" $
+    withEmptyTempGraph \dir -> do
+      write dir nilNID $ node' nilNID [] []
+      B.writeFile (dir </> "000000000004.json.unparsable") "{not json"
+      B.writeFile (dir </> "000000000004.json.unparsable-3") "{nor this"
+      -- no file that a fix kept, whatever its name starts with
+      B.writeFile (dir </> "000000000004.json.unparsable.txt") "notes"
+      B.writeFile (dir </> "000000000004.json.unparsable-old") "notes"
+      B.writeFile (dir </> "000000000004.json.unparsable-") "notes"
+      -- nor one with a number that fix doesn't give: it counts from 2
+      B.writeFile (dir </> "000000000004.json.unparsable-0") "notes"
+      B.writeFile (dir </> "000000000004.json.unparsable-1") "notes"
+      B.writeFile (dir </> "000000000004.json.unparsable-03") "notes"
+      -- nor what is no file, whatever it is named: fix keeps a copy as a file
+      createDirectory (dir </> "000000000004.json.unparsable-2")
+      createFileLink (dir </> "nowhere") (dir </> "000000000004.json.unparsable-4")
+      createFileLink
+        (dir </> "000000000004.json.unparsable.txt")
+        (dir </> "000000000004.json.unparsable-5")
+      (printed, result) <- runFsck dir
+      printed
+        `shouldBe` [ "000000000004.json.unparsable,"
+                       <> " 000000000004.json.unparsable-3 are left over from a"
+                       <> " deleted node: there is no 000000000004.json any"
+                       <> " more, of which fix had kept them when it couldn't"
+                       <> " read that file as a node"
+                   ]
+      void (first show result) `shouldSatisfy` isLeft
+  it "says nothing of a kept file whose node has a file" $
+    withEmptyTempGraph \dir -> do
+      write dir nilNID $ node' nilNID [] []
+      B.writeFile (dir </> "000000000000.json.unparsable") "{not json"
+      (printed, _) <- runFsck dir
+      printed `shouldBe` ["no damage found in 1 node files"]
+  it "calls nothing left over in a directory that is no graph" $
+    -- no file in it is a node file that says the id it is named after
+    withSystemTempDirectory "not-a-graph" \dir -> do
+      B.writeFile (dir </> "00000000000A.json.unparsable") "{my notes"
+      (printed, result) <- runFsck dir
+      printed
+        `shouldBe` ["there is no 000000000000.json, the file of the origin node"]
+      void (first show result) `shouldSatisfy` isLeft
   it "reports that the origin has no file" $
     withEmptyTempGraph \dir -> do
       write dir n1 $ node' n1 [] []

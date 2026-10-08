@@ -7,6 +7,7 @@ module Graph.Fsck where
 
 import Control.Concurrent (threadDelay)
 import DAL.DTO
+import DAL.FileSystemOperations.Metadata (isKeptNodeFile, isKeptNodeFileName)
 import DAL.RawGraph
 import Data.ByteString qualified as B
 import Data.Map.Strict qualified as Map
@@ -28,9 +29,15 @@ data GraphFiles = GraphFiles
     -- created after the directory was listed for the scan, and nothing is
     -- said about the edges that other nodes record with them
     unread :: Set NID,
+    -- | The node files among them that are there but could not be read at
+    -- all (for their permissions, say), unlike one whose content is not a
+    -- node: such a file may be a good node file
+    unreadable :: Set NID,
     -- | The names of the other files named after a node, such as its data.
     -- They are no part of the graph, which is what the node files say: a
     -- data file whose node has no file is not damage and is left alone.
+    -- What is named like a copy that fix kept of a node file but is no file
+    -- (a directory, a symbolic link) is not among them: it is no copy.
     others :: Map NID (Set FilePath)
   }
   deriving stock (Eq, Show, Generic)
@@ -47,6 +54,13 @@ scanDamage files =
     <> setFromList
       [UnparsableNodeFile nid reason | (nid, Left reason) <- mapToList files.nodes]
     <> setFromList [MissingOriginFile | nilNID `notMember` files.nodes]
+    <> setFromList
+      [ KeptFileWithoutNode nid names
+      | -- where the files are not those of a graph, no node is known to have
+        -- been there, and so nothing to be left over from one
+        looksLikeGraph files,
+        (nid, names) <- mapToList (leftOver files)
+      ]
   where
     readable = readableNodes files
     -- a node that has no file is known to be missing; one whose file can't
@@ -66,6 +80,38 @@ scanDamage files =
             nid `notMember` files.unread
           ]
 
+-- | Whether a file with this name is named as a copy that fix kept of the
+-- node's file, which it couldn't read as a node.
+isKeptFileOf :: NID -> FilePath -> Bool
+isKeptFileOf nid = isKeptNodeFileName (nodeFileName nid)
+
+-- | Whether the files are those of a graph: at least one of them is a node
+-- file that says the id it is named after. (Any file whose name is twelve
+-- letters and digits and @.json@ is named like a node file, so a directory
+-- in which no such file is a node is taken for something else, also if it is
+-- a graph of which every node file was lost.) No other file says so,
+-- whatever it is named like: what fix does to a graph, it must not do to a
+-- directory of something else.
+looksLikeGraph :: GraphFiles -> Bool
+looksLikeGraph files =
+  any (\(name, node) -> node.nid == name) (mapToList (readableNodes files))
+
+-- | The nodes that have no node file but copies that a fix kept of one, with
+-- the names of those. They are left over from nodes that were deleted:
+-- deleting a node removes the copies kept of its file, if it finds them and
+-- can. (A fix never leaves a node without its file: it replaces the file
+-- only once the copy is written.)
+leftOver :: GraphFiles -> Map NID [FilePath]
+leftOver files =
+  mapFromList
+    [ (nid, kept)
+    | (nid, names) <- mapToList files.others,
+      nid `notMember` files.nodes,
+      nid `notMember` files.unread,
+      let kept = filter (isKeptFileOf nid) (toList names),
+      not (null kept)
+    ]
+
 -- | Read a node file's contents as a node.
 parseNodeFile :: ByteString -> Either String (Node Text ())
 parseNodeFile = fmap nodeFromDTO . eitherDecodeStrict @(NodeDTO Text)
@@ -81,7 +127,9 @@ classifyFileName name =
 data GraphScan = GraphScan
   { files :: GraphFiles,
     -- | what each node file held when it was read
-    contents :: Map NID ByteString
+    contents :: Map NID ByteString,
+    -- | why each of the unreadable node files could not be read
+    failures :: Map NID IOError
   }
   deriving stock (Eq, Show, Generic)
 
@@ -91,7 +139,7 @@ scanGraph :: (Members [RawGraph, IOE, Error UserError] es) => Eff es GraphScan
 scanGraph =
   readNodeFiles
     Nothing
-    (GraphScan (GraphFiles mempty mempty mempty) mempty)
+    (GraphScan (GraphFiles mempty mempty mempty mempty) mempty mempty)
 
 -- | Read the files of some nodes (of all with 'Nothing'), in place of what a
 -- scan has of those nodes.
@@ -123,14 +171,23 @@ readNodeFiles which scan = do
           Just (nid, isNode) <- [classifyFileName name],
           wanted nid
         ]
-      others =
+  -- a copy that fix kept of a node file is a file ('isKeptNodeFile'): what
+  -- else has the name of one is no file of the node
+  notNodeFiles <-
+    embedCatchingErrors . flip filterM [(nid, name) | (nid, False, name) <- named] $
+      \(nid, name) ->
+        if isKeptFileOf nid name
+          then isKeptNodeFile (directory </> name)
+          else pure True
+  let others =
         Map.fromListWith
           (<>)
-          [(nid, singletonSet name) | (nid, False, name) <- named]
+          [(nid, singletonSet name) | (nid, name) <- notNodeFiles]
   read' <- for [(nid, name) | (nid, True, name) <- named] \(nid, name) ->
     (nid,) <$> embedCatchingErrors (readNodeFile (directory </> name))
   let kept :: Map NID a -> Map NID a
       kept = Map.filterWithKey (\nid _ -> not (wanted nid))
+      failures = mapFromList [(nid, e) | (nid, Left e) <- read']
       nodes =
         kept scan.files.nodes
           <> mapFromList [(nid, nodeRead result) | (nid, result) <- read']
@@ -143,11 +200,15 @@ readNodeFiles which scan = do
           GraphFiles
             { nodes,
               unread = listed `difference` keysSet nodes,
+              unreadable =
+                filterSet (not . wanted) scan.files.unreadable
+                  <> keysSet failures,
               others = kept scan.files.others <> others
             },
         contents =
           kept scan.contents
-            <> mapFromList [(nid, bytes) | (nid, Right bytes) <- read']
+            <> mapFromList [(nid, bytes) | (nid, Right bytes) <- read'],
+        failures = kept scan.failures <> failures
       }
 
 -- | The node that reading a node file gave, or why there is none.

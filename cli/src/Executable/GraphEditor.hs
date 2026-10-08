@@ -2,6 +2,10 @@ module Executable.GraphEditor where
 
 import Control.Exception qualified as E
 import Control.Monad.Fix
+import DAL.FileSystemOperations.Metadata
+  ( GraphMetadataFilesystemOperations,
+    onlyDescribesWrites,
+  )
 import DAL.RawGraph
 import DAL.Serialization (doesNodeExist, initializeGraph)
 import Effect.IOWrapper.DisplayImage
@@ -24,8 +28,9 @@ import Graph.Dualizeable
 import Graph.FreshNID
 import Graph.GraphEditing
 import Graph.NodeLocated
-import Graph.SystemNodes.Init (createSystemNodes)
+import Graph.SystemNodes.Init (SystemParts (..), createSystemNodes)
 import Models.Command.Parse
+import Models.Damage (Damage (MissingOriginFile), describeDamage, describeEdge)
 import Models.History
 import Models.NID
 import MyPrelude
@@ -85,6 +90,72 @@ reportingFailure report command =
           "the command failed unexpectedly (uncaught-exception): "
             <> displayException e
 
+-- | Make the graph ready for commands: its origin must be there, and its
+-- system nodes and the edges to them are added if they aren't. Every command
+-- but @fsck@ and @fix@ needs this ('needsOpenGraph'); those two must run on a
+-- graph where this fails, since they are what finds and repairs the reason.
+openGraph ::
+  ( Members
+      [ RawGraph,
+        IOE,
+        Error UserError,
+        Warn UserError,
+        ProviderList_ GraphEditing (),
+        GraphMetadataFilesystemOperations
+      ]
+      effs
+  ) =>
+  Eff effs ()
+openGraph =
+  ( do
+      graphDir <- getGraphFilePath
+      unlessM (doesNodeExist graphDir nilNID) . throwString $
+        "the graph is damaged: " <> describeDamage MissingOriginFile
+      added <- provideList_ @GraphEditing createSystemNodes
+      -- in a dry run nothing was written: say what would be
+      dry <- onlyDescribesWrites
+      -- not silently, whatever the command is that made the graph open: a
+      -- file may have been lost (had another node recorded an edge with it,
+      -- creating it would have been refused), and a command that only reads
+      -- has written to the graph
+      unless (null added.nodes) . warnText $
+        ( if dry
+            then "warning: would create the system nodes that have no file: "
+            else "warning: created the system nodes that had no file: "
+        )
+          <> intercalate ", " (map tshow added.nodes)
+      unless (null added.edges) . warnText $
+        ( if dry
+            then "warning: would add the system edges that no node records: "
+            else "warning: added the system edges that no node recorded: "
+        )
+          <> intercalate ", " (map (pack . describeEdge) added.edges)
+  )
+    `catchError` \_ e -> throwError (CannotOpenGraph e)
+
+-- | 'openGraph' when the commands ask for it, unless it has succeeded since
+-- they last asked for it to be done again; the reference says whether it has.
+openingOnce ::
+  ( Members
+      [ RawGraph,
+        IOE,
+        Error UserError,
+        Warn UserError,
+        ProviderList_ GraphEditing (),
+        GraphMetadataFilesystemOperations
+      ]
+      effs
+  ) =>
+  IORef Bool ->
+  Opening ->
+  Eff effs ()
+openingOnce opened = \case
+  EnsureOpen -> unlessM (readIORef opened) (openGraph >> writeIORef opened True)
+  OpenAgain -> writeIORef opened False
+
+-- | The REPL. A command that needs the graph open fails while it can't be
+-- opened, with the reason; opening is tried again for each such command, so
+-- that the REPL goes on normally once @fix@ has repaired the graph.
 repl ::
   ( Members [Echo, DisplayImage, SetLocation, GetLocation, Dualizeable, Readline, IOE] effs,
     Members [FileSystem, Web, FreshNID, GetTime, Editor, State History] effs,
@@ -93,17 +164,23 @@ repl ::
     -- TODO: these effects are bad and shouldn't be exposed; need to rewrite
     -- commands using them as plugins once plugins are available. See also
     -- lengthier comment at interpretCommand
-    Members [IOE, RawGraph, State DamageReadPast] effs
+    Members [IOE, RawGraph, State DamageReadPast] effs,
+    GraphMetadataFilesystemOperations :> effs
   ) =>
+  -- | whether the graph is open
+  IORef Bool ->
   Eff effs ()
-repl = handleInterrupt repl $ withInterrupt do
+repl opened = handleInterrupt (repl opened) $ withInterrupt do
   command <- getInputLine "g> "
   case withDefaultQuitParser parseCommand . pack <$> command of
     Nothing -> outputStrLn "Goodbye!"
     Just (Right Quit) -> outputStrLn "Goodbye!"
-    Just (Right (C command')) ->
-      reportingFailure (liftIO . eputStr) (interpretCommand command') >> repl
-    Just (Left err) -> outputStrLn err >> repl
+    Just (Right (C command')) -> do
+      reportingFailure
+        (liftIO . eputStr)
+        (interpretCommand (openingOnce opened) command')
+      repl opened
+    Just (Left err) -> outputStrLn err >> repl opened
 
 -- | Ensures that the graph directory exists, emitting an error if it doesn't
 -- or creates it if the --new option is passed in
@@ -117,14 +194,14 @@ graphDirInitialization graphDir options = do
           whenM (not <$> doesNodeExist graphDir nilNID) $
             initializeGraph graphDir
         else initializeGraph graphDir
-    else do
+    else
+      -- whether its origin is there is for 'openGraph' to say, so that fsck
+      -- and fix can run on a graph that has lost it
       unless graphDirExists $
         error $
           "graph in directory "
             ++ graphDir
             ++ " doesn't exist"
-      unlessM (doesNodeExist graphDir nilNID) $
-        error "couldn't find origin node in graph "
 
 geMain :: IO ()
 geMain = withOptions $ \options -> do
@@ -158,22 +235,27 @@ geMain = withOptions $ \options -> do
         filesystemBehavior
         env
         do
-          -- the damage that this reads past is warned of before the first
-          -- prompt, or with the command that was given: startup and that
-          -- command are one line to whoever ran it
-          let startup = provideList_ @GraphEditing createSystemNodes
+          opened <- newIORef False
           case options.executeExpression of
-            Just command ->
-              warningOfDamageReadPast (startup >> interpretCommand command)
-            Nothing -> warningOfDamageReadPast startup >> repl
+            -- opening the graph is part of the command line: what it reads
+            -- past is warned of once, with what the commands read past
+            Just command -> interpretCommand (openingOnce opened) command
+            Nothing -> do
+              -- before the first prompt, so that it is known from the start
+              -- if the graph can't be opened, or is damaged where opening
+              -- it reads
+              reportingFailure
+                (liftIO . eputStr)
+                (warningOfDamageReadPast (openingOnce opened EnsureOpen))
+              repl opened
           pure ExitSuccess
   exitWith exitCode
 
 -- | Print warnings and errors like 'printingErrorsAndWarnings'; an error
 -- makes the exit code 1, so that whoever ran @ge -e@ can tell that the
--- command failed. Warnings don't change the exit code. (The REPL reports the
--- errors of its commands itself, so only a failure outside of them, at
--- startup, makes it exit with 1.)
+-- command failed, or that the graph could not be opened for it. Warnings
+-- don't change the exit code. (The REPL reports the errors of its commands
+-- and of opening the graph itself, and goes on.)
 exitCodeOfErrors :: ErrorHandlingBehavior ExitCode
 exitCodeOfErrors =
   printWarnings

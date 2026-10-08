@@ -11,6 +11,10 @@ For setup instructions (installing Stack, running tests), see [docs/claude-code-
 - **[Route patterns](docs/path-pattern-ir.md)** - How paths compile to route
   patterns, and how resolution, residuation (`mk`) and edge selection work.
 
+- **[Damaged graphs](docs/damaged-graphs.md)** - What counts as damage to a
+  graph's node files, how commands refuse to edit and warn when reading next
+  to it, what `fsck` reports and what `fix` repairs.
+
 - **[Testing Best Practices](docs/Testing.md)** - Guidelines for writing tests, including in-file tests, test utilities, golden tests, and avoiding cyclic imports.
 
 ## Quick Reference

@@ -31,6 +31,10 @@ data Damage
     UnparsableNodeFile NID String
   | -- | The origin, the node that every graph has, has no file
     MissingOriginFile
+  | -- | The node has no file, but there are the files with these names that
+    -- a fix kept of a node file that it couldn't read as a node: they are
+    -- left over from the node, which was deleted since
+    KeptFileWithoutNode NID [FilePath]
   deriving stock (Eq, Ord, Show, Generic)
   deriving anyclass (NFData)
 
@@ -82,6 +86,14 @@ describeDamage = \case
     nodeFileName nid <> " cannot be read as a node: " <> reason
   MissingOriginFile ->
     "there is no " <> nodeFileName nilNID <> ", the file of the origin node"
+  KeptFileWithoutNode nid names ->
+    intercalate ", " names
+      <> (if length names == 1 then " is" else " are")
+      <> " left over from a deleted node: there is no "
+      <> nodeFileName nid
+      <> " any more, of which fix had kept "
+      <> (if length names == 1 then "it" else "them")
+      <> " when it couldn't read that file as a node"
   where
     sideName = \case
       IncomingRecord -> "incoming"
@@ -95,6 +107,7 @@ damagedNodes = \case
   FileSaysOtherId name claimed -> [name, claimed]
   UnparsableNodeFile name _ -> [name]
   MissingOriginFile -> [nilNID]
+  KeptFileWithoutNode name _ -> [name]
 
 otherSide :: RecordSide -> RecordSide
 otherSide = \case
@@ -102,18 +115,31 @@ otherSide = \case
   OutgoingRecord -> IncomingRecord
 
 -- | Why a node file that is there could not be read, as the reason of an
--- 'UnparsableNodeFile': first in words, then once as the system said it
--- (which has the whole path of the file).
+-- 'UnparsableNodeFile' (see 'fileFailure').
 readFailure :: IOError -> String
-readFailure e = inWords <> " (" <> show e <> ")"
+readFailure e
+  | isDoesNotExistError e =
+      "the directory lists it but it can't be opened, as a symbolic link to a"
+        <> " file that isn't there can't"
+        <> asTheSystemSaid e
+  | otherwise = fileFailure "read" e
+
+-- | Why something could not be done to a file (to read it, to write it, to
+-- remove it): first in words, then once as the system said it (which has the
+-- whole path of the file).
+fileFailure :: String -> IOError -> String
+fileFailure doing e = inWords <> asTheSystemSaid e
   where
     inWords
-      | isPermissionError e = "there is no permission to read it"
-      | isDoesNotExistError e =
-          "the directory lists it but it can't be opened, as a symbolic link"
-            <> " to a file that isn't there can't"
+      | isPermissionError e = "there is no permission to " <> doing <> " it"
+      | isDoesNotExistError e = "it is not there"
       | ioe_type e == InappropriateType = "it is not a file but a directory"
-      | otherwise = "the system could not read it"
+      | isAlreadyExistsError e = "there already is a file of that name"
+      | isFullError e = "there is no space left for it"
+      | otherwise = "the system could not " <> doing <> " it"
+
+asTheSystemSaid :: IOError -> String
+asTheSystemSaid e = " (" <> show e <> ")"
 
 -- | What follows a description of damage to say what to do about it.
 repairHint :: String
@@ -285,6 +311,20 @@ spec_describeDamage = do
     `describes` "000000000002.json says it is the node @000000000003"
   UnparsableNodeFile (smallNID 2) "not enough input"
     `describes` "000000000002.json cannot be read as a node: not enough input"
+  KeptFileWithoutNode (smallNID 2) ["000000000002.json.unparsable"]
+    `describes` ( "000000000002.json.unparsable is left over from a deleted"
+                    <> " node: there is no 000000000002.json any more, of which"
+                    <> " fix had kept it when it couldn't read that file as a"
+                    <> " node"
+                )
+  KeptFileWithoutNode
+    (smallNID 2)
+    ["000000000002.json.unparsable", "000000000002.json.unparsable-3"]
+    `describes` ( "000000000002.json.unparsable, 000000000002.json.unparsable-3"
+                    <> " are left over from a deleted node: there is no"
+                    <> " 000000000002.json any more, of which fix had kept them"
+                    <> " when it couldn't read that file as a node"
+                )
   -- a file that could not be read: in words, then what the system said
   UnparsableNodeFile
     (smallNID 2)
