@@ -232,6 +232,9 @@ cachingGraphMetadataEditingInState = interpret \_ -> \case
               cached'.augmentation.edits
               Nothing
     modify' @GraphWithEdits $ at nid .~ n'
+    -- remembered, so that an edit that doesn't create the node (deleting one
+    -- of its edges) isn't taken to leave a node behind
+    when (isNothing n') $ modify' @(Set NID) (insertSet nid)
     pure $! void <$> n'
   TouchNode nid -> do
     modify' @(Set NID) $ deleteSet nid

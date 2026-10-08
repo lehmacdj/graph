@@ -564,10 +564,20 @@ runCommand' = \case
     -- and each target starts from the same history; at leaves the history
     -- (and so the location) as it found it
     history <- get @History
-    forM_ locations $ \nid' -> do
+    forM_ (zip (inits (toList locations)) (toList locations)) $ \(done, nid') -> do
       result <- tryError @UserError $ local @NID (const nid') (runCommand c)
       put history
-      either (throwError . snd) pure result
+      case result of
+        Right () -> pure ()
+        -- each target is a change of its own: what failed here was not
+        -- written, what was done at the targets before it stays
+        Left (_, e)
+          | null done -> throwError e
+          | otherwise ->
+              throwError . (e <>) . OtherError $
+                "Note: at had already run the command at "
+                  ++ intercalate ", " (map tshow done)
+                  ++ "; what it did there stays."
   Dedup t -> do
     nid <- currentLocation
     editing do
@@ -643,8 +653,23 @@ runCommand' = \case
     -- already modifies the location and if we set the location we would end up
     -- adding duplicates to the history
     put @History history'
-  Seq ps -> do
-    toList ps & traverse_ runCommand
+  Seq ps ->
+    forM_ (zip [0 :: Int ..] (toList ps)) $ \(before, command) ->
+      -- each command is a change of its own: what failed was not written,
+      -- what the commands before it did stays
+      runCommand command `catchError` \_ e ->
+        throwError $
+          if before == 0
+            then e
+            else
+              e
+                <> OtherError
+                  ( "Note: the "
+                      ++ (if before == 1 then "command" else tshow before ++ " commands")
+                      ++ " before this one in the line had already run; what "
+                      ++ (if before == 1 then "it" else "they")
+                      ++ " did stays."
+                  )
   Preview p -> do
     nid <- currentLocation
     p' <- expandDirectives p

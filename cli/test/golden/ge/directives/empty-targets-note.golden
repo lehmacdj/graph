@@ -11,15 +11,12 @@ g> g> Goodbye!
 ==========stderr==========
 This path cannot be constructed.
 Note: %targets("nope") at line 1, columns 6-19 matched no nodes, so it expanded to %never.
-
 cd needs a path that resolves to a single node
 but it resolved to: []
 Note: %targets("nope" + "a" / "nope") at line 1, columns 4-26 matched no nodes, so it expanded to %never.
-
 cd needs a path that resolves to a single node
 but it resolved to: []
 Note: %targets("nope") at line 1, columns 4-18, %targets("nada") at line 1, columns 21-34 matched no nodes, so they expanded to %never.
-
 ==========graph-dump==========
 @000000000000{out=[@000000000001 via "a"], in=[@0daCJjMrQel8 via "origin"]}
 @000000000001{out=[], in=[@000000000000 via "a"]}

@@ -6,8 +6,10 @@ import DAL.DirectoryFormat
 import DAL.FileSystemOperations.Metadata
 import DAL.Interpreters
 import DAL.RawGraph
+import Data.List.NonEmpty qualified as NonEmpty
 import Error.UserError
 import Models.Augmentation.NodeEdits
+import Models.Connect
 import Models.NID
 import Models.Node
 import MyPrelude
@@ -21,10 +23,11 @@ data GraphMetadataFilesystemOperationsWriteDiff :: Effect where
     -- | Changes that need to be written to the underlying filesystem, if a
     -- node is Nothing it should be deleted
     Map NID (NodeEdits Text) ->
-    -- | Debug only parameter that indicates the data we expect to be written
-    -- Since we read the node from the filesystem and then apply edits when
-    -- writing the diff the two should be identical.
-    -- Nothing indicates that the node should be deleted
+    -- | The node that the transaction computed for each changed node that it
+    -- had read (Nothing if it deletes the node). Applying the edits to the
+    -- node's file must give this node, or none of the change is written. A
+    -- node that is changed without having been read has no entry: it is
+    -- written as its file with the edits applied, whatever that gives.
     Map NID (Maybe (Node Text ())) ->
     GraphMetadataFilesystemOperationsWriteDiff m ()
 
@@ -80,48 +83,74 @@ writeGraphDiff_
             "The following nodes were changed before trying to write the diff: "
               ++ tshow notUpToDateNids
         let upToDateNodes = map (unwrapEx "node exists due to above check") upToDateNodes'
-        ipooledForConcurrentlyN_ 300 writingPaths \nid _ -> do
-          let upToDateNode :: Maybe (Node Text ())
-              upToDateNode =
-                unwrapEx "upToDateNode exists for nodes we are writing" $
-                  upToDateNodes ^. at nid
-          let nodeChanges :: Seq (NodeEdit Text)
-              nodeChanges =
-                unwrapEx "changes exists for nodes we are writing" $
-                  changes ^? ix nid . #edits
-          let changedNode =
-                applyEditsCreatingNonExistent nodeChanges nid upToDateNode
-              expectedChangedNode = changedNodes ^. at nid
-          case (upToDateNode, changedNode, expectedChangedNode) of
-            (_, _, Just expectedChangedNode')
-              | changedNode /= expectedChangedNode' ->
-                  let nshowIncoming :: (CompactNodeShow n) => n -> String
-                      nshowIncoming =
-                        unpack . nshowWith (\s -> s {showIncoming = True})
-                   in error . unlines $
-                        [ "applying changes to node from disk "
-                            <> "did not yield expected result!",
-                          "expected:\n" <> nshowIncoming expectedChangedNode,
-                          "changes to apply:\n" <> show nodeChanges,
-                          "read from disk:\n" <> nshowIncoming upToDateNode,
-                          "after applying changes:\n" <> nshowIncoming changedNode
-                        ]
-            (Just _, Nothing, _) ->
+        -- every node to write as it is on disk and as it will be once its
+        -- edits are applied
+        let plannedWrites :: Map NID (Maybe (Node Text ()), Maybe (Node Text ()))
+            plannedWrites = flip imap changes \nid nodeEdits ->
+              let upToDateNode =
+                    unwrapEx "upToDateNode exists for nodes we are writing" $
+                      upToDateNodes ^. at nid
+               in ( upToDateNode,
+                    applyEditsCreatingNonExistent nodeEdits.edits nid upToDateNode
+                  )
+        -- All of the checks come before the first write: once a file is
+        -- written there is no going back, and a change written only in part
+        -- damages the graph (further).
+        let mismatches =
+              concat
+                [ recordMismatches nid changedNode expectedNode
+                | (nid, (_, changedNode)) <- mapToList plannedWrites,
+                  expectedNode <- toList (changedNodes ^. at nid)
+                ]
+        for_ (NonEmpty.nonEmpty mismatches) $
+          unliftIO . throwError . InconsistentNodeRecords
+        ipooledForConcurrentlyN_ 300 writingPaths \nid _ ->
+          case unwrapEx "a write is planned for nodes we are writing" $
+            plannedWrites ^. at nid of
+            (Just _, Nothing) ->
               withWriting nid defaultWritingOptions {forDeleting = True} $
                 unliftIO . deleteNodeMetadata'
-            (Nothing, Just node, _) ->
+            (Nothing, Just node) ->
               withWriting nid defaultWritingOptions $ \path ->
                 unliftIO $ writeNodeMetadata' path node
-            (Just upToDateNode', Just changedNode', _)
-              | upToDateNode' /= changedNode' ->
+            (Just upToDateNode, Just changedNode)
+              | upToDateNode /= changedNode ->
                   withWriting nid defaultWritingOptions \path ->
-                    unliftIO $ writeNodeMetadata' path changedNode'
+                    unliftIO $ writeNodeMetadata' path changedNode
               | otherwise ->
                   -- node didn't change
                   pure ()
-            (Nothing, Nothing, _) ->
+            (Nothing, Nothing) ->
               -- node never existed and still doesn't exist
               pure ()
+
+-- | How the node that applying a transaction's edits to the file of @nid@
+-- gives differs from the node the transaction computed. The two are the same
+-- unless the records of the graph contradict each other: the transaction
+-- works with a graph in which both nodes of an edge agree about it.
+recordMismatches ::
+  NID ->
+  -- | the node on disk with the edits applied
+  Maybe (Node Text ()) ->
+  -- | the node the transaction computed
+  Maybe (Node Text ()) ->
+  [RecordMismatch]
+recordMismatches nid = curry \case
+  (Nothing, Nothing) -> []
+  (Just _, Nothing) -> [NodeNotDeleted nid]
+  (Nothing, Just _) -> [NodeNotCreated nid]
+  (Just onDisk, Just computed) ->
+    [FileOfOtherNode nid onDisk.nid | onDisk.nid /= computed.nid]
+      <> records RecordNotComputed onDisk computed
+      <> records RecordNotInFile computed onDisk
+  where
+    records mismatch present absent =
+      [ mismatch nid OutgoingRecord c.transition c.node
+      | c <- toList (present.outgoing `difference` absent.outgoing)
+      ]
+        <> [ mismatch nid IncomingRecord c.transition c.node
+           | c <- toList (present.incoming `difference` absent.incoming)
+           ]
 
 runGraphMetadataFilesystemOperationsWriteDiffIO ::
   (Members [RawGraph, IOE, Error UserError] effs) =>

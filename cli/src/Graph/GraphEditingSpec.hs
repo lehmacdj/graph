@@ -1,10 +1,12 @@
 module Graph.GraphEditingSpec where
 
-import DAL.DirectoryFormat (legacyNodeDataFile)
+import DAL.DirectoryFormat (legacyNodeDataFile, metadataFile)
 import DAL.FileSystemOperations.Data
 import DAL.FileSystemOperations.Metadata
 import DAL.FileSystemOperations.MetadataWriteDiff
 import DAL.RawGraph
+import DAL.Serialization (serializeNodeEx)
+import Data.ByteString qualified as B
 import Effectful.State.Dynamic
 import Error.UserError
 import Error.Warn
@@ -18,7 +20,7 @@ import Models.Graph (Graph, emptyGraph)
 import Models.NID
 import Models.Node
 import MyPrelude
-import System.Directory (doesFileExist)
+import System.Directory (doesFileExist, listDirectory)
 import Utils.Testing
 
 n1, n2 :: NID
@@ -47,6 +49,18 @@ runOnDiskEither dir =
     . runGraphDataFilesystemOperationsIO
     . runGraphMetadataFilesystemOperationsWriteDiffIO
     . runGraphMetadataFilesystemOperationsIO True
+    . runGraphEditingTransactionally
+
+-- | Like 'runOnDiskEither', but as @--dry-run@ does it.
+runDryEither :: FilePath -> Eff OnDisk a -> IO (Either UserError a)
+runDryEither dir =
+  runEff
+    . runErrorNoCallStack @UserError
+    . ignoreWarnings @UserError
+    . runRawGraphWithPath dir
+    . runGraphDataFilesystemOperationsDryRun
+    . runGraphMetadataFilesystemOperationsWriteDiffDryRun
+    . runGraphMetadataFilesystemOperationsDryRun True
     . runGraphEditingTransactionally
 
 runOnDisk :: FilePath -> Eff OnDisk a -> IO a
@@ -108,6 +122,31 @@ spec_runGraphEditingTransactionally = do
         (,) <$> listNodes <*> getNodeMetadata n1
       result `shouldBe` (singletonSet nilNID, Nothing)
       runOnDisk dir listNodes `shouldReturn` singletonSet nilNID
+  it "deletes an edge of a node that it read and found missing" do
+    withEmptyTempGraph \dir -> do
+      result <- runOnDisk dir do
+        missing <- getNodeMetadata n1
+        deleteEdge (Edge n1 "x" n2)
+        (missing,) <$> getNodeMetadata n1
+      result `shouldBe` (Nothing, Nothing)
+      runOnDisk dir listNodes `shouldReturn` singletonSet nilNID
+  it "removes the record of an edge to a node that it found missing" do
+    withEmptyTempGraph \dir -> do
+      -- the origin records an edge to n1, which has no file
+      serializeNodeEx
+        ( (emptyNode nilNID :: Node Text ())
+            & #outgoing .~ setFromList [Connect "b" n1]
+            & ($> Nothing)
+        )
+        dir
+      runOnDisk dir do
+        _ <- getNodeMetadata nilNID
+        _ <- getNodeMetadata n1
+        deleteEdge (Edge nilNID "b" n1)
+      fmap (.outgoing)
+        <$> runOnDisk dir (getNodeMetadata nilNID)
+          `shouldReturn` Just mempty
+      doesFileExist (metadataFile dir n1) `shouldReturn` False
   it "writes nothing if the action fails" do
     withEmptyTempGraph \dir -> do
       _ <- runOnDiskEither dir do
@@ -116,6 +155,74 @@ spec_runGraphEditingTransactionally = do
         throwText "failed"
       doesFileExist (legacyNodeDataFile dir n1) `shouldReturn` False
       runOnDisk dir listNodes `shouldReturn` singletonSet nilNID
+
+-- | Every file of a directory with its content
+directoryContents :: FilePath -> IO (Map FilePath ByteString)
+directoryContents dir = do
+  files <- listDirectory dir
+  mapFromList <$> for files \file -> (file,) <$> B.readFile (dir </> file)
+
+spec_transactionOnDamagedGraph :: Spec
+spec_transactionOnDamagedGraph = do
+  -- the origin -a-> n1, and an edge the origin -b-> n1 that only n1 records
+  let withOneSidedEdge :: (FilePath -> IO ()) -> IO ()
+      withOneSidedEdge test = withEmptyTempGraph \dir -> do
+        let write :: Node Text () -> IO ()
+            write n = serializeNodeEx (n $> Nothing) dir
+        write $
+          emptyNode nilNID & #outgoing .~ setFromList [Connect "a" n1]
+        write $
+          emptyNode n1
+            & #incoming .~ setFromList [Connect "a" nilNID, Connect "b" nilNID]
+        test dir
+      -- reading the origin after n1 makes the transaction forget the edge
+      -- b that only n1 records, so the edits to n1 don't give what it expects
+      editNearDamage :: Eff OnDisk ()
+      editNearDamage = do
+        _ <- getNodeMetadata n1
+        _ <- getNodeMetadata nilNID
+        insertEdge (Edge n2 "x" nilNID)
+        insertEdge (Edge n1 "y" n2)
+        writeRawData n2 "data"
+      failsWithoutWriting ::
+        (FilePath -> Eff OnDisk () -> IO (Either UserError ())) -> IO ()
+      failsWithoutWriting run = withOneSidedEdge \dir -> do
+        before <- directoryContents dir
+        result <- run dir editNearDamage
+        case result of
+          Left (InconsistentNodeRecords mismatches) ->
+            toList mismatches
+              `shouldBe` [RecordNotComputed n1 IncomingRecord "b" nilNID]
+          Left e -> expectationFailure $ "failed with another error: " <> show e
+          Right () -> expectationFailure "the transaction didn't fail"
+        directoryContents dir `shouldReturn` before
+  it "writes none of a change when one of its nodes contradicts it" $
+    failsWithoutWriting runOnDiskEither
+  it "fails a dry run of such a change in the same way" $
+    failsWithoutWriting runDryEither
+  it "still writes a change that doesn't touch the contradicting node" do
+    withOneSidedEdge \dir -> do
+      runOnDisk dir do
+        _ <- getNodeMetadata n1
+        _ <- getNodeMetadata nilNID
+        insertEdge (Edge nilNID "x" n2)
+      fmap (.incoming)
+        <$> runOnDisk dir (getNodeMetadata n2)
+          `shouldReturn` Just (singletonSet (Connect "x" nilNID))
+  it "says which record contradicts the change and that it was not written" do
+    let message =
+          show . InconsistentNodeRecords $
+            RecordNotComputed n1 IncomingRecord "b" nilNID
+              :| [FileOfOtherNode n1 n2]
+    lines message
+      `shouldBe` [ "this change was not written: the graph is damaged where it"
+                     <> " applies (inconsistent-node-records)",
+                   "- the file of @000000000001 has an incoming edge \"b\" from"
+                     <> " @000000000000, but the other records say there is no"
+                     <> " such edge",
+                   "- the file of @000000000001 says it is the node"
+                     <> " @000000000002"
+                 ]
 
 spec_dualizingGraphMetadataEditing :: Spec
 spec_dualizingGraphMetadataEditing = do
