@@ -8,14 +8,15 @@ id 2 3
 at (a + b) mk y
 nid
 ==========stdout==========
-g> 
-<no newline at the end>
+g> g> @000000000000
+g> Goodbye!
 ==========stderr==========
 Warning: NID mismatch when reading metadata file for NID @000000000002. File contains NID @000000000003
 this change was not written: the graph is damaged where it applies (inconsistent-node-records)
 - the file of @000000000002 says it is the node @000000000003
 - the file of @000000000002 has an outgoing edge "d" to @000000000001, but the other records say there is no such edge
 - the file of @000000000002 has an incoming edge "b" from @000000000000, but the other records say there is no such edge
+Note: at had already run the command at @000000000001; what it did there stays.
 ==========graph-dump==========
 @000000000000{out=[@000000000001 via "a", @000000000002 via "b", @000000000003 via "c"], in=[@0daCJjMrQel8 via "origin"]}
 @000000000001{out=[@O8OhMSVtjevt via "y"], in=[@000000000000 via "a", @000000000002 via "d"]}

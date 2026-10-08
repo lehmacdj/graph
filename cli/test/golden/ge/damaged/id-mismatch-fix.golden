@@ -10,8 +10,8 @@ fix
 nid
 ==========stdout==========
 g> @000000000000 has a outgoing edge "c" to @000000000003 but the corresponding incoming one doesn't exist
-g> 
-<no newline at the end>
+g> g> @000000000000
+g> Goodbye!
 ==========stderr==========
 Warning: NID mismatch when reading metadata file for NID @000000000002. File contains NID @000000000003
 Warning: NID mismatch when reading metadata file for NID @000000000002. File contains NID @000000000003

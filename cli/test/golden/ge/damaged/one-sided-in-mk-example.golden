@@ -5,8 +5,8 @@
 at @000000000001 mk ~a/b/c & e/~e/@000000000001
 nid
 ==========stdout==========
-g> 
-<no newline at the end>
+g> g> @000000000000
+g> Goodbye!
 ==========stderr==========
 this change was not written: the graph is damaged where it applies (inconsistent-node-records)
 - the file of @000000000001 has an incoming edge "b" from @000000000000, but the other records say there is no such edge

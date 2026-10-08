@@ -5,8 +5,8 @@
 tag x a/~b
 nid
 ==========stdout==========
-g> 
-<no newline at the end>
+g> g> @000000000000
+g> Goodbye!
 ==========stderr==========
 this change was not written: the graph is damaged where it applies (inconsistent-node-records)
 - the file of @000000000000 doesn't have an outgoing edge "b" to @000000000001, but the other records say there is such an edge

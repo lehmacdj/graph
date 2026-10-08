@@ -1,5 +1,6 @@
 module Executable.GraphEditor where
 
+import Control.Exception qualified as E
 import Control.Monad.Fix
 import DAL.RawGraph
 import DAL.Serialization (doesNodeExist, initializeGraph)
@@ -13,6 +14,8 @@ import Effect.IOWrapper.Web
 import Effectful.Provider.List
 import Effectful.Readline
 import Effectful.State.Dynamic
+import Error.UserError
+import Error.Warn
 import Executable.GraphEditor.Completion
 import Executable.GraphEditor.Options
 import Graph.AppInterpreters
@@ -30,6 +33,7 @@ import System.Console.Haskeline qualified as H
 import System.Directory (createDirectoryIfMissing, doesDirectoryExist)
 import System.Environment.XDG.BaseDir (getUserDataDir)
 import System.Random (initStdGen, mkStdGen)
+import Utils.Testing
 
 ioExceptionHandler :: IOError -> IO (Maybe a)
 ioExceptionHandler _ = pure Nothing
@@ -57,10 +61,34 @@ withDefaultQuitParser p s
   | s == ":q" || s == ":quit" = Right Quit
   | otherwise = C <$> p s
 
+-- | Run one command of the REPL. Whatever goes wrong in it is reported
+-- (with @report@) and the REPL goes on:
+--
+-- * a 'UserError', whether the command threw it or an interpreter that the
+--   command uses did (those are installed outside of the REPL, so a handler
+--   installed around the command alone would not see their errors)
+-- * any other exception, such as an @error@ call
+--
+-- An interrupt (Ctrl-C) is left to the REPL's own handler.
+reportingFailure ::
+  (Members [Error UserError, IOE] effs) =>
+  (String -> Eff effs ()) ->
+  Eff effs () ->
+  Eff effs ()
+reportingFailure report command =
+  (command `catchError` \_ e -> report (show e))
+    `catchAny` \e -> case E.fromException e of
+      Just H.Interrupt -> throwIO e
+      Nothing ->
+        report $
+          "the command failed unexpectedly (uncaught-exception): "
+            <> displayException e
+
 repl ::
   ( Members [Echo, DisplayImage, SetLocation, GetLocation, Dualizeable, Readline, IOE] effs,
     Members [FileSystem, Web, FreshNID, GetTime, Editor, State History] effs,
     Members '[FileTypeOracle, ProviderList_ GraphEditing ()] effs,
+    Members [Error UserError, Warn UserError] effs,
     -- TODO: these effects are bad and shouldn't be exposed; need to rewrite
     -- commands using them as plugins once plugins are available. See also
     -- lengthier comment at interpretCommand
@@ -72,11 +100,8 @@ repl = handleInterrupt repl $ withInterrupt do
   case withDefaultQuitParser parseCommand . pack <$> command of
     Nothing -> outputStrLn "Goodbye!"
     Just (Right Quit) -> outputStrLn "Goodbye!"
-    -- TODO: since we now interpret Haskeline as an effect we need to add a
-    -- catch block for each individual command execution outside of the effect
-    -- interpreter
     Just (Right (C command')) ->
-      printingErrorsAndWarnings (interpretCommand command') >> repl
+      reportingFailure (liftIO . eputStr) (interpretCommand command') >> repl
     Just (Left err) -> outputStrLn err >> repl
 
 -- | Ensures that the graph directory exists, emitting an error if it doesn't
@@ -133,3 +158,31 @@ geMain = withOptions $ \options -> do
       do
         provideList_ @GraphEditing createSystemNodes
         maybe repl interpretCommand options.executeExpression
+
+spec_reportingFailure :: Spec
+spec_reportingFailure = do
+  let reports :: Eff [Error UserError, IOE] () -> IO [String]
+      reports command = do
+        reported <- newIORef []
+        result <-
+          runEff . runErrorNoCallStack @UserError $
+            reportingFailure
+              (\message -> modifyIORef reported (message :))
+              command
+        either (const (fail "the error was not handled")) pure result
+        reverse <$> readIORef reported
+  it "reports nothing for a command that succeeds" $
+    reports (pure ()) `shouldReturn` []
+  it "reports a UserError" $
+    reports (throwText "no such thing") `shouldReturn` ["no such thing"]
+  it "reports an exception" $
+    reports (throwIO (userError "disk on fire"))
+      `shouldReturn` [ "the command failed unexpectedly (uncaught-exception): "
+                         <> "user error (disk on fire)"
+                     ]
+  it "reports an error call" do
+    [message] <- reports (error "broken invariant")
+    message `shouldStartWith` "the command failed unexpectedly"
+    message `shouldContain` "broken invariant"
+  it "leaves an interrupt to the REPL" $
+    reports (throwIO H.Interrupt) `shouldThrow` \H.Interrupt -> True

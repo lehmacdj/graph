@@ -1,0 +1,13 @@
+==========graph==========
+0 -a-> 1
+raw 0 "{not json"
+==========input==========
+ls
+nid
+==========stdout==========
+==========stderr==========
+failed to deserialize JSON for @000000000000: Error in $: object key > 34: Failed reading: satisfy
+==========graph-dump==========
+couldn't deserialize node @000000000000; failed with error Error in $: Failed reading: satisfy. Expecting object key at 'notjson'
+@000000000001{out=[], in=[@000000000000 via "a"]}
+==========data==========
