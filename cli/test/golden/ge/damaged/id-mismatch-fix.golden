@@ -9,19 +9,11 @@ fsck
 fix
 nid
 ==========stdout==========
-g> @000000000000 has a outgoing edge "c" to @000000000003 but the corresponding incoming one doesn't exist
-g> g> @000000000000
+g> g> g> @000000000000
 g> Goodbye!
 ==========stderr==========
 Warning: NID mismatch when reading metadata file for NID @000000000002. File contains NID @000000000003
 Warning: NID mismatch when reading metadata file for NID @000000000002. File contains NID @000000000003
-Warning: NID mismatch when reading metadata file for NID @000000000002. File contains NID @000000000003
-Warning: NID mismatch when reading metadata file for NID @000000000002. File contains NID @000000000003
-Warning: NID mismatch when reading metadata file for NID @000000000002. File contains NID @000000000003
-Warning: NID mismatch when reading metadata file for NID @000000000002. File contains NID @000000000003
-this change was not written: the graph is damaged where it applies (inconsistent-node-records)
-- the file of @000000000000 has an outgoing edge "c" to @000000000003, but the other records say there is no such edge
-- the file of @000000000000 doesn't have an outgoing edge "b" to @000000000003, but the other records say there is such an edge
 ==========graph-dump==========
 @000000000000{out=[@000000000001 via "a", @000000000002 via "b", @000000000003 via "c"], in=[@0daCJjMrQel8 via "origin"]}
 @000000000001{out=[], in=[@000000000000 via "a", @000000000002 via "d"]}

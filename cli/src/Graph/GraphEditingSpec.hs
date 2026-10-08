@@ -175,8 +175,6 @@ spec_transactionOnDamagedGraph = do
           emptyNode n1
             & #incoming .~ setFromList [Connect "a" nilNID, Connect "b" nilNID]
         test dir
-      -- reading the origin after n1 makes the transaction forget the edge
-      -- b that only n1 records, so the edits to n1 don't give what it expects
       editNearDamage :: Eff OnDisk ()
       editNearDamage = do
         _ <- getNodeMetadata n1
@@ -184,22 +182,19 @@ spec_transactionOnDamagedGraph = do
         insertEdge (Edge n2 "x" nilNID)
         insertEdge (Edge n1 "y" n2)
         writeRawData n2 "data"
-      failsWithoutWriting ::
-        (FilePath -> Eff OnDisk () -> IO (Either UserError ())) -> IO ()
-      failsWithoutWriting run = withOneSidedEdge \dir -> do
-        before <- directoryContents dir
-        result <- run dir editNearDamage
-        case result of
-          Left (InconsistentNodeRecords mismatches) ->
-            toList mismatches
-              `shouldBe` [RecordNotComputed n1 IncomingRecord "b" nilNID]
-          Left e -> expectationFailure $ "failed with another error: " <> show e
-          Right () -> expectationFailure "the transaction didn't fail"
-        directoryContents dir `shouldReturn` before
-  it "writes none of a change when one of its nodes contradicts it" $
-    failsWithoutWriting runOnDiskEither
-  it "fails a dry run of such a change in the same way" $
-    failsWithoutWriting runDryEither
+  -- reading the origin after n1 used to make the transaction forget the edge
+  -- b that only n1 records, and the change was then refused because the
+  -- edits to n1 didn't give what the transaction expected
+  it "keeps the record that only one node has of an edge" do
+    withOneSidedEdge \dir -> do
+      runOnDisk dir editNearDamage
+      fmap (.incoming)
+        <$> runOnDisk dir (getNodeMetadata n1)
+          `shouldReturn` Just
+            (setFromList [Connect "a" nilNID, Connect "b" nilNID])
+      fmap (.outgoing)
+        <$> runOnDisk dir (getNodeMetadata nilNID)
+          `shouldReturn` Just (singletonSet (Connect "a" n1))
   it "still writes a change that doesn't touch the contradicting node" do
     withOneSidedEdge \dir -> do
       runOnDisk dir do

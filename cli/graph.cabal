@@ -62,6 +62,7 @@ library
       Graph.GraphEditing
       Graph.GraphEditingSpec
       Graph.GraphMetadataEditing
+      Graph.GraphMetadataEditingSpec
       Graph.Import.ByteString
       Graph.Import.FileSystem
       Graph.NodeLocated

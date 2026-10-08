@@ -9,17 +9,10 @@ at (a + b) mk y
 ==========stdout==========
 ==========stderr==========
 Warning: NID mismatch when reading metadata file for NID @000000000002. File contains NID @000000000003
-this change was not written: the graph is damaged where it applies (inconsistent-node-records)
-- the file of @000000000002 says it is the node @000000000003
-- the file of @000000000002 has an outgoing edge "d" to @000000000001, but the other records say there is no such edge
-- the file of @000000000002 has an incoming edge "b" from @000000000000, but the other records say there is no such edge
-Note: at had already run the command at @000000000001; what it did there stays.
-==========exit-code==========
-1
 ==========graph-dump==========
 @000000000000{out=[@000000000001 via "a", @000000000002 via "b", @000000000003 via "c"], in=[@0daCJjMrQel8 via "origin"]}
 @000000000001{out=[@O8OhMSVtjevt via "y"], in=[@000000000000 via "a", @000000000002 via "d"]}
-@000000000003{out=[@000000000001 via "d"], in=[@000000000000 via "b"]}
+@000000000003{out=[@000000000001 via "d", @w4VxcgSm0Js6 via "y"], in=[@000000000000 via "b"]}
 @000000000003{out=[], in=[@000000000000 via "c"]}
 @0daCJjMrQel8{out=[@zsBuPkn5mh8F via "file-extensions", @AhQufiPzgyRf via "file-hashes", @3JJvxFUHGAA1 via "historical-special-nodes", @S00KkOYoVpFu via "import-dates", @a0fVkm0kR7KE via "import-urls", @927u9Xyky2pC via "mime-types", @000000000000 via "origin", @pbYxBO6fzBQV via "tags"], in=[]}
 @3JJvxFUHGAA1{out=[@VEfLhuTgZ88Z via "sequence-ids"], in=[@0daCJjMrQel8 via "historical-special-nodes"]}
@@ -32,6 +25,7 @@ Note: at had already run the command at @000000000001; what it did there stays.
 @VEfLhuTgZ88Z{out=[], in=[@3JJvxFUHGAA1 via "sequence-ids"]}
 @a0fVkm0kR7KE{out=[], in=[@0daCJjMrQel8 via "import-urls"]}
 @pbYxBO6fzBQV{out=[], in=[@0daCJjMrQel8 via "tags"]}
-@sYumkceKpoAh{out=[@O8OhMSVtjevt via "00:00:00.000000000000"], in=[@DQ1KCJgauHiV via "01"]}
+@sYumkceKpoAh{out=[@O8OhMSVtjevt via "00:00:00.000000000000", @w4VxcgSm0Js6 via "00:00:01.000000000000"], in=[@DQ1KCJgauHiV via "01"]}
+@w4VxcgSm0Js6{out=[], in=[@sYumkceKpoAh via "00:00:01.000000000000", @000000000002 via "y"]}
 @zsBuPkn5mh8F{out=[], in=[@0daCJjMrQel8 via "file-extensions"]}
 ==========data==========

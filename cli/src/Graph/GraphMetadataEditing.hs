@@ -95,7 +95,9 @@ cachingReadingInState = interpret \_ -> \case
       getNodeMetadata nid `onNothingM` do
         modify @(Set NID) $ insertSet nid
         returnEarly Nothing
-    modify @(Graph t IsThin) $ at nid ?~ (Fetched <$ n)
+    -- stored as it was read: storing it with @at@ would rewrite the nodes
+    -- read before it to agree with it about the edges between them
+    modify @(Graph t IsThin) $ #nodeMap . at nid ?~ (Fetched <$ n)
     pure $ Just n
   TouchNode _ -> error "TouchNode is unsafe while caching reading"
   DeleteNode _ -> error "DeleteNode is unsafe while caching reading"
@@ -187,6 +189,25 @@ runGraphMetadataEditing = interpret \_ -> \case
 
 type GraphWithEdits = Graph Text (Bundled [NodeEdits Text, IsThin])
 
+type NodeWithEdits = Node Text (Bundled [NodeEdits Text, IsThin])
+
+-- | Where 'cachingGraphMetadataEditingStoringIn' keeps the node with an id
+newtype NodeSlot
+  = NodeSlot
+      ( forall f.
+        (Functor f) =>
+        NID ->
+        LensLike' f GraphWithEdits (Maybe NodeWithEdits)
+      )
+
+-- | Each node is kept as its own file and its own edits say, whatever the
+-- other nodes say about the edges they share with it. What a transaction
+-- sees of a node therefore doesn't depend on which nodes it read before:
+-- a step forwards reads the outgoing edges of the node it leaves, and a
+-- step backwards its incoming edges.
+ownRecords :: NodeSlot
+ownRecords = NodeSlot \nid -> #nodeMap . at nid
+
 cachingGraphMetadataEditingInState ::
   forall r a.
   ( GraphMetadataFilesystemOperations :> r,
@@ -206,11 +227,31 @@ cachingGraphMetadataEditingInState ::
   ) =>
   Eff (GraphMetadataEditing' Text : r) a ->
   Eff r a
-cachingGraphMetadataEditingInState = interpret \_ -> \case
+cachingGraphMetadataEditingInState =
+  cachingGraphMetadataEditingStoringIn ownRecords
+
+-- | 'cachingGraphMetadataEditingInState' with a choice of where a node is
+-- kept. The choice exists for the tests, which compare 'ownRecords' with
+-- what this used to do (see @reconcilingRecords@ there).
+cachingGraphMetadataEditingStoringIn ::
+  forall r a.
+  ( GraphMetadataFilesystemOperations :> r,
+    Members
+      [ State GraphWithEdits,
+        State (Set NID),
+        State (Map NID (Maybe (Node Text ())))
+      ]
+      r,
+    HasCallStack
+  ) =>
+  NodeSlot ->
+  Eff (GraphMetadataEditing' Text : r) a ->
+  Eff r a
+cachingGraphMetadataEditingStoringIn (NodeSlot slot) = interpret \_ -> \case
   GetNodeMetadata nid -> withEarlyReturn do
     -- if a node is in the deleted set, we need to treat it as non-existing
     whenM (gets @(Set NID) (member nid)) (returnEarly Nothing)
-    cached <- gets @GraphWithEdits (preview (ix nid))
+    cached <- gets @GraphWithEdits (view (slot nid))
     -- if we've already fetched this node, we can trust it and return it
     let onlyFetched =
           _Just . alongsideMetadata (lensA @IsThin) . asideMetadata (only Fetched)
@@ -231,7 +272,7 @@ cachingGraphMetadataEditingInState = interpret \_ -> \case
               (markFetched cached'.augmentation)
               cached'.augmentation.edits
               Nothing
-    modify' @GraphWithEdits $ at nid .~ n'
+    modify' @GraphWithEdits $ slot nid .~ n'
     -- remembered, so that an edit that doesn't create the node (deleting one
     -- of its edges) isn't taken to leave a node behind
     when (isNothing n') $ modify' @(Set NID) (insertSet nid)
@@ -239,7 +280,7 @@ cachingGraphMetadataEditingInState = interpret \_ -> \case
   TouchNode nid -> do
     modify' @(Set NID) $ deleteSet nid
     modify' @GraphWithEdits $
-      at nid
+      slot nid
         %~ Just . \case
           Nothing ->
             emptyNode @() nid
@@ -248,15 +289,15 @@ cachingGraphMetadataEditingInState = interpret \_ -> \case
             node & #augmentation %~ updateA @(NodeEdits Text) (appendEdit Touch)
   DeleteNode nid -> do
     -- ensure node has been loaded if it exists so we know which edges to delete
-    n <- cachingGraphMetadataEditingInState (getNodeMetadata nid)
+    n <- again (getNodeMetadata nid)
     -- delete the edges as edits so the neighbors lose them too
     forOf_ (_Just . #outgoing . folded) n $ \n' ->
-      cachingGraphMetadataEditingInState (deleteEdge (nid `outgoingEdge` n'))
+      again (deleteEdge (nid `outgoingEdge` n'))
     forOf_ (_Just . #incoming . folded) n $ \n' ->
-      cachingGraphMetadataEditingInState (deleteEdge (n' `incomingEdge` nid))
+      again (deleteEdge (n' `incomingEdge` nid))
     modify' @(Set NID) $ insertSet nid
     modify' @GraphWithEdits $
-      at nid . _Just
+      slot nid . _Just
         -- edges of the node have already been deleted from the deleteEdge
         -- calls above
         %~ (#augmentation %~ updateA @(NodeEdits Text) (appendEdit Delete))
@@ -264,7 +305,7 @@ cachingGraphMetadataEditingInState = interpret \_ -> \case
     modify' @(Set NID) $ deleteSet edge.source . deleteSet edge.sink
     modify' @GraphWithEdits $
       id @_ @GraphWithEdits
-        . ( at edge.source
+        . ( slot edge.source
               %~ Just . \case
                 Nothing ->
                   outStubNode'
@@ -279,7 +320,7 @@ cachingGraphMetadataEditingInState = interpret \_ -> \case
                       %~ updateA @(NodeEdits Text)
                         (appendEdit (InsertOutgoing (outConnect edge)))
           )
-        . ( at edge.sink
+        . ( slot edge.sink
               %~ Just . \case
                 Nothing ->
                   inStubNode'
@@ -304,7 +345,7 @@ cachingGraphMetadataEditingInState = interpret \_ -> \case
         deleteIncoming = DeleteIncoming (inConnect edge)
     modify' @GraphWithEdits $
       id @_ @GraphWithEdits
-        . ( at edge.source
+        . ( slot edge.source
               %~ Just . \case
                 Nothing -> stub edge.source deleteOutgoing
                 Just n ->
@@ -313,7 +354,7 @@ cachingGraphMetadataEditingInState = interpret \_ -> \case
                     & #augmentation
                       %~ updateA @(NodeEdits Text) (appendEdit deleteOutgoing)
           )
-        . ( at edge.sink
+        . ( slot edge.sink
               %~ Just . \case
                 Nothing -> stub edge.sink deleteIncoming
                 Just n ->
@@ -332,6 +373,9 @@ cachingGraphMetadataEditingInState = interpret \_ -> \case
               applyEditsFrom @Text nid () node.augmentation.edits Nothing
     nonExistent <- get @(Set NID)
     pure $ (onDisk <> created) `difference` nonExistent
+  where
+    again :: Eff (GraphMetadataEditing' Text : r) b -> Eff r b
+    again = cachingGraphMetadataEditingStoringIn (NodeSlot slot)
 
 -- | Update a graph transactionally by first building up a diff of all changes
 -- in memory and then writing them to the disk using
@@ -349,21 +393,10 @@ runGraphMetadataEditingTransactionally ::
   Eff (GraphMetadataEditing : r) a ->
   Eff r a
 runGraphMetadataEditingTransactionally action = do
-  let applyGraphDiff (((result, Graph nodeMap), asLoaded), nonExistent) = do
-        let allChanges = flip Map.mapMaybeWithKey nodeMap \nid node ->
-              -- the node or Nothing if it should be deleted
-              let deleted = justIfTrue (nid `notMember` nonExistent) (void node)
-               in -- we only need to edit the nodes that actually changed
-                  -- this is any node with non-null edits that is different from
-                  -- how it was when we loaded it
-                  justIfTrue
-                    (not (null node.augmentation.edits))
-                    ( node ^. #augmentation . lensA @(NodeEdits Text),
-                      justIfTrue (has (ix nid) asLoaded) deleted
-                    )
+  let applyGraphDiff (((result, graph), asLoaded), nonExistent) = do
+        let (edits, changedNodes) = transactionChanges graph asLoaded nonExistent
         -- a transaction that only read the graph has nothing to write
-        unless (null allChanges) $
-          writeGraphDiff asLoaded (fst <$> allChanges) (Map.mapMaybe snd allChanges)
+        unless (null edits) $ writeGraphDiff asLoaded edits changedNodes
         pure result
   action
     & inject
@@ -374,3 +407,28 @@ runGraphMetadataEditingTransactionally action = do
     & runStateLocal @(Map NID (Maybe (Node Text ()))) mempty
     & runStateLocal @(Set NID) mempty
     & (>>= applyGraphDiff)
+
+-- | What a finished transaction has to write: the edits of every node it
+-- changed and, for the changed nodes it had loaded, the node those edits
+-- give ('Nothing' if they delete it).
+transactionChanges ::
+  GraphWithEdits ->
+  -- | nodes as they were when the transaction loaded them
+  Map NID (Maybe (Node Text ())) ->
+  -- | nodes that don't exist once the transaction is done
+  Set NID ->
+  (Map NID (NodeEdits Text), Map NID (Maybe (Node Text ())))
+transactionChanges (Graph nodeMap) asLoaded nonExistent =
+  (fst <$> allChanges, Map.mapMaybe snd allChanges)
+  where
+    allChanges = flip Map.mapMaybeWithKey nodeMap \nid node ->
+      -- the node or Nothing if it should be deleted
+      let deleted = justIfTrue (nid `notMember` nonExistent) (void node)
+       in -- we only need to edit the nodes that actually changed
+          -- this is any node with non-null edits that is different from
+          -- how it was when we loaded it
+          justIfTrue
+            (not (null node.augmentation.edits))
+            ( node ^. #augmentation . lensA @(NodeEdits Text),
+              justIfTrue (has (ix nid) asLoaded) deleted
+            )
