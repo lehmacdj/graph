@@ -10,7 +10,7 @@ import Error.UserError
 import Models.NID
 import Models.Node
 import MyPrelude
-import System.Directory (removeFile)
+import System.Directory (pathIsSymbolicLink, removeFile)
 import System.FileCoordination
 
 data GraphMetadataFilesystemOperations :: Effect where
@@ -32,8 +32,22 @@ readNodeMetadata_ shouldCoordinate nid path = withEarlyReturn do
   result <- embedCatchingErrors $
     (if shouldCoordinate then coordinateReading path False defaultReadingOptions else ($ path)) $
       \path' ->
-        try @IO @IOError $ readFile path'
-  serialized <- either (const $ returnEarly Nothing) pure result
+        try @IO @IOError (readFile path') >>= \case
+          Right bytes -> pure (Right bytes)
+          Left e
+            | isDoesNotExistError e ->
+                -- nothing is there, unless it is a symbolic link to a file
+                -- that isn't there
+                Left . bool Nothing (Just e)
+                  <$> (pathIsSymbolicLink path' `catch` \(_ :: IOError) -> pure False)
+            | otherwise -> pure (Left (Just e))
+  serialized <- case result of
+    Right bytes -> pure bytes
+    Left Nothing -> returnEarly Nothing
+    -- What is there but can't be read (a file without the permission, a
+    -- directory, a link that leads nowhere) is not a missing node: taking it
+    -- for one would have the node created over it, or through the link.
+    Left (Just e) -> throwError (UnreadableNodeFile nid e)
   Just <$> decodeNode nid serialized
 
 writeNodeMetadata_ ::
@@ -68,16 +82,10 @@ runGraphMetadataFilesystemOperationsIO ::
   Eff r a
 runGraphMetadataFilesystemOperationsIO useCoordination = interpret \_ -> \case
   ReadNodeMetadata nid -> do
+    -- the node is returned as the file has it, even if the file says it is
+    -- another node: whoever reads it compares the two (see 'damageAmong')
     path <- getMetadataFile nid
-    node <- readNodeMetadata_ useCoordination nid path
-    withJust node $ \n ->
-      unless (n.nid == nid) $
-        sayErr $
-          "Warning: NID mismatch when reading metadata file for NID "
-            <> tshow nid
-            <> ". File contains NID "
-            <> tshow n.nid
-    pure node
+    readNodeMetadata_ useCoordination nid path
   WriteNodeMetadata node -> do
     f <- getMetadataFile node.nid
     writeNodeMetadata_ useCoordination f node

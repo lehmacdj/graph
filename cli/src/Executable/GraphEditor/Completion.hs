@@ -3,7 +3,7 @@ module Executable.GraphEditor.Completion where
 
 import Control.Arrow
 import Control.Lens
-import DAL.Serialization (nodesWithPrefix)
+import DAL.Serialization (nodesWithPrefix, serializeNodeEx)
 import Effect.IOWrapper.GetTime
 import Effectful.Provider.List
 import Effectful.Readline (runReadlineNonInteractive)
@@ -13,14 +13,18 @@ import Graph.AppInterpreters
 import Graph.GraphEditing
 import Graph.NodeLocated
 import Graph.PathPattern.Execution (completionTransitions)
+import Models.Connect
 import Models.LegacyPartialPath
-import Models.NID (nidDigits)
+import Models.NID
+import Models.Node
 import Models.Path.Simple qualified as Simple
 import Models.PathPattern.Compile (checkAlternatives)
 import MyPrelude
 import System.Console.Haskeline
+import System.Random (mkStdGen)
 import Utils.Base62 (isBase62Char)
 import Utils.Parsing
+import Utils.Testing
 
 commands :: [String]
 commands = []
@@ -83,29 +87,45 @@ failCompletionWithOriginalInputOnErrorOrWarning i =
 -- transition currently on as much as possible, then tries to complete from
 -- that location
 completePath :: Env -> (String, String) -> IO (String, [Completion])
-completePath env (i, _) = case getLegacyPartialPath (pack $ takeRelevantFromEnd i) of
-  Nothing -> pure (i, [])
-  Just (MissingSlash _) -> pure (i, [simpleCompletion "/"])
-  Just (LegacyPartialPath pp end) ->
-    runAppEffects
-      runReadlineNonInteractive
-      (failCompletionWithOriginalInputOnErrorOrWarning i)
-      interpretTimeAsIO
-      filesystemBehaviorDryRun
-      env
-      $ do
-        let p = case pp of
-              [] -> Simple.One
-              p0 : rest -> foldl' (Simple.:/) p0 rest
-        nid <- currentLocation
-        -- a prefix beyond its alternatives limit completes to nothing,
-        -- rather than hanging on TAB
-        octs <- case checkAlternatives p of
-          Left _ -> pure []
-          Right () ->
-            map unpack . toList
-              <$> provideList_ @GraphEditing (completionTransitions nid p)
-        pure (fromMaybe i (stripPrefix (reverse end) i), mkCompleter octs end)
+completePath =
+  completePathHandling (\i -> failCompletionWithOriginalInputOnErrorOrWarning i)
+
+-- | 'completePath' with a choice of what becomes of the errors and warnings
+-- of reading the graph, given the original input.
+--
+-- Damage that completing reads past is not among the warnings: only a
+-- command line warns of it ('warningOfDamageReadPast'), which is what the
+-- user runs next. A warning here would be written into the line that the
+-- user is editing.
+completePathHandling ::
+  (String -> ErrorHandlingBehavior (String, [Completion])) ->
+  Env ->
+  (String, String) ->
+  IO (String, [Completion])
+completePathHandling handling env (i, _) =
+  case getLegacyPartialPath (pack $ takeRelevantFromEnd i) of
+    Nothing -> pure (i, [])
+    Just (MissingSlash _) -> pure (i, [simpleCompletion "/"])
+    Just (LegacyPartialPath pp end) ->
+      runAppEffects
+        runReadlineNonInteractive
+        (handling i)
+        interpretTimeAsIO
+        filesystemBehaviorDryRun
+        env
+        $ do
+          let p = case pp of
+                [] -> Simple.One
+                p0 : rest -> foldl' (Simple.:/) p0 rest
+          nid <- currentLocation
+          -- a prefix beyond its alternatives limit completes to nothing,
+          -- rather than hanging on TAB
+          octs <- case checkAlternatives p of
+            Left _ -> pure []
+            Right () ->
+              map unpack . toList
+                <$> provideList_ @GraphEditing (completionTransitions nid p)
+          pure (fromMaybe i (stripPrefix (reverse end) i), mkCompleter octs end)
 
 completeNID :: Env -> (String, String) -> IO (String, [Completion])
 completeNID env (i, _) = do
@@ -116,6 +136,31 @@ completeNID env (i, _) = do
       nids <- nodesWithPrefix base (reverse reversedNidPrefix)
       pure (fromMaybe i (stripPrefix reversedNidPrefix i), map (simpleCompletion' . show) nids)
     _ -> pure (i, [])
+
+spec_completePath :: Spec
+spec_completePath =
+  it "completes past damage without a warning or an error" $
+    withEmptyTempGraph \dir -> do
+      -- the origin -b-> 1 -d-> 2, where the node 1 doesn't record b
+      let n1 = smallNID 1
+          n2 = smallNID 2
+          write :: Node Text () -> IO ()
+          write n = serializeNodeEx (n $> Nothing) dir
+      write $ emptyNode nilNID & #outgoing .~ singletonSet (Connect "b" n1)
+      write $ emptyNode n1 & #outgoing .~ singletonSet (Connect "d" n2)
+      write $ emptyNode n2 & #incoming .~ singletonSet (Connect "d" n1)
+      env <- initEnv dir (mkStdGen 0) defaultSettings
+      said <- newIORef []
+      let note :: (IOE :> r) => UserError -> Eff r ()
+          note e = liftIO (modifyIORef said (show e :))
+          recording :: String -> ErrorHandlingBehavior (String, [Completion])
+          recording _ =
+            interpret (\_ (Warn e) -> note e)
+              >>> (`handleError` \e -> note e $> ("", []))
+      -- the input is given reversed, as haskeline gives it
+      (_, completions) <- completePathHandling recording env (reverse "ls b/", "")
+      map replacement completions `shouldBe` ["d"]
+      readIORef said `shouldReturn` []
 
 completionFunction :: Env -> (String, String) -> IO (String, [Completion])
 completionFunction env =

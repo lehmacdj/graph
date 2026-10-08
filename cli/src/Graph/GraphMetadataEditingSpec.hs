@@ -8,6 +8,7 @@ import Error.UserError
 import Graph.GraphMetadataEditing
 import Models.Augmentation.NodeEdits
 import Models.Connect
+import Models.Damage
 import Models.Edge
 import Models.Graph (Graph, emptyGraph, insertEdges, insertNode, nodesOf)
 import Models.NID
@@ -25,7 +26,7 @@ runNodeFilesInMemory ::
   Eff r a
 runNodeFilesInMemory = interpret \_ -> \case
   ReadNodeMetadata nid -> gets @NodeFiles (lookup nid)
-  WriteNodeMetadata node -> modify @NodeFiles (insertMap node.nid node)
+  WriteNodeMetadata n -> modify @NodeFiles (insertMap n.nid n)
   DeleteNodeMetadata nid -> modify @NodeFiles (deleteMap nid)
   ListNodeMetadata -> gets @NodeFiles keysSet
 
@@ -36,12 +37,14 @@ runWriteDiffInMemory ::
   Eff (GraphMetadataFilesystemOperationsWriteDiff : r) a ->
   Eff r a
 runWriteDiffInMemory = interpret \_ -> \case
-  WriteGraphDiff asLoaded changes changedNodes -> do
+  WriteGraphDiff asLoaded changes changedNodes _ -> do
     files <- get @NodeFiles
     let changed =
           [nid | (nid, loaded) <- mapToList asLoaded, lookup nid files /= loaded]
     unless (null changed) $
       throwText ("changed since they were loaded: " <> tshow changed)
+    for_ (NonEmpty.nonEmpty (toList (damageAmong (map Just files)))) $
+      throwError . DamagedGraph
     let planned = flip imap changes \nid nodeEdits ->
           applyEditsCreatingNonExistent nodeEdits.edits nid (lookup nid files)
         mismatches =
@@ -51,8 +54,9 @@ runWriteDiffInMemory = interpret \_ -> \case
               expected <- toList (lookup nid changedNodes)
             ]
     for_ (NonEmpty.nonEmpty mismatches) (throwError . InconsistentNodeRecords)
-    for_ (mapToList planned) \(nid, node) ->
-      modify @NodeFiles (maybe (deleteMap nid) (insertMap nid) node)
+    for_ (mapToList planned) \(nid, n) ->
+      modify @NodeFiles (maybe (deleteMap nid) (insertMap nid) n)
+    pure planned
 
 -- | One transaction on node files kept in memory, with a choice of how the
 -- transaction keeps the nodes it read and changed.
@@ -71,8 +75,8 @@ transactionStoringIn slot action = do
       & runStateLocal @(Set NID) mempty
       & runNodeFilesInMemory
   let (edits, changedNodes) = transactionChanges graph asLoaded nonExistent
-  unless (null edits) . runWriteDiffInMemory $
-    writeGraphDiff asLoaded edits changedNodes
+  unless (null edits) . void . runWriteDiffInMemory $
+    writeGraphDiff asLoaded edits changedNodes mempty
   pure result
 
 -- | What transactions did until they kept every node as its own file says:
@@ -186,14 +190,14 @@ consistent :: NodeFiles -> Bool
 consistent files =
   and
     [ maybe False (member (Connect c.transition nid) . mirror) (lookup c.node files)
-    | (nid, node) <- mapToList files,
-      (records, mirror) <-
-        [ (node.outgoing, (.incoming)),
-          (node.incoming, (.outgoing))
+    | (nid, n) <- mapToList files,
+      (recorded, mirror) <-
+        [ (n.outgoing, (.incoming)),
+          (n.incoming, (.outgoing))
         ],
-      c <- toList records
+      c <- toList recorded
     ]
-    && and [nid == node.nid | (nid, node) <- mapToList files]
+    && and [nid == n.nid | (nid, n) <- mapToList files]
 
 test_ownRecords :: TestTree
 test_ownRecords =
@@ -245,10 +249,10 @@ test_ownRecords =
         -- transaction had read of the node 1
         let rereading slot =
               concat . fst <$> runTransactions slot files [map Read [n1, n0, n1]]
-            withEdge = GotNode (lookup n1 files)
-            withoutEdge = GotNode (Just (emptyNode n1))
+            withTheEdge = GotNode (lookup n1 files)
+            withoutTheEdge = GotNode (Just (emptyNode n1))
         rereading ownRecords
-          @?= Right [withEdge, GotNode (lookup n0 files), withEdge]
+          @?= Right [withTheEdge, GotNode (lookup n0 files), withTheEdge]
         rereading reconcilingRecords
-          @?= Right [withEdge, GotNode (lookup n0 files), withoutEdge]
+          @?= Right [withTheEdge, GotNode (lookup n0 files), withoutTheEdge]
     ]

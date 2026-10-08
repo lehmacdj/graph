@@ -85,6 +85,7 @@ library
       Models.Command.Parse
       Models.Common
       Models.Connect
+      Models.Damage
       Models.Edge
       Models.FileTypeInfo
       Models.Graph

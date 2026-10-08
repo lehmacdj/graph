@@ -7,9 +7,11 @@ import DAL.FileSystemOperations.Metadata
 import DAL.Interpreters
 import DAL.RawGraph
 import Data.List.NonEmpty qualified as NonEmpty
+import Data.Map.Strict qualified as Map
 import Error.UserError
 import Models.Augmentation.NodeEdits
 import Models.Connect
+import Models.Damage (damageAmong, damageNear, filesNewTo)
 import Models.NID
 import Models.Node
 import MyPrelude
@@ -29,10 +31,21 @@ data GraphMetadataFilesystemOperationsWriteDiff :: Effect where
     -- node that is changed without having been read has no entry: it is
     -- written as its file with the edits applied, whatever that gives.
     Map NID (Maybe (Node Text ())) ->
-    GraphMetadataFilesystemOperationsWriteDiff m ()
+    -- | Node files that whoever asks for the change has read besides (in
+    -- earlier transactions of the same command), as it last read or wrote
+    -- them. They are not read again, and they are compared with the files
+    -- that are read here like those are with each other: the change is
+    -- refused if they are damaged.
+    Map NID (Maybe (Node Text ())) ->
+    -- | The file of each changed node as the change leaves it ('Nothing':
+    -- no file): as it was written, or as it was read for the change where
+    -- nothing is written (a dry run)
+    GraphMetadataFilesystemOperationsWriteDiff m (Map NID (Maybe (Node Text ())))
 
 makeEffect ''GraphMetadataFilesystemOperationsWriteDiff
 
+-- | Returns the file of each changed node as it was read here, and as it is
+-- to be once the change is written.
 writeGraphDiff_ ::
   (Members [RawGraph, IOE, Error UserError] r) =>
   (NID -> FilePath -> Eff RawGraphUserErrorIO (Maybe (Node Text ()))) ->
@@ -41,14 +54,16 @@ writeGraphDiff_ ::
   Map NID (Maybe (Node Text ())) ->
   Map NID (NodeEdits Text) ->
   Map NID (Maybe (Node Text ())) ->
-  Eff r ()
+  Map NID (Maybe (Node Text ())) ->
+  Eff r (Map NID (Maybe (Node Text ()), Maybe (Node Text ())))
 writeGraphDiff_
   readNodeMetadata'
   writeNodeMetadata'
   deleteNodeMetadata'
   (force -> asLoaded)
   (force -> changes)
-  changedNodes = do
+  changedNodes
+  others = do
     writingPaths <- ifor changes \nid _ -> getMetadataFile nid <&> (,False)
     -- we need to read every node we write to, plus any node that was loaded
     -- to check that nothing changed since we started the transaction
@@ -66,23 +81,61 @@ writeGraphDiff_
               forall a. (HasCallStack) => NID -> WritingOptions -> (FilePath -> IO a) -> IO a
             withWriting nid =
               unwrappingWriter (wrappedWriters ^. at nid . to (unwrapEx "missing writer"))
-        upToDateNodes' <- ipooledForConcurrentlyN 300 readingPaths \nid _ ->
-          withReading nid defaultReadingOptions $ \path -> do
-            upToDateNode <- unliftIO $ readNodeMetadata' nid path
-            _ <- evaluateDeep upToDateNode
+        -- the files are read concurrently, so a failure to read one is kept
+        -- rather than thrown: which of several is thrown first would differ
+        -- from run to run
+        readNodes <- ipooledForConcurrentlyN 300 readingPaths \nid _ ->
+          withReading nid defaultReadingOptions $ \path ->
+            unliftIO (tryError @UserError (readNodeMetadata' nid path)) >>= \case
+              Left (_, e) -> pure (Left e)
+              Right upToDateNode -> Right <$> evaluateDeep upToDateNode
+        let unusable =
+              [ damage
+              | (_, Left e) <- mapToList readNodes,
+                damage <- toList (damageOfReadError e)
+              ]
+            failures =
+              [ e
+              | (_, Left e) <- mapToList readNodes,
+                isNothing (damageOfReadError e)
+              ]
             -- if the node was loaded, we require that it is the same now as it was
             -- when loading, if it wasn't the node is up to date inherently
-            pure $! case asLoaded ^. at nid of
-              Just asLoadedNode
-                | upToDateNode == asLoadedNode -> Just upToDateNode
-                | otherwise -> Nothing
-              Nothing -> Just upToDateNode
+            upToDateNodes' = flip Map.mapMaybeWithKey readNodes \nid -> \case
+              Left _ -> Nothing
+              Right upToDateNode -> Just case asLoaded ^. at nid of
+                Just asLoadedNode
+                  | upToDateNode == asLoadedNode -> Just upToDateNode
+                  | otherwise -> Nothing
+                Nothing -> Just upToDateNode
+        -- the one of the node with the least id
+        for_ (headMay failures) (unliftIO . throwError)
         let notUpToDateNids = keysSet $ filterMap (== Nothing) upToDateNodes'
         unless (null notUpToDateNids) $
           unliftIO . throwText $
             "The following nodes were changed before trying to write the diff: "
               ++ tshow notUpToDateNids
         let upToDateNodes = map (unwrapEx "node exists due to above check") upToDateNodes'
+        -- All of the checks come before the first write: once a file is
+        -- written there is no going back, and a change written only in part
+        -- damages the graph (further).
+        --
+        -- A change is refused if the files it was computed from or will be
+        -- written to are damaged: what it should do there is anyone's guess.
+        -- Every such file is named, the ones that can't be used as a node
+        -- among them (in the order of their ids). The files that the
+        -- command read before count as well, as it read them: the ones that
+        -- were read here are the later reading. (What those files show
+        -- among themselves, whoever read them has found: only the files
+        -- that are new to the command are compared with them.)
+        let damage =
+              setFromList unusable
+                <> damageAmong upToDateNodes
+                <> damageNear
+                  (filesNewTo others upToDateNodes)
+                  (upToDateNodes <> (others `Map.difference` readNodes))
+        for_ (NonEmpty.nonEmpty (toList damage)) $
+          unliftIO . throwError . DamagedGraph
         -- every node to write as it is on disk and as it will be once its
         -- edits are applied
         let plannedWrites :: Map NID (Maybe (Node Text ()), Maybe (Node Text ()))
@@ -93,9 +146,8 @@ writeGraphDiff_
                in ( upToDateNode,
                     applyEditsCreatingNonExistent nodeEdits.edits nid upToDateNode
                   )
-        -- All of the checks come before the first write: once a file is
-        -- written there is no going back, and a change written only in part
-        -- damages the graph (further).
+        -- with undamaged files this cannot fail unless the transaction
+        -- miscomputed its nodes
         let mismatches =
               concat
                 [ recordMismatches nid changedNode expectedNode
@@ -123,6 +175,7 @@ writeGraphDiff_
             (Nothing, Nothing) ->
               -- node never existed and still doesn't exist
               pure ()
+        pure plannedWrites
 
 -- | How the node that applying a transaction's edits to the file of @nid@
 -- gives differs from the node the transaction computed. The two are the same
@@ -157,25 +210,33 @@ runGraphMetadataFilesystemOperationsWriteDiffIO ::
   Eff (GraphMetadataFilesystemOperationsWriteDiff ': effs) a ->
   Eff effs a
 runGraphMetadataFilesystemOperationsWriteDiffIO = interpret \_ -> \case
-  WriteGraphDiff asLoaded changes changedNodes ->
-    writeGraphDiff_
-      (readNodeMetadata_ False)
-      (writeNodeMetadata_ False)
-      (deleteNodeMetadata_ False)
-      asLoaded
-      changes
-      changedNodes
+  WriteGraphDiff asLoaded changes changedNodes others ->
+    fmap snd
+      <$> writeGraphDiff_
+        (readNodeMetadata_ False)
+        (writeNodeMetadata_ False)
+        (deleteNodeMetadata_ False)
+        asLoaded
+        changes
+        changedNodes
+        others
 
 runGraphMetadataFilesystemOperationsWriteDiffDryRun ::
   (Members [RawGraph, IOE, Error UserError] effs) =>
   Eff (GraphMetadataFilesystemOperationsWriteDiff ': effs) a ->
   Eff effs a
 runGraphMetadataFilesystemOperationsWriteDiffDryRun = interpret \_ -> \case
-  WriteGraphDiff asLoaded changes changedNodes -> do
-    writeGraphDiff_
-      (readNodeMetadata_ False)
-      (\path node -> say $ "would write: " <> tshow node <> " -> " <> tshow path)
-      (\path -> say $ "would delete at path: " <> tshow path)
-      asLoaded
-      changes
-      changedNodes
+  WriteGraphDiff asLoaded changes changedNodes others ->
+    -- Nothing is written, so each of these files stays as it was read for
+    -- the change. The command has read it then, as it has in the real run:
+    -- what a later step of it reads is compared with a file that only
+    -- writing read (that of a neighbour of a deleted node, say) as well.
+    fmap fst
+      <$> writeGraphDiff_
+        (readNodeMetadata_ False)
+        (\path node -> say $ "would write: " <> tshow node <> " -> " <> tshow path)
+        (\path -> say $ "would delete at path: " <> tshow path)
+        asLoaded
+        changes
+        changedNodes
+        others

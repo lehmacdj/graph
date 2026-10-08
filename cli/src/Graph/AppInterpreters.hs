@@ -163,7 +163,8 @@ type PermissiveDependencyEffects =
     State StdGen,
     IOE,
     State History,
-    RawGraph
+    RawGraph,
+    State DamageReadPast
   ]
 
 runPermisiveDependencyEffects ::
@@ -177,6 +178,7 @@ runPermisiveDependencyEffects path =
     >>> subsume
     >>> evalStateLocal (History [] nilNID [])
     >>> runRawGraphWithPath path
+    >>> evalStateLocal noDamageReadPast
 
 runPermissiveDependencyEffectsEnv ::
   (Members FinalEffects r) =>
@@ -188,6 +190,7 @@ runPermissiveDependencyEffectsEnv =
     >>> subsume
     >>> runStateInputIORefOf @History #history
     >>> runRawGraphFromEnv
+    >>> evalStateLocal noDamageReadPast
 
 -- | Interpret 'RawGraph' by reading the (mutable) graph path out of the
 -- ambient 'Env'.

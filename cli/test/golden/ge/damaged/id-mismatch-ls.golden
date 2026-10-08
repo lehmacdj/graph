@@ -9,12 +9,14 @@ ls
 nid
 ==========stdout==========
 g> [0m[0;1ma[0m[0m [0;34m@000000000001[0m [0m[0m
-[0m[0;1mb[0m[0m [0;34m@000000000003[0m [0m[0m
+[0m[0;1mb[0m[0m [0;34m@000000000002[0m [0m[0m
 [0m[0;1mc[0m[0m [0;34m@000000000003[0m [0m[0m
 g> @000000000000
 g> Goodbye!
 ==========stderr==========
-Warning: NID mismatch when reading metadata file for NID @000000000002. File contains NID @000000000003
+warning: the graph is damaged where this command read it (damaged-graph)
+- 000000000002.json says it is the node @000000000003
+fsck lists all such damage; fix repairs it, or says why it can't
 ==========graph-dump==========
 @000000000000{out=[@000000000001 via "a", @000000000002 via "b", @000000000003 via "c"], in=[@0daCJjMrQel8 via "origin"]}
 @000000000001{out=[], in=[@000000000000 via "a", @000000000002 via "d"]}

@@ -1,0 +1,42 @@
+==========graph==========
+0 -a-> 1
+0 -b-> 2
+2 -c-> 3
+4 -d-> 2
+0 -e-> 4
+1 -f-> 2
+0 -g-> 3
+0 -h-> 5
+0 -i-> 6
+1 data "one"
+2 data "two"
+raw 2 "{not json"
+==========expression==========
+mg (b/c + h) i
+==========stdout==========
+==========stderr==========
+this change was not written: the graph is damaged where it applies (damaged-graph)
+- 000000000002.json cannot be read as a node: Error in $: object key > 34: Failed reading: satisfy
+fsck lists all such damage; fix repairs it, or says why it can't
+==========exit-code==========
+1
+==========graph-dump==========
+@000000000000{out=[@000000000001 via "a", @000000000002 via "b", @000000000004 via "e", @000000000003 via "g", @000000000005 via "h", @000000000006 via "i"], in=[@0daCJjMrQel8 via "origin"]}
+@000000000001{out=[@000000000002 via "f"], in=[@000000000000 via "a"]}
+couldn't deserialize node @000000000002; failed with error Error in $: Failed reading: satisfy. Expecting object key at 'notjson'
+@000000000003{out=[], in=[@000000000002 via "c", @000000000000 via "g"]}
+@000000000004{out=[@000000000002 via "d"], in=[@000000000000 via "e"]}
+@000000000005{out=[], in=[@000000000000 via "h"]}
+@000000000006{out=[], in=[@000000000000 via "i"]}
+@0daCJjMrQel8{out=[@zsBuPkn5mh8F via "file-extensions", @AhQufiPzgyRf via "file-hashes", @3JJvxFUHGAA1 via "historical-special-nodes", @S00KkOYoVpFu via "import-dates", @a0fVkm0kR7KE via "import-urls", @927u9Xyky2pC via "mime-types", @000000000000 via "origin", @pbYxBO6fzBQV via "tags"], in=[]}
+@3JJvxFUHGAA1{out=[@VEfLhuTgZ88Z via "sequence-ids"], in=[@0daCJjMrQel8 via "historical-special-nodes"]}
+@927u9Xyky2pC{out=[], in=[@0daCJjMrQel8 via "mime-types"]}
+@AhQufiPzgyRf{out=[], in=[@0daCJjMrQel8 via "file-hashes"]}
+@S00KkOYoVpFu{out=[], in=[@0daCJjMrQel8 via "import-dates"]}
+@VEfLhuTgZ88Z{out=[], in=[@3JJvxFUHGAA1 via "sequence-ids"]}
+@a0fVkm0kR7KE{out=[], in=[@0daCJjMrQel8 via "import-urls"]}
+@pbYxBO6fzBQV{out=[], in=[@0daCJjMrQel8 via "tags"]}
+@zsBuPkn5mh8F{out=[], in=[@0daCJjMrQel8 via "file-extensions"]}
+==========data==========
+000000000001.data: "one"
+000000000002.data: "two"

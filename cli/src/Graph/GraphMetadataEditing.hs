@@ -4,6 +4,7 @@ module Graph.GraphMetadataEditing where
 
 import DAL.FileSystemOperations.Metadata
 import DAL.FileSystemOperations.MetadataWriteDiff
+import Data.List.NonEmpty qualified as NonEmpty
 import Data.Map.Strict qualified as Map
 import Effectful.State.Dynamic
 import Error.UserError
@@ -11,6 +12,7 @@ import Error.Warn
 import Models.Augmentation.Bundled
 import Models.Augmentation.IsThin
 import Models.Augmentation.NodeEdits
+import Models.Damage
 import Models.Edge
 import Models.Graph (Graph, Graph' (..), emptyGraph)
 import Models.Graph qualified
@@ -261,9 +263,12 @@ cachingGraphMetadataEditingStoringIn (NodeSlot slot) = interpret \_ -> \case
     let cached' = fromMaybe (emptyNode nid) cached
         markFetched = lensA @IsThin .~ Fetched
         n' = case n of
+          -- a file is the node it is named after, whatever id it says:
+          -- that is how every edge to it finds it ('damageAmong' reports
+          -- the file)
           Just onDisk ->
             Just . applyEditsPreservingDeleted cached'.augmentation.edits $
-              onDisk $> markFetched cached'.augmentation
+              (onDisk & #nid .~ nid) $> markFetched cached'.augmentation
           -- a node that is not on disk exists only if we created it earlier
           -- in this transaction
           Nothing ->
@@ -382,31 +387,115 @@ cachingGraphMetadataEditingStoringIn (NodeSlot slot) = interpret \_ -> \case
 -- @GraphMetadataFilesystemOperationsWriteDiff@
 -- Actual transactionality is dependent on the transactionality of the
 -- @GraphMetadataFilesystemOperationsWriteDiff@ effect.
+--
+-- The files of the nodes that the transaction read are compared with each
+-- other once it is done, and with the ones that the command it is part of
+-- read in its earlier steps ('filesReadByCommand'): a command that read both
+-- files of an edge has read them, in however many transactions. No file is
+-- read for this. If they are damaged (see 'damageAmong'):
+--
+-- * a transaction that changes something fails before it writes anything,
+--   with 'DamagedGraph'. Writing checks this again together with the nodes
+--   that the transaction changes without having read them. It fails in the
+--   same way if the command that it is part of has read past damage before
+--   it, in another transaction ('asOneDecision').
+-- * a transaction that changes nothing, or that failed for another reason,
+--   notes each piece of damage as read past ('noteDamageReadPast'): the
+--   command line warns of it.
+--
+-- A node file that is there but can't be used as a node (its content is not
+-- a node, or it can't be read at all) is damage like any other, and doesn't
+-- fail the transaction that reads it either: the node is read as a node
+-- without edges. It is there, and other nodes may record edges with it, but
+-- nothing is known of what its own file recorded.
+--
+-- Changing the data of a node is changing something, although no node file
+-- is written for it: the first argument says, once the action is done,
+-- whether it did that. (Deleting a node that has no file changes no node
+-- file and deletes its data.)
 runGraphMetadataEditingTransactionally ::
   forall r a.
   ( Members
       [ GraphMetadataFilesystemOperations,
-        GraphMetadataFilesystemOperationsWriteDiff
+        GraphMetadataFilesystemOperationsWriteDiff,
+        Warn UserError,
+        State DamageReadPast,
+        Error UserError
       ]
       r
   ) =>
+  Eff r Bool ->
   Eff (GraphMetadataEditing : r) a ->
   Eff r a
-runGraphMetadataEditingTransactionally action = do
-  let applyGraphDiff (((result, graph), asLoaded), nonExistent) = do
-        let (edits, changedNodes) = transactionChanges graph asLoaded nonExistent
-        -- a transaction that only read the graph has nothing to write
-        unless (null edits) $ writeGraphDiff asLoaded edits changedNodes
-        pure result
-  action
-    & inject
-    -- this just exists so that we can avoid duplicating the implementation of
-    -- runInMemoryGraphMetadataEditing
-    & cachingGraphMetadataEditingInState
-    & runStateLocal @GraphWithEdits Models.Graph.emptyGraph
-    & runStateLocal @(Map NID (Maybe (Node Text ()))) mempty
-    & runStateLocal @(Set NID) mempty
-    & (>>= applyGraphDiff)
+runGraphMetadataEditingTransactionally changedData action = do
+  ((((result, graph), asLoaded), nonExistent), unusable) <-
+    tryError @UserError (inject action)
+      & cachingGraphMetadataEditingInState
+      & runStateLocal @GraphWithEdits Models.Graph.emptyGraph
+      & runStateLocal @(Map NID (Maybe (Node Text ()))) mempty
+      & runStateLocal @(Set NID) mempty
+      & readingPastUnusableFiles
+  -- the node files that the command read before this transaction, in its
+  -- earlier steps, and the ones that the transaction read, which are the
+  -- later reading of a file that both read
+  earlierFiles <- filesReadByCommand
+  let -- nothing is said about the edges that other nodes record with a node
+      -- whose file can't be used: what that file records is not known
+      own = asLoaded `Map.withoutKeys` keysSet unusable
+      files = own <> (earlierFiles `Map.withoutKeys` keysSet unusable)
+      -- The files of this transaction among themselves, and the ones of
+      -- them that the command had not read before, or not as they are now,
+      -- with all of its files. (What the files that it had read show among
+      -- themselves was found by the step that read them.)
+      damage =
+        damageAmong own
+          <> damageNear (filesNewTo earlierFiles own) files
+          <> setFromList (toList unusable)
+      (edits, changedNodes) = transactionChanges graph asLoaded nonExistent
+  setFilesReadByCommand files
+  case result of
+    Left (_, e) -> noteDamageReadPast damage >> throwError e
+    Right x -> do
+      onlyRead <- (null edits &&) . not <$> changedData
+      if onlyRead
+        then noteDamageReadPast damage
+        else do
+          -- what the command read before this transaction decided what the
+          -- transaction changes ('asOneDecision')
+          earlier <- damageReadPastByCommand
+          for_ (NonEmpty.nonEmpty (toList (earlier <> damage))) $
+            throwError . DamagedGraph
+          -- a transaction that changed only data has no node file to write
+          unless (null edits) do
+            written <- writeGraphDiff asLoaded edits changedNodes files
+            -- so that what the command wrote itself is never taken for a
+            -- file that disagrees with what it read before; in a dry run,
+            -- the files that writing read, which the command has read then
+            setFilesReadByCommand (written <> files)
+      pure x
+
+-- | Read a node file that is there but can't be used as a node as a node
+-- without edges instead of failing. Returns those files as the damage that
+-- they are, by the node each is named after.
+readingPastUnusableFiles ::
+  (Members [GraphMetadataFilesystemOperations, Error UserError] r) =>
+  Eff r a ->
+  Eff r (a, Map NID Damage)
+readingPastUnusableFiles =
+  runStateLocal @(Map NID Damage) mempty
+    . interpose @GraphMetadataFilesystemOperations
+      ( \_ -> \case
+          ReadNodeMetadata nid ->
+            readNodeMetadata nid `catchError` \_ e -> case damageOfReadError e of
+              Just damage -> do
+                modify' @(Map NID Damage) (insertMap nid damage)
+                pure (Just (emptyNode nid))
+              Nothing -> throwError e
+          WriteNodeMetadata node -> writeNodeMetadata node
+          DeleteNodeMetadata nid -> deleteNodeMetadata nid
+          ListNodeMetadata -> listNodeMetadata
+      )
+    . raise
 
 -- | What a finished transaction has to write: the edits of every node it
 -- changed and, for the changed nodes it had loaded, the node those edits

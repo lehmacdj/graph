@@ -1,0 +1,55 @@
+==========graph==========
+0 -a-> 1
+0 -b-> 2 !out
+2 -c-> 3
+0 -k-> 7
+==========input==========
+at b rmnf @
+rmnf %targets(b)
+at b mk x
+at b vi
+at b ls
+at k mk x
+rmnf b
+==========stdout==========
+g> g> g> g> g> [0m[0;1mc[0m[0m [0;34m@000000000003[0m [0m[0m
+g> g> g> Goodbye!
+==========stderr==========
+this change was not written: the graph is damaged where it applies (damaged-graph)
+- the edge @000000000000 -"b"-> @000000000002 is among the outgoing edges in 000000000000.json but not among the incoming edges in 000000000002.json
+fsck lists all such damage; fix repairs it, or says why it can't
+this change was not written: the graph is damaged where it applies (damaged-graph)
+- the edge @000000000000 -"b"-> @000000000002 is among the outgoing edges in 000000000000.json but not among the incoming edges in 000000000002.json
+fsck lists all such damage; fix repairs it, or says why it can't
+this change was not written: the graph is damaged where it applies (damaged-graph)
+- the edge @000000000000 -"b"-> @000000000002 is among the outgoing edges in 000000000000.json but not among the incoming edges in 000000000002.json
+fsck lists all such damage; fix repairs it, or says why it can't
+this change was not written: the graph is damaged where it applies (damaged-graph)
+- the edge @000000000000 -"b"-> @000000000002 is among the outgoing edges in 000000000000.json but not among the incoming edges in 000000000002.json
+fsck lists all such damage; fix repairs it, or says why it can't
+warning: the graph is damaged where this command read it (damaged-graph)
+- the edge @000000000000 -"b"-> @000000000002 is among the outgoing edges in 000000000000.json but not among the incoming edges in 000000000002.json
+fsck lists all such damage; fix repairs it, or says why it can't
+this change was not written: the graph is damaged where it applies (damaged-graph)
+- the edge @000000000000 -"b"-> @000000000002 is among the outgoing edges in 000000000000.json but not among the incoming edges in 000000000002.json
+fsck lists all such damage; fix repairs it, or says why it can't
+==========graph-dump==========
+@000000000000{out=[@000000000001 via "a", @000000000002 via "b", @000000000007 via "k"], in=[@0daCJjMrQel8 via "origin"]}
+@000000000001{out=[], in=[@000000000000 via "a"]}
+@000000000002{out=[@000000000003 via "c"], in=[]}
+@000000000003{out=[], in=[@000000000002 via "c"]}
+@000000000007{out=[@w4VxcgSm0Js6 via "x"], in=[@000000000000 via "k"]}
+@0daCJjMrQel8{out=[@zsBuPkn5mh8F via "file-extensions", @AhQufiPzgyRf via "file-hashes", @3JJvxFUHGAA1 via "historical-special-nodes", @S00KkOYoVpFu via "import-dates", @a0fVkm0kR7KE via "import-urls", @927u9Xyky2pC via "mime-types", @000000000000 via "origin", @pbYxBO6fzBQV via "tags"], in=[]}
+@3JJvxFUHGAA1{out=[@VEfLhuTgZ88Z via "sequence-ids"], in=[@0daCJjMrQel8 via "historical-special-nodes"]}
+@927u9Xyky2pC{out=[], in=[@0daCJjMrQel8 via "mime-types"]}
+@AhQufiPzgyRf{out=[], in=[@0daCJjMrQel8 via "file-hashes"]}
+@OBlFGnwL1N3D{out=[@sSvdmA080xFk via "01"], in=[@w4P7BSd8jU2v via "01"]}
+@S00KkOYoVpFu{out=[@w4P7BSd8jU2v via "1970"], in=[@0daCJjMrQel8 via "import-dates"]}
+@VEfLhuTgZ88Z{out=[], in=[@3JJvxFUHGAA1 via "sequence-ids"]}
+@a0fVkm0kR7KE{out=[], in=[@0daCJjMrQel8 via "import-urls"]}
+@pbYxBO6fzBQV{out=[], in=[@0daCJjMrQel8 via "tags"]}
+@sSvdmA080xFk{out=[@w4VxcgSm0Js6 via "00:00:02.000000000000"], in=[@OBlFGnwL1N3D via "01"]}
+@w4P7BSd8jU2v{out=[@OBlFGnwL1N3D via "01"], in=[@S00KkOYoVpFu via "1970"]}
+@w4VxcgSm0Js6{out=[], in=[@sSvdmA080xFk via "00:00:02.000000000000", @000000000007 via "x"]}
+@zsBuPkn5mh8F{out=[], in=[@0daCJjMrQel8 via "file-extensions"]}
+==========data==========

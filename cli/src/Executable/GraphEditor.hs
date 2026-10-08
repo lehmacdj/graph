@@ -93,7 +93,7 @@ repl ::
     -- TODO: these effects are bad and shouldn't be exposed; need to rewrite
     -- commands using them as plugins once plugins are available. See also
     -- lengthier comment at interpretCommand
-    Members [IOE, RawGraph] effs
+    Members [IOE, RawGraph, State DamageReadPast] effs
   ) =>
   Eff effs ()
 repl = handleInterrupt repl $ withInterrupt do
@@ -158,8 +158,14 @@ geMain = withOptions $ \options -> do
         filesystemBehavior
         env
         do
-          provideList_ @GraphEditing createSystemNodes
-          maybe repl interpretCommand options.executeExpression
+          -- the damage that this reads past is warned of before the first
+          -- prompt, or with the command that was given: startup and that
+          -- command are one line to whoever ran it
+          let startup = provideList_ @GraphEditing createSystemNodes
+          case options.executeExpression of
+            Just command ->
+              warningOfDamageReadPast (startup >> interpretCommand command)
+            Nothing -> warningOfDamageReadPast startup >> repl
           pure ExitSuccess
   exitWith exitCode
 

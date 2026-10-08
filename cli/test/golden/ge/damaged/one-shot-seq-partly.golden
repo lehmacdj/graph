@@ -8,11 +8,16 @@ id 2 3
 mk q ; mk p ; mk b/x ; mk r
 ==========stdout==========
 ==========stderr==========
-Warning: NID mismatch when reading metadata file for NID @000000000002. File contains NID @000000000003
+this change was not written: the graph is damaged where it applies (damaged-graph)
+- 000000000002.json says it is the node @000000000003
+fsck lists all such damage; fix repairs it, or says why it can't
+Note: the 2 commands before this one in the line had already run; what they did stays.
+==========exit-code==========
+1
 ==========graph-dump==========
-@000000000000{out=[@000000000001 via "a", @000000000002 via "b", @000000000003 via "c", @w4VxcgSm0Js6 via "p", @O8OhMSVtjevt via "q", @OBlFGnwL1N3D via "r"], in=[@0daCJjMrQel8 via "origin"]}
+@000000000000{out=[@000000000001 via "a", @000000000002 via "b", @000000000003 via "c", @w4VxcgSm0Js6 via "p", @O8OhMSVtjevt via "q"], in=[@0daCJjMrQel8 via "origin"]}
 @000000000001{out=[], in=[@000000000000 via "a", @000000000002 via "d"]}
-@000000000003{out=[@000000000001 via "d", @w4P7BSd8jU2v via "x"], in=[@000000000000 via "b"]}
+@000000000003{out=[@000000000001 via "d"], in=[@000000000000 via "b"]}
 @000000000003{out=[], in=[@000000000000 via "c"]}
 @0daCJjMrQel8{out=[@zsBuPkn5mh8F via "file-extensions", @AhQufiPzgyRf via "file-hashes", @3JJvxFUHGAA1 via "historical-special-nodes", @S00KkOYoVpFu via "import-dates", @a0fVkm0kR7KE via "import-urls", @927u9Xyky2pC via "mime-types", @000000000000 via "origin", @pbYxBO6fzBQV via "tags"], in=[]}
 @3JJvxFUHGAA1{out=[@VEfLhuTgZ88Z via "sequence-ids"], in=[@0daCJjMrQel8 via "historical-special-nodes"]}
@@ -20,14 +25,12 @@ Warning: NID mismatch when reading metadata file for NID @000000000002. File con
 @AhQufiPzgyRf{out=[], in=[@0daCJjMrQel8 via "file-hashes"]}
 @DQ1KCJgauHiV{out=[@sYumkceKpoAh via "01"], in=[@Pqf7kGOdKJIr via "01"]}
 @O8OhMSVtjevt{out=[], in=[@sYumkceKpoAh via "00:00:00.000000000000", @000000000000 via "q"]}
-@OBlFGnwL1N3D{out=[], in=[@sYumkceKpoAh via "00:00:03.000000000000", @000000000000 via "r"]}
 @Pqf7kGOdKJIr{out=[@DQ1KCJgauHiV via "01"], in=[@S00KkOYoVpFu via "1970"]}
 @S00KkOYoVpFu{out=[@Pqf7kGOdKJIr via "1970"], in=[@0daCJjMrQel8 via "import-dates"]}
 @VEfLhuTgZ88Z{out=[], in=[@3JJvxFUHGAA1 via "sequence-ids"]}
 @a0fVkm0kR7KE{out=[], in=[@0daCJjMrQel8 via "import-urls"]}
 @pbYxBO6fzBQV{out=[], in=[@0daCJjMrQel8 via "tags"]}
-@sYumkceKpoAh{out=[@O8OhMSVtjevt via "00:00:00.000000000000", @w4VxcgSm0Js6 via "00:00:01.000000000000", @w4P7BSd8jU2v via "00:00:02.000000000000", @OBlFGnwL1N3D via "00:00:03.000000000000"], in=[@DQ1KCJgauHiV via "01"]}
-@w4P7BSd8jU2v{out=[], in=[@sYumkceKpoAh via "00:00:02.000000000000", @000000000002 via "x"]}
+@sYumkceKpoAh{out=[@O8OhMSVtjevt via "00:00:00.000000000000", @w4VxcgSm0Js6 via "00:00:01.000000000000"], in=[@DQ1KCJgauHiV via "01"]}
 @w4VxcgSm0Js6{out=[], in=[@sYumkceKpoAh via "00:00:01.000000000000", @000000000000 via "p"]}
 @zsBuPkn5mh8F{out=[], in=[@0daCJjMrQel8 via "file-extensions"]}
 ==========data==========

@@ -1,5 +1,6 @@
 module Error.UserError
   ( module Error.UserError,
+    RecordSide (..),
     left,
     (#),
   )
@@ -7,6 +8,7 @@ where
 
 import Control.Exception qualified as E
 import Control.Lens
+import Models.Damage
 import Models.NID (NID)
 import MyPrelude
 import Network.HTTP.Conduit (HttpException)
@@ -29,15 +31,23 @@ data UserError
     MissingNode NID (Maybe Text)
   | WebError HttpException
   | FailedToDeserializeNode NID String
+  | -- | The file of the node is there but could not be read
+    UnreadableNodeFile NID IOError
   | FileCoordinationError NSErrorException
   | -- | A change was not written because the files of the nodes it changes
     -- contradict what it was computed from
     InconsistentNodeRecords (NonEmpty RecordMismatch)
+  | -- | A change was not written because the files of the nodes that it read
+    -- or changes are damaged
+    DamagedGraph (NonEmpty Damage)
+  | -- | Only ever a warning: a command that changes nothing read damaged
+    -- files and went on
+    DamagedGraphWarning (NonEmpty Damage)
+  | -- | @at@ ran its command nowhere because targets of its path have no
+    -- node file: each such target with the edges that led to it, as the
+    -- damage that they are (none for a target that no edge led to)
+    TargetsWithoutFile (NonEmpty (NID, [Damage]))
   deriving stock (Generic)
-
--- | Which of a node's two lists of edges
-data RecordSide = IncomingRecord | OutgoingRecord
-  deriving stock (Eq, Ord, Show, Generic)
 
 -- | A difference between the file of a node with a change applied to it and
 -- the node that the change was computed to give. In each the first 'NID' is
@@ -96,7 +106,14 @@ instance Show UserError where
       ++ maybe "" ((" for reason " ++) . unpack) reason
   show (WebError e) = show e
   show (FailedToDeserializeNode nid e) =
-    "failed to deserialize JSON for " ++ show nid ++ ": " ++ e
+    "the graph is damaged (unparsable-node-file): "
+      ++ describeDamage (UnparsableNodeFile nid e)
+      ++ "\n"
+      ++ repairHint
+  show (UnreadableNodeFile nid e) =
+    nodeFileName nid
+      ++ " is there but cannot be read (unreadable-node-file): "
+      ++ show e
   show (FileCoordinationError e) = "error while file coordinating: " ++ show e
   show (InconsistentNodeRecords mismatches) =
     intercalate "\n" $
@@ -104,6 +121,54 @@ instance Show UserError where
           ++ " (inconsistent-node-records)"
       ]
         ++ map (("- " ++) . describeRecordMismatch) (toList mismatches)
+  show (DamagedGraph damage) =
+    intercalate "\n" $
+      [ "this change was not written: the graph is damaged where it applies"
+          ++ " (damaged-graph)"
+      ]
+        ++ map (("- " ++) . describeDamage) (toList damage)
+        ++ [repairHint]
+  show (DamagedGraphWarning damage) =
+    intercalate "\n" $
+      ["warning: the graph is damaged where this command read it (damaged-graph)"]
+        ++ map (("- " ++) . describeDamage) (toList damage)
+        ++ [repairHint]
+  show (TargetsWithoutFile targets) =
+    intercalate "\n" $
+      [ "at did nothing: "
+          ++ (if length targets == 1 then "a target has" else "targets have")
+          ++ " no node file (damaged-graph)"
+      ]
+        ++ map ("- " ++) (concatMap describeTarget (toList targets))
+        ++ [repairHint]
+    where
+      describeTarget = \case
+        (target, []) ->
+          [ "there is no "
+              ++ nodeFileName target
+              ++ ", the file of the target "
+              ++ show target
+          ]
+        (_, damage) -> map describeDamage damage
+
+-- | The damage that an error says a command was refused for. A command line
+-- doesn't warn of that damage as well ('Error.Warn.warningOfDamageReadPast').
+damageRefusedBy :: UserError -> Set Damage
+damageRefusedBy = \case
+  DamagedGraph damage -> setFromList (toList damage)
+  TargetsWithoutFile targets -> setFromList (concatMap snd (toList targets))
+  -- as when a command of a @;@ line is refused and the error says what the
+  -- commands before it did
+  Multiple errors -> foldMap damageRefusedBy errors
+  _ -> mempty
+
+-- | The damage that an error from reading a node file stands for, if it says
+-- that the file is there and can't be used as a node.
+damageOfReadError :: UserError -> Maybe Damage
+damageOfReadError = \case
+  FailedToDeserializeNode nid reason -> Just (UnparsableNodeFile nid reason)
+  UnreadableNodeFile nid e -> Just (UnparsableNodeFile nid (readFailure e))
+  _ -> Nothing
 
 -- | order preserving union of the errors in the different error types
 -- for use with Validation

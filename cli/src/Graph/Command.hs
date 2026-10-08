@@ -3,6 +3,8 @@ module Graph.Command where
 import Control.Monad (zipWithM_)
 import DAL.DirectoryFormat (legacyNodeDataFile)
 import DAL.RawGraph
+import DAL.Serialization (doesNodeExist)
+import Data.List.NonEmpty qualified as NonEmpty
 import Effect.IOWrapper.DisplayImage
 import Effect.IOWrapper.Echo
 import Effect.IOWrapper.Editor
@@ -37,6 +39,7 @@ import Models.Augmentation.Tags
 import Models.Augmentation.Timestamps
 import Models.Command
 import Models.Connect
+import Models.Damage
 import Models.Edge
 import Models.History
 import Models.NID
@@ -44,7 +47,12 @@ import Models.Path.ParsedPath
 import Models.Path.Simple (Path)
 import Models.Path.Simple qualified as Simple
 import Models.PathPattern.Compile (TooManyAlternatives (..), checkAlternatives)
-import Models.PathPattern.Match (ConcreteHop (..), ConcreteRoute (..), selectedRoutes)
+import Models.PathPattern.Match
+  ( ConcreteHop (..),
+    ConcreteRoute (..),
+    routeLastEdges,
+    selectedRoutes,
+  )
 import MyPrelude
 import System.Console.Terminal.Size qualified as Terminal
 import Utils.Parsing.Common (showSpan)
@@ -340,21 +348,27 @@ type CommandEffects effs =
     -- best way to do this is to allow commands to be defined as @stack@
     -- scripts, and then rewrite resolve and any other commands that
     -- require this outside of
-    Members [RawGraph, IOE] effs
+    Members [RawGraph, IOE, State DamageReadPast] effs
   )
 
--- | Run one command line.
+-- | Run one command line. Damage that the commands of the line read past is
+-- warned of once, when the line is done (see 'warningOfDamageReadPast').
 interpretCommand :: (CommandEffects effs) => Command -> Eff effs ()
-interpretCommand = evalStateLocal (ImportedUrls mempty) . runCommand
+interpretCommand command =
+  warningOfDamageReadPast $
+    evalStateLocal (ImportedUrls mempty) (runCommand command)
 
 -- | Run a command, noting in its error any @%targets(…)@ that it expanded
 -- to nothing (it then means @%never@, which is easy to miss).
+--
+-- A command is one decision ('asOneDecision'): once it has read past damage,
+-- in resolving its arguments or the targets of @at@, say, it writes nothing.
 runCommand ::
   (CommandEffects effs, State ImportedUrls :> effs) =>
   Command ->
   Eff effs ()
 runCommand c = evalStateLocal (EmptyTargets []) do
-  result <- tryError @UserError (runCommand' c)
+  result <- tryError @UserError (deciding (runCommand' c))
   EmptyTargets empties <- get
   case result of
     Right () -> pure ()
@@ -367,6 +381,13 @@ runCommand c = evalStateLocal (EmptyTargets []) do
               ++ " matched no nodes, so "
               ++ (if length empties == 1 then "it" else "they")
               ++ " expanded to %never."
+  where
+    -- Each command of a @;@ line is a decision of its own, and so is a
+    -- command that is no part of another one. What a command runs (@at@ its
+    -- command at each target) is part of its decision.
+    deciding = case c of
+      Seq _ -> id
+      _ -> asOneDecision
 
 -- | Merge the nodes of @mg@'s arguments (paired with the node each
 -- resolved to) and return the survivor. Arguments resolving to the same node
@@ -417,12 +438,10 @@ mergeTargets targets = do
       firstWithData =
         fst <$> find ((`elem` withData) . snd . snd) (zip [0 ..] targets)
       kept = snd <$> find (isKept . fst) targets
-      systemNodes = filter (`member` systemNodeNIDs) nids
-      systemError why =
-        throwError . OtherError $
-          "mg cannot merge a system node away (the origin and the special "
-            ++ "nodes such as tags must keep their NIDs)\n"
-            ++ why
+      systemNodes = systemNodesAmong nids
+      systemError =
+        throwError
+          . systemNodeError "mg cannot merge a system node away" "keep their NIDs"
   -- a system node (the origin, tags, …) must survive the merge
   systemSurvivor <- case systemNodes of
     [] -> pure Nothing
@@ -462,6 +481,41 @@ mergeTargets targets = do
       ++ intercalate ", " (map describeNode dropped)
   pure survivor
 
+-- | The system nodes among some nodes ('systemNodeNIDs': the origin and the
+-- special nodes such as tags). @ge@ needs them to open the graph, so no
+-- command takes one out of it: @mg@ never merges one away and @rmnf@ doesn't
+-- delete one.
+systemNodesAmong :: [NID] -> [NID]
+systemNodesAmong = filter (`member` systemNodeNIDs)
+
+-- | The error of a command that would take a system node out of the graph:
+-- what it can't do, what the system nodes must do instead, and which nodes
+-- of the command this is about.
+systemNodeError :: Text -> Text -> Text -> UserError
+systemNodeError cannot must which =
+  OtherError $
+    cannot
+      ++ " (the origin and the special nodes such as tags must "
+      ++ must
+      ++ ")\n"
+      ++ which
+
+spec_systemNodeError :: Spec
+spec_systemNodeError =
+  it "says what can't be done to a system node, why, and to which" $
+    lines
+      ( show $
+          systemNodeError
+            "mg cannot merge a system node away"
+            "keep their NIDs"
+            "more than one system node: @000000000000 (a), @0daCJjMrQel8 (b)"
+      )
+      `shouldBe` [ "mg cannot merge a system node away (the origin and the"
+                     <> " special nodes such as tags must keep their NIDs)",
+                   "more than one system node: @000000000000 (a),"
+                     <> " @0daCJjMrQel8 (b)"
+                 ]
+
 -- | Tell the user that the path @rm@, @mv@ or @cp@ takes its edges from
 -- matched nothing (as it was written, before its directives were expanded),
 -- so the command did nothing. This is a warning, not an error: the rest of
@@ -483,6 +537,72 @@ noticeNoMatch what p cur = do
       ++ (if cur == prompt then "" else " at " ++ tshow cur)
       ++ "; nothing was changed."
 
+-- | What @at@ fails with when targets of its path have no node file, given
+-- the edges that the path can end with: for each such target the edges that
+-- lead to it, as the damage that they are.
+targetsWithoutFile :: NonEmpty NID -> Set (Edge Text) -> UserError
+targetsWithoutFile missing lastEdges =
+  TargetsWithoutFile $
+    missing <&> \target -> (target, mapMaybe (leadingTo target) (toList lastEdges))
+  where
+    -- the other node of the edge records it: that is how the path got here
+    leadingTo target e
+      | e.sink == target = Just (EdgeToMissingNode OutgoingRecord e)
+      | e.source == target = Just (EdgeToMissingNode IncomingRecord e)
+      | otherwise = Nothing
+
+spec_targetsWithoutFile :: Spec
+spec_targetsWithoutFile = do
+  let n = smallNID
+      b = Edge (n 0) "b" (n 2)
+  it "names the edge that leads to a target without a file, and its file" $
+    lines
+      ( show $
+          targetsWithoutFile
+            (n 2 :| [])
+            (setFromList [b, Edge (n 0) "a" (n 1)])
+      )
+      `shouldBe` [ "at did nothing: a target has no node file (damaged-graph)",
+                   "- the edge @000000000000 -\"b\"-> @000000000002 is among"
+                     <> " the outgoing edges in 000000000000.json but there is"
+                     <> " no 000000000002.json",
+                   "fsck lists all such damage; fix repairs it, or says why it"
+                     <> " can't"
+                 ]
+  it "names an edge that was followed backwards by the file that records it" $
+    lines
+      (show (targetsWithoutFile (n 2 :| []) (singletonSet (Edge (n 2) "d" (n 1)))))
+      `shouldBe` [ "at did nothing: a target has no node file (damaged-graph)",
+                   "- the edge @000000000002 -\"d\"-> @000000000001 is among"
+                     <> " the incoming edges in 000000000001.json but there is"
+                     <> " no 000000000002.json",
+                   "fsck lists all such damage; fix repairs it, or says why it"
+                     <> " can't"
+                 ]
+  it "says which targets no edge led to" $
+    lines (show (targetsWithoutFile (n 2 :| [n 3]) (singletonSet b)))
+      `shouldBe` [ "at did nothing: targets have no node file (damaged-graph)",
+                   "- the edge @000000000000 -\"b\"-> @000000000002 is among"
+                     <> " the outgoing edges in 000000000000.json but there is"
+                     <> " no 000000000002.json",
+                   "- there is no 000000000003.json, the file of the target"
+                     <> " @000000000003",
+                   "fsck lists all such damage; fix repairs it, or says why it"
+                     <> " can't"
+                 ]
+  it "is a refusal for the damage that it names, like that of a change" do
+    -- so that a line that read past that damage doesn't warn of it as well
+    let refusal = targetsWithoutFile (n 2 :| [n 3]) (singletonSet b)
+        damage = singletonSet (EdgeToMissingNode OutgoingRecord b)
+    damageRefusedBy refusal `shouldBe` damage
+    -- as the error of a later command of a line, which says so in a note
+    damageRefusedBy (refusal <> OtherError "Note: the command before…")
+      `shouldBe` damage
+    damageRefusedBy
+      (DamagedGraph (EdgeToMissingNode OutgoingRecord b :| []) <> OtherError "Note")
+      `shouldBe` damage
+    damageRefusedBy (OtherError "another failure") `shouldBe` mempty
+
 runCommand' ::
   ( CommandEffects effs,
     Members [State ImportedUrls, State EmptyTargets] effs
@@ -494,7 +614,12 @@ runCommand' = \case
     p <- expandDirectives p0
     nid <- currentLocation
     let err = singleErr "cd"
-    nid' <- the' err =<< editing (Paths.queryTargets nid p)
+    nid' <- editing do
+      target <- the' err =<< Paths.queryTargets nid p
+      -- every later command would start from a node that isn't there; an
+      -- edge can only lead to one in a damaged graph
+      _ <- subsumeUserError @Missing (getNodeSem @Text target)
+      pure target
     changeLocation nid'
   NodeId -> currentLocation >>= echo . show
   Dualize -> dualize
@@ -535,6 +660,16 @@ runCommand' = \case
     nid <- currentLocation
     editing do
       nids <- Paths.queryTargets nid p
+      -- like mg, which never merges one away; nothing is deleted then
+      unless (null (systemNodesAmong (toList nids))) . throwError $
+        systemNodeError
+          "rmnf cannot delete a system node"
+          "stay in the graph"
+          ( "the path of rmnf ("
+              ++ tshow p0
+              ++ ") resolves to "
+              ++ intercalate ", " (map tshow (systemNodesAmong (toList nids)))
+          )
       forM_ nids $ deleteNode @Text
   Tag p0 q0 -> do
     p <- expandConstruction p0
@@ -560,6 +695,20 @@ runCommand' = \case
     p <- expandDirectives p0
     nid <- currentLocation
     locations <- editing (Paths.queryTargets nid p)
+    -- A command run at a node that has no file would mostly do nothing and
+    -- say nothing. Only whether there is anything under the file's name is
+    -- looked at (what is there may not be usable as a node, which the command
+    -- finds out when it reads it): reading the targets here as well would
+    -- read each of them twice.
+    graphDir <- getGraphFilePath
+    missing <- filterM (fmap not . doesNodeExist graphDir) (toList locations)
+    for_ (NonEmpty.nonEmpty missing) \missing' -> do
+      -- the path is resolved once more for the edges that led to them; this
+      -- only happens on a damaged graph
+      lastEdges <-
+        editing $
+          foldMap (fold . routeLastEdges) <$> Paths.resolveCommandQuery nid p
+      throwError (targetsWithoutFile missing' lastEdges)
     -- c's directives are expanded per target, relative to that target,
     -- and each target starts from the same history; at leaves the history
     -- (and so the location) as it found it
@@ -641,6 +790,12 @@ runCommand' = \case
     editing (Paths.relabelPath False parents nid p q)
   Edit -> do
     n <- subsumeUserError @Missing currentLocation
+    -- The editor writes the data file itself, but this is a change of the
+    -- node's data like any other: it is refused, before the editor starts,
+    -- if the graph is damaged where the node is read.
+    editing do
+      _ <- getNodeMetadata n
+      editingDataOutside n
     path <- getGraphFilePath
     invokeEditor [legacyNodeDataFile path n]
   Back n -> do

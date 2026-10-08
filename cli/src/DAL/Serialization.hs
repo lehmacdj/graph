@@ -111,11 +111,19 @@ deserializeNode base nid = do
   d <- liftIO $ tryGetBinaryData base nid
   pure $ fmap (#augmentation .~ d) node
 
+-- | Whether there is anything under the name of the node's file. That may be
+-- something that can't be used as a node (a directory of that name, a
+-- symbolic link to a file that isn't there), which whoever reads the node
+-- finds out: it is not a node that has no file.
 doesNodeExist :: (MonadIO m) => FilePath -> NID -> m Bool
 doesNodeExist base nid = liftIO $ do
   whenM (not <$> doesDirectoryExist base) $
     error "doesNodeExist: graph directory doesn't exist"
-  doesFileExist (metadataFile base nid)
+  let file = metadataFile base nid
+  -- the first one follows a link, the second one doesn't
+  doesPathExist file >>= \case
+    True -> pure True
+    False -> pathIsSymbolicLink file `catch` \(_ :: IOError) -> pure False
 
 -- | initializes graph with a single node with id 0 with no edges, if the
 -- directory doesn't exist, this creates one

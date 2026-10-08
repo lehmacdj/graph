@@ -5,7 +5,9 @@ raw 0 "{not json"
 ls
 ==========stdout==========
 ==========stderr==========
-failed to deserialize JSON for @000000000000: Error in $: object key > 34: Failed reading: satisfy
+this change was not written: the graph is damaged where it applies (damaged-graph)
+- 000000000000.json cannot be read as a node: Error in $: object key > 34: Failed reading: satisfy
+fsck lists all such damage; fix repairs it, or says why it can't
 ==========exit-code==========
 1
 ==========graph-dump==========

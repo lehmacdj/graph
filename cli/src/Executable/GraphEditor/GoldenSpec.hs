@@ -208,10 +208,7 @@ runGraphEditor test@GoldenTest {..} =
             )
             & setStdin
               (byteStringInput (if oneShot then "" else fromStrict input))
-            & setEnv
-              ( ("XDG_DATA_HOME", dataHome)
-                  : filter ((/= "XDG_DATA_HOME") . fst) environment
-              )
+            & setEnv (geEnvironment dataHome environment)
       graphDump' <- dumpGraph tmpGraph
       dataDump' <- for baseGraph \_ -> do
         files <-
@@ -230,6 +227,14 @@ runGraphEditor test@GoldenTest {..} =
             graphDump = toStrict $ builderToLazy graphDump',
             dataDump = dataDump'
           }
+
+-- | The environment that a test runs @ge@ in, given the one of the tests: a
+-- data directory of its own, and an editor that does nothing and succeeds
+-- instead of whatever the user has (@vi@ would start it).
+geEnvironment :: FilePath -> [(String, String)] -> [(String, String)]
+geEnvironment dataHome environment =
+  [("XDG_DATA_HOME", dataHome), ("EDITOR", "true")]
+    <> filter ((`notElem` ["XDG_DATA_HOME", "EDITOR"]) . fst) environment
 
 data BaseGraphLine
   = BaseEdge (Edge Text)

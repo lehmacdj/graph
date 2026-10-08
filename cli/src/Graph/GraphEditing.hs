@@ -12,6 +12,9 @@ import DAL.FileSystemOperations.Data
 import DAL.FileSystemOperations.Metadata
 import DAL.FileSystemOperations.MetadataWriteDiff
 import Effectful.Provider.List
+import Effectful.State.Dynamic (State)
+import Error.UserError
+import Error.Warn
 import Graph.Dualizeable
 import Graph.GraphDataEditing
 import Graph.GraphMetadataEditing
@@ -44,12 +47,17 @@ deletingDataWithNodes = interpose @GraphMetadataEditing \_ -> \case
 
 -- | Build up every change in memory and then write them to the filesystem
 -- once the action finishes: first the metadata, then the data. If the action
--- or writing the metadata fails, the data is not written.
+-- or writing the metadata fails, the data is not written. A change to data
+-- alone is refused like any other change if the node files that the action
+-- read are damaged.
 runGraphEditingTransactionally ::
   ( Members
       [ GraphMetadataFilesystemOperations,
         GraphMetadataFilesystemOperationsWriteDiff,
-        GraphDataFilesystemOperations
+        GraphDataFilesystemOperations,
+        Warn UserError,
+        State DamageReadPast,
+        Error UserError
       ]
       r
   ) =>
@@ -58,6 +66,7 @@ runGraphEditingTransactionally ::
 runGraphEditingTransactionally =
   runGraphDataEditingTransactionally
     . runGraphMetadataEditingTransactionally
+      (not . null <$> pendingDataChanges)
     . deletingDataWithNodes
 
 -- | Every 'provideList_' is its own transaction, viewing the graph dualized
@@ -67,6 +76,9 @@ runScopedGraphEditingTransactionally ::
       [ GraphMetadataFilesystemOperations,
         GraphMetadataFilesystemOperationsWriteDiff,
         GraphDataFilesystemOperations,
+        Warn UserError,
+        State DamageReadPast,
+        Error UserError,
         Dualizeable
       ]
       r

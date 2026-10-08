@@ -7,10 +7,13 @@ raw 2 "{not json"
 ==========expression==========
 ls
 ==========stdout==========
+[0m[0;1ma[0m[0m [0;34m@000000000001[0m [0m[0m
+[0m[0;1mb[0m[0m [0;34m@000000000002[0m [0m[0m
+[0m[0;1mc[0m[0m [0;34m@000000000003[0m [0m[0m
 ==========stderr==========
-failed to deserialize JSON for @000000000002: Error in $: object key > 34: Failed reading: satisfy
-==========exit-code==========
-1
+warning: the graph is damaged where this command read it (damaged-graph)
+- 000000000002.json cannot be read as a node: Error in $: object key > 34: Failed reading: satisfy
+fsck lists all such damage; fix repairs it, or says why it can't
 ==========graph-dump==========
 @000000000000{out=[@000000000001 via "a", @000000000002 via "b", @000000000003 via "c"], in=[@0daCJjMrQel8 via "origin"]}
 @000000000001{out=[], in=[@000000000000 via "a", @000000000002 via "d"]}
