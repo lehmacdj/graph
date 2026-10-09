@@ -25,6 +25,22 @@ warnString = warn . OtherError . pack
 warnText :: (Warn UserError :> r) => Text -> Eff r ()
 warnText = warn . OtherError
 
+-- | Run what may change the graph in several steps, each a change of its
+-- own that stays once it is made. An interrupt (Ctrl-C, or a signal that
+-- ends the program: 'isInterrupt') is not an error of the command and is
+-- not reported as one, so nothing else would tell the user that it stopped
+-- such a command part way: if one does, this warns of what the first
+-- argument then says was left behind, if anything, and the interrupt goes
+-- on as it was.
+--
+-- What was left behind is what was written, where it was written: see
+-- 'DAL.RawGraph.untoldGraphChanges', which the first argument asks.
+notingWhatInterruptLeaves ::
+  (Members [Warn UserError, IOE] r) => Eff r [Text] -> Eff r a -> Eff r a
+notingWhatInterruptLeaves leftBehind action =
+  action `withException` \e ->
+    when (isInterrupt e) (leftBehind >>= traverse_ warnText)
+
 printWarnings ::
   forall e r a.
   (IOE :> r, Show e) =>

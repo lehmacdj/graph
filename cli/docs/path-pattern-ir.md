@@ -1229,10 +1229,15 @@ seconds of processor time (79 within one second), 107 finish an `ls`
 and 76 an `mk` within 20 seconds, and the others run until the user
 stops them (an unoptimized build, a busy machine).
 
-A command that is compiling can be stopped. At the prompt Ctrl-C brings
-the prompt back (in about a tenth of a second when tried) and nothing
-has been changed, since a command compiles its paths before it writes;
-`ge -e` ends at an interrupt. TAB completion compiles the prefix it
+A command that is compiling can be stopped, and so can the next one:
+any number of them in one session. At the prompt Ctrl-C brings the
+prompt back (in about a tenth of a second when tried) and nothing has
+been changed, since a command compiles its paths before it writes;
+`ge -e` ends at an interrupt, by the signal as an interrupted program
+does, and says nothing of its own. A command that is reading node files
+when the interrupt arrives is stopped in the same way, and is not
+reported as a command that failed. Either way the damage that the line
+had read past is still warned of. TAB completion compiles the prefix it
 completes, lowering `+` as `|` like a query, and cannot be interrupted
 while it does: a prefix that takes long to compile holds the prompt
 until it is done, or until `ge` is killed. A prefix that no command

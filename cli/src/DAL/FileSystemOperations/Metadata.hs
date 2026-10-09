@@ -69,8 +69,13 @@ readNodeMetadata_ shouldCoordinate nid path = withEarlyReturn do
     Left (Just e) -> throwError (UnreadableNodeFile nid e)
   Just <$> decodeNode nid serialized
 
+-- | Each of the functions below that changes a file of the graph does it
+-- as a change of its own ('changingGraphFile'): it is on record once it is
+-- made, and the program does not end in the middle of it. That is done
+-- where the file is changed, inside of what coordinates the access, so
+-- that waiting for the access is no part of it.
 writeNodeMetadata_ ::
-  (Members [IOE, Error UserError] effs) =>
+  (Members [RawGraph, IOE, Error UserError] effs) =>
   Bool ->
   FilePath ->
   Node Text () ->
@@ -78,10 +83,11 @@ writeNodeMetadata_ ::
 writeNodeMetadata_ shouldCoordinate path node = do
   let dto = nodeToDTO node
   let serialized = toStrict $ encodeJSON dto
+  writes <- getGraphWrites
   embedCatchingErrors $
     (if shouldCoordinate then coordinateWriting path False defaultWritingOptions else ($ path)) $
       \path' ->
-        writeFile path' serialized
+        changingGraphFile writes (writeFile path' serialized)
 
 deleteNodeMetadata_ ::
   (Members [RawGraph, IOE, Error UserError] effs) =>
@@ -89,10 +95,11 @@ deleteNodeMetadata_ ::
   FilePath ->
   Eff effs ()
 deleteNodeMetadata_ shouldCoordinate path = do
+  writes <- getGraphWrites
   embedCatchingErrors $
     (if shouldCoordinate then coordinateWriting path False defaultWritingOptions else ($ path)) $
       \path' ->
-        removeFile path'
+        changingGraphFile writes (removeFile path')
 
 -- | The names that the copies kept of the node file with this name get
 -- ('KeepNodeMetadataCopy'), in the order in which they are taken.
@@ -149,13 +156,14 @@ keptNodeFilesOf path = go (keptNodeFileNames path)
       [] -> pure []
 
 keepNodeMetadataCopy_ ::
-  (Members [IOE, Error UserError] effs) =>
+  (Members [RawGraph, IOE, Error UserError] effs) =>
   Bool ->
   FilePath ->
   -- | the name of the copy, in the same directory
   FilePath ->
   Eff effs ()
-keepNodeMetadataCopy_ shouldCoordinate path name =
+keepNodeMetadataCopy_ shouldCoordinate path name = do
+  writes <- getGraphWrites
   embedCatchingErrors $
     (if shouldCoordinate then coordinateReading path False defaultReadingOptions else ($ path)) $
       \path' -> do
@@ -163,7 +171,7 @@ keepNodeMetadataCopy_ shouldCoordinate path name =
         -- copying would replace it
         whenM (isNameTaken destination) . throwIO $
           mkIOError alreadyExistsErrorType "keeping a copy" Nothing (Just destination)
-        copyFile path' destination
+        changingGraphFile writes (copyFile path' destination)
 
 runGraphMetadataFilesystemOperationsIO ::
   (Members [RawGraph, IOE, Error UserError] r) =>
@@ -186,10 +194,12 @@ runGraphMetadataFilesystemOperationsIO useCoordination = interpret \_ -> \case
     keepNodeMetadataCopy_ useCoordination path name
   RemoveKeptNodeMetadata name -> do
     directory <- getGraphFilePath
+    writes <- getGraphWrites
     -- what is there under the name by now may be no copy any more (a
     -- directory, say), or nothing: that stays
     embedCatchingErrors $
-      whenM (isKeptNodeFile (directory </> name)) (removeFile (directory </> name))
+      whenM (isKeptNodeFile (directory </> name)) $
+        changingGraphFile writes (removeFile (directory </> name))
   ListNodeMetadata -> setFromList <$> (getAllNodeIds =<< getGraphFilePath)
   OnlyDescribesWrites -> pure False
 

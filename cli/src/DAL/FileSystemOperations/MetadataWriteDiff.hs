@@ -83,6 +83,7 @@ writeGraphDiff_
     readingPaths <- ifor nodesToRead \nid _ -> getMetadataFile nid <&> (,False)
     let blanketReadingOptions = defaultReadingOptions
         blanketWritingOptions = defaultWritingOptions
+    writes <- getGraphWrites
     withUnliftIORawGraphUserError \(UnliftIO unliftIO) ->
       coordinateAccessing FilesToCoordinate {..} \wrappedReaders wrappedWriters -> do
         let withReading ::
@@ -168,25 +169,28 @@ writeGraphDiff_
                 ]
         for_ (NonEmpty.nonEmpty mismatches) $
           unliftIO . throwError . InconsistentNodeRecords
-        ipooledForConcurrentlyN_ 300 writingPaths \nid _ ->
-          case unwrapEx "a write is planned for nodes we are writing" $
-            plannedWrites ^. at nid of
-            (Just _, Nothing) ->
-              withWriting nid defaultWritingOptions {forDeleting = True} $
-                unliftIO . deleteNodeMetadata'
-            (Nothing, Just node) ->
-              withWriting nid defaultWritingOptions $ \path ->
-                unliftIO $ writeNodeMetadata' path node
-            (Just upToDateNode, Just changedNode)
-              | upToDateNode /= changedNode ->
-                  withWriting nid defaultWritingOptions \path ->
-                    unliftIO $ writeNodeMetadata' path changedNode
-              | otherwise ->
-                  -- node didn't change
-                  pure ()
-            (Nothing, Nothing) ->
-              -- node never existed and still doesn't exist
-              pure ()
+        -- The files of the change are written as one: the program does not
+        -- end between two of them ('noMoreGraphChanges').
+        changingGraphFiles writes $
+          ipooledForConcurrentlyN_ 300 writingPaths \nid _ ->
+            case unwrapEx "a write is planned for nodes we are writing" $
+              plannedWrites ^. at nid of
+              (Just _, Nothing) ->
+                withWriting nid defaultWritingOptions {forDeleting = True} $
+                  unliftIO . deleteNodeMetadata'
+              (Nothing, Just node) ->
+                withWriting nid defaultWritingOptions $ \path ->
+                  unliftIO $ writeNodeMetadata' path node
+              (Just upToDateNode, Just changedNode)
+                | upToDateNode /= changedNode ->
+                    withWriting nid defaultWritingOptions \path ->
+                      unliftIO $ writeNodeMetadata' path changedNode
+                | otherwise ->
+                    -- node didn't change
+                    pure ()
+              (Nothing, Nothing) ->
+                -- node never existed and still doesn't exist
+                pure ()
         -- What fix kept of the file of a node that is deleted goes with the
         -- node. This comes after the change is written, and doesn't undo it:
         -- a kept file that can't be removed is left over, which whoever
@@ -249,12 +253,16 @@ writingGraphDiffsRemovingKeptWith ::
   Eff effs a
 writingGraphDiffsRemovingKeptWith removeKeptFile' = interpret \_ -> \case
   WriteGraphDiff asLoaded changes changedNodes others -> do
+    -- Each file that is changed is put on record here: what changes it is
+    -- run with a record of its own ('withUnliftIORawGraphUserError'), and
+    -- the files of the change are written as one.
+    writes <- getGraphWrites
     (written, leftOver) <-
       writeGraphDiff_
         (readNodeMetadata_ False)
-        (writeNodeMetadata_ False)
-        (deleteNodeMetadata_ False)
-        removeKeptFile'
+        (\path -> countingGraphFile writes . writeNodeMetadata_ False path)
+        (countingGraphFile writes . deleteNodeMetadata_ False)
+        (countingGraphFile writes . removeKeptFile')
         asLoaded
         changes
         changedNodes

@@ -39,6 +39,7 @@ import Data.List.NonEmpty qualified as NonEmpty
 import Data.Map.Strict qualified as Map
 import Effect.IOWrapper.Echo
 import Error.UserError
+import Error.Warn
 import GHC.IO.Exception (IOErrorType (InappropriateType), IOException (ioe_type))
 import Graph.Fsck
 import Models.Command (FixMode (..))
@@ -349,7 +350,8 @@ counted n thing = show n <> " " <> thing <> "s"
 fix ::
   ( Members
       [RawGraph, IOE, Echo, Error UserError, GraphMetadataFilesystemOperations]
-      es
+      es,
+    Warn UserError :> es
   ) =>
   FixMode ->
   Eff es ()
@@ -415,7 +417,8 @@ namesTaken directory files =
 repair ::
   ( Members
       [RawGraph, IOE, Echo, Error UserError, GraphMetadataFilesystemOperations]
-      es
+      es,
+    Warn UserError :> es
   ) =>
   FixMode ->
   GraphScan ->
@@ -541,32 +544,38 @@ repair mode scan = do
     -- is kept, so no node is ever without its file: if the copy can't be
     -- written the file is as it was, and if the new file can't be, what the
     -- old one held is in the copy.
-    let stopped what why =
-          throwText $
-            "fix stopped part way: "
-              <> what
-              <> ": "
-              <> why
-              <> ". What was written before it stays; run fix again for the"
-              <> " rest."
+    let stoppedPartWay why =
+          "fix stopped part way: "
+            <> why
+            <> ". What was written before it stays; run fix again for the"
+            <> " rest."
+        stopped what why = throwText (stoppedPartWay (what <> ": " <> why))
         inWords doing = \case
           IOFail io -> pack (fileFailure doing io)
           e -> tshow e
-    for_ (mapToList plan.writes) \(nid, node) -> do
-      let file = pack (nodeFileName nid)
-          copy = pack <$> lookup nid plan.setAside
-      for_ (lookup nid plan.setAside) \name ->
-        keepNodeMetadataCopy nid name `catchError` \_ e ->
+    -- An interrupt is no error: it gets the note that an error gets, when a
+    -- file has been written, copied or removed by then (also the one that
+    -- was being written when the interrupt arrived).
+    start <- graphFilesChanged
+    let interruptedPartWay =
+          untoldGraphChanges start <&> \changed ->
+            [stoppedPartWay "it was interrupted" | changed > 0]
+    notingWhatInterruptLeaves interruptedPartWay do
+      for_ (mapToList plan.writes) \(nid, node) -> do
+        let file = pack (nodeFileName nid)
+            copy = pack <$> lookup nid plan.setAside
+        for_ (lookup nid plan.setAside) \name ->
+          keepNodeMetadataCopy nid name `catchError` \_ e ->
+            stopped
+              (pack name <> ", the copy to keep of " <> file <> ", could not be written")
+              (inWords "write" e <> "; " <> file <> " is as it was")
+        writeNodeMetadata node `catchError` \_ e ->
           stopped
-            (pack name <> ", the copy to keep of " <> file <> ", could not be written")
-            (inWords "write" e <> "; " <> file <> " is as it was")
-      writeNodeMetadata node `catchError` \_ e ->
-        stopped
-          (file <> " could not be written")
-          (inWords "write" e <> maybe "" ("; what it held is kept in " <>) copy)
-    for_ (concat (toList plan.removals)) \name ->
-      removeKeptNodeMetadata name `catchError` \_ e ->
-        stopped (pack name <> " could not be removed") (inWords "remove" e)
+            (file <> " could not be written")
+            (inWords "write" e <> maybe "" ("; what it held is kept in " <>) copy)
+      for_ (concat (toList plan.removals)) \name ->
+        removeKeptNodeMetadata name `catchError` \_ e ->
+          stopped (pack name <> " could not be removed") (inWords "remove" e)
   for_ (NonEmpty.nonEmpty plan.notRepaired) $
     throwError . DamageNotRepaired . length
   where

@@ -37,6 +37,8 @@ library
       base >=4.7 && <5
     , effectful-core
     , effectful-th
+    , exceptions
     , haskeline
+    , stm
     , unix
   default-language: GHC2021

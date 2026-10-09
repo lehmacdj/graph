@@ -628,7 +628,27 @@ interpretCommand open command =
   warningOfDamageReadPast
     . evalStateLocal (ImportedUrls mempty)
     . evalStateLocal (ShownWarnings mempty)
-    $ runCommand (raise . raise . open) command
+    $ do
+      -- An interrupt is no error and says nothing by itself: when it stops
+      -- a line that has changed files of the graph, the user is told so,
+      -- unless a part of the line has said it more exactly (at, a ; line,
+      -- fix).
+      start <- graphFilesChanged
+      notingWhatInterruptLeaves
+        ( untoldGraphChanges start <&> \untold ->
+            [interruptedAfterChanging | untold > 0]
+        )
+        (runCommand (raise . raise . open) command)
+
+-- | What an interrupted command line says when files of the graph were
+-- changed before the interrupt stopped it. Whether they were is known from
+-- where they are changed ('untoldGraphChanges'), not from what the command
+-- is: a command that only reads says nothing, and one that reads a URL has
+-- imported it.
+interruptedAfterChanging :: Text
+interruptedAfterChanging =
+  "Note: the command that was interrupted had already changed the graph;"
+    <> " what it did stays."
 
 -- | What the commands ask of whoever opens the graph for them
 data Opening
@@ -1009,20 +1029,53 @@ runCommand' open = \case
     -- and each target starts from the same history; at leaves the history
     -- (and so the location) as it found it
     history <- get @History
-    forM_ (zip (inits (toList locations)) (toList locations)) $ \(done, nid') -> do
-      result <- tryError @UserError $ local @NID (const nid') (runCommand open c)
-      put history
-      case result of
-        Right () -> pure ()
-        -- each target is a change of its own: what failed here was not
-        -- written, what was done at the targets before it stays
-        Left (_, e)
-          | null done -> throwError e
-          | otherwise ->
-              throwError . (e <>) . OtherError $
-                "Note: at had already run the command at "
-                  ++ intercalate ", " (map tshow done)
-                  ++ "; what it did there stays."
+    let alreadyRan done =
+          "Note: at had already run the command at "
+            ++ intercalate ", " (map tshow done)
+            ++ "; what it did there stays."
+    -- The targets that the command was started at, the last one first,
+    -- each with the number of files of the graph that had been changed when
+    -- it was.
+    started <- newIORef []
+    start <- graphFilesChanged
+    let -- An interrupt is no error, and it can stop the command at a target
+        -- where it has written already: the note names every target at
+        -- which something was written, that one too. (What a target
+        -- changed is what was changed until the next one was started.)
+        changedWhenInterrupted = do
+          now <- graphFilesChanged
+          _ <- untoldGraphChanges start
+          -- a target that an at in the command has named already is not
+          -- named again: the changes up to this count are not named
+          unnamedUpTo <- (start +) <$> unnamedAtTargetChanges start
+          starts <- readIORef started
+          let changedAt =
+                [ nid'
+                | ((nid', since), upTo) <- zip starts (now : map snd starts),
+                  min upTo unnamedUpTo > since
+                ]
+          pure
+            [ "Note: at had already changed the graph at "
+                ++ intercalate ", " (map tshow (reverse changedAt))
+                ++ "; what it did there stays."
+            | not (null changedAt)
+            ]
+    notingWhatInterruptLeaves changedWhenInterrupted $
+      forM_ (zip (inits (toList locations)) (toList locations)) $ \(done, nid') -> do
+        since <- graphFilesChanged
+        modifyIORef started ((nid', since) :)
+        -- also when the command is interrupted: the REPL goes on where it
+        -- was
+        result <-
+          tryError @UserError (local @NID (const nid') (runCommand open c))
+            `finally` put history
+        case result of
+          Right () -> pure ()
+          -- each target is a change of its own: what failed here was not
+          -- written, what was done at the targets before it stays
+          Left (_, e)
+            | null done -> throwError e
+            | otherwise -> throwError (e <> OtherError (alreadyRan done))
   Dedup t -> do
     nid <- currentLocation
     editing do
@@ -1100,7 +1153,11 @@ runCommand' open = \case
       _ <- getNodeMetadata n
       editingDataOutside n
     path <- getGraphFilePath
-    invokeEditor [legacyNodeDataFile path n]
+    writes <- getGraphWrites
+    -- counted as a change when the editor has changed the file, which an
+    -- interrupted line then says, as for any other change
+    let file = legacyNodeDataFile path n
+    changingGraphFileOutside writes file (invokeEditor [file])
   Back n -> do
     history <- get @History
     let (_, history') = backInTime n history
@@ -1116,26 +1173,42 @@ runCommand' open = \case
     -- exit code: it doesn't stop the line (fsck ; fix must reach fix), and
     -- is kept for the end of it
     reports <- newIORef []
-    forM_ (zip [0 :: Int ..] (toList ps)) $ \(before, command) ->
-      -- each command is a change of its own: what failed was not written,
-      -- what the commands before it did stays
-      runCommand open command `catchError` \_ e ->
-        if isDamageReport e
-          then modifyIORef reports (e :)
-          else do
-            earlier <- reverse <$> readIORef reports
-            throwError . sconcat . NonEmpty.prependList earlier . singleton $
-              if before == 0
-                then e
-                else
-                  e
-                    <> OtherError
-                      ( "Note: the "
-                          ++ (if before == 1 then "command" else tshow before ++ " commands")
-                          ++ " before this one in the line had already run; what "
-                          ++ (if before == 1 then "it" else "they")
-                          ++ " did stays."
-                      )
+    let alreadyRan before =
+          "Note: the "
+            ++ (if before == 1 then "command" else tshow before ++ " commands")
+            ++ " before this one in the line had already run; what "
+            ++ (if before == 1 then "it" else "they")
+            ++ " did stays."
+    -- how many commands of the line have run, and how many files of the
+    -- graph had been changed when the one that is running began
+    start <- graphFilesChanged
+    running <- newIORef (0 :: Int, start)
+    let -- An interrupt is no error. It gets a note when files were changed:
+        -- by the command that it stopped, which can have written already
+        -- (unless that command has said so itself), and by the commands
+        -- before it.
+        changedWhenInterrupted = do
+          (before, since) <- readIORef running
+          byThisOne <- untoldGraphChanges since
+          byEarlier <- untoldGraphChanges start
+          pure $
+            [interruptedAfterChanging | byThisOne > 0]
+              <> [alreadyRan before | byEarlier > 0]
+    notingWhatInterruptLeaves changedWhenInterrupted $
+      forM_ (zip [0 :: Int ..] (toList ps)) $ \(before, command) -> do
+        since <- graphFilesChanged
+        writeIORef running (before, since)
+        -- each command is a change of its own: what failed was not written,
+        -- what the commands before it did stays
+        runCommand open command `catchError` \_ e ->
+          if isDamageReport e
+            then modifyIORef reports (e :)
+            else do
+              earlier <- reverse <$> readIORef reports
+              throwError . sconcat . NonEmpty.prependList earlier . singleton $
+                if before == 0
+                  then e
+                  else e <> OtherError (alreadyRan before)
     readIORef reports
       >>= traverse_ (throwError . sconcat) . NonEmpty.nonEmpty . reverse
   Preview p -> do

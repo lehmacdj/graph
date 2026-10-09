@@ -1,5 +1,7 @@
 module Graph.FixSpec where
 
+import Control.Concurrent (myThreadId)
+import Control.Exception qualified as E
 import DAL.DTO (nodeToDTO)
 import DAL.DirectoryFormat (metadataFile)
 import DAL.FileSystemOperations.Metadata
@@ -9,6 +11,7 @@ import Data.ByteString qualified as B
 import Data.Map.Strict qualified as Map
 import Effect.IOWrapper.Echo
 import Error.UserError
+import Error.Warn
 import Graph.Fix
 import Graph.Fsck
 import Graph.FsckSpec (allRecords, genPlant, genUndamaged, plant)
@@ -365,6 +368,7 @@ runFix dry mode dir = do
       . runErrorNoCallStack @UserError
       . runRawGraphWithPath dir
       . interpret (\_ (Echo line) -> liftIO (modifyIORef printed (line :)))
+      . ignoreWarnings @UserError
       . ( if dry
             then runGraphMetadataFilesystemOperationsDryRun True
             else runGraphMetadataFilesystemOperationsIO True
@@ -432,6 +436,7 @@ spec_fix = do
           . runErrorNoCallStack @UserError
           . runRawGraphWithPath dir
           . interpret (\_ (Echo _) -> pure ())
+          . ignoreWarnings @UserError
           . runGraphMetadataFilesystemOperationsIO True
           . interpose @GraphMetadataFilesystemOperations
             ( \_ -> \case
@@ -448,6 +453,36 @@ spec_fix = do
                 OnlyDescribesWrites -> onlyDescribesWrites
             )
           $ fix ApplyRepairs
+      -- fix, where an interrupt arrives in place of the write of one node's
+      -- file: what it warned of, and whether the interrupt went on
+      fixInterruptedWriting :: NID -> FilePath -> IO ([String], Bool)
+      fixInterruptedWriting interruptedAt dir = do
+        warned <- newIORef []
+        outcome <-
+          E.try @E.AsyncException
+            . runEff
+            . runErrorNoCallStack @UserError
+            . runRawGraphWithPath dir
+            . interpret (\_ (Echo _) -> pure ())
+            . interpret (\_ (Warn e) -> modifyIORef warned (show @UserError e :))
+            . runGraphMetadataFilesystemOperationsIO True
+            . interpose @GraphMetadataFilesystemOperations
+              ( \_ -> \case
+                  WriteNodeMetadata n
+                    -- as an interrupt arrives: thrown at the thread
+                    | n.nid == interruptedAt ->
+                        liftIO (myThreadId >>= (`E.throwTo` E.UserInterrupt))
+                    | otherwise -> writeNodeMetadata n
+                  ReadNodeMetadata nid -> readNodeMetadata nid
+                  DeleteNodeMetadata nid -> deleteNodeMetadata nid
+                  KeepNodeMetadataCopy nid name -> keepNodeMetadataCopy nid name
+                  RemoveKeptNodeMetadata name -> removeKeptNodeMetadata name
+                  ListNodeMetadata -> listNodeMetadata
+                  OnlyDescribesWrites -> onlyDescribesWrites
+              )
+            $ fix ApplyRepairs
+        warnings <- reverse <$> readIORef warned
+        pure (warnings, either (== E.UserInterrupt) (const False) outcome)
       stopped what after result =
         first show result
           `shouldBe` Left
@@ -547,6 +582,7 @@ spec_fix = do
           . runErrorNoCallStack @UserError
           . runRawGraphWithPath dir
           . interpret (\_ (Echo _) -> pure ())
+          . ignoreWarnings @UserError
           . runGraphMetadataFilesystemOperationsIO True
           $ repair ApplyRepairs scan
       first show result
@@ -571,6 +607,7 @@ spec_fix = do
           . runErrorNoCallStack @UserError
           . runRawGraphWithPath dir
           . interpret (\_ (Echo _) -> pure ())
+          . ignoreWarnings @UserError
           . runGraphMetadataFilesystemOperationsIO True
           $ repair ApplyRepairs scan
       first show result
@@ -607,6 +644,26 @@ spec_fix = do
       succeeds result
       scan <- scanned dir
       toList (scanDamage scan.files) `shouldBe` []
+  it "says that it stopped part way when an interrupt stops it there" $
+    withEveryKind \dir -> do
+      -- 0 and 1 are written before 2
+      fixInterruptedWriting n2 dir
+        `shouldReturn` ( [ "fix stopped part way: it was interrupted. What was"
+                             <> " written before it stays; run fix again for the"
+                             <> " rest."
+                         ],
+                         True
+                       )
+      (_, result) <- runFix False ApplyRepairs dir
+      succeeds result
+      scan <- scanned dir
+      toList (scanDamage scan.files) `shouldBe` []
+  it "says nothing when an interrupt stops it before it has written anything" $
+    withEveryKind \dir -> do
+      before <- directoryContents dir
+      -- the file of the origin is the first that it writes
+      fixInterruptedWriting nilNID dir `shouldReturn` ([], True)
+      directoryContents dir `shouldReturn` before
   it "leaves a file that it can't read as it is if the copy of it can't be written" $
     withEveryKind \dir -> do
       fixFailingToWrite (Left n3) dir
@@ -730,6 +787,7 @@ spec_fix = do
           . runErrorNoCallStack @UserError
           . runRawGraphWithPath dir
           . interpret (\_ (Echo _) -> pure ())
+          . ignoreWarnings @UserError
           . runGraphMetadataFilesystemOperationsIO True
           $ repair ApplyRepairs scan
       first show result
@@ -780,6 +838,7 @@ spec_fix = do
               . runErrorNoCallStack @UserError
               . runRawGraphWithPath dir
               . interpret (\_ (Echo _) -> pure ())
+              . ignoreWarnings @UserError
               . runGraphMetadataFilesystemOperationsIO True
               $ repair mode scan
       listed <- repairing ListRepairs
@@ -807,6 +866,7 @@ spec_fix = do
           . runErrorNoCallStack @UserError
           . runRawGraphWithPath dir
           . interpret (\_ (Echo _) -> pure ())
+          . ignoreWarnings @UserError
           . runGraphMetadataFilesystemOperationsIO True
           $ repair ApplyRepairs scan
       first show result

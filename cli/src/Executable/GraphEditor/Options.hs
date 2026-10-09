@@ -15,6 +15,14 @@ data Options = Options
     createNew :: Bool,
     testOnlyNidGenerationSeed :: Maybe Int,
     testOnlyMonotonicIncreasingDeterministicTime :: Bool,
+    -- | for how long each part of the end at SIGTERM or SIGHUP may take, in
+    -- microseconds, instead of 'endingAllowance'
+    testOnlyEndingAllowance :: Maybe Int,
+    -- | whether SIGCHLD is ignored, so that the system reaps the processes
+    -- that ge starts: the stop of one ('stopProcess') then fails, and a wait
+    -- for the exit status of one that ends by itself never returns (only for
+    -- a test whose editor is stopped at an interrupt)
+    testOnlyChildrenReapedBySystem :: Bool,
     dryRun :: Bool
   }
   deriving (Show, Generic)
@@ -48,6 +56,20 @@ optionsP =
     <*> switch
       ( long "test-only-monotonic-increasing-deterministic-time"
           <> help "use a deterministic time that increases monotonically"
+          <> internal
+      )
+    <*> optional
+      ( option
+          auto
+          ( long "test-only-ending-allowance"
+              <> help "for how long each part of the end at SIGTERM or SIGHUP may take, in microseconds"
+              <> metavar "<microseconds>"
+              <> internal
+          )
+      )
+    <*> switch
+      ( long "test-only-children-reaped-by-the-system"
+          <> help "ignore SIGCHLD, so that the system reaps the processes that ge starts: stopping one fails, and waiting for one that ends by itself never returns"
           <> internal
       )
     <*> switch

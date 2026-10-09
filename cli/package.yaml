@@ -194,6 +194,8 @@ executables:
   ge:
     main:                Main.hs
     source-dirs:         app/ge
+    c-sources:
+    - app/ge/standard-descriptors.c
     ghc-options:
     - -threaded
     - -rtsopts

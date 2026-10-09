@@ -141,6 +141,7 @@ library
       MyPrelude.URI
       MyPrelude.Vary
       Spec
+      System.ControllingTerminal
       System.Directory.Clone
       System.FileCoordination
       System.IO.Term.BinarySerialize
@@ -371,6 +372,8 @@ executable ge
       ViewPatterns
   ghc-options: -Wall -fplugin=Effectful.Plugin -flate-specialise -fspecialise-aggressively -threaded -rtsopts -with-rtsopts=-N
   cpp-options: -DDEBUG
+  c-sources:
+      app/ge/standard-descriptors.c
   build-depends:
       Glob
     , QuickCheck

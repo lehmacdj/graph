@@ -40,10 +40,12 @@ writeNodeData_ ::
   Eff effs ()
 writeNodeData_ nid extension rawData = do
   path <- getNodeDataFile nid extension
+  writes <- getGraphWrites
+  -- a change of its own, on record once it is made: see 'writeNodeMetadata_'
   embedCatchingErrors $
     coordinateWriting path False defaultWritingOptions $
       \path' ->
-        writeFile path' rawData
+        changingGraphFile writes (writeFile path' rawData)
 
 deleteNodeData_ ::
   (Members [RawGraph, IOE, Error UserError] effs) =>
@@ -53,9 +55,10 @@ deleteNodeData_ ::
   Eff effs ()
 deleteNodeData_ nid extension = do
   path <- getNodeDataFile nid extension
-  -- a node without data has nothing to delete
+  writes <- getGraphWrites
+  -- a node without data has nothing to delete, and then nothing is changed
   let removeIfPresent path' =
-        removeFile path' `catch` \e ->
+        changingGraphFile writes (removeFile path') `catch` \e ->
           unless (isDoesNotExistError e) (throwIO e)
   embedCatchingErrors $
     coordinateWriting

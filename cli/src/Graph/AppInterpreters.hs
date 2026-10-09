@@ -40,7 +40,9 @@ data Env = Env
     randomGen :: IORef StdGen,
     history :: IORef History,
     isDualized :: IORef IsDual,
-    replSettings :: H.Settings IO
+    replSettings :: H.Settings IO,
+    -- | what is kept of the changes made to the graph's files
+    graphWrites :: GraphWrites
   }
   deriving (Generic)
 
@@ -56,6 +58,7 @@ initEnv graphDir nidGenerator _replSettings =
     <*> newIORef (History [] nilNID [])
     <*> newIORef (IsDual False)
     <*> pure _replSettings
+    <*> newGraphWrites
 
 printingErrorsAndWarnings :: ErrorHandlingBehavior ()
 printingErrorsAndWarnings = printWarnings >>> printErrors
@@ -199,6 +202,7 @@ runRawGraphFromEnv ::
   Eff (RawGraph : r) ~> Eff r
 runRawGraphFromEnv = interpret \_ -> \case
   GetGraphFilePath -> liftIO . readIORef . view #filePath =<< input @Env
+  GetGraphWrites -> view #graphWrites <$> input @Env
 
 type FinalEffects =
   [ Readline,
