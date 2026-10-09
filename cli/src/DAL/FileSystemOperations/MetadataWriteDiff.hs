@@ -305,9 +305,8 @@ runGraphMetadataFilesystemOperationsWriteDiffDryRun = interpret \_ -> \case
   WriteGraphDiff asLoaded changes changedNodes others -> do
     collected <- newIORef []
     -- A line is worked out in full where it is asked for, not when it is
-    -- printed: the path that a callback is given is good only while the
-    -- callback runs. (It is read, when it is first looked at, from memory
-    -- that file coordination frees afterwards: 'filePathFromNSURL'.)
+    -- printed: nothing that a callback is given is held on to once it has
+    -- returned, and printing has nothing left to work out.
     let collect :: (MonadIO m) => WouldDo -> FilePath -> Text -> m ()
         collect wouldDo path line = liftIO do
           said <- (wouldDo,,) <$> evaluate (force path) <*> evaluate (force line)

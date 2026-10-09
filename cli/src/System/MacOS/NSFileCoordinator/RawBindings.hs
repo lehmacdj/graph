@@ -9,7 +9,7 @@ module System.MacOS.NSFileCoordinator.RawBindings
   )
 where
 
-import Data.ByteString.Unsafe qualified as ByteString
+import Data.ByteString qualified as ByteString
 import Foreign.C.String
 import Foreign.C.Types
 import Foreign.Ptr
@@ -109,10 +109,26 @@ nsError_init domain code =
   }
   |]
 
+-- | Runs the action in an autorelease pool of its own, for the tests: what
+-- is autoreleased while it runs is freed when it returns. (The action is
+-- called back in the operating system thread that the pool belongs to.)
+inAutoreleasePool :: IO () -> IO ()
+inAutoreleasePool action =
+  [C.block| void { @autoreleasepool { $fun:(void (*action)())(); } } |]
+
+-- | The text of a string, copied out of it: it is good for as long as it is
+-- kept, whatever becomes of the string.
+--
+-- @UTF8String@ gives a buffer that is freed with the string, or with the
+-- autorelease pool that it was made in, or when the thread of that pool
+-- ends. So its bytes are copied and decoded before this returns: a text
+-- that is decoded only when it is first looked at (a path that the body of
+-- a coordinated access keeps, the description of an error that is shown
+-- later) reads freed memory then.
 packNSString :: Ptr NSString -> IO Text
 packNSString nsString = do
   cString <- [C.exp| const char *{ [$(NSString *nsString) UTF8String] } |]
-  decodeUtf8 <$> ByteString.unsafePackCString cString
+  evaluate . decodeUtf8 =<< ByteString.packCString cString
 
 -- | Returns an owned (+1) array; the caller must release it.
 nsArray_initWithObjects :: Ptr C.Id -> CUInt -> IO (Ptr NSArray)

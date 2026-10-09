@@ -23,6 +23,7 @@ module System.FileCoordination
     NullResultException (..),
     NSErrorException (..),
     spec_coordinatedBodyThrows,
+    spec_coordinatedPathKept,
     spec_peekNSError,
   )
 where
@@ -182,6 +183,16 @@ accessorResult (AccessorResult ref) =
     Nothing -> throwIO NullResultException
     Just (Left e) -> throwIO e
     Just (Right result) -> pure result
+
+-- | Runs the action in an autorelease pool of its own, for the tests: the
+-- Objective-C objects that it autoreleases are freed before its result is
+-- returned, as they are sooner or later wherever it runs (when a pool
+-- around it is left, or when its operating system thread ends).
+inOwnAutoreleasePool :: IO a -> IO a
+inOwnAutoreleasePool action = do
+  result <- newAccessorResult
+  inAutoreleasePool (runAccessorBody result action)
+  accessorResult result
 
 coordinateReading' ::
   Ptr NSFileCoordinator ->
@@ -415,9 +426,80 @@ spec_peekNSError = do
     Just e <- peeked "NSPOSIXErrorDomain" 13
     (e.domain, e.code) `shouldBe` ("NSPOSIXErrorDomain", 13)
     e.description `shouldNotBe` ""
+  it "gives texts that outlive the error" do
+    -- the error and its strings are freed before the texts are looked at
+    inOwnAutoreleasePool (described "an error domain that only this test has" 257)
+      `shouldReturn` Just
+        ( "an error domain that only this test has",
+          257,
+          "The operation couldn’t be completed. (an error domain that only this test has error 257.)"
+        )
 #else
   pure ()
 #endif
+
+-- | The path that a body is given is the body's to keep: it can be looked at
+-- after the coordinated call has returned, and after the Objective-C string
+-- that it was read from is freed.
+spec_coordinatedPathKept :: Spec
+spec_coordinatedPathKept = do
+  let inTempFile :: (FilePath -> IO ()) -> IO ()
+      inTempFile test = withSystemTempDirectory "coordination" \dir -> do
+        writeFile (dir </> "file") "content"
+        test (dir </> "file")
+      -- the body returns its path without looking at it
+      keeping :: FilePath -> IO FilePath
+      keeping = pure
+      keepingBoth :: FilePath -> FilePath -> IO (FilePath, FilePath)
+      keepingBoth = curry pure
+      -- what the call autoreleased is freed before its result is looked at
+      afterwards :: (HasCallStack, Eq a, Show a) => IO a -> a -> IO ()
+      afterwards call expected =
+#ifdef darwin_HOST_OS
+        inOwnAutoreleasePool call `shouldReturn` expected
+#else
+        call `shouldReturn` expected
+#endif
+  it "after reading" $ inTempFile \file ->
+    coordinateReading file False defaultReadingOptions keeping
+      `afterwards` file
+  it "after writing" $ inTempFile \file ->
+    coordinateWriting file False defaultWritingOptions keeping
+      `afterwards` file
+  it "after reading then writing" $ inTempFile \file ->
+    coordinateReadingThenWriting
+      file
+      False
+      defaultReadingOptions
+      (file <> ".other")
+      False
+      defaultWritingOptions
+      keepingBoth
+      `afterwards` (file, file <> ".other")
+  it "after writing two files" $ inTempFile \file ->
+    coordinateWritingAndWriting
+      file
+      False
+      defaultWritingOptions
+      (file <> ".other")
+      False
+      defaultWritingOptions
+      keepingBoth
+      `afterwards` (file, file <> ".other")
+  it "after accessing several files" $ inTempFile \file ->
+    coordinateAccessing
+      FilesToCoordinate
+        { readingPaths = [(file, False)],
+          blanketReadingOptions = defaultReadingOptions,
+          writingPaths = [(file <> ".other", False)],
+          blanketWritingOptions = defaultWritingOptions
+        }
+      ( \readers writers ->
+          (,)
+            <$> for readers (\r -> unwrappingReader r defaultReadingOptions keeping)
+            <*> for writers (\w -> unwrappingWriter w defaultWritingOptions keeping)
+      )
+      `afterwards` ([file], [file <> ".other"])
 
 -- | A body that throws must not end the process (on macOS the body runs in
 -- a callback called from Objective-C): its caller gets the exception.
