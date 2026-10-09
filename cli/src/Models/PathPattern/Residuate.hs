@@ -192,8 +192,7 @@ defaultMaxRepairs = 5000
 -- | The largest limit in effect at a step or node of the path: the one of
 -- the innermost @max-repairs@ override around it, or the default. The
 -- candidates are those of the whole path and cannot be attributed to a
--- part of it, so the most generous limit asked for applies to all of it
--- (as for @max-alternatives@, 'Models.PathPattern.Compile.checkAlternatives').
+-- part of it, so the most generous limit asked for applies to all of it.
 pathMaxRepairs :: P.Path -> P.RepairsLimit
 pathMaxRepairs = go (P.AtMostRepairs defaultMaxRepairs)
   where

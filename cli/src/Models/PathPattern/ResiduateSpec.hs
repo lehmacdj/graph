@@ -14,7 +14,7 @@ import Models.Node (emptyNode)
 import Models.Path.Simple qualified as P
 import Models.Path.TH (path)
 import Models.PathPattern
-import Models.PathPattern.Compile (checkAlternatives, compilePath)
+import Models.PathPattern.Compile (compilePath)
 import Models.PathPattern.Match
 import Models.PathPattern.Residuate
 import Models.PathPattern.TestCorpus
@@ -647,16 +647,14 @@ spec_selectMatchesReference = describe "select keeps what its reference keeps" d
       [path| (a | b)/~a/(a & b)/~b |]
   it "on random paths and graphs" . withMaxSuccess 1500 $
     forAll genRepairCase \(surface, g) -> forAll arbitraryBoundedEnum \labels ->
-      checkAlternatives surface
-        == Right ()
-          ==> case candidatesUpTo (Just 300) (labelsOf labels) g (compilePath surface) of
-            Nothing -> discard
-            Just cs -> select cs === selectReference cs
+      fewAlternatives 1000 surface
+        ==> case candidatesUpTo (Just 300) (labelsOf labels) g (compilePath surface) of
+          Nothing -> discard
+          Just cs -> select cs === selectReference cs
   it "pairs created hops as its reference does" . withMaxSuccess 1500 $
     forAll genRepairCase \(surface, _) ->
-      checkAlternatives surface
-        == Right ()
-          ==> forAll (genPairing (toList (compilePath surface).alternatives))
+      fewAlternatives 1000 surface
+        ==> forAll (genPairing (toList (compilePath surface).alternatives))
         $ \(specs, labels, created, binds) ->
           let bind v = findWithDefault (Fresh 0) v binds
            in sharedPairs specs labels created bind
@@ -693,7 +691,7 @@ spec_selectMatchesReference = describe "select keeps what its reference keeps" d
 
 -- | A path under @%override({max-repairs = …}, …)@.
 repairsLimited :: P.RepairsLimit -> P.Path -> P.Path
-repairsLimited l = P.WithLimits () (P.PathLimits Nothing (Just l))
+repairsLimited l = P.WithLimits () (P.PathLimits (Just l))
 
 residuateUpTo ::
   P.RepairsLimit ->
@@ -845,36 +843,35 @@ spec_repairsLimit = describe "the limit on candidate repairs" do
         `shouldBe` Right AlreadyResolves
     it "on random paths and graphs" . withMaxSuccess 1000 $
       forAll genRepairCase \(surface, g) ->
-        checkAlternatives surface
-          == Right ()
-            ==> case candidatesUpTo
-              (Just 300)
-              (const Nothing)
-              g
-              (compilePath surface) of
-              Nothing -> discard
-              Just cs ->
-                let unlimited = residuateUpTo P.UnlimitedRepairs g surface
-                    overLimit k
-                      | unlimited == Right AlreadyResolves = unlimited
-                      | otherwise = Left (TooManyRepairs k)
-                    made = length cs
-                 in conjoin
-                      [ -- fewer than the candidates is always too few
-                        made
-                          == 0
-                            .||. residuateUpTo (P.AtMostRepairs (made - 1)) g surface
-                            === overLimit (made - 1),
-                        made
-                          == 0
-                            .||. residuateUpTo (P.AtMostRepairs 0) g surface
-                            === overLimit 0,
-                        residuateUpTo (P.AtMostRepairs 100000) g surface === unlimited,
-                        -- at least the candidates are counted, maybe more
-                        residuateUpTo (P.AtMostRepairs made) g surface
-                          `elem` [unlimited, overLimit made]
-                            === True
-                      ]
+        fewAlternatives 1000 surface
+          ==> case candidatesUpTo
+            (Just 300)
+            (const Nothing)
+            g
+            (compilePath surface) of
+            Nothing -> discard
+            Just cs ->
+              let unlimited = residuateUpTo P.UnlimitedRepairs g surface
+                  overLimit k
+                    | unlimited == Right AlreadyResolves = unlimited
+                    | otherwise = Left (TooManyRepairs k)
+                  made = length cs
+               in conjoin
+                    [ -- fewer than the candidates is always too few
+                      made
+                        == 0
+                          .||. residuateUpTo (P.AtMostRepairs (made - 1)) g surface
+                          === overLimit (made - 1),
+                      made
+                        == 0
+                          .||. residuateUpTo (P.AtMostRepairs 0) g surface
+                          === overLimit 0,
+                      residuateUpTo (P.AtMostRepairs 100000) g surface === unlimited,
+                      -- at least the candidates are counted, maybe more
+                      residuateUpTo (P.AtMostRepairs made) g surface
+                        `elem` [unlimited, overLimit made]
+                          === True
+                    ]
   describe "the slow paths" do
     it "many matches for each of several steps" do
       -- 9 ^ 4 = 6561 candidates and 4096 repairs: stopped at once if that
@@ -923,12 +920,6 @@ spec_repairsLimit = describe "the limit on candidate repairs" do
       limitOf
         (upTo 5 ([path| a |] P.:/ repairsLimited P.UnlimitedRepairs [path| b |]))
         `shouldBe` P.UnlimitedRepairs
-    it "an override of something else keeps it" $
-      limitOf
-        ( upTo 5 $
-            P.WithLimits
-              ()
-              (P.PathLimits (Just (P.AtMostAlternatives 3)) Nothing)
-              [path| a | b |]
-        )
+    it "a limit node that sets no limit keeps it" $
+      limitOf (upTo 5 (P.WithLimits () (P.PathLimits Nothing) [path| a | b |]))
         `shouldBe` P.AtMostRepairs 5

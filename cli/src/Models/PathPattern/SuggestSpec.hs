@@ -7,7 +7,7 @@ import Models.Graph (Graph, maybeNodeLookup)
 import Models.NID (NID)
 import Models.Path.Simple qualified as P
 import Models.Path.TH (path)
-import Models.PathPattern.Compile (checkAlternatives, compilePath)
+import Models.PathPattern.Compile (compilePath)
 import Models.PathPattern.Residuate
 import Models.PathPattern.ResiduateSpec (genRepairCase)
 import Models.PathPattern.Suggest
@@ -87,13 +87,12 @@ spec_suggestPathsMatchesReference =
         [path| a/b ++ a/c ++ d |]
     it "on random ambiguous paths and graphs" . withMaxSuccess 400 $
       forAll genRepairCase \(p, g) ->
-        checkAlternatives p
-          == Right ()
-            ==> case ambiguousIn (P.AtMostRepairs 150) g p of
-              Nothing -> discard
-              Just rs ->
-                fst (suggestionsWith suggestPaths g p rs)
-                  === fst (suggestionsWith suggestPathsReference g p rs)
+        fewAlternatives 1000 p
+          ==> case ambiguousIn (P.AtMostRepairs 150) g p of
+            Nothing -> discard
+            Just rs ->
+              fst (suggestionsWith suggestPaths g p rs)
+                === fst (suggestionsWith suggestPathsReference g p rs)
 
 spec_suggestPathsCost :: Spec
 spec_suggestPathsCost = describe "suggestPaths residuates no more than it must" do

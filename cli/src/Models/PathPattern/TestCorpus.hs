@@ -8,6 +8,7 @@ module Models.PathPattern.TestCorpus
     corpusLargeEquivalences,
     corpusGraphs,
     corpusCurrent,
+    fewAlternatives,
   )
 where
 
@@ -17,7 +18,104 @@ import Models.NID
 import Models.Node (emptyNode)
 import Models.Path.Simple qualified as P
 import Models.Path.TH (path)
+import Models.PathPattern (PatternPath)
+import Models.PathPattern.Compile (Item, alternativeRoutes)
 import MyPrelude
+
+-- | Whether a path is small enough for a test to compile it and look at
+-- all of what it compiles to. The tests on random paths leave out the
+-- paths that are not: nothing else limits how large a path may be
+-- (docs/path-cost-limits.md), and a random path can take hours to
+-- compile.
+--
+-- Small enough is: by a rough count read off the path, its routes choose
+-- the sides of its unions in at most @4 * n@ ways ('estimatedWays'); and
+-- it compiles to at most @n@ alternatives, found among at most @4 * n@
+-- ways to choose (an alternative is listed once for every way to choose
+-- that comes to it; they are listed lazily, and a path with more is given
+-- up when one too many is listed).
+--
+-- Neither part bounds the time compiling takes. The first is there
+-- because the second alone was held up for over two seconds, or for good,
+-- by 28 of 3,700 paths of three generators of
+-- "Models.PathPattern.CompileSpec" (with @n@ 200). With it the slowest of
+-- them takes 0.6 s, and 49 of the 3,377 that compile quickly are left
+-- out. No clock is read, so a test looks at the same paths every time.
+fewAlternatives :: Int -> P.Path -> Bool
+fewAlternatives n p =
+  estimatedWays p <= fromIntegral (4 * n)
+    && go mempty (0 :: Int) (alternativeRoutes p)
+  where
+    go :: Set PatternPath -> Int -> [([[Item Int]], PatternPath)] -> Bool
+    go seen listed = \case
+      [] -> True
+      (_, pattern') : rest ->
+        let seen' = insertSet pattern' seen
+         in listed < 4 * n && length seen' <= n && go seen' (listed + 1) rest
+
+-- | A rough count of the ways the routes of a path can choose the sides of
+-- its unions, read off the path as it is written, without compiling it.
+--
+-- A @|@ union of @k@ sides that @m@ routes go through counts @k ^ m@, and
+-- a @++@ union counts once for each side. The routes through a part of a
+-- chain are those through the chain, times the routes of the other parts
+-- of its stretch (the parts between two joins of the chain): a group has
+-- the routes of its conjuncts together, and a union those of the side
+-- that has most.
+--
+-- This is for 'fewAlternatives' and nothing else. It is mostly far too
+-- high, since it does not know that routes through one copy of a union
+-- choose alike or that choices contradict each other; and it is not known
+-- to be an upper bound.
+estimatedWays :: P.Path -> Double
+estimatedWays = ways 1
+  where
+    ways :: Double -> P.Path -> Double
+    ways m p =
+      product
+        [ part (m * product [routes e' | (j, e') <- zip [0 :: Int ..] stretch, j /= i]) e
+        | stretch <- stretches (parts p),
+          (i, e) <- zip [0 ..] stretch
+        ]
+    part m = \case
+      e@(_ P.:& _) -> product (map (ways m) (conjuncts e))
+      e@(P.Union P.Relational _ _) ->
+        let sides' = sides P.Relational e
+         in fromIntegral (length sides') ** m * product (map (ways m) sides')
+      e@(P.Union P.Shared _ _) -> sum (map (ways m) (sides P.Shared e))
+      P.Backwards e -> part m e
+      P.WithLimits _ _ e -> part m e
+      _ -> 1
+    routes :: P.Path -> Double
+    routes = \case
+      l P.:/ r -> routes l * routes r
+      l P.:& r -> routes l + routes r
+      P.Union _ l r -> max (routes l) (routes r)
+      P.Backwards e -> routes e
+      P.WithLimits _ _ e -> routes e
+      _ -> 1
+    -- the parts of a chain, and the chain cut at its joins
+    parts = \case
+      l P.:/ r -> parts l <> parts r
+      P.Backwards e -> parts e
+      P.WithLimits _ _ e -> parts e
+      e -> [e]
+    stretches xs = case break isJoin xs of
+      (stretch, []) -> [stretch]
+      (stretch, _ : rest) -> stretch : stretches rest
+    isJoin = \case
+      P.One -> True
+      P.Absolute _ -> True
+      P.ExcludingNIDs _ -> True
+      _ -> False
+    conjuncts = \case
+      l P.:& r -> conjuncts l <> conjuncts r
+      P.WithLimits _ _ e -> conjuncts e
+      e -> [e]
+    sides kind = \case
+      P.Union kind' l r | kind' == kind -> sides kind l <> sides kind r
+      P.WithLimits _ _ e -> sides kind e
+      e -> [e]
 
 -- | Pairs of paths that must compile to the same canonical pattern.
 corpusEquivalences :: [(P.Path, P.Path)]

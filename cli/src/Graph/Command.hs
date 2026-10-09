@@ -51,11 +51,9 @@ import Models.Path.Simple qualified as Simple
 import Models.PathPattern.Compile
   ( CopiedMeetingPoint (..),
     IdleJoin (..),
-    TooManyAlternatives (..),
     UnionReading (..),
     WalksAcross (..),
     asRead,
-    checkAlternatives,
     checkCopies,
   )
 import Models.PathPattern.Match
@@ -406,11 +404,11 @@ unionOfNodes = all isNode . sidesOf
 
 -- | Fail readably, before a path is compiled for a command, if no
 -- command runs it: a product in it would copy a meeting point
--- ('checkCopies'), or it would make more alternatives than its limit
--- allows. A path that is both is refused for the first, which no limit
--- cures. Warn, once for each path of a command line, about an @ that
--- does nothing because a product copies it. The first argument says
--- which unions of the path were written @+@.
+-- ('checkCopies'). Warn, once for each path of a command line, about an
+-- @ that does nothing because a product copies it. The first argument
+-- says which unions of the path were written @+@. Nothing here looks at
+-- how large the path is: a path that is run is compiled however long
+-- that takes (docs/path-cost-limits.md).
 checkPath ::
   (Members [Error UserError, Warn UserError, State ShownWarnings] effs) =>
   PlusWritten ->
@@ -419,13 +417,12 @@ checkPath ::
 checkPath written p = case checkCopies p of
   Left refusal ->
     throwError . OtherError $ renderCopiedMeetingPoint written refusal
-  Right idle -> do
+  Right idle ->
     for_ (renderIdleJoins idle) \warning -> do
       ShownWarnings shown <- get
       unless (warning `member` shown) do
         put (ShownWarnings (insertSet warning shown))
         warnText warning
-    checkAlternativesLimit p
 
 -- | A path as part of a sentence: as it would be typed, with parentheses
 -- around a conjunction or a union.
@@ -604,43 +601,6 @@ renderIdleJoins = \case
         " (Routes that take different sides of "
           ++ quoted u
           ++ " pass it as one step.)"
-
--- | Fail readably if a path would make more alternatives than its limit
--- allows ('checkPath').
-checkAlternativesLimit :: (Error UserError :> effs) => Path -> Eff effs ()
-checkAlternativesLimit p = case checkAlternatives p of
-  Right () -> pure ()
-  Left (TooManyAlternatives n) ->
-    throwError . OtherError $
-      "This path would make more than "
-        ++ tshow n
-        ++ " alternatives, since each copy distribution makes of a | union"
-        ++ " chooses its side. Write ++ for a union whose side every copy"
-        ++ " shares, wrap the path in %override({plus = shared}, …), narrow"
-        ++ " it, or raise the limit with %override({max-alternatives = …},"
-        ++ " …). (TooManyAlternatives)"
-  Left (TooLargeToCount n) ->
-    throwError . OtherError $
-      "This path's unions make too much to count its alternatives within"
-        ++ " the limit of "
-        ++ tshow n
-        ++ ": each copy distribution makes of a | union chooses its side,"
-        ++ " and what is made on the way is limited too, however few"
-        ++ " alternatives it comes to. Write ++ for a union whose side every"
-        ++ " copy shares, wrap the path in %override({plus = shared}, …),"
-        ++ " narrow it, or raise the limit with"
-        ++ " %override({max-alternatives = …}, …). (TooLargeToCount)"
-  Left (TooManyRoutes n) ->
-    throwError . OtherError $
-      "This path has too many routes to count the alternatives its | unions"
-        ++ " make (the limit is "
-        ++ tshow n
-        ++ ", but its conjunctions alone multiply to more routes than are"
-        ++ " listed to count, so no higher number helps). Write ++ for a"
-        ++ " union whose side every copy shares, wrap the path in"
-        ++ " %override({plus = shared}, …), narrow it, or lift the limit"
-        ++ " with %override({max-alternatives = unlimited}, …), which"
-        ++ " compiles it however long that takes. (TooManyRoutes)"
 
 type CommandEffects effs =
   ( Members [DisplayImage, Echo, Error UserError, SetLocation, GetLocation, Dualizeable] effs,

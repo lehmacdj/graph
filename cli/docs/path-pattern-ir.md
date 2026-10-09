@@ -462,9 +462,8 @@ chosen and no route listed: each group looks along its chain in both
 directions, through the sides of the unions on the way, and into the
 conjuncts of the groups it meets. So it takes at most the length of the
 path times its depth for each group, whatever the path would compile
-to, and it comes before the alternatives limit: a path that is both
-refused and over its limit is reported as refused, which no higher
-limit cures. It follows the path as the compiler reads it in two
+to: a path is refused without anything of it being compiled, however
+large it is. It follows the path as the compiler reads it in two
 respects: node tests written right after one another are one join
 (`@/@1` is one join, which tests that the node is `1`, and is no
 meeting point), and a side that is `%never` or has such tests that
@@ -563,8 +562,9 @@ than written ones.)
   tests: every `/@` and `!{…}` marked, a join flagged when the routes
   of an alternative go through it under two names or more and at one
   of them arrive by different steps or leave by different steps): of
-  the 6,299 of those paths within an alternatives limit of 300, 1,356
-  are flagged, and the check differs on 39, each refused and not
+  the 6,299 of those paths that were within a limit of 300 alternatives
+  (the limit on alternatives that there was then,
+  `docs/path-cost-limits.md`), 1,356 are flagged, and the check differs on 39, each refused and not
   flagged; those looked at have node tests that contradict each other
   (`@1/…/!{@1}`), so that the alternative the check reads is not
   compiled. No path that is run is flagged.
@@ -589,8 +589,8 @@ than written ones.)
   the same alternatives listed in another order (the routes of each in
   the same order; in those looked at the `@` was in a side of a union,
   and sides are taken in an order that goes by what they are made of),
-  and never to anything else; 4,468 were over an alternatives limit of
-  400 and were not compared. With the conditions the warning had
+  and never to anything else; 4,468 were over a limit of 400
+  alternatives and were not compared. With the conditions the warning had
   before, 6 of the 24,609 compiled to something else, each with a
   union in the conjunct of the `@`.
 - What condition 4 of the warning leaves out (`t2 idlex`: the paths
@@ -621,10 +621,9 @@ than written ones.)
   with a conjunct `x/@` (each looks along the whole stretch): about
   50 ms for 320 groups (960 steps and joins). Forty `++` unions of
   joined sides before a meeting point (`2^40` choices), 320 `|` unions
-  along one route, and nesting 320 deep each take under 20 ms. Nothing
-  in it depends on the alternatives limit. Compiling no longer compares
-  sides, so nothing is compiled before a command but what the command
-  runs.
+  along one route, and nesting 320 deep each take under 20 ms.
+  Compiling no longer compares sides, so nothing is compiled before a
+  command but what the command runs.
 
 Laws of sequencing (for paths without `|`; each is a test in
 `Models.PathPattern.CompileSpec`). They are laws of what `compilePath`
@@ -783,19 +782,20 @@ lower every `+` in `p` to `++` or `|` instead, in any command; the
 innermost override wins, `|` and `++` written in `p` are unaffected, and
 an override inside `%targets(…)` applies to its query
 (`%targets(%override({plus = shared}, …))`). Its settings record is
-`{key = value, …}`, with the keys `plus` (`shared` or `relational`),
-`max-alternatives` (a positive number or `unlimited`; see the limit
-below) and `max-repairs` (likewise; the limit on the candidate repairs
-of a construction, §5). Settings combine
-(`{plus = shared, max-alternatives = 50000}`); an
+`{key = value, …}`, with the keys `plus` (`shared` or `relational`)
+and `max-repairs` (a positive number or `unlimited`; the limit on the
+candidate repairs of a construction, §5). Settings combine
+(`{plus = shared, max-repairs = 50000}`); an
 unknown key or value, or a key given twice, is a parse error naming the
-accepted ones (`InvalidOverrideSetting`). The
+accepted ones (`InvalidOverrideSetting`). `max-alternatives`, which was
+a key while compiling had a limit (*No limit on what a path compiles
+to*, below), is an unknown key like any other. The
 path quasiquoter rejects `+`, since a quoted path has no command; tests
 write `|` or `++` (or an `%override`). Suggestions (§5) are rendered with
 `|` and `++` only, so they mean the same in every command.
 
 Relational unions in detail. A `|` union is its sides read in place,
-route by route (`Models.PathPattern.Compile`: `resolveWithin` lets every
+route by route (`Models.PathPattern.Compile`: `resolve` lets every
 route choose, `sharedBy` says what two routes share and whether they can
 be routes of one alternative, `sharing` puts that together):
 
@@ -984,12 +984,12 @@ be routes of one alternative, `sharing` puts that together):
    - The check for meeting points reads the same sides (*Meeting
      points*): a side written twice is two sides there too, so the
      union is also read as one step.
-   - The alternatives limit (below) counts ways to choose before it
-     knows which of them come to the same alternative, so a row of
-     unions of sides written alike is over it sooner than its
-     alternatives suggest: `(x/@ | @/x/@)/` five times before
-     `(a/@ | @/a/@)/(d & e)` has 7 alternatives and is refused
-     (`TooLargeToCount`) at the default limit; four times it runs.
+   - The compiler lists the ways to choose before it knows which of
+     them come to the same alternative, so a row of unions of sides
+     written alike costs more than its alternatives suggest:
+     `(x/@ | @/x/@)/` five times before `(a/@ | @/a/@)/(d & e)` has 7
+     alternatives, which take about a tenth of a second to compile
+     (an unoptimized build; four times it has 6, in a third of that).
 
    (Before, sides that compiled to the same thing in place were one
    side, within bounds on how much was compiled to find out. That made
@@ -1005,7 +1005,7 @@ be routes of one alternative, `sharing` puts that together):
    with `9 -x-> 9` added, `ls (a/@ | @/a/@)/(d & e)/@` followed by
    `/(x | y)` four times found nothing and followed by five found `9`;
    it finds `9` whether none follows or eight (with nine the path has
-   1024 alternatives and is over the default limit). These are tests,
+   1024 alternatives). These are tests,
    `spec_compileEverySide`.)
 7. *The routes of an alternative, and its spelling.* Rules 1 to 6 say
    what the routes of an alternative are and what they share; they fix
@@ -1134,43 +1134,19 @@ it compiles, also on those no command runs:
   without unions.
 - *`*` is the `|` of all labels* (`spec_compileWildIsUnion`).
 
-**Alternatives limit.** Alternatives multiply: a `k`-way `|` copied into
-`n` conjuncts gives `k^n` alternatives (`(a | b | c)/(d & e & f & g)` has
-81), deduplicated by canonical equality. Since `+` is `|` in queries, a
-path with a `|` union and a conjunction may compile to at most 1000
-alternatives (`Models.PathPattern.Compile.defaultMaxAlternatives`);
-beyond that the command fails, before doing anything, with an error that
-names the limit and suggests `++`, `%override({plus = shared}, …)`,
-narrowing the path, or raising the limit (`TooManyAlternatives`). A path
-with only `++` unions has no limit, as before. Nor has a path without a
-conjunction, since nothing copies its unions and it compiles as it would
-with `++` (a chain of ten `(a | b)` is fine); such a chain multiplies all
-the same (`k` unions of `n` sides are `n^k` alternatives), and a long
-one of wide unions is slow: four unions of 64, 64, 64 and 2 sides are
-524,288 alternatives and take about ten seconds to compile. 1000 keeps
-compiling and resolving a query well under a second. It does not bound
-`mk`, whose work is in the candidate repairs of each alternative
-(residuation), which depend on the graph; they have a limit of their
-own, `max-repairs` (§5). Measured with `ge` in an unoptimized (`--fast`)
-build, each including about 0.06s of startup: on a graph with none of
-the path's edges, where each alternative has one candidate,
-`mk (a | b)/(c & … & j)` (256 repairs) takes 0.20s,
-`mk (a | b)/(c & … & k)` (512) 0.35s and `mk (a | b | c)/(d & … & i)`
-(729) 0.30s. On a graph that already has an `a` and a `b` edge every
-copy of the prefix may bind or not, so each alternative of
-`mk (a | b)/(c & … & g)` has 32 candidates: 1024 in all, under the
-default limit of 5000, and its 32 repairs are listed in about 0.2s. The
-729- and 256-repair paths above have far more (the latter 65,536) and
-are refused in about 0.6s and 0.8s. In `mk` a `+` is `++`, so this only
-arises for a `|` written there. (All figures here and in §5 are
-approximate, from single runs on a machine that was not always idle.)
+**How many alternatives.** Alternatives multiply: a `k`-way `|` copied
+into `n` conjuncts gives `k^n` alternatives (`(a | b | c)/(d & e & f & g)`
+has 81), deduplicated by canonical equality. A chain of unions
+multiplies too, with or without a conjunction, and with `++` as with
+`|` (`k` unions of `n` sides are `n^k` alternatives; a chain of ten
+`(a | b)` has 1024), and a long one of wide unions is slow: four unions
+of 64, 64, 64 and 2 sides are 524,288 alternatives and take about ten
+seconds to compile.
 
-The check (`checkAlternatives`) counts the alternatives as `compilePath`
-makes them, after contradictory ones are dropped and ones that glue to
-the same pattern are merged. It finds them one after the other and stops
-at the first beyond the limit. So the count is exact:
-`(@1 | … | @31)/(a & b)`, 961 alternatives, passes and with 32 nodes,
-1024, it is refused; sides of other shapes among the targets, as in
+Alternatives that glue to the same pattern are one, and ways to choose
+that contradict each other are none: `(@1 | … | @31)/(a & b)` has 961
+alternatives and with 32 nodes 1024; sides of other shapes among the
+targets, as in
 `(@1 | … | @25 | a | b | c & d | e & f | x/@ & d | y/@ & d)/(e & f)`
 (31 sides, 961), make no difference.
 
@@ -1190,130 +1166,109 @@ choose at all: a conjunct that cannot be satisfied, as `(@1 | @2)/@3`
 or `@/(@1 & c)/@2`, makes the path compile to nothing at once wherever
 it is written among twenty unions joined by `&`. And a side that some
 route through a copy cannot choose is not tried for the other routes
-of that copy.
+of that copy (`narrowed`). These are tests,
+`spec_compileContradictions`; with nothing limiting what a path may
+compile to (below), they are what keeps such paths from taking as long
+as their choices are many. One kind of dead end is known that they do
+not see: two routes that must choose two unions alike by one of them
+and differently by the other; a path with it took 11.5s to compile to
+nothing (measured by the fourth review of the limit, before it was
+removed).
 
-Two bounds limit what the check makes, and so the time it takes, and
-keep it from repeating a long compilation. A path beyond either is
-refused, however few alternatives it would end up with, with an error
-of its own:
-
-- The routes of the path, listed once with no union chosen, may come to
-  150,000 segments. A path with more is refused before anything is
-  made, in milliseconds (`TooManyRoutes`): no higher limit helps, and
-  the error says so and names `++`, narrowing the path, and
-  `%override({max-alternatives = unlimited}, …)`, which compiles it
-  however long that takes. So are refused
-  `(a0 & … & a169)/(x | y)/(b0 & … & b169)`, and the same with 500
-  conjuncts; `(x | y) & (a & b & c)/…` with nine such groups (2
-  alternatives of 19,684 routes, which take several seconds to
-  compile) and `(x | y) & (a & b)/…` with thirteen;
-  `(a & b & c)/…/@/(x | y)/(a & b)` with eight groups before the join
-  (4 alternatives of 13,122 routes).
-- Everything the check makes on the way is counted by its size, before
-  it is made, and may come to 400 for each alternative allowed, and
-  besides to twice what the routes of the path come to listed once
-  (`TooLargeToCount`: the alternatives cannot be counted within what
-  the limit allows to be made on the way; raising the limit raises this
-  too). A route is counted by its steps and joins, through the
-  conjuncts and the sides it chose. What is counted: every chain (one
-  for each choice of the shared unions) by its steps and node specs;
-  the routes of each stretch of a chain between its own joins; every
-  way a route chooses a union, by the routes it then is, and every two
-  ways of the routes a side with a conjunction makes of it that are
-  compared, by the route, four times; every way of a route that is
-  tried with those of the routes before it, by one, and every two
-  routes that chose different sides of a union and are compared then or
-  for what they share, by the length of a route, four times; every way
-  to choose that is found for a stretch, by its routes, four times; and
-  every alternative of a chain with joins of its own, by its routes.
-
-So a path under the limit can be refused, but only for what counting
-its alternatives takes. Together the bounds limit what the check makes
-at the default limit to 700,000, whatever the path and in whatever
-order its conjuncts are written. That is a bound on what is made, not a
-proof about time: in an unoptimized build the slowest refusal found
-among some 400 paths took 0.6s
-(`(x0 | y0) & … & (x6 | y6) & (a & b)/…/s/…/s` with eight groups and
-twenty steps: 128 alternatives of 263 routes, most of 28 steps), a union
-between two groups of 140 conjuncts 0.25s, also as a conjunct of
-`q & …`; the slowest path that passes took 0.9s,
-`(x | y) & (a & b & c)/…/(a & b & c)` with eight groups (2 alternatives
-of 6562 routes) and `(x | y) & (a & b)/…` with twelve, which take as
-long to compile. Most paths take a few milliseconds, and a path the
-check passes compiles in about the time the check took. A path without
-unions that large has no check.
-
-- Refused as too large to count: a path whose alternatives are large,
-  `(a & b & c)/(a & b & c)/(a & b & c)/(a & b & c)/(a & b)/@/((e | f) & g)/(a & b & c)/(a & b & c)`
-  (512 alternatives of 2916 routes each);
-  `(x0 | y0) & … & (x8 | y8) & (a & b)/…/s/…/s` with six groups and ten
-  steps (512 alternatives of 73 routes of 16 steps; 0.35s); a path
-  with far too many ways for the stretches of a chain to choose, which
-  are not counted as alternatives until the chain's are put together:
-  `(c & d)/(@1 | … | @29)/(a & b)/@` (707,281; 0.07s).
-- Passing where it was refused before stretches were resolved apart:
-  `(a & b & c)/…/@/(x | y)/(a & b)` with seven groups before the join
-  has 4 alternatives of 4374 routes (0.3s). A join of the chain is gone
-  through by every route, so the stretches before and after it choose
-  apart, and only the routes of one stretch are compared two by two.
-  `q & (a & (c | @1))/(@ & d/@1)/((@ | @1) & !{@1})/(~a | @1)/(* & (a | c))`
-  passes with no alternative at all: every way to choose contradicts
-  itself.
+A join of the chain is gone through by every route, so the stretches
+before and after it choose apart, and only the routes of one stretch
+are compared two by two: `(a & b & c)/…/@/(x | y)/(a & b)` with seven
+groups before the join has 4 alternatives of 4374 routes each (0.6s).
+`q & (a & (c | @1))/(@ & d/@1)/((@ | @1) & !{@1})/(~a | @1)/(* & (a | c))`
+has no alternative at all: every way to choose contradicts itself.
 
 Unions cost about what their alternatives cost. Nine `(a | b)` joined
-by `&`, or in a chain before `& z`, are 512 alternatives and pass in
-0.02s; `(a | b)/(c | d)/(e | f)/(g | h)/(i | j)/(m & n)` (1024) is
-refused as too many in 0.04s, and so it is with a sixth union (4096).
-Unions with joined sides in one chain are no dearer:
+by `&`, or in a chain before `& z`, are 512 alternatives (0.02s);
+`(a | b)/(c | d)/(e | f)/(g | h)/(i | j)/(m & n)` has 1024 (0.06s), and
+4096 with a sixth union (0.3s). Unions with joined sides in one chain
+are no dearer:
 `(p & q)/(x/@ | y)/(w/@ | z)/(u/@ | v)/(s/@ | t)` has 146 alternatives
-(0.01s), with a fifth such union 454 (0.03s), and with a sixth, 1394,
-it is refused as too many. Eight `(p/@ | q)` joined by `&` are 256
-(0.01s). With
+(0.01s), with a fifth such union 454 (0.04s), and with a sixth 1394
+(0.15s). Eight `(p/@ | q)` joined by `&` are 256 (0.01s). With
 `u = (@1 | @2 | @3 | a | (a | b) & (c | d) | (c & d)/(a | b) | (a & b | c)/@ | (a | b/@)/(c & d))`,
-`(u & u)/c` has 324 alternatives and passes in 0.01s. (Before
-chain-scoped joins the path with a fifth such union, the eight
-`(p/@ | q)` and `(u & u)/c` were refused as too large to count, and the
-four-union path had 256 alternatives.) Of 681 random unions of up to 45
-targets and other sides before a conjunction, the check passes 403 (402
-before chain-scoped joins) and refuses none that compiles to fewer
-alternatives than the limit.
+`(u & u)/c` has 324 alternatives (0.02s). (Before chain-scoped joins
+the four-union path had 256 alternatives.) Alternatives of many routes
+cost their routes: `(x | y) & (a & b & c)/…` with seven such groups
+has 2 alternatives of 2188 routes each (0.4s), and with eight groups 2
+of 6562 (1.4s). (The times in this section are the processor time of
+`compilePath` alone, in an unoptimized build, on a machine doing other
+work; a command also loads and matches what it compiled, §4.)
 
 One kind of path has more alternatives than it had before chain-scoped
-joins, and can be over the limit where it was not: a union before a
-join in a conjunct of a group that a later group copies chooses in
-every copy of the conjunct (*Relational unions in detail*, 5).
-`((x | y)/@ & z)/(c1 & … & c9)` has 512 alternatives (it had 2) and
-passes; with a tenth conjunct it has 1024 and is refused, as too large
-to count (the second bound is reached some alternatives before the
-1001st, which would make it too many). `(x | y)/@/(c1 & … & c10)`,
-or the same with `++`, has 2.
+joins: a union before a join in a conjunct of a group that a later
+group copies chooses in every copy of the conjunct (*Relational unions
+in detail*, 5). `((x | y)/@ & z)/(c1 & … & c9)` has 512 alternatives
+(it had 2), and 1024 with a tenth conjunct (0.3s).
+`(x | y)/@/(c1 & … & c10)`, or the same with `++`, has 2.
 
-`%override({max-alternatives = N}, p)`
-(or `unlimited`) changes the limit: the innermost override around a `|`
-is that union's limit, and since alternatives multiply across unions and
-cannot be attributed to one, the largest limit among the path's `|`
-unions applies to the whole path. So a low limit on one union does not
-constrain a path that also has a `|` outside the override (which has the
-default limit); to lower the limit, wrap the whole path. `%override` is a
-directive, expanded before compilation, so the setting is carried
-explicitly: expansion leaves a `WithLimits limits p` node around
-the expanded `p` (a constructor that only exists in the `Prenormal`
-phase; it carries the `max-repairs` of the override as well, §5), which
-`checkAlternatives` reads
-(`Graph.Command.expandDirectives` runs it on every command path and on
-each `%targets(…)` query); it does not otherwise change what the path
+**No limit on what a path compiles to.** Nothing refuses a path for
+being large. A command compiles its path however many alternatives it
+has and however many routes they have, for as long as that takes, and
+some paths that are short to write do not finish:
+`(x | y)/(a & b & c)/…` with seven such groups has one union that 2187
+routes choose on their own, `2^2187` ways. The only paths a command
+does not run are those that would copy a meeting point (*Meeting
+points*), which is found by reading the path and costs nothing.
+
+There was a limit. A path with a `|` union and a conjunction could
+compile to at most 1000 alternatives, counted before the command ran,
+within bounds on the work of counting; beyond them the command failed
+with `TooManyAlternatives`, `TooLargeToCount` or `TooManyRoutes`, and
+`%override({max-alternatives = N}, p)` moved the limit. It was removed.
+`docs/path-cost-limits.md` says what it was, why it was removed, where
+the time of a path command goes, what is known about limiting it, and
+what removing it costs, with the measurements. In short: a path the
+limit accepted compiles to exactly what it did; and of 149 paths
+sampled from those that only the limit refused, 132 compile within 20
+seconds of processor time (79 within one second), 107 finish an `ls`
+and 76 an `mk` within 20 seconds, and the others run until the user
+stops them (an unoptimized build, a busy machine).
+
+A command that is compiling can be stopped. At the prompt Ctrl-C brings
+the prompt back (in about a tenth of a second when tried) and nothing
+has been changed, since a command compiles its paths before it writes;
+`ge -e` ends at an interrupt. TAB completion compiles the prefix it
+completes, lowering `+` as `|` like a query, and cannot be interrupted
+while it does: a prefix that takes long to compile holds the prompt
+until it is done, or until `ge` is killed. A prefix that no command
+runs offers no completions.
+
+What `mk` makes is limited: its work is in the candidate repairs of
+each alternative (residuation), which depend on the graph, and they
+have a limit, `max-repairs` (§5), the one limit there is. Measured with
+`ge` in an unoptimized (`--fast`) build, each including about 0.06s of
+startup: on a graph with none of the path's edges, where each
+alternative has one candidate, `mk (a | b)/(c & … & j)` (256 repairs)
+takes 0.20s, `mk (a | b)/(c & … & k)` (512) 0.35s and
+`mk (a | b | c)/(d & … & i)` (729) 0.30s. On a graph that already has
+an `a` and a `b` edge every copy of the prefix may bind or not, so each
+alternative of `mk (a | b)/(c & … & g)` has 32 candidates: 1024 in all,
+under the default limit of 5000, and its 32 repairs are listed in about
+0.2s. The 729- and 256-repair paths above have far more (the latter
+65,536) and are refused in about 0.6s and 0.8s. In `mk` a `+` is `++`,
+so this only arises for a `|` written there. (These figures and those
+of §5 are approximate, from single runs on a machine that was not
+always idle.)
+
+`%override({max-repairs = N}, p)` is a directive, expanded before
+compilation, so the setting is carried explicitly: expansion leaves a
+`WithLimits limits p` node around the expanded `p` (a constructor that
+only exists in the `Prenormal` phase), which residuation reads
+(`pathMaxRepairs`, §5). It does not otherwise change what the path
 means: wherever such nodes are, and however many are nested, the path
-compiles to what it compiles to without them (`withoutLimits`). TAB completion lowers `+` as `|` like a query and runs the same
-check: a prefix beyond its limit offers no completions. A path that is
-also refused for copying a meeting point (*Meeting points*) is reported
-as that, before its alternatives are counted: no limit cures it.
+compiles to what it compiles to without them (`withoutLimits`).
 
-Implementation (`Models.PathPattern.Compile`): `structuresWithin`
+Implementation (`Models.PathPattern.Compile`): `structures`
 writes the path as chains, one for each choice of its shared unions, in
 a normal form (`normal`: joins written right after one another are one
 join, and the sides of a union stand in a fixed order, every side that
 is written being a side of its own). `routesOf` lists the routes of a chain with its unions not
-chosen, and `resolveWithin` lets each of them choose its unions
+chosen, and `resolve` lets each of them choose its unions
 (`chosen`) and takes every way to do so for all of them in which any two
 routes can be together, depth first, dropping a way whose routes
 contradict each other as it is made (`gluesWith`). It does so for each
@@ -1349,9 +1304,8 @@ does anything else; expanding also lowers `+` (see *Unions*):
 
 - `%override({plus = shared}, p)` / `%override({plus = relational}, p)`
   expand `p` with `+` lowered to `++` / `|`, and
-  `%override({max-alternatives = N}, p)` sets its alternatives limit (see
-  *Unions*), and `%override({max-repairs = N}, p)` the limit on the
-  candidate repairs of a construction (§5).
+  `%override({max-repairs = N}, p)` sets the limit on the candidate
+  repairs of a construction (§5).
 
 - `%history(n)` / `%last` become `@N` for the location `n` steps back in the
   history *at that moment*, so in `cd a; cd %last` (one line) the `%last`
@@ -1368,12 +1322,13 @@ does anything else; expanding also lowers `+` (see *Unions*):
   run the command at each target with `at %targets(p) …`
   (`%override({plus = relational}, …)` gives the per-copy reading in
   `mk`). Many targets before a conjunction multiply (`k` targets copied
-  into `n` conjuncts are `k^n` alternatives) and can hit the alternatives
-  limit: with 42 targets, `ls %targets(*)/(a & b)` would have 1764 and is
-  refused, where the per-target reading has 42. Targets that nothing
-  copies do not multiply, whatever else the path has: `ls x & %targets(*)/a`
-  has one alternative for each target
-  (`test/golden/ge/directives/targets-many.golden`). In
+  into `n` conjuncts are `k^n` alternatives): with 42 targets,
+  `ls %targets(*)/(a & b)` has 1764, where the per-target reading has
+  42, and nothing limits that number (*No limit on what a path compiles
+  to*). Targets that nothing copies do not multiply, whatever else the
+  path has: `ls x & %targets(*)/a` has one alternative for each target
+  (`test/golden/ge/directives/targets-many.golden`, which runs all
+  three). In
   `mk` each target is one alternative: with `0 -p-> 1`, `mk x/%targets(p)` creates
   `0 -x-> 1`, but with `0 -p-> 1` and `0 -p-> 2` it is ambiguous (two
   repairs, nothing changed). `mk #t/""/%targets(q)` and
@@ -1431,8 +1386,8 @@ directives at parse time (`IllegalDirective`).
   matches is a match, and prints nothing. The other refusals are
   unchanged and come without the notice: a zero-hop route 0 (`rm @`), a
   `mv`/`cp` destination that is not one node (checked first, whatever the
-  source matches), too many alternatives, a parse error. `rn`/`cl` still
-  treat a source that matches nothing as an error.
+  source matches), a parse error. `rn`/`cl` still treat a source that
+  matches nothing as an error.
 - The `rn`/`cl` destination creates one edge: its prefix (everything
   before the final label) must resolve to a single parent node. With
   `0 -c-> 3`, `0 -c-> 4`, `rn a c/z` is an error (`SeveralParents`) that
@@ -1711,16 +1666,16 @@ Then:
   total and its patch empty exactly when it is such a match, and the
   evidence rule reaches every match.
 
-`%override({max-repairs = N}, p)` (or `unlimited`) changes the limit, as
-`max-alternatives` does for alternatives (§2): `N` is a positive number;
+`%override({max-repairs = N}, p)` (or `unlimited`) changes the limit:
+`N` is a positive number;
 the innermost override around a part of the path is that part's limit;
 and since the candidates are those of the whole path and cannot be
 attributed to a part, the largest limit among the path's steps and nodes
 applies to all of it (`pathMaxRepairs`). So a low limit around one
 conjunct does not constrain a path with parts outside the override
 (which have the default); to lower the limit, wrap the whole path. The
-setting combines with the others (`{plus = shared, max-repairs = 5000}`)
-and is carried by the same `WithLimits` node. Commands that construct
+setting combines with `plus` (`{plus = shared, max-repairs = 5000}`)
+and is carried by a `WithLimits` node (§2). Commands that construct
 nothing (`ls`, `cd`, `rm`, …, a `%targets(…)` query, `tag`'s target)
 accept it and ignore it. The paths suggested for an ambiguous `mk`
 (below) are written without it, and are confirmed within the default

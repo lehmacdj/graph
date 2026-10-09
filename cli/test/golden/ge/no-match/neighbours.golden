@@ -8,7 +8,6 @@ rm @000000000001
 rm @000000000099
 rm @000000000099/x
 rm (
-rm %override({max-alternatives = 1}, (a + zz)/(b & b))
 mv zz nope
 mv a nope
 mv zz *
@@ -26,13 +25,12 @@ g> g> g> g> g> <interactive>:1:5:
 unexpected end of input
 expecting "!{", "%history(", "%last", "%never", "%override(", "%targets(", "%{", "http://", "https://", '#', '(', '*', '@', '~', <transition>, @<nid>, or regex:"<regex>"
 
-g> g> g> g> g> g> g> g> g> g> g> Goodbye!
+g> g> g> g> g> g> g> g> g> g> Goodbye!
 ==========stderr==========
 rm selected a zero-edge route. Put the edge branch first; nothing was changed.
 rm selected a zero-edge route. Put the edge branch first; nothing was changed.
 the path of rm (@000000000099) matched nothing; nothing was changed.
 the path of rm (@000000000099 / "x") matched nothing; nothing was changed.
-This path would make more than 1 alternatives, since each copy distribution makes of a | union chooses its side. Write ++ for a union whose side every copy shares, wrap the path in %override({plus = shared}, …), narrow it, or raise the limit with %override({max-alternatives = …}, …). (TooManyAlternatives)
 the last argument of mv needs a path that resolves to a single node
 but it resolved to: []
 the last argument of mv needs a path that resolves to a single node

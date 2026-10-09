@@ -72,7 +72,7 @@ pOverride :: Parser (Directive 'Partial)
 pOverride = do
   settings <-
     between (symbol "{") (symbol "}") (pSetting `sepBy` symbol ",")
-  settings' <- foldM addSetting (OverrideSettings Nothing Nothing Nothing) settings
+  settings' <- foldM addSetting (OverrideSettings Nothing Nothing) settings
   _ <- symbol ","
   Override settings' <$> pPartialPath
   where
@@ -95,31 +95,19 @@ pOverride = do
               "Unknown value "
                 <> value
                 <> " for plus; it accepts shared or relational"
-      "max-alternatives" -> case s.maxAlternatives of
-        Just _ -> invalid range "The setting max-alternatives is given twice"
-        Nothing ->
-          limit range key value <&> \l ->
-            OverrideSettings
-              { plus = s.plus,
-                maxAlternatives =
-                  Just (maybe UnlimitedAlternatives AtMostAlternatives l),
-                maxRepairs = s.maxRepairs
-              }
       "max-repairs" -> case s.maxRepairs of
         Just _ -> invalid range "The setting max-repairs is given twice"
         Nothing ->
           limit range key value <&> \l ->
             OverrideSettings
               { plus = s.plus,
-                maxAlternatives = s.maxAlternatives,
                 maxRepairs = Just (maybe UnlimitedRepairs AtMostRepairs l)
               }
       _ ->
         invalid range $
           "Unknown setting "
             <> key
-            <> " in %override; the settings are plus, max-alternatives and"
-            <> " max-repairs"
+            <> " in %override; the settings are plus and max-repairs"
     -- A limit: @unlimited@ ('Nothing'), or a positive number written in
     -- decimal digits that is not too large to count to.
     limit range key value
@@ -358,35 +346,23 @@ test_pDirective =
       -- parse anything here
       "%override({plus = shared}, a + b)"
         `parsesTo` Override
-          (OverrideSettings (Just Shared) Nothing Nothing)
+          (OverrideSettings (Just Shared) Nothing)
           (Literal "a" :+ Literal "b"),
       "%override({ plus=relational }, %targets(a) + b)"
         `parsesTo` Override
-          (OverrideSettings (Just Relational) Nothing Nothing)
+          (OverrideSettings (Just Relational) Nothing)
           (Directive testRange (Targets (Literal "a")) :+ Literal "b"),
       "%override({}, a)"
         `parsesTo` Override
-          (OverrideSettings Nothing Nothing Nothing)
-          (Literal "a"),
-      "%override({max-alternatives = 100000}, a)"
-        `parsesTo` Override
-          (OverrideSettings Nothing (Just (AtMostAlternatives 100000)) Nothing)
-          (Literal "a"),
-      "%override({plus = shared, max-alternatives = unlimited}, a)"
-        `parsesTo` Override
-          (OverrideSettings (Just Shared) (Just UnlimitedAlternatives) Nothing)
+          (OverrideSettings Nothing Nothing)
           (Literal "a"),
       "%override({max-repairs = 5000}, a)"
         `parsesTo` Override
-          (OverrideSettings Nothing Nothing (Just (AtMostRepairs 5000)))
+          (OverrideSettings Nothing (Just (AtMostRepairs 5000)))
           (Literal "a"),
-      "%override({max-repairs = unlimited, max-alternatives = 7}, a)"
+      "%override({plus = shared, max-repairs = unlimited}, a)"
         `parsesTo` Override
-          ( OverrideSettings
-              Nothing
-              (Just (AtMostAlternatives 7))
-              (Just UnlimitedRepairs)
-          )
+          (OverrideSettings (Just Shared) (Just UnlimitedRepairs))
           (Literal "a"),
       "%{some text here}" `parsesTo` Splice "some text here",
       "%{Absolute nid}" `parsesTo` Splice "Absolute nid",
@@ -403,18 +379,18 @@ test_pDirective =
       parseFails "%override({minus = shared}, a)",
       parseFails "%override({plus = shared, plus = shared}, a)",
       parseFails "%override(a)",
-      parseFails "%override({max-alternatives = 0}, a)",
-      parseFails "%override({max-alternatives = many}, a)",
-      parseFails "%override({max-alternatives = 1, max-alternatives = 2}, a)",
+      -- max-alternatives was a setting once; it is unknown like any other
+      parseFails "%override({max-alternatives = 100000}, a)",
+      parseFails "%override({max-alternatives = unlimited}, a)",
+      parseFails "%override({max-repairs = unlimited, max-alternatives = 7}, a)",
+      parseFails "%override({max-repairs = many}, a)",
+      parseFails "%override({max-repairs = 1, max-repairs = 2}, a)",
       parseFails "%override({max-repairs = 0x10}, a)",
       parseFails "%override({max-repairs = 99999999999999999999999}, a)",
       parseFails "%override({max-repairs = 1e3}, a)",
-      parseFails "%override({max-alternatives = 0x10}, a)",
-      parseFails "%override({max-alternatives = 99999999999999999999999}, a)",
-      parseFails "%override({max-alternatives = -1}, a)",
       "%override({max-repairs = 007}, a)"
         `parsesTo` Override
-          (OverrideSettings Nothing Nothing (Just (AtMostRepairs 7)))
+          (OverrideSettings Nothing (Just (AtMostRepairs 7)))
           (Literal "a"),
       parseFails "%override({max-repairs = 0}, a)",
       parseFails "%override({max-repairs = -3}, a)",

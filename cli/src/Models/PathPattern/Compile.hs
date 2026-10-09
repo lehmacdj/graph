@@ -29,11 +29,7 @@ module Models.PathPattern.Compile
     UnionReading (..),
     WalksAcross (..),
     IdleJoin (..),
-    checkAlternatives,
-    TooManyAlternatives (..),
-    defaultMaxAlternatives,
     pushBackwards,
-    checkSpending,
   )
 where
 
@@ -59,16 +55,14 @@ alternativeRoutes = alternatives
 alternatives :: Path -> [([[Item Int]], PatternPath)]
 alternatives p =
   [ (routes, pattern')
-  | chain <- runIdentity (structuresWithin freely p'),
-    routes <- runIdentity (resolveWithin freely chain),
+  | chain <- structures (prepared p),
+    routes <- resolve chain,
     Just pattern' <- [glueRoutes routes]
   ]
-  where
-    p' = prepared p
 
 -- | A path without the nodes that carry its limits. A limit says how much
--- compiling or residuating the path may make, not what the path means, so
--- everything here compiles the path without them: wherever such a node
+-- residuating the path may make (@max-repairs@), not what the path means,
+-- so everything here compiles the path without them: wherever such a node
 -- is, and however many are nested, the path compiles as if it were not
 -- there.
 withoutLimits :: Path -> Path
@@ -123,33 +117,19 @@ data Seg
 -- a chain of their own, and neither does a side of a union.
 type Chain = [Seg]
 
--- | What making chains and alternatives spends, so that a limit can stop
--- it early ('checkAlternatives').
-data Spend m = Spend
-  { -- | something made, by its size
-    made :: Int -> m (),
-    -- | the routes of an alternative, once they are found
-    found :: [[Item Int]] -> m ()
-  }
-
--- | Without a limit.
-freely :: (Applicative m) => Spend m
-freely = Spend (\_ -> pure ()) (\_ -> pure ())
-
 -- | The chains of a path, one for each choice of its shared unions, in
 -- normal form ('norm').
-structuresWithin :: forall m. (Monad m) => Spend m -> Path -> m [Chain]
-structuresWithin spend path =
-  ordNub . mapMaybe normal . toList <$> go 0 path
+structures :: Path -> [Chain]
+structures path = ordNub . mapMaybe normal . toList $ go 0 path
   where
     total = leaves path
     -- a name for a group or a union: no two start at the same leaf and
     -- have as many leaves
     named pos p = pos * (total + 1) + leaves p
-    go :: Int -> Path -> m (Set Chain)
+    go :: Int -> Path -> Set Chain
     go pos = \case
       One -> one (SJoin pos anyNode False)
-      Zero -> pure mempty
+      Zero -> mempty
       Wild -> one (SStep pos Out MWild)
       Literal t -> one (SStep pos Out (MLiteral t))
       RegexMatch r -> one (SStep pos Out (MRegex r))
@@ -159,45 +139,32 @@ structuresWithin spend path =
       Backwards _ -> error "structures: pushBackwards leaves ~ only on steps"
       Absolute nid -> one (SJoin pos (Exactly nid) True)
       ExcludingNIDs ns -> one (SJoin pos (Except ns) False)
-      p :++ q -> do
-        a <- go pos p
-        b <- go (pos + leaves p) q
-        collect a (map (pure . Just) (toList b))
-      p@(_ :|| _) -> do
+      p :++ q -> go pos p <> go (pos + leaves p) q
+      p@(_ :|| _) ->
         -- every side that is written is a side of its own, also when
         -- another is written the same; one that has no chain (@%never@,
         -- or node tests that contradict each other) is no side
-        sides <-
-          filter (not . null)
-            <$> for (placed pos (unionSides p)) \(pos', side) ->
-              toList <$> go pos' side
-        collect mempty $
-          map (pure . unionOf (named pos p)) (traverse id sides)
-      p :& q -> do
-        a <- go pos p
-        b <- go (pos + leaves p) q
-        collect
-          mempty
-          [ pure (Just [SGroup (named pos (p :& q)) (conjuncts x <> conjuncts y)])
-          | x <- toList a,
-            y <- toList b
-          ]
+        let sides =
+              filter
+                (not . null)
+                [toList (go pos' side) | (pos', side) <- placed pos (unionSides p)]
+         in setFromList (mapMaybe (unionOf (named pos p)) (sequence sides))
+      p :& q ->
+        let a = go pos p
+            b = go (pos + leaves p) q
+         in setFromList
+              [ [SGroup (named pos (p :& q)) (conjuncts x <> conjuncts y)]
+              | x <- toList a,
+                y <- toList b
+              ]
       WithLimits _ _ p -> go pos p
-      p :/ q -> do
-        a <- go pos p
-        if null a
-          then pure a
-          else do
-            b <- go (pos + leaves p) q
-            collect mempty [pure (sequenced x y) | x <- toList a, y <- toList b]
-    one = pure . singletonSet . (: [])
-    collect :: Set Chain -> [m (Maybe Chain)] -> m (Set Chain)
-    collect = foldM \acc making ->
-      making >>= \case
-        Nothing -> pure acc
-        Just x -> do
-          spend.made (weight x)
-          pure (insertSet x acc)
+      p :/ q ->
+        let a = go pos p
+            b = go (pos + leaves p) q
+         in if null a
+              then a
+              else setFromList (catMaybes [sequenced x y | x <- toList a, y <- toList b])
+    one = singletonSet . (: [])
 
 -- | Each of some parts of a path written one after the other with the
 -- place it is written at: the leaves of the path before it.
@@ -335,15 +302,6 @@ renamed c = S.evalState (chain' c) 0
       SGroup _ cs -> SGroup <$> next <*> traverse chain' cs
       SUnion _ cs -> SUnion <$> next <*> traverse chain' cs
 
--- | The steps and node specs of a chain, in all its conjuncts and union
--- sides: what it costs to make or compare it.
-weight :: Chain -> Int
-weight =
-  sum . map \case
-    SGroup _ cs -> sum (map weight cs)
-    SUnion _ cs -> sum (map weight cs)
-    _ -> 1
-
 -- | The sides of every union in a chain, by the union's name.
 unionsIn :: Chain -> Map Int [Chain]
 unionsIn = foldMap \case
@@ -411,15 +369,6 @@ routesSize = \case
      in (capped (r * r'), capped (s * r' + r * s'))
   where
     capped = min 1000000000
-
--- | How many steps, joins and unions not chosen a route has, through
--- the conjuncts and the sides it chose: what it costs to go along it.
-segmentsOf :: [RSeg] -> Int
-segmentsOf =
-  sum . map \case
-    RGroup _ _ body -> segmentsOf body
-    RPicked _ _ body -> segmentsOf body
-    _ -> 1
 
 -- | A route with the chosen sides written in their unions' places.
 written :: [RSeg] -> [RSeg]
@@ -738,17 +687,18 @@ gluesAlone ending route' =
 -- alternative of the chain is one of each, every route of a stretch
 -- going on with every route of the next. Only the routes of one stretch
 -- are compared two by two.
-resolveWithin :: forall m. (Monad m) => Spend m -> Chain -> m [[[Item Int]]]
-resolveWithin spend chain = case ownStretches chain of
-  (single, []) -> resolveStretch spend Nothing single
-  (first', more) -> do
+resolve :: Chain -> [[[Item Int]]]
+resolve chain = case ownStretches chain of
+  (single, []) -> resolveStretch Nothing single
+  (first', more) ->
     -- each stretch ends at the join that follows it
     let endings =
           [Just test | (SJoin _ test _, _) <- more] <> [Nothing]
-    parts <-
-      for (zip endings (first' : map snd more)) \(ending, stretch) ->
-        resolveStretch (Spend spend.made (\_ -> pure ())) ending stretch
-    let width = length parts
+        parts =
+          [ resolveStretch ending stretch
+          | (ending, stretch) <- zip endings (first' : map snd more)
+          ]
+        width = length parts
         -- the steps and joins of each stretch numbered apart, and the
         -- joins between them
         apart i = map (map (fmap (\k -> k * width + i)))
@@ -760,18 +710,9 @@ resolveWithin spend chain = case ownStretches chain of
         through [a] _ = a
         through (a : as) js =
           [r <> take 1 js <> r' | r <- a, r' <- through as (drop 1 js)]
-    for (traverse (\(i, alts) -> map (apart i) alts) (zip [0 ..] parts)) \alts -> do
-      let counts = map length alts
-          routes' = product (map (min 1000000) counts)
-          segments =
-            sum
-              [ (sum (map length a) + n) * (routes' `div` max 1 n)
-              | (a, n) <- zip alts counts
-              ]
-      spend.made (min 1000000000 segments)
-      let routes = through alts joins
-      spend.found routes
-      pure routes
+     in [ through alts joins
+        | alts <- traverse (\(i, alts) -> map (apart i) alts) (zip [0 ..] parts)
+        ]
 
 -- | A chain at its own joins: what is before the first, and each join
 -- with what follows it.
@@ -786,33 +727,17 @@ ownStretches chain =
         let (stretch, rest') = break isJoin rest
          in (j, stretch) : go rest'
 
--- | 'resolveWithin' for a chain without a join of its own, and the test
--- of the join that follows it, if one does.
-resolveStretch ::
-  forall m.
-  (Monad m) =>
-  Spend m ->
-  Maybe NodeTest ->
-  Chain ->
-  m [[[Item Int]]]
-resolveStretch spend ending chain = do
-  let (count, size) = routesSize chain
-  spend.made (count + size)
-  if null sides
-    then do
-      let routes = numbered (map annotate (sortOn listedBy (routesOf chain)))
-      spend.made size
-      spend.found routes
-      pure [routes]
-    else do
-      each <- for (routesOf chain) \r -> (openCopies r,) <$> chosen r
-      ways <- narrowed each
-      -- a route with no way to choose is a route of no alternative,
-      -- whatever the others choose
-      if any (null . snd) ways
-        then pure []
-        else combine ways [] mempty mempty
+-- | 'resolve' for a chain without a join of its own, and the test of the
+-- join that follows it, if one does.
+resolveStretch :: Maybe NodeTest -> Chain -> [[[Item Int]]]
+resolveStretch ending chain
+  | null sides = [numbered (map annotate (sortOn listedBy (routesOf chain)))]
+  -- a route with no way to choose is a route of no alternative, whatever
+  -- the others choose
+  | any (null . snd) ways = []
+  | otherwise = combine ways [] mempty mempty
   where
+    ways = narrowed [(openCopies r, chosen r) | r <- routesOf chain]
     sides = unionsIn chain
     joinedConjunct = hasJoinedConjunct chain
     -- the joins in the own chain of a side, by the union
@@ -827,36 +752,28 @@ resolveStretch spend ending chain = do
     -- changes nothing for the others; of those with a group in a side
     -- each may be the first, since a side with a group makes the route
     -- several routes, which choose the other unions apart.
-    chosen :: [RSeg] -> m [[[RSeg]]]
+    chosen :: [RSeg] -> [[[RSeg]]]
     chosen route' = case ordNub (openOn route') of
       []
-        | gluesAlone ending route' -> pure [[route']]
+        | gluesAlone ending route' -> [[route']]
         -- its node tests contradict each other: it is a route of no
         -- alternative
-        | otherwise -> pure []
-      open -> do
+        | otherwise -> []
+      open ->
         let forking = filter (any snd . sidesOf) open
             first' = if null forking then take 1 open else forking
-        ways <-
-          concat <$> for first' \name ->
-            concat <$> for (zip [0 ..] (sidesOf name)) \(i, (bodies, _)) -> do
-              spend.made (length bodies * segmentsOf route')
-              parts <- traverse (chosen . (\body -> replaced name i body route')) bodies
-              -- every way of one is compared with every way of the
-              -- next
-              foldM
-                ( \before next -> do
-                    spend.made
-                      ( checkPair
-                          * length before
-                          * length next
-                          * segmentsOf route'
-                      )
-                    pure (together' before next)
-                )
-                [[]]
-                parts
-        pure (distinctOn sort ways)
+         in distinctOn sort $
+              [ way
+              | name <- first',
+                (i, (bodies, _)) <- zip [0 ..] (sidesOf name),
+                -- every way of one is compared with every way of the
+                -- next
+                way <-
+                  foldl'
+                    together'
+                    [[]]
+                    [chosen (replaced name i body route') | body <- bodies]
+              ]
     sidesOf name = findWithDefault [] name sideRoutes
     -- The ways of each route without those that choose, for a copy of a
     -- union that all its routes have to choose alike ('settles'), a side
@@ -864,12 +781,12 @@ resolveStretch spend ending chain = do
     -- that can only choose one side there is not found to be without a
     -- way after every way of the routes before it has been tried.
     narrowed ::
-      [([(Int, [Choices])], [[[RSeg]]])] -> m [([(Int, [Choices])], [[[RSeg]]])]
-    narrowed ways
-      | all (null . fst) settling = pure ways
-      | otherwise = do
-          spend.made (sum [length settled * length ws | (settled@(_ : _), ws) <- settling])
-          map (second (map fst)) <$> narrow [(c, s', ws) | ((c, _), (s', ws)) <- zip ways settling]
+      [([(Int, [Choices])], [[[RSeg]]])] -> [([(Int, [Choices])], [[[RSeg]]])]
+    narrowed each
+      | all (null . fst) settling = each
+      | otherwise =
+          map (second (map fst)) $
+            narrow [(c, s', ws) | ((c, _), (s', ws)) <- zip each settling]
       where
         -- for each route, the copies it has to choose as the others do,
         -- and its ways with the sides they choose
@@ -877,18 +794,18 @@ resolveStretch spend ending chain = do
           [ ( settles copies,
               [(way, foldMap sidesOn (take 1 way)) | way <- ws]
             )
-          | (copies, ws) <- ways
+          | (copies, ws) <- each
           ]
     narrow ::
       [([(Int, [Choices])], [(Int, [Choices])], [([[RSeg]], Map Int Int)])] ->
-      m [([(Int, [Choices])], [([[RSeg]], Map Int Int)])]
-    narrow ways = do
+      [([(Int, [Choices])], [([[RSeg]], Map Int Int)])]
+    narrow these =
       let possible :: Map (Int, [Choices]) (Set Int)
           possible =
             Map.fromListWith
               intersection
               [ (copy', setFromList [i | (_, picks') <- ws, Just i <- [lookup name picks']])
-              | (_, settled, ws) <- ways,
+              | (_, settled, ws) <- these,
                 copy'@(name, _) <- settled
               ]
           keeps settled (_, picks') =
@@ -897,16 +814,14 @@ resolveStretch spend ending chain = do
               | copy'@(name, _) <- settled,
                 Just i <- [lookup name picks']
               ]
-          ways' =
+          these' =
             [ (copies, settled, if null settled then ws else filter (keeps settled) ws)
-            | (copies, settled, ws) <- ways
+            | (copies, settled, ws) <- these
             ]
           sizes made = [length ws | (_, settled, ws) <- made, not (null settled)]
-      if sizes ways' == sizes ways
-        then pure [(copies, ws) | (copies, _, ws) <- ways]
-        else do
-          spend.made (sum [length settled * length ws | (_, settled@(_ : _), ws) <- ways'])
-          narrow ways'
+       in if sizes these' == sizes these
+            then [(copies, ws) | (copies, _, ws) <- these]
+            else narrow these'
     -- every way to take one set of routes of each, the routes of which
     -- can all be together
     together' :: [[[RSeg]]] -> [[[RSeg]]] -> [[[RSeg]]]
@@ -936,13 +851,10 @@ resolveStretch spend ending chain = do
       [[RSeg]] ->
       Map (Int, Int) [[RSeg]] ->
       Map (Int, [Choices]) Int ->
-      m [[[Item Int]]]
-    combine [] routes _ _ = do
-      let (differing, size) = differingPairs routes
-          segments = sum (map segmentsOf routes)
-      -- what working out what the routes share costs, before it is done
-      spend.made (checkPair * differing * size + (checkShare + 1) * segments)
-      let listed
+      [[[Item Int]]]
+    combine [] routes _ _ =
+      let differing = differingPairs routes
+          listed
             -- Without a conjunct that has a join, and without a side
             -- with a group chosen, the routes are in order as they are.
             | joinedConjunct || any (any chooses) routes =
@@ -963,14 +875,12 @@ resolveStretch spend ending chain = do
               )
           joins =
             setFromList (concat (toList (Map.restrictKeys sideJoins mixed)))
-          items = uncurry together (sharing joins differing listed)
-      spend.found items
-      pure [items]
-    combine ((copies, ways) : rest) routes bySide settled = go allowed
+       in [uncurry together (sharing joins differing listed)]
+    combine ((copies, ways') : rest) routes bySide settled = go allowed
       where
         allowed =
           [ way
-          | way <- ways,
+          | way <- ways',
             and
               [ all ((== Just i) . lookup name . sidesOn) way
               | copy'@(name, _) <- settles copies,
@@ -986,35 +896,31 @@ resolveStretch spend ending chain = do
               r <- take 1 way,
               Just i <- [lookup name (sidesOn r)]
             ]
-        go [] = pure []
-        go (way : more) = do
-          let picked = [(r, mapToList (sidesOn r)) | r <- way]
-          fits <- allM fitsIn picked
-          if fits
-            then do
-              here <-
-                combine
-                  rest
-                  (reverse way <> routes)
-                  ( foldl'
-                      (\acc (r, picks') -> foldl' (\acc' k -> Map.insertWith (<>) k [r] acc') acc picks')
-                      bySide
-                      picked
-                  )
-                  (settledBy way)
-              later <- go more
-              pure (here <> later)
-            else go more
-        fitsIn (route', picks') = do
-          let others =
-                [ other
-                | (name, i) <- picks',
-                  (i', _) <- zip [0 ..] (sidesOf name),
-                  i' /= i,
-                  other <- findWithDefault [] (name, i') bySide
-                ]
-          spend.made (1 + checkPair * length others * segmentsOf route')
-          pure (all (gluesWith ending route') others)
+        go [] = []
+        go (way : more)
+          | all fitsIn picked =
+              combine
+                rest
+                (reverse way <> routes)
+                ( foldl'
+                    (\acc (r, picks') -> foldl' (\acc' k -> Map.insertWith (<>) k [r] acc') acc picks')
+                    bySide
+                    picked
+                )
+                (settledBy way)
+                <> go more
+          | otherwise = go more
+          where
+            picked = [(r, mapToList (sidesOn r)) | r <- way]
+        fitsIn (route', picks') =
+          all
+            (gluesWith ending route')
+            [ other
+            | (name, i) <- picks',
+              (i', _) <- zip [0 ..] (sidesOf name),
+              i' /= i,
+              other <- findWithDefault [] (name, i') bySide
+            ]
     -- whether a segment is a side with a group that a route chose
     chooses = \case
       RPicked _ _ body -> any isGroup' body || any chooses body
@@ -1024,20 +930,16 @@ resolveStretch spend ending chain = do
       RGroup {} -> True
       RPicked _ _ body -> any isGroup' body
       _ -> False
-    allM f = foldM (\ok x -> if ok then f x else pure False) True
 
--- | How many pairs of routes chose different sides of some union, and the
--- length of the longest route: what working out what they share costs.
-differingPairs :: [[RSeg]] -> (Int, Int)
+-- | How many pairs of routes chose different sides of some union.
+differingPairs :: [[RSeg]] -> Int
 differingPairs routes =
-  ( sum
-      [ length a * length b
-      | (p, a) : rest <- tails (mapToList grouped),
-        (q, b) <- rest,
-        differ p q
-      ],
-    maximumEx (1 : map segmentsOf routes)
-  )
+  sum
+    [ length a * length b
+    | (p, a) : rest <- tails (mapToList grouped),
+      (q, b) <- rest,
+      differ p q
+    ]
   where
     grouped :: Map (Map Int Int) [()]
     grouped = Map.fromListWith (<>) [(sidesOn r, [()]) | r <- routes]
@@ -1277,172 +1179,6 @@ together sideJoins
       Meet k' _ _ -> k' == k
       _ -> False
     meetsOf r = [k | Meet k _ _ <- r]
-
--- * Budget
-
--- | How many alternatives the relational unions of a path may make, unless
--- an @%override({max-alternatives = …}, …)@ says otherwise.
-defaultMaxAlternatives :: Int
-defaultMaxAlternatives = 1000
-
--- | Why a path is over its alternatives limit.
-data TooManyAlternatives
-  = -- | it compiles to more alternatives than allowed
-    TooManyAlternatives {limit :: Int}
-  | -- | its alternatives cannot be counted within what the limit allows
-    -- to be made on the way, however many they are
-    TooLargeToCount {limit :: Int}
-  | -- | its routes alone, listed once with no union chosen, are more than
-    -- are listed to count alternatives ('checkRoutes'), whatever the
-    -- limit is: only no limit at all lets it through
-    TooManyRoutes {limit :: Int}
-  deriving stock (Eq, Show)
-
--- | The largest limit in effect at a relational union of the path: the one
--- of the innermost @max-alternatives@ override around it, or the default.
--- The alternatives multiply across unions, so they cannot be attributed to
--- one; the most generous limit asked for applies to the whole path.
-pathLimit :: Path -> Maybe AlternativesLimit
-pathLimit = go (AtMostAlternatives defaultMaxAlternatives)
-  where
-    go l = \case
-      WithLimits _ l' p -> go (fromMaybe l l'.maxAlternatives) p
-      p :|| q -> Just l `max` go l p `max` go l q
-      p :++ q -> go l p `max` go l q
-      p :/ q -> go l p `max` go l q
-      p :& q -> go l p `max` go l q
-      Backwards p -> go l p
-      _ -> Nothing
-
-hasConj :: Path -> Bool
-hasConj = \case
-  _ :& _ -> True
-  Backwards p -> hasConj p
-  p :/ q -> hasConj p || hasConj q
-  Union _ p q -> hasConj p || hasConj q
-  WithLimits _ _ p -> hasConj p
-  _ -> False
-
--- | Whether compiling the path stays within its alternatives limit. The
--- alternatives are counted as 'compilePath' makes them, after
--- contradictory ones are dropped and the same ones are merged, one after
--- the other, so the count is exact and stops at the first beyond the
--- limit ('TooManyAlternatives').
---
--- Two bounds make the check finish in a bounded time, without repeating
--- a long compilation; a path beyond either is over the limit too,
--- however many alternatives it would come to:
---
--- * the routes of the path, listed once with no union chosen, may come
---   to 'checkRoutes' ('routesSize'): a path with more is refused before
---   anything is made ('TooManyRoutes');
--- * everything made on the way is counted by its size, before it is
---   made, and may come to 'checkSteps' for each alternative allowed and
---   to 'checkOnce' times what the routes of the path come to listed
---   once ('TooLargeToCount'). What is counted: every chain by its steps and node specs
---   ('weight'); the routes of a stretch by their segments; every way a
---   route chooses a union by the routes it then is; every two routes
---   that chose different sides of a union and are compared, by the
---   length of a route, 'checkPair' times; every way of a route that is
---   tried with those of the routes before it, also when it does not go
---   with them, by one; every way to choose that is
---   found for a stretch, by the segments of its routes, once and
---   'checkShare' times more; and every alternative of a chain with
---   joins of its own by the segments of its routes.
---
--- A route is counted by all its segments, through the conjuncts and the
--- sides it chose ('segmentsOf'). Ways to choose that contradict each
--- other are not listed: a route whose choice cannot be glued with that
--- of a route before it is dropped as it is made ('gluesWith'), a route
--- with no way to choose ends the count before any other is tried, and a
--- side that some route through a copy cannot choose is not tried for
--- the others ('narrowed').
---
--- A path without a relational union has no limit, and neither has one
--- without a conjunction: nothing copies its unions, so it compiles as it
--- would with shared unions.
-checkAlternatives :: Path -> Either TooManyAlternatives ()
-checkAlternatives = bimap fst (const ()) . checkSpending
-
--- | 'checkAlternatives', with what it spent, also when it refuses the
--- path: the size of what it made, and the steps it took.
-checkSpending ::
-  Path -> Either (TooManyAlternatives, (Int, Int)) (Int, Int)
-checkSpending p = case pathLimit p of
-  Just (AtMostAlternatives n) | hasConj p -> do
-    let refuse ::
-          TooManyAlternatives ->
-          S.StateT CheckBudget (Either (TooManyAlternatives, (Int, Int))) a
-        refuse why = do
-          budget <- S.get
-          lift (Left (why, (budget.spent, budget.found)))
-        -- refused before what is counted is made
-        spent k = do
-          budget <- S.get
-          when (budget.spent + k > budget.allowed) $
-            refuse (TooLargeToCount n)
-          S.put budget {spent = budget.spent + k}
-        found routes = do
-          budget <- S.get
-          let patterns =
-                maybe id insertSet (glueRoutes routes) budget.patterns
-          when (length patterns > n) (refuse (TooManyAlternatives n))
-          S.put budget {found = budget.found + 1, patterns = patterns}
-        spend = Spend spent found
-    flip S.evalStateT (CheckBudget (checkSteps * n) 0 0 mempty) do
-      chains <- structuresWithin spend (prepared p)
-      -- what listing the routes of the path once costs is allowed some
-      -- times over, whatever the limit
-      let once = sum [count + size | (count, size) <- map routesSize chains]
-      when (once > checkRoutes) (refuse (TooManyRoutes n))
-      S.modify' \budget -> budget {allowed = budget.allowed + checkOnce * once}
-      for_ chains (resolveWithin spend)
-      budget <- S.get
-      pure (budget.spent, budget.found)
-  _ -> pure (0, 0)
-
--- | What 'checkAlternatives' may spend and has spent, the ways to choose
--- it has found, and what they glue to.
-data CheckBudget = CheckBudget
-  { allowed :: Int,
-    spent :: Int,
-    found :: Int,
-    patterns :: Set PatternPath
-  }
-
--- | The size of everything 'checkAlternatives' may make, for each
--- alternative allowed. With 'checkRoutes' this bounds the check at the
--- default limit to 400,000 and twice 150,000; the slowest check measured
--- in an unoptimized build (docs/path-pattern-ir.md, Alternatives limit)
--- is a measurement and not a guarantee.
-checkSteps :: Int
-checkSteps = 400
-
--- | How many times over 'checkAlternatives' may spend what listing the
--- routes of the path once costs, besides 'checkSteps': a path with few
--- alternatives is not refused for having many routes, which it has
--- without its unions too.
-checkOnce :: Int
-checkOnce = 2
-
--- | The most the routes of a path may come to, listed once with no union
--- chosen, for 'checkAlternatives' to count its alternatives at all: a
--- path with more is refused before anything is made. With 'checkSteps'
--- this bounds what the check makes whatever the path, and so the time it
--- takes.
-checkRoutes :: Int
-checkRoutes = 150000
-
--- | What working out what the routes of an alternative of a union share
--- costs 'checkAlternatives', for each segment of the routes: it takes
--- about that many times as long as listing the routes does.
-checkShare :: Int
-checkShare = 3
-
--- | What comparing two routes that chose different sides of a union
--- costs 'checkAlternatives', for each segment of a route.
-checkPair :: Int
-checkPair = 4
 
 -- * Copied meeting points
 

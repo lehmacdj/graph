@@ -49,24 +49,20 @@
 12 -b-> 73
 ==========input==========
 ls x & %targets(*)/a
-ls %override({max-alternatives = unlimited}, x & %targets(*)/a)
 ls %targets(*)/(a & b)
 ls %override({plus = shared}, %targets(*)/(a & b))
-ls %override({max-alternatives = 2000}, %targets(*)/(a & b))
 rm q & %targets(*)/a
 ls q
 ls c23/a
 ==========stdout==========
 g> [0m[0;1mx[0m[0m [0;34m@000000000018[0m [0m[0m
-g> [0m[0;1mx[0m[0m [0;34m@000000000018[0m [0m[0m
-g> g> [0m[0;1ma[0m[0m [0;34m@00000000001A[0m [0m[0m
 g> [0m[0;1ma[0m[0m [0;34m@00000000001A[0m [0m[0m
 [0m[0;1ma[0m[0m [0;34m@00000000001B[0m [0m[0m
+g> [0m[0;1ma[0m[0m [0;34m@00000000001A[0m [0m[0m
 g> g> no targets
 g> [0mc23/[0;1ma[0m[0m [0;34m@000000000019[0m [0m[0m
 g> Goodbye!
 ==========stderr==========
-This path would make more than 1000 alternatives, since each copy distribution makes of a | union chooses its side. Write ++ for a union whose side every copy shares, wrap the path in %override({plus = shared}, …), narrow it, or raise the limit with %override({max-alternatives = …}, …). (TooManyAlternatives)
 ==========graph-dump==========
 @000000000000{out=[@000000000001 via "c1", @00000000000A via "c10", @00000000000B via "c11", @00000000000C via "c12", @00000000000D via "c13", @00000000000E via "c14", @00000000000F via "c15", @00000000000G via "c16", @00000000000H via "c17", @00000000000I via "c18", @00000000000J via "c19", @000000000002 via "c2", @00000000000K via "c20", @00000000000L via "c21", @00000000000M via "c22", @00000000000N via "c23", @00000000000O via "c24", @00000000000P via "c25", @00000000000Q via "c26", @00000000000R via "c27", @00000000000S via "c28", @00000000000T via "c29", @000000000003 via "c3", @00000000000U via "c30", @00000000000V via "c31", @00000000000W via "c32", @00000000000X via "c33", @00000000000Y via "c34", @00000000000Z via "c35", @000000000010 via "c36", @000000000011 via "c37", @000000000012 via "c38", @000000000013 via "c39", @000000000004 via "c4", @000000000014 via "c40", @000000000005 via "c5", @000000000006 via "c6", @000000000007 via "c7", @000000000008 via "c8", @000000000009 via "c9", @000000000018 via "x"], in=[@0daCJjMrQel8 via "origin"]}
 @000000000001{out=[], in=[@000000000000 via "c1"]}

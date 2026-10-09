@@ -3,7 +3,6 @@
 module Models.Path
   ( Path' (..),
     UnionKind (..),
-    AlternativesLimit (..),
     RepairsLimit (..),
     PathLimits (..),
     showLimits,
@@ -86,10 +85,8 @@ data Path' (p :: PathPhase)
     -- kind. It does not exist in the Prenormal phase.
     DefaultUnion (DefaultUnionVal p) (Path' p) (Path' p)
   | -- | The path inside an @%override@ that sets a limit, after directives
-    -- are expanded: with @max-alternatives@, compilation allows the
-    -- relational unions in it to make that many alternatives; with
-    -- @max-repairs@, residuation allows that many candidate repairs. It
-    -- only exists in the Prenormal phase.
+    -- are expanded: with @max-repairs@, residuation allows that many
+    -- candidate repairs. It only exists in the Prenormal phase.
     WithLimits (WithLimitsVal p) PathLimits (Path' p)
   | -- | intersection
     Path' p ::& Path' p
@@ -115,19 +112,13 @@ data UnionKind
     Shared
   deriving (Eq, Ord, Show, Generic, Lift)
 
--- | How many alternatives compiling a path may make.
-data AlternativesLimit = AtMostAlternatives Int | UnlimitedAlternatives
-  deriving (Eq, Ord, Show, Generic, Lift)
-
 -- | How many candidate repairs residuating a path may make.
 data RepairsLimit = AtMostRepairs Int | UnlimitedRepairs
   deriving (Eq, Ord, Show, Generic, Lift)
 
 -- | The limits an @%override@ sets; 'Nothing' keeps the outer one.
 data PathLimits = PathLimits
-  { -- | how many alternatives the relational unions inside may make
-    maxAlternatives :: Maybe AlternativesLimit,
-    -- | how many candidate repairs residuation may make
+  { -- | how many candidate repairs residuation may make
     maxRepairs :: Maybe RepairsLimit
   }
   deriving (Eq, Ord, Show, Generic, Lift)
@@ -136,8 +127,6 @@ data PathLimits = PathLimits
 data OverrideSettings = OverrideSettings
   { -- | the union @+@ is lowered to
     plus :: Maybe UnionKind,
-    -- | how many alternatives the relational unions inside may make
-    maxAlternatives :: Maybe AlternativesLimit,
     -- | how many candidate repairs residuation may make
     maxRepairs :: Maybe RepairsLimit
   }
@@ -146,28 +135,17 @@ data OverrideSettings = OverrideSettings
 -- | The limits of an override, if it sets one.
 overrideLimits :: OverrideSettings -> Maybe PathLimits
 overrideLimits settings
-  | isNothing settings.maxAlternatives && isNothing settings.maxRepairs =
-      Nothing
-  | otherwise =
-      Just
-        PathLimits
-          { maxAlternatives = settings.maxAlternatives,
-            maxRepairs = settings.maxRepairs
-          }
+  | isNothing settings.maxRepairs = Nothing
+  | otherwise = Just PathLimits {maxRepairs = settings.maxRepairs}
 
 -- | The settings of an @%override@ as written: @key = value@ each.
 showLimits :: PathLimits -> [String]
 showLimits limits =
-  [ "max-alternatives = " <> case l of
-      AtMostAlternatives n -> show n
-      UnlimitedAlternatives -> "unlimited"
-  | Just l <- [limits.maxAlternatives]
+  [ "max-repairs = " <> case l of
+      AtMostRepairs n -> show n
+      UnlimitedRepairs -> "unlimited"
+  | Just l <- [limits.maxRepairs]
   ]
-    ++ [ "max-repairs = " <> case l of
-           AtMostRepairs n -> show n
-           UnlimitedRepairs -> "unlimited"
-       | Just l <- [limits.maxRepairs]
-       ]
 
 -- * Trees that grow machinery
 

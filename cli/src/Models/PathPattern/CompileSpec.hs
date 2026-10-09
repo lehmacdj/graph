@@ -382,8 +382,6 @@ spec_compileManyJoinedSides = describe "a union of many joined sides" do
           (P.:||)
           [P.Literal ("x" <> tshow i) P.:/ P.One | i <- [0 .. n - 1 :: Int]]
       counts name p n = it name do
-        checked <- timeout 1000000 (evaluate (checkAlternatives p))
-        checked `shouldBe` Just (Right ())
         compiled <-
           timeout 2000000 (evaluate (length (compilePath p).alternatives))
         compiled `shouldBe` Just n
@@ -398,44 +396,16 @@ spec_compileManyJoinedSides = describe "a union of many joined sides" do
     ((nodes 12 P.:|| walks 6 P.:|| [path| a | b | c & d | e & f |]) P.:/ [path| a & b |])
     -- 22 sides for each of two copies, and nothing besides
     484
-  it "more alternatives than the limit are still refused at once" do
-    checked <-
-      timeout 1000000 . evaluate . checkAlternatives $
-        nodes 40 P.:/ [path| a & b |]
-    checked `shouldBe` Just (Left (TooManyAlternatives defaultMaxAlternatives))
-  let refused name p = it name do
-        checked <- timeout 1000000 (evaluate (checkAlternatives p))
-        checked `shouldBe` Just (Left (TooLargeToCount defaultMaxAlternatives))
-  -- unions whose copies choose in more ways than can be listed, most of
-  -- which contradict each other: the check stops before it has found
-  -- more alternatives than the limit
-  it "two unions copied by both ends" do
-    -- most of the ways its copies choose contradict each other; they are
-    -- dropped as they are made, so the alternatives are counted up to
-    -- the limit (too large to count before)
-    checked <-
-      timeout 1000000 . evaluate . checkAlternatives $
-        [path| a & b |]
-          P.:/ ([path| f |] P.:|| nodes 30)
-          P.:/ ([path| j |] P.:|| nodes 30)
-          P.:/ [path| k & l |]
-    checked `shouldBe` Just (Left (TooManyAlternatives defaultMaxAlternatives))
-  refused "a union in a conjunct, copied twice" $
-    [path| (a & b & c)/(a & b | c) |]
-      P.:/ (nodes 200 P.:& [path| c |])
-      P.:/ [path| a & b |]
 
 -- | Unions cost what their alternatives cost: unions that are never
--- sequenced with each other, and unions of single chains, are counted
--- and compiled in milliseconds (docs/path-pattern-ir.md, Unions).
+-- sequenced with each other, and unions of single chains, are compiled
+-- in milliseconds (docs/path-pattern-ir.md, Unions).
 spec_compileIndependentUnions :: Spec
 spec_compileIndependentUnions = describe "unions whose order cannot matter" do
   let union' i = P.Literal ("a" <> tshow i) P.:|| P.Literal ("b" <> tshow i)
       conjoined n f = foldl1Ex' (P.:&) [f (union' i) | i <- [1 .. n :: Int]]
       chained n = foldl1Ex' (P.:/) [union' i | i <- [1 .. n :: Int]]
       counts name p n = it name do
-        checked <- timeout 300000 (evaluate (checkAlternatives p))
-        checked `shouldBe` Just (Right ())
         compiled <-
           timeout 500000 (evaluate (length (compilePath p).alternatives))
         compiled `shouldBe` Just n
@@ -537,8 +507,7 @@ spec_compileSubUnions = describe "leaving out a side of a union" do
           _ -> (x P.:& before) P.:/ [path| w/@ | z |] P.:/ suf
         union' = foldl1Ex' (P.:||)
         withinLimit x =
-          isRight . checkAlternatives $
-            limitedTo 300 x
+          fewAlternatives 300 x
         checked =
           [ (plug ctx before suf (union' fewer), full)
           | (sides', before, suf, ctx) <- cases,
@@ -680,8 +649,7 @@ spec_compileSharedWalks = describe "a joined side is one walk" do
             (mkQCGen 20261006)
             30
         withinLimit x =
-          isRight . checkAlternatives $
-            limitedTo 300 x
+          fewAlternatives 300 x
         checked =
           [ (whole, written)
           | (segments, wrap) <- cases,
@@ -878,8 +846,7 @@ spec_compileInterchangeablePrefixes =
             (mkQCGen 20261006)
             30
         withinLimit x =
-          isRight . checkAlternatives $
-            limitedTo 300 x
+          fewAlternatives 300 x
         checked =
           [ (p, p', c)
           | (p, k, c) <- cases,
@@ -1114,103 +1081,45 @@ routeColours p =
     mix :: (Show a) => a -> Int
     mix = foldl' (\acc ch -> (acc * 1000003 + fromEnum ch) `rem` 2305843009213693951) 7 . show
 
-spec_compileAlternativesLimit :: Spec
-spec_compileAlternativesLimit = describe "the alternatives limit" do
-  let big = [path| (a | b | c)/(d & e & f & g & h & i & j) |]
-      limited l = P.WithLimits () (P.PathLimits (Just l) Nothing)
-  it "does not limit a path without a conjunction, where nothing copies" $
-    checkAlternatives
-      [path| (a | b)/(a | b)/(a | b)/(a | b)/(a | b)/(a | b)/(a | b)/(a | b)/(a | b)/(a | b)/(a | b) |]
-      `shouldBe` Right ()
-  it "gives up on a path that would take too long to count" do
-    -- 2187 copies of the union, each alternative with as many routes
-    let slow =
-          [path| (x | y)/(a & b & c)/(a & b & c)/(a & b & c)/(a & b & c)/(a & b & c)/(a & b & c)/(a & b & c) |]
-    result <- timeout 2000000 (evaluate (checkAlternatives slow))
-    result `shouldBe` Just (Left (TooLargeToCount defaultMaxAlternatives))
-  it "refuses a union with thousands of copies at once" do
-    -- 95 * 95 copies of the union, each choosing on its own
-    let wide n = foldl1Ex' (P.:&) [P.Literal (n <> tshow i) | i <- [0 .. 94 :: Int]]
-        slow = wide "a" P.:/ [path| x | y |] P.:/ wide "b"
-    result <- timeout 1500000 (evaluate (checkAlternatives slow))
-    result `shouldBe` Just (Left (TooLargeToCount defaultMaxAlternatives))
-  it "counts the one alternative of many choices that contradict a join" do
+-- | The compiler does not list the ways to choose that contradict each
+-- other: a route whose choice cannot be glued with that of a route before
+-- it is dropped as it is made, a route with no way to choose ends the
+-- search, and a side that some route through a copy cannot choose is not
+-- tried for the others. Nothing limits how large a path may be
+-- (docs/path-cost-limits.md), so only this keeps such paths from taking
+-- as long as their choices are many.
+--
+-- Each compile here is over in a fraction of a second, and takes hours
+-- or does not end when the search lists what it should drop. The
+-- allowance is there to make that a failure instead of a suite that
+-- hangs; it measures nothing.
+spec_compileContradictions :: Spec
+spec_compileContradictions = describe "choices that contradict each other are not listed" do
+  let alternativesOf p = do
+        compiled <- timeout 60000000 (evaluate (length (compilePath p).alternatives))
+        maybe (expectationFailure ("did not compile within a minute: " <> show p) $> 0) pure compiled
+      unions n =
+        foldl1Ex'
+          (P.:&)
+          [ P.Literal ("a" <> tshow i) P.:|| P.Literal ("b" <> tshow i)
+          | i <- [0 .. n - 1 :: Int]
+          ]
+  it "one alternative of many choices that contradict a join" do
     -- 64 * 64 ways to choose, of which all but one contradict the @1
-    -- that follows (refused as too large to count before the check
-    -- counted what it makes by size alone)
+    -- that follows
     let nodes = foldl1Ex' (P.:||) [P.Absolute (smallNID i) | i <- [1 .. 64]]
-        one = [path| a & b |] P.:/ nodes P.:/ [path| @000000000001 |]
-    result <- timeout 2000000 (evaluate (checkAlternatives one))
-    result `shouldBe` Just (Right ())
-    length (compilePath one).alternatives `shouldBe` 1
-  it "does not refuse a path for the routes it has without its unions" do
-    -- 2 alternatives of 2188 routes: a quarter of a second alone (the
-    -- allowance is for a machine running the other tests)
-    let wide =
-          [path| (x | y) & (a & b & c)/(a & b & c)/(a & b & c)/(a & b & c)/(a & b & c)/(a & b & c)/(a & b & c) |]
-    result <- timeout 2000000 (evaluate (checkAlternatives wide))
-    result `shouldBe` Just (Right ())
-    -- 2 alternatives of 6562 routes pass too, within what the check may
-    -- make whatever the path (its check takes what compiling it takes,
-    -- most of a second)
-    let wider =
-          [path| (x | y) & (a & b & c)/(a & b & c)/(a & b & c)/(a & b & c)/(a & b & c)/(a & b & c)/(a & b & c)/(a & b & c) |]
-    fmap fst (checkSpending wider)
-      `shouldSatisfy` either (const False) (< 400 * defaultMaxAlternatives + 2 * 150000)
-    -- 8 alternatives of 6561 routes: more than 400 for each alternative
-    -- allowed is made, within twice what its routes come to
-    let after' =
-          [path| (a & b & c)/(a & b & c)/(a & b & c)/(a & b & c)/(a & b & c)/(a & b & c)/(a & b & c)/@/(x | y)/(a & b & c) |]
-    (spent, found) <- either (fail . show) pure (checkSpending after')
-    found `shouldBe` 8
-    spent `shouldSatisfy` (> 400 * defaultMaxAlternatives)
-  it "counts the routes through a conjunct by their segments" do
-    -- 512 alternatives of 73 routes of 16 steps (a third of a second
-    -- alone)
-    let unions =
-          foldl1Ex'
-            (P.:&)
-            [ P.Literal ("x" <> tshow i) P.:|| P.Literal ("y" <> tshow i)
-            | i <- [0 .. 8 :: Int]
-            ]
-        long =
-          unions
-            P.:& [path| (a & b)/(a & b)/(a & b)/(a & b)/(a & b)/(a & b)/s/s/s/s/s/s/s/s/s/s |]
-    result <- timeout 3000000 (evaluate (checkAlternatives long))
-    result `shouldBe` Just (Left (TooLargeToCount defaultMaxAlternatives))
-    -- the same union between wide groups, as a conjunct
-    let wide n = foldl1Ex' (P.:&) [P.Literal (n <> tshow i) | i <- [0 .. 139 :: Int]]
-        slow = [path| q |] P.:& (wide "a" P.:/ [path| x | y |] P.:/ wide "b")
-    result' <- timeout 3000000 (evaluate (checkAlternatives slow))
-    result' `shouldBe` Just (Left (TooLargeToCount defaultMaxAlternatives))
-  it "refuses a path with too many routes before making anything" do
-    let wide n = foldl1Ex' (P.:&) [P.Literal (n <> tshow i) | i <- [0 .. 499 :: Int]]
-        slow = wide "a" P.:/ [path| x | y |] P.:/ wide "b"
-    result <- timeout 300000 (evaluate (checkAlternatives slow))
-    result `shouldBe` Just (Left (TooManyRoutes defaultMaxAlternatives))
-    -- no number helps, only no limit
-    checkAlternatives (limited (P.AtMostAlternatives 1000000000) slow)
-      `shouldBe` Left (TooManyRoutes 1000000000)
-    checkAlternatives (limited P.UnlimitedAlternatives slow) `shouldBe` Right ()
-    -- no way to choose was looked at
-    either (Just . snd . snd) (const Nothing) (checkSpending slow)
-      `shouldBe` Just 0
-  it "a conjunct that cannot be satisfied costs nothing, wherever it is written" do
-    let unions n =
-          foldl1Ex'
-            (P.:&)
-            [ P.Literal ("a" <> tshow i) P.:|| P.Literal ("b" <> tshow i)
-            | i <- [0 .. n - 1 :: Int]
-            ]
-        none p = do
-          result <- timeout 300000 (evaluate (checkAlternatives p))
-          result `shouldBe` Just (Right ())
-          compiled <- timeout 300000 (evaluate (length (compilePath p).alternatives))
-          compiled `shouldBe` Just 0
-    -- every way to choose the last conjunct contradicts itself
-    none (unions 22 P.:& [path| (@000000000001 | @000000000002)/@000000000003 |])
-    none ([path| (@000000000001 | @000000000002)/@000000000003 |] P.:& unions 22)
-    none (unions 22 P.:& [path| @/(@000000000001 & c)/@000000000002 |])
+    alternativesOf ([path| a & b |] P.:/ nodes P.:/ [path| @000000000001 |])
+      `shouldReturn` 1
+  it "a conjunct that cannot be satisfied leaves nothing, wherever it is written" do
+    -- every way to choose the last conjunct contradicts itself, and the
+    -- 2^22 ways to choose the others are not gone through
+    for_
+      [ unions 22 P.:& [path| (@000000000001 | @000000000002)/@000000000003 |],
+        [path| (@000000000001 | @000000000002)/@000000000003 |] P.:& unions 22,
+        unions 22 P.:& [path| @/(@000000000001 & c)/@000000000002 |]
+      ]
+      \p -> alternativesOf p `shouldReturn` 0
+  it "a route that can only choose one side settles it for the others" do
     -- the last route can only choose @2 for a union the others choose
     -- too: they are not tried with @1 first
     let settled n =
@@ -1218,60 +1127,24 @@ spec_compileAlternativesLimit = describe "the alternatives limit" do
             P.:& ( [path| @/(@000000000001 | @000000000002)/@ |]
                      P.:/ ([path| c |] P.:& unions n P.:& [path| @000000000002 |])
                  )
-    result <- timeout 300000 (evaluate (checkAlternatives (settled 8)))
-    result `shouldBe` Just (Right ())
-    length (compilePath (settled 8)).alternatives `shouldBe` 256
-    refused <- timeout 1000000 (evaluate (checkAlternatives (settled 18)))
-    refused `shouldBe` Just (Left (TooManyAlternatives defaultMaxAlternatives))
-  it "a union of targets after a join costs its targets" do
+    alternativesOf (settled 8) `shouldReturn` 256
+  it "a union of targets after a join has its targets for alternatives" do
     -- two routes at one joined node cannot choose different nodes there:
     -- 5 alternatives of 5^5 ways to choose, 46 of 46^4
     let targets n = foldl1Ex' (P.:||) [P.Absolute (smallNID i) | i <- [1 .. n]]
-        five = [path| x/@ |] P.:/ targets 5 P.:/ [path| a & b & c & d & e |]
-        many = [path| (c & d)/@ |] P.:/ targets 46 P.:/ [path| a & b |]
-    result <- timeout 300000 (evaluate (checkSpending five))
-    fmap (fmap snd) result `shouldBe` Just (Right 5)
-    length (compilePath five).alternatives `shouldBe` 5
-    result' <- timeout 500000 (evaluate (checkSpending many))
-    fmap (fmap snd) result' `shouldBe` Just (Right 46)
-  it "counts nothing for joins that contradict each other where written" do
-    -- no chain is made for them, whatever is before (refused as too
-    -- large to count before chain-scoped joins)
+    alternativesOf ([path| x/@ |] P.:/ targets 5 P.:/ [path| a & b & c & d & e |])
+      `shouldReturn` 5
+    alternativesOf ([path| (c & d)/@ |] P.:/ targets 46 P.:/ [path| a & b |])
+      `shouldReturn` 46
+  it "joins that contradict each other where written leave no chain" do
+    -- no chain is made for them, whatever is before
     let labels' = foldl1Ex' (P.:++) [P.Literal (tshow i) | i <- [1 .. 31 :: Int]]
         none =
           labels'
             P.:/ labels'
             P.:/ [path| (a | b | c)/(e & f & g & h & i & j & k)/@000000000001/@000000000002 |]
-    result <- timeout 2000000 (evaluate (checkAlternatives none))
-    result `shouldBe` Just (Right ())
+    alternativesOf none `shouldReturn` 0
     compilePath none `shouldBe` query []
-  it "stops a path with more alternatives than the default" $
-    checkAlternatives big
-      `shouldBe` Left (TooManyAlternatives defaultMaxAlternatives)
-  it "allows it as a shared union" $
-    checkAlternatives [path| (a ++ b ++ c)/(d & e & f & g & h & i & j) |]
-      `shouldBe` Right ()
-  it "an override raises the limit" do
-    checkAlternatives (limited (P.AtMostAlternatives 3000) big)
-      `shouldBe` Right ()
-    checkAlternatives (limited P.UnlimitedAlternatives big) `shouldBe` Right ()
-    checkAlternatives
-      [path| %override({max-alternatives = 3000}, (a | b | c)/(d & e & f & g & h & i & j)) |]
-      `shouldBe` Right ()
-  it "an override lowers the limit, and the innermost one wins" do
-    checkAlternatives
-      [path| %override({max-alternatives = 5}, (a | b)/(c & d & e)) |]
-      `shouldBe` Left (TooManyAlternatives 5)
-    checkAlternatives
-      [path| %override({max-alternatives = 5}, %override({max-alternatives = 8}, (a | b)/(c & d & e))) |]
-      `shouldBe` Right ()
-  it "the largest limit among the unions applies to the path" $
-    checkAlternatives
-      [path| %override({max-alternatives = 100}, a | b)/(c | d)/(e & f & g) |]
-      `shouldBe` Right ()
-  it "the limit does not change what the path means" $
-    compilePath (limited (P.AtMostAlternatives 3) [path| (a | b)/(c & d) |])
-      `shouldBe` compilePath [path| (a | b)/(c & d) |]
 
 spec_compileOverride :: Spec
 spec_compileOverride = describe "%override in the quasiquoter" do
@@ -1331,8 +1204,7 @@ spec_compileUnionMonotoneRandom =
             30
         -- keep resolving cheap
         withinLimit x =
-          isRight . checkAlternatives $
-            limitedTo 100 (x P.:/ P.One)
+          fewAlternatives 100 (x P.:/ P.One)
         checked =
           [ (base, bigger)
           | (p, q, c, d, ctx) <- cases,
@@ -1660,14 +1532,8 @@ spec_compileExamples = describe "compile examples" do
   where
     hopLabels r = [l | Hop _ _ (MLiteral l) _ <- r.hops]
 
--- | The path under @%override({max-alternatives = n}, …)@.
-limitedTo :: Int -> P.Path -> P.Path
-limitedTo n =
-  P.WithLimits () (P.PathLimits (Just (P.AtMostAlternatives n)) Nothing)
-
 -- | The path with limit nodes put around random parts of it, up to three
--- deep at one place. The alternatives limits are the default's, so the
--- limit in effect is the same everywhere.
+-- deep at one place.
 genWithLimits :: P.Path -> Gen P.Path
 genWithLimits = \case
   P.Backwards p -> wrapped (P.Backwards <$> genWithLimits p)
@@ -1683,19 +1549,17 @@ genWithLimits = \case
     genLimits =
       P.PathLimits
         <$> elements
-          [Nothing, Just (P.AtMostAlternatives defaultMaxAlternatives)]
-        <*> elements
           [Nothing, Just (P.AtMostRepairs 5), Just P.UnlimitedRepairs]
 
 spec_compileIgnoresLimits :: Spec
 spec_compileIgnoresLimits = describe "limit nodes do not change compilation" do
   let override l = P.WithLimits () l
-      repairs = P.PathLimits Nothing (Just (P.AtMostRepairs 5000))
-      alternatives = P.PathLimits (Just (P.AtMostAlternatives 50)) Nothing
+      repairs = P.PathLimits (Just (P.AtMostRepairs 5000))
+      fewer = P.PathLimits (Just (P.AtMostRepairs 50))
       plain = [path| (a & b)/(@ | d) |]
   it "two nested around a union after a conjunction" $
     compilePath
-      ([path| a & b |] P.:/ override repairs (override alternatives [path| @ | d |]))
+      ([path| a & b |] P.:/ override repairs (override fewer [path| @ | d |]))
       `shouldBe` compilePath plain
   it "one around a join in a sequence" $
     compilePath
@@ -1710,21 +1574,17 @@ spec_compileIgnoresLimits = describe "limit nodes do not change compilation" do
       `shouldBe` compilePath [path| (a ++ b) ++ c/(d & e) |]
     compilePath
       ( [path| x & y |]
-          P.:/ override alternatives (override repairs [path| a/@ |])
+          P.:/ override fewer (override repairs [path| a/@ |])
           P.:/ [path| d & e |]
       )
       `shouldBe` compilePath [path| (x & y)/a/@/(d & e) |]
   it "any number anywhere in random paths" . withMaxSuccess 2000 $
     forAll (fst <$> genRepairCase) \p -> forAll (genWithLimits p) \limited ->
-      conjoin
-        [ checkAlternatives limited === checkAlternatives p,
-          checkAlternatives p
-            == Right ()
-              ==> conjoin
-                [ compilePath limited === compilePath p,
-                  compileAlternatives limited === compileAlternatives p
-                ]
-        ]
+      fewAlternatives 1000 p
+        ==> conjoin
+          [ compilePath limited === compilePath p,
+            compileAlternatives limited === compileAlternatives p
+          ]
 
 -- * The compiler before relational unions, as a reference
 
@@ -2335,7 +2195,7 @@ spec_compileProduct = describe "adjacent conjunctions are their product" do
           (mkQCGen 20261008)
           30
       conj = foldl1Ex' (P.:&)
-      withinLimit x = isRight (checkAlternatives (limitedTo 300 x))
+      withinLimit x = fewAlternatives 300 x
       checked =
         [ (plain, whole, product')
         | (ls, rs, context) <- cases,
@@ -2461,7 +2321,7 @@ spec_compileReversal = describe "the reverse of a path is its converse" do
           )
           (mkQCGen 20261009)
           30
-      withinLimit x = isRight (checkAlternatives (limitedTo 100 (x P.:/ P.One)))
+      withinLimit x = fewAlternatives 100 (x P.:/ P.One)
       checked = [(p, gs) | (p, gs) <- cases, withinLimit p]
       reached cur g surface =
         foldMap
@@ -2631,7 +2491,7 @@ spec_compileUnionIsItsChoices =
             )
             (mkQCGen 20261010)
             30
-        withinLimit x = isRight (checkAlternatives (limitedTo 150 x))
+        withinLimit x = fewAlternatives 150 x
         checked =
           [ (plug ctx c d p, plug ctx c d (p P.:|| q), plug ctx c d (q P.:|| p))
           | (p, q, c, d, ctx) <- cases,
@@ -2733,7 +2593,7 @@ spec_compileRepeatedConjunct = describe "a conjunct written twice" do
           )
           (mkQCGen 20261011)
           30
-      withinLimit x = isRight (checkAlternatives (limitedTo 40 (x P.:/ P.One)))
+      withinLimit x = fewAlternatives 40 (x P.:/ P.One)
       reached cur g surface =
         foldMap
           targets
@@ -3048,7 +2908,7 @@ spec_compileCopies = describe "the copies of a union choose on their own" do
         l P.:/ r -> unions l + unions r
         l P.:& r -> unions l + unions r
         _ -> 0
-      withinLimit x = isRight (checkAlternatives (limitedTo 200 x))
+      withinLimit x = fewAlternatives 200 x
       ls edges surface =
         map smallNIDIndex . toList $
           foldMap
@@ -3851,12 +3711,12 @@ spec_compileCopiedMeetingPoints = describe "a product may not copy a meeting poi
             30
         -- explicitly: only paths that are run, and that are within a
         -- limit that keeps the test short
-        run' = [p | p <- cases, runs p, isRight (checkAlternatives (limitedTo 200 (marked p)))]
+        run' = [p | p <- cases, runs p, fewAlternatives 200 (marked p)]
         flagged p = any (not . null . copiedJoins True) (alternativeRoutes (marked p))
         written' p = any (not . null . copiedJoins False) (alternativeRoutes (marked p))
     length run' `shouldSatisfy` (> 1500)
     -- the oracle does flag what the rule refuses
-    length (filter flagged [p | p <- drop 1500 cases, not (runs p), isRight (checkAlternatives (limitedTo 200 (marked p)))])
+    length (filter flagged [p | p <- drop 1500 cases, not (runs p), fewAlternatives 200 (marked p)])
       `shouldSatisfy` (> 200)
     flagged [path| (@000000000001/(c & e) & b)/(x/@/w & d) |] `shouldBe` True
     flagged [path| (a & b)/((c & y)/@/e & d) |] `shouldBe` True
@@ -3869,14 +3729,14 @@ spec_compileCopiedMeetingPoints = describe "a product may not copy a meeting poi
     let plain =
           unGen (vectorOf 1500 (choose (2, 9) >>= genScoped False)) (mkQCGen 20261107) 30
             <> drop 1500 cases
-        within = [p | p <- plain, isRight (checkAlternatives (limitedTo 200 (marked p)))]
+        within = [p | p <- plain, fewAlternatives 200 (marked p)]
     length within `shouldSatisfy` (> 2400)
     length (filter (not . runs) within) `shouldSatisfy` (> 500)
     forM_ within \p ->
       (show p, written' p) `shouldBe` (show p, not (runs p))
     -- with contradicting tests: what is compiled as a copied meeting
     -- point is refused
-    forM_ [p | p <- take 1500 cases, isRight (checkAlternatives (limitedTo 200 (marked p)))] \p ->
+    forM_ [p | p <- take 1500 cases, fewAlternatives 200 (marked p)] \p ->
       when (written' p) ((show p, runs p) `shouldBe` (show p, False))
     -- where the two ways to count differ, the copies are one node: the
     -- leading @ of a forking conjunct whose group starts its stretch
@@ -3909,7 +3769,7 @@ spec_compileCopiedMeetingPoints = describe "a product may not copy a meeting poi
             (const Nothing)
             (Just . sum . map (\j -> fromEnum j.begins + fromEnum j.ends))
             (checkCopies p)
-        within p = isRight (checkAlternatives (limitedTo 200 p))
+        within p = fewAlternatives 200 p
         warned = [(p, n) | p <- cases, Just n <- [warnings p], n > 0, within p]
     length warned `shouldSatisfy` (> 400)
     -- among them paths with unions, with @N, and from each generator
@@ -3928,7 +3788,7 @@ spec_compileCopiedMeetingPoints = describe "a product may not copy a meeting poi
     forM_ pairs \(with', without) ->
       when (maybe False (> 0) (warnings with')) $
         (show with', compilePath with') `shouldBe` (show with', compilePath without)
-  it "does bounded work, and comes before the alternatives limit" do
+  it "does bounded work, however much the path would compile to" do
     -- 2^40 alternatives and 2^40 choices: the path is read as written
     let wide = foldl1Ex' (P.:/) (replicate 40 [path| (a ++ b)/(c | d) |] :: [P.Path])
         long = [path| (p & q) |] P.:/ wide P.:/ [path| ((c & y)/@/e & d) |]
@@ -3940,11 +3800,9 @@ spec_compileCopiedMeetingPoints = describe "a product may not copy a meeting poi
       timeout 1000000 . evaluate . either (isNothing . (.writtenApart)) (const False) $
         checkCopies (many P.:/ [path| ((c & y)/@/e & d) |])
     result' `shouldBe` Just True
-    -- too many alternatives, and refused whatever the limit is
-    let both = [path| (a & b)/(x | y | z)/(c1 & c2 & c3 & c4 & c5 & c6 & c7)/((c & y)/@/e & d) |]
-    checkAlternatives both `shouldSatisfy` isLeft
-    refuses both
-    refuses (limitedTo 1000000 both)
+    -- a union with a side for each of many copies: refused like any
+    -- other, without a way to choose being listed
+    refuses [path| (a & b)/(x | y | z)/(c1 & c2 & c3 & c4 & c5 & c6 & c7)/((c & y)/@/e & d) |]
   where
     (<$$>) = fmap . fmap
     isUnion = \case
@@ -4712,7 +4570,7 @@ spec_compileEverySide = describe "every written side of a union is its own side"
             )
             (mkQCGen 20261108)
             30
-        within p = isRight (checkAlternatives (limitedTo 200 p))
+        within p = fewAlternatives 200 p
         -- and each with a side of every union written twice
         twinned = [q | p <- take 500 cases, hasUnion p, let q = withTwin p, within q]
         unions = [p | p <- cases <> map oneLabel cases, hasUnion p, within p] <> twinned
