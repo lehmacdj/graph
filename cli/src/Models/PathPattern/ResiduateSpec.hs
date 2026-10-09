@@ -88,7 +88,7 @@ spec_residuationProperties = describe "residuation properties" do
             (context, applyPatch r.patch g') `shouldBe` (context, g')
 
 -- | Without labels, mk does what it would do with a fresh label, or errors
--- iff a survivor would use that label (docs/path-pattern-ir.md §5).
+-- iff a survivor would use that label (docs/path-route-ir.md, Residuation).
 spec_missingLabelsActAsFreshLabels :: Spec
 spec_missingLabelsActAsFreshLabels =
   it "missing labels act as a fresh label over the corpus" do

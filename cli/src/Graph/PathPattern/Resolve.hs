@@ -1,4 +1,4 @@
--- | Resolve route patterns against the graph (docs/path-pattern-ir.md §4).
+-- | Resolve route patterns against the graph (docs/path-route-ir.md, Resolution).
 --
 -- Resolution has an effectful load phase, which propagates candidate sets
 -- from the bound vertices and reads each node it needs once, and a pure

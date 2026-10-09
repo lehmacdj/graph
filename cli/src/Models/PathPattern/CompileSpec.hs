@@ -1,5 +1,5 @@
 -- | Tests for "Models.PathPattern.Compile": the examples and the laws in
--- docs/path-pattern-ir.md, and the compiler as it was before relational
+-- docs/path-route-ir.md, and the compiler as it was before relational
 -- unions, with an interpreter of its terms, as a reference that shares no
 -- code with it.
 --
@@ -373,7 +373,7 @@ spec_compileRootJoin = describe "a leading @ before an @N conjunct" do
       `shouldBe` alternativesUpToOrder [path| (c & g)/(@000000000001 & d) |]
 
 -- | A union of many joined sides costs what its alternatives cost, not a
--- reading for each subset of its sides (docs/path-pattern-ir.md, Unions).
+-- reading for each subset of its sides (docs/path-route-ir.md, Unions).
 spec_compileManyJoinedSides :: Spec
 spec_compileManyJoinedSides = describe "a union of many joined sides" do
   let nodes n = foldl1Ex' (P.:||) [P.Absolute (smallNID i) | i <- [1 .. n]]
@@ -401,7 +401,7 @@ spec_compileManyJoinedSides = describe "a union of many joined sides" do
 
 -- | Unions cost what their alternatives cost: unions that are never
 -- sequenced with each other, and unions of single chains, are compiled
--- in milliseconds (docs/path-pattern-ir.md, Unions).
+-- in milliseconds (docs/path-route-ir.md, Unions).
 spec_compileIndependentUnions :: Spec
 spec_compileIndependentUnions = describe "unions whose order cannot matter" do
   let union' i = P.Literal ("a" <> tshow i) P.:|| P.Literal ("b" <> tshow i)
@@ -763,7 +763,7 @@ spec_compileChoicesWrittenOut = describe "a union is its choices written out" do
 -- it) has nothing to share where the input is one node: at the root of a
 -- path and after another join. There @J/(p & q)@ is @J/p & J/q@, also for
 -- the copies of a union that follows, so that a leading @\@@ at the root
--- is the same wherever it is written (docs/path-pattern-ir.md, Unions).
+-- is the same wherever it is written (docs/path-route-ir.md, Unions).
 spec_compileRootJoins :: Spec
 spec_compileRootJoins = describe "a join of the root has nothing to share" do
   let reached g surface =
@@ -2700,7 +2700,7 @@ spec_compileRepeatedConjunct = describe "a conjunct written twice" do
             ]
 
 -- | The expected results of the definition of chain-scoped joins
--- (docs/path-pattern-ir.md, Unions), each on its graph, as @ls@ finds
+-- (docs/path-route-ir.md, Unions), each on its graph, as @ls@ finds
 -- them from node 0.
 spec_compileChainScoped :: Spec
 spec_compileChainScoped = describe "chain-scoped joins" do
@@ -3649,7 +3649,7 @@ spec_compileCopiedMeetingPoints = describe "a product may not copy a meeting poi
     runsQuietly [path| (p & q)/((m & n)/(x/@000000000001/w ++ y/@000000000002/v)/@ & d) |]
     runsQuietly [path| (u/@000000000007/(m & n) & z)/((x/@000000000001/w ++ y/@000000000002/v)/@/s & b) |]
   it "refuses a | of two joined sides before walks that an @N holds, though nothing is copied" do
-    -- An over-refusal that the spec lists (docs/path-pattern-ir.md,
+    -- An over-refusal that the spec lists (docs/path-route-ir.md,
     -- Meeting points), pinned here so that relaxing it is a change that
     -- shows. The check reads the | as one step, past which the group
     -- after it copies p/@. In what the compiler makes, no alternative
@@ -4226,7 +4226,7 @@ data Written
   | WGroup [[Written]]
   | WUnion Bool [[Written]]
 
--- | The rule of docs/path-pattern-ir.md (Meeting points), worked the
+-- | The rule of docs/path-route-ir.md (Meeting points), worked the
 -- long way: the path is written once for every way to read its unions
 -- (each side in its place, and a | union as one step), and for each the
 -- product is written out: the path is refused when a @/\@@ or @!{…}@

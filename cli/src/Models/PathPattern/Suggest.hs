@@ -1,5 +1,5 @@
 -- | Paths that choose one repair of an ambiguous construction
--- (docs/path-pattern-ir.md §5, @mk@).
+-- (docs/path-route-ir.md, Residuation, @mk@).
 --
 -- For a surviving repair, keep only the @+@ alternative it came from, then
 -- pin with @/\@N@ every step whose output it binds to an existing node, and

@@ -8,7 +8,7 @@ chooses among several ways to do so, the settings a path can carry,
 what happens when a command fails, and what commands do next to a
 damaged graph. The language itself (operators, joins, unions, refusals,
 laws) is in [path-language.md](path-language.md); the compiler and the
-engine are in [path-pattern-ir.md](path-pattern-ir.md).
+engine are in [path-route-ir.md](path-route-ir.md).
 
 Examples follow the conventions of
 [path-language.md](path-language.md): node `0` is the node the command

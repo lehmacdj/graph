@@ -25,6 +25,11 @@ Benefits:
 
 ## Tasty
 - We use the tasty-discover as our test runner. To run specific tests use `stack test --test-arguments "--pattern <string pattern>"`.
+- `stack test --ta` splits its argument at spaces. A pattern of one word
+  needs no more quoting (`stack test --ta '-p Compile'`); one of several
+  words has to be quoted again inside it
+  (`--ta '-p "residuation properties"'`), or the test program refuses the
+  second word as an invalid argument.
 - Prefer writing Hspec `spec_` tests, over using `testGroup`
 
 ## Test Organization
@@ -108,6 +113,18 @@ with 0, and output that does not end with a newline is followed by a
 The input is fed to the REPL. To run one command line as `ge -e` does
 (which is where the exit code tells whether the command failed), head the
 section `expression` instead of `input`.
+
+### Examples in the documents
+
+`docs/path-language.md` and `docs/commands.md` show what `ge` prints in
+fenced `ge` blocks: a `graph:` line in the notation above with the edges
+separated by commas, then `$` lines with a command each, each followed by
+what `ge` printed for it on a fresh copy of that graph. The blocks were
+produced by running `ge`, but no test in the suite runs them again, so a
+change to a message or to what a path finds has to be carried into the
+documents by hand. A block has what a golden test has (the graph, the
+input, the output), so they could be run through
+`Executable.GraphEditor.GoldenSpec`.
 
 ## Avoiding Cyclic Imports
 

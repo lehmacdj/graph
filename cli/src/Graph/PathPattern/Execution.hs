@@ -1,5 +1,5 @@
--- | Command policy on top of route patterns (docs/path-pattern-ir.md §3,
--- §5). Queries append @/\@@ before compiling, so that every output meets
+-- | Command policy on top of route patterns (docs/path-route-ir.md,
+-- Selection and Residuation). Queries append @/\@@ before compiling, so that every output meets
 -- at one node; construction does not. The engine itself adds no defaults.
 module Graph.PathPattern.Execution
   ( PathReading,

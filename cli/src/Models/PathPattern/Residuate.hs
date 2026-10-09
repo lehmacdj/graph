@@ -1,5 +1,5 @@
 -- | Residuation: what to add to the graph so that a path resolves
--- (docs/path-pattern-ir.md §5).
+-- (docs/path-route-ir.md, Residuation).
 --
 -- A residual is the pattern with a total binding: every vertex is an
 -- existing node or a fresh one. The patch (nodes and edges to create) is
@@ -185,7 +185,7 @@ data Candidate = Candidate
 -- | How many candidates residuating a path may make, unless an
 -- @%override({max-repairs = …}, …)@ says otherwise. This bounds a count,
 -- not time: what a candidate costs grows with the pattern
--- (docs/path-pattern-ir.md §5 has measurements).
+-- (docs/path-route-ir.md, Residuation, Limit on candidates, has measurements).
 defaultMaxRepairs :: Int
 defaultMaxRepairs = 5000
 
@@ -379,7 +379,7 @@ shapeWithin small large =
     && Map.isSubmapOfBy (<=) small.edgeKinds large.edgeKinds
 
 -- | Drop dominated and redundant candidates and order the survivors
--- (docs/path-pattern-ir.md §5, Selection). 'selectReference' states the
+-- (docs/path-route-ir.md, Residuation, Selection). 'selectReference' states the
 -- rule; this gives the same survivors in the same order, without comparing
 -- every pair of candidates:
 --

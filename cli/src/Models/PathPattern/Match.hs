@@ -1,6 +1,6 @@
 {-# LANGUAGE MultiWayIf #-}
 
--- | Pure matching of route patterns (docs/path-pattern-ir.md §4).
+-- | Pure matching of route patterns (docs/path-route-ir.md, Resolution).
 --
 -- Matching is a homomorphism: distinct variables may bind the same node. The
 -- pattern is split at bound vertices ('Current' and 'Fixed') into

@@ -1,8 +1,12 @@
 # Limits on what a path costs: what was tried, and why there is none
 
-A path command (`ls`, `mk`, `rm` and the others) compiles its path to
-alternatives, each a set of routes, and then matches them against the
-graph (`cli/docs/path-pattern-ir.md`). A path that is short to write can
+A path command (`ls`, `mk`, `rm` and the others) compiles its path and
+then matches what it compiled against the graph
+(`cli/docs/path-route-ir.md`). What it compiles to is a set of
+*alternatives*, one for each way the `|` unions of the path can be
+taken, and each alternative is a list of *routes*: the single walks,
+from a start node along steps, that the path comes to when its `&`
+groups are multiplied out. A path that is short to write can
 compile to a great deal, and then the command takes long.
 
 For a while `ge` refused such paths before running them. That check, the
@@ -26,11 +30,21 @@ How to read the numbers. Every time below says how it was measured.
 "Unoptimized" is a build with `-O0`, which is what `cli/stack.yaml`
 gives (`stack build --fast` and `stack test --fast` likewise);
 "optimized" is `-O1`. All of them were taken on a machine that was
-doing other work at the time, with a load average between 17 and 160 on
+doing other work at the time, with a load average between 12 and 160 on
 18 cores, so processor time is given where it was recorded, wall-clock
 times are inflated, and ratios are more reliable than absolute values.
-Graphs are small throwaway graphs, described where they matter; no real
-graph was used.
+A time is processor time unless it is called wall time. Graphs are
+small throwaway graphs, described where they matter; no real graph was
+used.
+
+When and on what. The figures that sections 2 to 4 give as measured by
+"the investigation" were taken on 2026-10-07, on the commit 97e3671c
+(which had the limit) and on prototypes built from it, by scratch
+programs that are not in the repository; they cannot be taken again
+from it. The figures of section 6 were taken on 2026-10-09, on the
+builds that section names. The figures that section 2 quotes from the
+reviews are the reviewers', taken on the builds they reviewed, and
+carry no date.
 
 ## 1. What existed
 
@@ -136,8 +150,9 @@ other groups (`spec_compileManyJoinedSides`,
 had two golden tests (`union-alternatives-limit` and
 `union-too-large-to-count` under `cli/test/golden/ge/path/`). And the
 tests on random paths elsewhere in the suite used the check as their
-filter, in fifteen places, to leave out the random paths that are too
-large to compile in a test.
+filter, in twenty places (16 in `CompileSpec.hs`, 3 in
+`ResiduateSpec.hs`, 1 in `SuggestSpec.hs`), to leave out the random
+paths that are too large to compile in a test.
 
 ## 2. Why it was removed
 
@@ -149,15 +164,15 @@ two have little to do with each other.
 Paths with few alternatives that are slow:
 
 - `ls x & (a & b & c)/(a & b & c)/(a & b & c)/(a & b & c)/(a & b & c)/(a & b & c)/(a & b & c)`
-  has no union, one alternative, 2,187 routes and 15,310 steps. The
+  has no union, one alternative, 2,188 routes and 15,310 steps. The
   limit never looked at it. It took 129.8 s of processor time
   (unoptimized `ge`, a one-node graph with the labels `a`, `b`, `c` and
   `x`, before the matcher fixes of section 3).
 - `(x | y) & (a & b & c)/…` with eight such groups has 2 alternatives of
   6,562 routes each. The limit passed it after counting for most of a
-  second (0.9 s was the slowest check that passed, measured by the
+  second (0.84 s was the slowest check that passed, measured by the
   author of the check in an unoptimized build). Compiling it alone
-  takes 1.4 s of processor time (`compilePath` forced, unoptimized,
+  takes 1,475 ms of processor time (`compilePath` forced, unoptimized,
   measured for this note), and the command then compiles it again and
   matches it.
 - On a complete graph of two nodes, `ls (a & b)/(a & b)/(a & b)`, one
@@ -170,7 +185,8 @@ unoptimized, `ls` on a graph where every step matches once; processor
 time of the whole `ge` process):
 
 - `(a | b | c)/(d & e & f & g & h & i & j)`, 2,187 alternatives, refused
-  as `TooManyAlternatives`: 1.0 s, of which compiling is 0.17 s.
+  as `TooManyAlternatives`: 1.0 s. (Compiling it alone, in a program
+  linked against the library, takes 0.16 s; section 6.)
 - `(a | b)/(c | d)/(e | f)/(g | h)/(i | j)/(m & n)`, 1,024
   alternatives, refused as `TooManyAlternatives`: 0.41 s.
 - `(x/@ | @/x/@)/` five times before `(a/@ | @/a/@)/(d & e)`, 7
@@ -205,14 +221,16 @@ review before had found and broke something else.
    gave the check its two bounds (150,000 segments up front; a budget
    of at most 700,000 units).
 
-2. The next review found:
-   - Paths refused that used to run, or that have almost no
-     alternatives: `(x | y) & (a & b & c)/…` with nine groups (2
-     alternatives), `(a & b & c)/…/@/(x | y)/(a & b)` with eight groups
-     before the join (4 alternatives; the build before accepted it),
-     and `((x | y)/@ & z)/(c1 & … & c10)` (1024 alternatives; the build
-     before accepted it, and the designer had ruled that the `2^n`
-     alternatives of such a path are fine).
+2. That repair had prices that its author knew and listed for the next
+   review: paths refused that used to run, or that have almost no
+   alternatives. `(x | y) & (a & b & c)/…` with nine groups (2
+   alternatives), `(a & b & c)/…/@/(x | y)/(a & b)` with eight groups
+   before the join (4 alternatives; the build before accepted it), and
+   `((x | y)/@ & z)/(c1 & … & c10)` (1024 alternatives; the build
+   before accepted it, and the designer had ruled that the `2^n`
+   alternatives of such a path are fine).
+
+   The next review found, besides:
    - A check that itself took exponential time: with a conjunct that
      cannot be satisfied written after twenty unions,
      `ls (a0 | b0) & … & (a19 | b19) & (@1 | @2)/@3` took 4.4 s, where
@@ -238,7 +256,14 @@ review before had found and broke something else.
    - A kind of dead end that the pruning does not see (two routes that
      have to choose two unions alike by one of them and differently by
      the other). For a path with it the check passed after 11.5 s and
-     `ls` then took 31 s; the build before refused it in 0.5 s.
+     `ls` then took 31 s; the build before refused it in 0.5 s. This
+     note comes back to that path three times, as *the path with the
+     dead end*. It is, with twenty sides `s0` to `s19` and the eleven
+     unions `(a0 | b0)` to `(a10 | b10)`:
+
+     ```
+     z & (s0 | … | s19)/(!{@2, @4} | !{@1, @3})/(!{@2, @3} | !{@1, @4})/@/((@1 | @2) & (a0 | b0) & … & (a10 | b10) & (@3 | @4))
+     ```
    - The clock tests failed when the machine was three times
      oversubscribed (their allowances were 1 to 3 s).
    - Wrong messages: a path with 1,394 alternatives was told it was too
@@ -276,7 +301,7 @@ commands were slow for a reason that no limit should have been hiding.
 
 ### Two inefficiencies in the matcher
 
-Profile of `ls x & (a & b & c)/…` with six groups (729 routes, 4,375
+Profile of `ls x & (a & b & c)/…` with six groups (730 routes, 4,375
 steps) on a one-node graph, unoptimized, with cost centres:
 `patternEdges`, entered 4,375 times from `loadPattern`, 89.3% of the
 time; `patternComponents` 4.9%.
@@ -297,25 +322,27 @@ time; `patternComponents` 4.9%.
 They are fixed in the commit "Group and load pattern edges in linear
 time", with a follow-up, "Index pattern edges to components and look
 literal steps up", which also stops a step from scanning every edge of
-the node it leaves when its label is literal. Those commits are on
-another line of work than the one that removed the limit; the
-measurements that section 6 reports for this note were taken with a
-build that does not have them yet, and say so.
+the node it leaves when its label is literal. Both commits are in the
+build this note is checked in with. The measurements that section 6
+reports were taken before that, with a build that had neither, and say
+so; the one column that was measured again with them says that too.
 
 `ge` end to end, one-node graph with the labels `a`, `b`, `c`, `x`,
 processor seconds, measured by the investigation (the fix here is the
-first commit's two changes):
+first commit's two changes). The routes are the `3^n` of the groups and
+the one of `x`; the source of these figures gives the first two
+without that one, as 729 and 2,187.
 
 | `ls x & (a & b & c)/…` | routes | steps | unoptimized, before | unoptimized, fixed | optimized, before | optimized, fixed |
 |---|---|---|---|---|---|---|
-| six groups | 729 | 4,375 | 6.9 | 0.29 | 0.49 | 0.20 |
-| seven groups | 2,187 | 15,310 | 129.8 | 0.88 | 4.6 | 0.59 |
-| eight groups | 6,561 | 52,489 | over 100 (stopped) | 3.2 | not run | 1.8 |
+| six groups | 730 | 4,375 | 6.9 | 0.29 | 0.49 | 0.20 |
+| seven groups | 2,188 | 15,310 | 129.8 | 0.88 | 4.6 | 0.59 |
+| eight groups | 6,562 | 52,489 | over 100 (stopped) | 3.2 | not run | 1.8 |
 
 After the fix, going from seven to eight groups (3.4 times the steps)
 costs 3.6 times as much: resolution is linear in the steps of the
-pattern. The follow-up, as its author measured it: `ls` at a node with
-811 labels 1.90 s to 0.37 s, and 2,000 one-hop routes 1.74 s to 0.87 s.
+pattern. What the follow-up commit gains was not measured for this
+note.
 
 ### Three costs that no number read off the path predicts
 
@@ -324,9 +351,9 @@ path before running it (all measured by the investigation, unoptimized
 with the matcher fixes unless said otherwise):
 
 1. **The compiler's search among the choices of unions** is not
-   proportional to what it produces. The path of the last review with
-   the dead end that the pruning does not see took 23 s to be found to
-   have no alternative at all. The time is spread over the function that
+   proportional to what it produces. The path with the dead end
+   (written out in section 2) took 23 s to be found to have no
+   alternative at all. The time is spread over the function that
    combines the ways the routes of a stretch can choose
    (`resolveStretch`, its `combine`). Nobody has tried to make that
    search cleverer.
@@ -345,10 +372,14 @@ with the matcher fixes unless said otherwise):
    (897 steps) 14 s; `mk x & (a & b & c)/…` with five groups (1,216
    steps) 33 s. That is roughly the 2.6th power of the steps. On a
    graph where the path already exists,
-   `mk x & (a & b & c)/(a & b & c)/(a & b & c)` (28 routes) takes 7 s:
-   the one node is read from disk 18,548 times (41% of the time; `mk`
-   does not cache reads as `ls` does), and candidates are listed up to
-   `max-repairs` before the path is found to resolve already.
+   `mk x & (a & b & c)/(a & b & c)/(a & b & c)` (28 routes) took 7 s
+   on that commit: the one node was read from disk 18,548 times (41%
+   of the time), since `mk` did not keep what it had read as `ls`
+   does, and candidates were listed up to `max-repairs` before the
+   path was found to resolve already. The first of these is repaired
+   in the build this note is checked in with, where an `mk` reads each
+   node once (`readOnce` in `Graph.PathPattern.Execution`); the 7 s
+   were not taken again.
 
 How well a number predicts time, measured on 20,683 generated paths
 with unions and 9,951 random paths without (unoptimized, matcher
@@ -401,9 +432,14 @@ in code that is not written yet.
 The message that goes with it does not suggest a rewrite, it runs one:
 each candidate (the heaviest `|` written `++`; every `|` written `++`)
 goes through the read-only part of the same command with a quarter of
-the budget, and is named only if it finished. So the advice is true by
-construction, at the cost of up to half a budget more time for a
-refusal. Two messages of the prototype, verbatim:
+the budget, and is named only if it finished. So it is true by
+construction that the path it names runs within the limit. That it is
+the path the user wants is not: `++` changes what the path means, and
+the message says so only with "one side for the whole path". The cost
+is up to half a budget more work for a refusal. A budget is an
+allowance of allocation, not of time (below), so how much longer a
+refusal takes for it is not bounded by that half. Two messages of the
+prototype, verbatim:
 
 ```
 This path is too large to run quickly, so it was not run. The limit is 20,000 steps (max-steps).
@@ -420,10 +456,18 @@ This path takes too much work to run, so it was stopped; nothing was changed. Th
   Or raise the limit (max-work). (TooMuchWork)
 ```
 
-Its tests read no clock. They assert on megabytes allocated, as
-ratios: 3.6 times the steps is at most 5 times the work (it was 12.4
-times before the matcher fixes, 3.83 after), so such a test catches
-both matcher defects and gave the same result on the loaded machine.
+Its tests read no clock. The prototype had six. Two are ratios of
+megabytes allocated: 3.6 times the steps is at most 5 times the work
+(it was 12.4 times before the matcher fixes, 3.83 after), so such a
+test catches both matcher defects. Three more are about work in
+absolute terms: that 512 alternatives of 9 routes use at most half of
+1,000 units, that a path of 65,536 alternatives is stopped at the
+budget, and that the same path costs the same work when it is run
+again in the process. The last of these fails in the optimized build
+(460.3 MB, then 458.3): tests of this kind have to compare with a
+margin. The sixth is on the size read off a path, 6,562 routes and
+52,489 steps for eight groups. They were run on the loaded machine
+only.
 
 ### How accurate it is
 
@@ -440,9 +484,18 @@ allocated.
 | time to refuse | up to 2.3 s | median 0.69 s; 95% within 1.02 s; 75 over 2 s; 9 over 5 s; worst 7.65 s | median 0.23 s; worst 1.11 s |
 | refused though it finishes in under 0.5 s | 76 finish in under 0.25 s; 261 have at most 1000 alternatives | none (116 finish in under 1 s) | 354 |
 
+Two of these figures do not agree with two given under "What it
+costs" below, and they are not reconciled here: 16,880 accepted by the
+limit, with the 328 that the check lets run and less the 30 that it
+stops, is 17,178, and the table has 17,181. All four are as the
+investigation reports them. That 11 of the 20,683 paths were not
+measured at 1500 does not explain it, since leaving paths out cannot
+raise the count.
+
 On the complete three-node graph, where the alternatives limit let
 through 1,653 paths that did not finish, the work budget stopped them,
-and the slowest accepted command took 0.86 s.
+and the slowest accepted command took 0.86 s. That run was not
+complete: 18,125 of the paths were measured on that graph.
 
 ### What it costs
 
@@ -474,14 +527,69 @@ Stated as plainly as the benefits:
   the verdict is then no property of the path.
 - **Feedback is not instant** for what the size check does not catch:
   a refusal arrives when the budget is spent.
+- **It stops paths the limit ran, and many of the paths it was meant
+  to free.** At a budget of 1500, 328 paths that the alternatives limit
+  refused run (the slowest in 0.83 s), and 30 that it accepted are
+  stopped. Of the 173 paths that section 2 gives as wrongly refused
+  after the last repair of the bounds, 100 run at 1500 (the slowest in
+  0.91 s) and 73 are still stopped (within 0.87 s); at 500, 6 of them
+  run. They are not cheap in this build: the median of those that run
+  is 0.43 s.
+- **Named paths that one would want to run are stopped.** In the
+  prototype `ge` at a budget of 1000, on a one-node graph whose node
+  has about sixty labels (the times are wall time, unoptimized and
+  then optimized):
+  - `((x | y)/@ & z)/(c1 & … & c10)` is stopped after 0.74 s, though
+    the designer had ruled that the `2^n` alternatives of that shape
+    are fine. (For the optimized build the source gives 0.57 s without
+    saying how the command ended.)
+  - `(a | b)/(c1 & … & c9)`, with 512 alternatives, is stopped after
+    0.67 s and after 0.56 s. It runs within such a budget at a node
+    with few labels: the same command costs more work at a node with
+    more.
+  - `x & (a & b & c)/…` with seven groups, the path without unions that
+    section 2 begins with and that the matcher fix brought down to
+    0.88 s of processor time, is stopped after 0.77 s and after 0.54 s.
+  - Of the eight small paths (9 to 36 alternatives) that the limit
+    refused for the work of counting, three are still stopped in the
+    unoptimized build and one in the optimized, each after about a
+    second.
+- **Work follows time less closely outside that one setting.** The
+  0.69 to 1.12 of section 3 is `ls` on a one-node graph in the
+  unoptimized build. In the optimized build, measured over predicted
+  ran from 0.41 to 2.63, and on a complete three-node graph from 0.44
+  to 2.08; for `mk` on an empty graph the rate itself ran from 0.27 to
+  0.71 ms a megabyte; and among compiles that were stopped at 3 GB it
+  ran from 0.2 to 5 ms a megabyte.
+- **For `mk` no size predicts time.** Of random paths without unions
+  with 300 steps or more, two thirds did not finish working out their
+  repair within 3 GB, and so did a third of those with 100 to 300
+  steps. The size check does little for `mk`; the budget has to do all
+  of it there.
+- **The message has weak points.** Its "ways to choose" figure is an
+  estimate from the shape of the path that ignores choices which
+  contradict each other, and can be far too high:
+  `x/@/(@1 | @2)/(a & … & j)` is estimated at 1,024 and has 2. For a
+  path that is stopped because of the graph and not because of the
+  path (many matches), the message has nothing useful to say. And
+  "raise the limit" does not say to what, since that is not known when
+  the work was cut short.
+- **Its figures are provisional.** They were all taken on a loaded
+  machine, and the investigation says it would take the headline
+  numbers again on an idle one before fixing a default. The run on the
+  three-node graph was incomplete.
+- **`ge` hung once.** The prototype's `ge` hung when its output was
+  piped to `head` after a refusal. It was not looked into, and whether
+  the prototype had a part in it is not known.
 - **It was a prototype.** Not built: commands other than `ls` and `mk`
   (they would get the size check only), `%override` settings for the
   two limits, TAB completion, `%targets(…)` queries. The prototype
   forced results inside the budget by hand; anything left lazy would be
   evaluated outside it, and a real version needs that audited.
 - The default was not chosen. At 500, accepted commands take at most
-  0.33 s and refusals arrive within 1.1 s, but 354 of 20,683 paths are
-  refused that finish in under half a second. At 1500 none is, and
+  0.33 s and refusals arrive within 1.1 s, but 354 of the 18,011 paths
+  measured at that setting are refused that finish in under half a
+  second. At 1500 none is, and
   accepted commands take up to 1.4 s and refusals up to 7.7 s.
 
 ### The other options that were on the table
@@ -510,7 +618,8 @@ Stated as plainly as the benefits:
 - **Repairs that remove a reason to hit any limit**, each a piece of
   work of its own: looking literal steps up instead of scanning a
   node's edges (done in the follow-up commit of section 3); caching
-  node reads in `mk`; testing "already resolves" before listing
+  node reads in `mk` (done since: an `mk` reads each node once);
+  testing "already resolves" before listing
   repairs; the cost of merging in `mk`; a matcher that does not list
   every match. The `mk` repairs were approved as separate work.
 - **Retiring `max-repairs` together with `max-alternatives`** once a
@@ -519,6 +628,10 @@ Stated as plainly as the benefits:
   the budget shelved, `max-repairs` stays.
 
 ## 5. What remains bounded today
+
+> **`mk` is about to be replaced, and this limit with it.** This
+> section, and the `mk` timings of sections 3 and 6, describe `mk` as
+> the build this note is checked in with has it.
 
 One thing: the candidates `mk` considers.
 
@@ -541,7 +654,7 @@ whatever the limit. When a path has several repairs, `mk` lists five
 of them and changes nothing.
 
 It bounds a count, not time: what one candidate costs grows with the
-pattern (`cli/docs/path-pattern-ir.md`, section 5, has the
+pattern (`cli/docs/path-route-ir.md`, Residuation, has the
 measurements, and section 3 above has the cost of `mk` on large
 patterns). And it bounds only `mk`'s planning. Compiling the path, for
 `mk` as for every other command, is not bounded by anything.
@@ -553,10 +666,11 @@ other where they are written compiles to nothing at once.
 
 ## 6. What removing the limit costs
 
-Measured for this note. The build is the one that has no limit:
-unoptimized, and without the matcher fixes of section 3, which are on
-another line of work, so loading and matching are slower here than they
-will be once the two lines are together. Each command is a fresh `ge`
+Measured for this note on 2026-10-09. Unless a figure says otherwise,
+the build is the first one that had no limit: unoptimized, and from
+before the matcher fixes of section 3, so loading and matching were
+slower in it than they are in the build this note is checked in with.
+Each command is a fresh `ge`
 process on a small scratch graph. The machine had a load average
 between 40 and 70 on 18 cores while these ran, so the measure is the
 processor time of the `ge` process (all its threads, which includes
@@ -584,9 +698,14 @@ every path the limit accepted that was tried:
   graph afterwards). Each session is a copy of a small graph and, for
   each of ten paths `p` in turn, `ls p`, `mk p`, `ls p`, so that a
   path is tried on whatever the `mk` before it left. On a graph with
-  almost no edges: 21,000 paths that the limit accepted, of which
-  20,951 gave identical sessions, none a different one, and 49 did not
-  finish within 60 s in either build. On a graph where every step
+  almost no edges (the first 32 of its 2,100 batches of ten paths on
+  the empty graph, the rest on that graph with the chain of seven
+  edges described below, the same for both builds): 21,000 paths that
+  the limit accepted, of which 20,951 gave identical sessions, none a
+  different one, and 49 did not finish within 60 s in either build.
+  (Five more did not finish within 60 s in one build only; run again
+  with 400 s they gave identical sessions, and are counted among the
+  20,951.) On a graph where every step
   matches once: 600 paths, 586 identical, none different, 14 unfinished
   in both. On a sparse random graph of nine nodes: 600 paths, 593
   identical, none different, 7 unfinished in both; and `ls` alone of
@@ -594,8 +713,9 @@ every path the limit accepted that was tried:
   paths, 17,742 are run, 1,924 of them with a warning about an `@`
   that does nothing, and 3,258 are refused by the meeting-point check,
   with the same message from both builds.)
-- The golden tests of `cli/test/golden/ge` that do not mention the
-  limit, 117 of them: unchanged, and they pass with both builds.
+- The golden tests of `cli/test/golden/ge` that did not mention the
+  limit, 117 of them at the time: unchanged, and they passed with both
+  builds.
 
 ### Paths the limit refused: most now run, some for a long time
 
@@ -613,7 +733,7 @@ A sample of 149 of the 648, drawn at random, each run with a limit of
 |---|---|---|---|
 | compiling alone (`compilePath`, forced; a program linked against the library, not `ge`) | 132 | 17 | half within 0.63 s, nine in ten within 5.4 s, the slowest 19.6 s; 79 under a second |
 | `ls`, on a graph where every step matches once | 107 | 42 | half within 2.8 s, nine in ten within 12.2 s, the slowest 18.9 s; 12 under a second, 75 under five |
-| `mk`, on a graph with almost no edges (below) | 76 | 73 | half within 9.9 s, the slowest 20.6 s; 2 under a second, 20 under five; 34 of the 76 ended with `TooManyRepairs` |
+| `mk`, on a graph with almost no edges (below) | 76 | 73 | half within 9.9 s, the slowest 20.6 s (as recorded: a little past the limit); 2 under a second, 20 under five; 34 of the 76 ended with `TooManyRepairs` |
 
 So about nine in ten of the paths the limit refused compile within
 20 s, most of them within a second; seven in ten finish an `ls` within
@@ -622,11 +742,9 @@ only by the user.
 
 (The graph for `mk` has the nodes 0, 1, 2, 3 and 7 and was meant to
 have no edges. The sixth `mk` of the table below succeeded and wrote
-what it created, a chain of seven edges from node 0, into the graph,
-though `ge` was run without `--no-dry-run-writing`: at this commit
-that flag does not keep `mk` from writing, with or without the limit.
-Every `mk` after it, which is all of the sample, ran on the graph with
-that chain.)
+what it created, a chain of seven edges from node 0, into the graph
+itself, which was meant to be used read-only. Every `mk` after it,
+which is all of the sample, ran on the graph with that chain.)
 
 Three more things the sample shows:
 
@@ -644,61 +762,74 @@ The paths that earlier text of the specification used as examples of
 each error, with the same build (`ls` on the graph where every step
 matches once and `mk` on the graph with almost no edges, each with
 120 s of wall-clock time, which under the load was 50 to 100 s of
-processor time; compiling alone with 120 s of processor time):
+processor time; compiling alone with 120 s of processor time). The last
+column is the `ls` measured again, on the same day, with the build this
+note is checked in with, which has the matcher fixes of section 3: the
+same graph, the same 120 s of wall-clock time, processor time of the
+process, under a load average of 12 to 18. The column "what the limit
+said" is the error that the earlier text of the specification gave for
+each path; the paths were not run through the limit again for this
+table. The fourth row is corrected from the run of the review of
+section 2, in which the limit answered `TooLargeToCount` and not, as
+that text had it, `TooManyAlternatives`:
 
-| path | what the limit said | alternatives | compiling alone | `ls` | `mk` |
-|---|---|---|---|---|---|
-| `(a \| b \| c)/(d & e & f & g & h & i & j)` | `TooManyAlternatives` | 2,187 | 0.16 s | 1.0 s | 5.2 s: 2,187 repairs to choose from |
-| `(a \| b)/(c \| d)/(e \| f)/(g \| h)/(i \| j)/(m & n)` | `TooManyAlternatives` | 1,024 | 0.06 s | 0.41 s | 1.4 s: 1,024 repairs |
-| `(p & q)/(x/@ \| y)/(w/@ \| z)/(u/@ \| v)/(s/@ \| t)/(m/@ \| n)/(k/@ \| l)` | `TooManyAlternatives` | 1,394 | 0.15 s | 0.71 s | 2.8 s: 2,360 repairs |
-| `((x \| y)/@ & z)/(c1 & … & c10)` | `TooLargeToCount` | 1,024 | 0.24 s | 1.9 s | 33 s, then `TooManyRepairs` |
-| `(x/@ \| @/x/@)/` five times, then `(a/@ \| @/a/@)/(d & e)` | `TooLargeToCount` | 7 | 0.08 s | 0.36 s | 0.30 s |
-| `(x0 \| y0) & … & (x8 \| y8) & (a & b)/…/s/…/s`, six groups and ten steps | `TooLargeToCount` | 512, of 73 routes each | 3.0 s | not in 120 s | not in 120 s |
-| `(a & b & c)/(a & b & c)/(a & b & c)/(a & b & c)/(a & b)/@/((e \| f) & g)/(a & b & c)/(a & b & c)` | `TooLargeToCount` | 512, of 2,916 routes each | 14.7 s | not in 120 s | not in 120 s |
-| `(c & d)/(@1 \| … \| @29)/(a & b)/@` | `TooLargeToCount` | 707,281 | 91 s | not in 120 s | not in 120 s |
-| `(x \| y) & (a & b & c)/…`, nine groups | `TooManyRoutes` | 2, of 19,684 routes each | 5.1 s | not in 120 s | not in 120 s |
-| `(a & b & c)/…/@/(x \| y)/(a & b)`, eight groups before the join | `TooManyRoutes` | 4, of 13,122 routes each | 1.9 s | not in 120 s | not in 120 s |
-| `(x \| y)/(a & b & c)/…`, seven groups | `TooLargeToCount` | `2^2187` ways to choose | not in 120 s | not in 120 s | not in 120 s |
-| `(a0 & … & a169)/(x \| y)/(b0 & … & b169)` | `TooManyRoutes` | `2^28900` ways to choose | not in 120 s | not in 120 s | not in 120 s |
+| path | what the limit said | alternatives | compiling alone | `ls` | `mk` | `ls`, with the matcher fixes |
+|---|---|---|---|---|---|---|
+| `(a \| b \| c)/(d & e & f & g & h & i & j)` | `TooManyAlternatives` | 2,187 | 0.16 s | 1.0 s | 5.2 s: 2,187 repairs to choose from | 0.57 s |
+| `(a \| b)/(c \| d)/(e \| f)/(g \| h)/(i \| j)/(m & n)` | `TooManyAlternatives` | 1,024 | 0.06 s | 0.41 s | 1.4 s: 1,024 repairs | 0.26 s |
+| `(@1 \| … \| @40)/(a & b)` | `TooManyAlternatives` | 1,600 | 0.05 s | 0.36 s | 0.80 s: 1,600 repairs | 0.27 s |
+| `(p & q)/(x/@ \| y)/(w/@ \| z)/(u/@ \| v)/(s/@ \| t)/(m/@ \| n)/(k/@ \| l)` | `TooLargeToCount` | 1,394 | 0.15 s | 0.71 s | 2.8 s: 2,360 repairs | 0.43 s |
+| `((x \| y)/@ & z)/(c1 & … & c10)` | `TooLargeToCount` | 1,024 | 0.24 s | 1.9 s | 33 s, then `TooManyRepairs` | 0.81 s |
+| `(x/@ \| @/x/@)/` five times, then `(a/@ \| @/a/@)/(d & e)` | `TooLargeToCount` | 7 | 0.08 s | 0.36 s | 0.30 s | 0.22 s |
+| `(x0 \| y0) & … & (x8 \| y8) & (a & b)/…/s/…/s`, six groups and ten steps | `TooLargeToCount` | 512, of 73 routes each | 3.0 s | not in 120 s | not in 120 s | 7.6 s |
+| `(a & b & c)/(a & b & c)/(a & b & c)/(a & b & c)/(a & b)/@/((e \| f) & g)/(a & b & c)/(a & b & c)` | `TooLargeToCount` | 512, of 2,916 routes each | 14.7 s | not in 120 s | not in 120 s | 46 s |
+| `(c & d)/(@1 \| … \| @29)/(a & b)/@` | `TooLargeToCount` | 707,281 | 91 s | not in 120 s | not in 120 s | not in 120 s |
+| `(x \| y) & (a & b & c)/…`, nine groups | `TooManyRoutes` | 2, of 19,684 routes each | 5.1 s | not in 120 s | not in 120 s | 19.8 s |
+| `(a & b & c)/…/@/(x \| y)/(a & b)`, eight groups before the join | `TooManyRoutes` | 4, of 13,122 routes each | 1.9 s | not in 120 s | not in 120 s | 10.8 s |
+| `(x \| y)/(a & b & c)/…`, seven groups | `TooLargeToCount` | `2^2187` ways to choose | not in 120 s | not in 120 s | not in 120 s | not in 120 s |
+| `(a0 & … & a169)/(x \| y)/(b0 & … & b169)` | `TooManyRoutes` | `2^28900` ways to choose | not in 120 s | not in 120 s | not in 120 s | not in 120 s |
 
 The last two never finish: no machine lists `2^2187` alternatives.
+With the matcher fixes, four of the seven paths whose `ls` did not
+finish in 120 s finish in 7.6 to 46 s of processor time, and the six that
+finished before take 0.2 to 0.8 s where they took 0.4 to 1.9 s (the
+load on the machine differed between the two measurements).
 The limit did not protect against slow paths in general, though. The
-path with the dead end of section 2, which the limit accepted, takes
+path with the dead end (written out in section 2), which the limit
+accepted, takes
 17 s of processor time to compile to nothing with this build, and a
 path without unions was never checked.
 
 ### What the user can do about a command that runs long
 
-Tried with the new build on a path that never finishes compiling
-(`ls (x | y)/(a & b & c)/…` with seven groups), in a terminal emulated
-by a program, eight seconds into the command:
+Tried on 2026-10-09 with the build this note is checked in with, in a
+terminal emulated by a program, on a path that never finishes compiling
+(`ls (x | y)/(a & b & c)/…` with seven groups) and on a command that is
+busy reading node files (`ls n/c` at a node with 3,000 children under
+`n`):
 
-- **At the prompt of the REPL, Ctrl-C stops the command.** `^C` is
-  echoed and the prompt is back 0.11 s later; the next command works.
+- **At the prompt of the REPL, Ctrl-C stops the command**, every time
+  in a session: four commands of each kind in a row were stopped. `^C`
+  is echoed, the prompt is back at once and the next command works.
   Nothing was changed: a command compiles its paths before it writes
-  anything. The memory the process had taken (about 300 MB after
-  eight seconds) was still held five seconds later.
-- **`ge -e 'COMMAND'` ends at an interrupt.** The process is gone
-  0.04 s after the signal, killed by it, with nothing printed.
-- **TAB completion cannot be interrupted.** TAB after that path and a
-  `/` compiles the prefix to find what could follow. The prompt stays
-  frozen; Ctrl-C typed there is not seen (the terminal is in raw mode
-  while a line is being edited), and neither is an interrupt signal
-  sent to the process from outside; what is typed afterwards is not
-  read. Only killing `ge` ends it. With the limit, TAB offered nothing
-  for such a prefix and the prompt stayed usable. This is the one
-  place where removing the limit makes `ge` worse in a way the user
-  cannot get out of, and it is the first thing to look at if long
-  commands become a problem: completion should be interruptible
-  whatever else is decided.
-
-  That has been done since, for completion alone: when its candidates
-  are not ready after about half a second, completion stops the work and
-  offers nothing, as it did for a prefix over the limit, and the prompt
-  stays usable (`completingWithin` in
-  `cli/src/Executable/GraphEditor/Completion.hs`). It is a bound on
-  time, which the limit was not, and it is on completion only: a command
-  still compiles its path for as long as it takes.
+  anything.
+- **`ge -e 'COMMAND'` ends at an interrupt.** The process is gone at
+  once, killed by the signal, with nothing printed, also when the
+  interrupt lands while node files are being read.
+- Either way, damage to the graph that the command line had read past
+  by then is still warned of.
+- **TAB completion gives up by itself.** TAB after that path and a `/`
+  compiles the prefix to find what could follow. When the candidates
+  are not ready after about half a second, completion offers nothing
+  and the prompt is usable again, and Ctrl-C during the half second
+  gives a new prompt at once. Work that computes is stopped then. Work
+  that is waiting for the system to let it read a node file (another
+  program is writing it, or it is not downloaded yet) is not stopped
+  until it has been let, but the prompt is back after the half second
+  regardless: tried with another program holding a write claim on the
+  file for six seconds. This is a bound on time, which the limit was
+  not, and it is on completion only: a command still compiles its path
+  for as long as it takes.
 
 ### What it costs the tests
 

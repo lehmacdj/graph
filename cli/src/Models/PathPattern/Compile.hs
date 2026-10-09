@@ -1,4 +1,4 @@
--- | Compile surface paths to route patterns (docs/path-pattern-ir.md §2).
+-- | Compile surface paths to route patterns (docs/path-route-ir.md, Compilation).
 --
 -- Compilation has four steps:
 --
@@ -1183,7 +1183,7 @@ together sideJoins
 -- * Copied meeting points
 
 -- | A path that no command runs: a product would copy a meeting point
--- (docs/path-pattern-ir.md, Meeting points).
+-- (docs/path-route-ir.md, Meeting points).
 data CopiedMeetingPoint = CopiedMeetingPoint
   { -- | the conjunct in which several walks meet at a join or leave it
     meeting :: Path,

@@ -1,5 +1,5 @@
 -- | 'suggestPaths' against its reference, which residuates every
--- candidate path (docs/path-pattern-ir.md §5, Suggested paths).
+-- candidate path (docs/path-route-ir.md, Residuation, Suggested paths).
 module Models.PathPattern.SuggestSpec where
 
 import Control.Monad.State.Strict qualified as S

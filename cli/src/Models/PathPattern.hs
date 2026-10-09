@@ -1,5 +1,5 @@
 -- | Route patterns: the normal form of a path. See
--- @docs/path-pattern-ir.md@ for the design.
+-- @docs/path-route-ir.md@ for the design.
 --
 -- A pattern is an ordered list of routes. Each route walks from a bound root
 -- through hops to one output. Routes meet at shared vertices; a shared prefix

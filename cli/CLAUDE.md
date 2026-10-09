@@ -12,10 +12,13 @@ For setup instructions (installing Stack, running tests), see [docs/claude-code-
   syntax, what each operator means, the product rule and joins, unions,
   refused and warned paths, and the laws. **[Commands and
   paths](docs/commands.md)** - What each command does with a path,
-  including `mk` and the limits.
+  including `mk`, the settings, and what happens when a command fails.
 
-- **[Route patterns](docs/path-pattern-ir.md)** - How paths compile to route
-  patterns, and how resolution, residuation (`mk`) and edge selection work.
+- **[Route patterns](docs/path-route-ir.md)** - For changing the compiler:
+  how paths compile to route patterns, how resolution, residuation (`mk`)
+  and edge selection work, and which test pins which law.
+  **[Limits on what a path costs](docs/path-cost-limits.md)** - Why nothing
+  limits what a path compiles to, what was tried, and what is still bounded.
 
 - **[Damaged graphs](docs/damaged-graphs.md)** - What counts as damage to a
   graph's node files, how commands refuse to edit and warn when reading next

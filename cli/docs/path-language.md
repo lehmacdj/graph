@@ -8,7 +8,7 @@ The commands that take a path are `ls` (`preview`), `cd`, `mk`, `rm`,
 what each operator means, which paths are refused or warned about and
 what to write instead, and the laws that hold. What each command does
 with a path is in [commands.md](commands.md); how a path is compiled and
-run is in [path-pattern-ir.md](path-pattern-ir.md).
+run is in [path-route-ir.md](path-route-ir.md).
 
 Every example in this document was run on the build it is checked in
 with. An example block names a graph and then shows commands and what
