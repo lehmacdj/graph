@@ -33,6 +33,7 @@ import Foreign (Ptr, allocaBytes, castPtr, peek)
 import Foreign.C.Error (throwErrnoIfMinus1_)
 import Foreign.C.Types (CInt (..), CULong (..))
 import Foreign.Ptr (FunPtr, castPtrToFunPtr, nullPtr, plusPtr)
+import GHC.Clock (getMonotonicTimeNSec)
 import GHC.IO.Exception (IOErrorType (ResourceVanished), IOException (..))
 import Graph.AppInterpreters
 import Graph.Command
@@ -766,6 +767,45 @@ spec_repl = do
       cancel stopped
       -- the session is free for the next request
       timeout 60000000 (askSession session (pure 'x')) `shouldReturn` Just 'x'
+  it "gets every line from the session, whenever the session answers" do
+    -- With the interpreter of the REPL. Between the session and the REPL no
+    -- line may be lost, whatever the moment at which it is handed over: a
+    -- wait for the answer that woke every 50 ms once lost the lines that
+    -- were handed over as a step of it ended, and then waited for good. So
+    -- the session here has its lines already (it reads a pipe) and answers
+    -- at a chosen time after it was asked, mostly at that mark.
+    (readFd, writeFd) <- createPipe
+    readEnd <- fdToHandle readFd
+    writeEnd <- fdToHandle writeFd
+    let delays :: [Int]
+        delays = [0, 100000, 150000] <> replicate 40 50000
+        typed :: Int -> String
+        typed n = "line " <> show n
+        answeringAfter :: Int -> H.InputT IO x -> IO x
+        answeringAfter delay asked = do
+          start <- getMonotonicTimeNSec
+          answer <-
+            H.runInputTBehavior (H.useFileHandle readEnd) H.defaultSettings asked
+          now <- getMonotonicTimeNSec
+          threadDelay (delay - fromIntegral ((now - start) `div` 1000))
+          pure answer
+        -- the first line that did not arrive as it was written, if any; the
+        -- minute is for a busy machine, and a lost line is waited for for
+        -- all of it
+        firstLost = \case
+          [] -> pure Nothing
+          (n, delay) : rest -> do
+            line <-
+              timeout 60000000 . runEff . runReadlineAsking (answeringAfter delay) $
+                getInputLine ""
+            if line == Just (Just (typed n))
+              then firstLost rest
+              else pure (Just (n, delay, line))
+    hPut writeEnd . encodeUtf8 . pack @Text $
+      concatMap ((<> "\n") . typed) [0 .. length delays - 1]
+    hClose writeEnd
+    (firstLost (zip [0 ..] delays) `finally` hClose readEnd)
+      `shouldReturn` Nothing
   it "leaves nothing of a turn around the turns after it" $
     withEmptyTempGraph \dir -> do
       -- lines that don't parse, and Ctrl-C at the prompt; then the end of

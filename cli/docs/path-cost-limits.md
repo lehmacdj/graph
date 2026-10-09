@@ -692,6 +692,14 @@ by a program, eight seconds into the command:
   commands become a problem: completion should be interruptible
   whatever else is decided.
 
+  That has been done since, for completion alone: when its candidates
+  are not ready after about half a second, completion stops the work and
+  offers nothing, as it did for a prefix over the limit, and the prompt
+  stays usable (`completingWithin` in
+  `cli/src/Executable/GraphEditor/Completion.hs`). It is a bound on
+  time, which the limit was not, and it is on completion only: a command
+  still compiles its path for as long as it takes.
+
 ### What it costs the tests
 
 The tests on random paths used the limit as their filter (section 1).

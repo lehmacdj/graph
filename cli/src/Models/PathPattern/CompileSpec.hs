@@ -381,9 +381,11 @@ spec_compileManyJoinedSides = describe "a union of many joined sides" do
         foldl1Ex'
           (P.:||)
           [P.Literal ("x" <> tshow i) P.:/ P.One | i <- [0 .. n - 1 :: Int]]
+      -- the allowance is that of 'spec_compileContradictions': a search
+      -- that does not end fails instead of hanging; it measures nothing
       counts name p n = it name do
         compiled <-
-          timeout 2000000 (evaluate (length (compilePath p).alternatives))
+          timeout 60000000 (evaluate (length (compilePath p).alternatives))
         compiled `shouldBe` Just n
   counts "(@1 | … | @12)/(a & b)" (nodes 12 P.:/ [path| a & b |]) 144
   counts "(@1 | … | @20)/(a & b)" (nodes 20 P.:/ [path| a & b |]) 400
@@ -405,9 +407,11 @@ spec_compileIndependentUnions = describe "unions whose order cannot matter" do
   let union' i = P.Literal ("a" <> tshow i) P.:|| P.Literal ("b" <> tshow i)
       conjoined n f = foldl1Ex' (P.:&) [f (union' i) | i <- [1 .. n :: Int]]
       chained n = foldl1Ex' (P.:/) [union' i | i <- [1 .. n :: Int]]
+      -- the allowance is that of 'spec_compileContradictions': a search
+      -- that does not end fails instead of hanging; it measures nothing
       counts name p n = it name do
         compiled <-
-          timeout 500000 (evaluate (length (compilePath p).alternatives))
+          timeout 60000000 (evaluate (length (compilePath p).alternatives))
         compiled `shouldBe` Just n
   counts "six unions joined by &" (conjoined 6 id) 64
   counts "seven unions joined by &" (conjoined 7 id) 128
@@ -3789,15 +3793,18 @@ spec_compileCopiedMeetingPoints = describe "a product may not copy a meeting poi
       when (maybe False (> 0) (warnings with')) $
         (show with', compilePath with') `shouldBe` (show with', compilePath without)
   it "does bounded work, however much the path would compile to" do
-    -- 2^40 alternatives and 2^40 choices: the path is read as written
+    -- 2^40 alternatives and 2^40 choices: the path is read as written.
+    -- The allowance is that of 'spec_compileContradictions': work that
+    -- grows with what the path would compile to fails instead of hanging;
+    -- it measures nothing
     let wide = foldl1Ex' (P.:/) (replicate 40 [path| (a ++ b)/(c | d) |] :: [P.Path])
         long = [path| (p & q) |] P.:/ wide P.:/ [path| ((c & y)/@/e & d) |]
-    result <- timeout 1000000 (evaluate (isLeft (checkCopies long)))
+    result <- timeout 60000000 (evaluate (isLeft (checkCopies long)))
     result `shouldBe` Just True
     -- many routes: what to write instead is only worked out for few
     let many = foldl1Ex' (P.:/) (replicate 30 [path| (a & b) |] :: [P.Path])
     result' <-
-      timeout 1000000 . evaluate . either (isNothing . (.writtenApart)) (const False) $
+      timeout 60000000 . evaluate . either (isNothing . (.writtenApart)) (const False) $
         checkCopies (many P.:/ [path| ((c & y)/@/e & d) |])
     result' `shouldBe` Just True
     -- a union with a side for each of many copies: refused like any

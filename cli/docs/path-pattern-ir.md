@@ -1237,11 +1237,21 @@ been changed, since a command compiles its paths before it writes;
 does, and says nothing of its own. A command that is reading node files
 when the interrupt arrives is stopped in the same way, and is not
 reported as a command that failed. Either way the damage that the line
-had read past is still warned of. TAB completion compiles the prefix it
-completes, lowering `+` as `|` like a query, and cannot be interrupted
-while it does: a prefix that takes long to compile holds the prompt
-until it is done, or until `ge` is killed. A prefix that no command
-runs offers no completions.
+had read past is still warned of.
+
+TAB completion compiles the prefix it completes, lowering `+` as `|`
+like a query, and reads the node files that the prefix leads to.
+Neither holds the prompt: when the candidates are not ready after about
+half a second (`Executable.GraphEditor.Completion.completionAllowance`)
+completion gives up and offers nothing, and the prompt goes on as after
+any TAB that finds nothing. The work is done in a thread of its own,
+which is told to stop then and is not waited for: work that computes
+stops at once, and work that waits for the system to let it read a file
+(another program is writing it, or it is not downloaded yet) stops when
+it has been let, after that one read. Ctrl-C during the half second
+gives a new prompt at once. That is a bound on completion, which is
+advice, and on no command. A prefix that no command runs offers no
+completions.
 
 What `mk` makes is limited: its work is in the candidate repairs of
 each alternative (residuation), which depend on the graph, and they
