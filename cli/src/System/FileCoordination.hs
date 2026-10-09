@@ -5,6 +5,19 @@
 -- with iCloud and other file presenters.
 -- On other platforms, it provides a no-op implementation that directly
 -- passes through to the provided actions.
+--
+-- Memory on macOS: file coordination autoreleases about 2.5 KB of
+-- Objective-C objects for every file that is read (3.3 KB for one that is
+-- written), and a Haskell program has no autorelease pool that would free
+-- them. So every coordinated call of the bindings runs in a pool of its own
+-- (see "Coordinated calls" in "System.MacOS.NSFileCoordinator.RawBindings"),
+-- and what it autoreleased is freed when it returns. Three things follow for
+-- the code here: the path of an accessor's URL is copied out of the URL
+-- inside the accessor ('filePathFromNSURL'); the error of a call is handed
+-- back as an object of our own, which is read in a pool as well and then
+-- released ('throwingNSError'); and what is made outside those calls is made
+-- with @alloc@ and @init@ and released by us ('allocateNSURL',
+-- 'allocateNSArray', the coordinator), never autoreleased.
 module System.FileCoordination
   ( coordinateReading,
     coordinateWriting,
@@ -24,6 +37,8 @@ module System.FileCoordination
     NSErrorException (..),
     spec_coordinatedBodyThrows,
     spec_coordinatedPathKept,
+    spec_coordinationError,
+    spec_coordinationFreesAutoreleased,
     spec_peekNSError,
   )
 where
@@ -136,8 +151,19 @@ peekNSError nsError = withEarlyReturnIO do
   description <- liftIO $ p_NSError_description nsError >>= packNSString
   pure . Just $ NSErrorException domain (fromIntegral code) description
 
-throwNonNullNSError :: Ptr NSError -> IO ()
-throwNonNullNSError nsError = peekNSError nsError >>= maybe (pure ()) throwIO
+-- | Runs a coordinated call of the bindings and throws its error, if it has
+-- one. The call hands the error back as the caller's own (see "Coordinated
+-- calls" in the bindings), so it is released here, once it is read or if
+-- reading it is interrupted. It is read in an autorelease pool as well: an
+-- error autoreleases its description when it is asked for it.
+throwingNSError :: IO (Ptr NSError) -> IO ()
+throwingNSError call =
+  bracket call releaseUnlessNull readError >>= traverse_ throwIO
+  where
+    releaseUnlessNull nsError = unless (nsError == nullPtr) (m_release nsError)
+    readError nsError
+      | nsError == nullPtr = pure Nothing
+      | otherwise = inOwnAutoreleasePool (peekNSError nsError)
 
 allocateNSURL :: FilePath -> Bool -> ResourceT IO (ReleaseKey, Ptr NSURL)
 allocateNSURL path isDirectory = allocate
@@ -184,10 +210,11 @@ accessorResult (AccessorResult ref) =
     Just (Left e) -> throwIO e
     Just (Right result) -> pure result
 
--- | Runs the action in an autorelease pool of its own, for the tests: the
--- Objective-C objects that it autoreleases are freed before its result is
--- returned, as they are sooner or later wherever it runs (when a pool
--- around it is left, or when its operating system thread ends).
+-- | Runs the action in an autorelease pool of its own: the Objective-C
+-- objects that it autoreleases are freed before its result is returned.
+-- (Without one they are freed sooner or later as well, wherever the action
+-- runs: when a pool around it is left, or when its operating system thread
+-- ends. The tests use this to have that happen at once.)
 inOwnAutoreleasePool :: IO a -> IO a
 inOwnAutoreleasePool action = do
   result <- newAccessorResult
@@ -196,90 +223,107 @@ inOwnAutoreleasePool action = do
 
 coordinateReading' ::
   Ptr NSFileCoordinator ->
-  Ptr (Ptr NSError) ->
   Ptr NSURL ->
   ReadingOptions ->
   (FilePath -> IO a) ->
   IO a
-coordinateReading' fileCoordinator errPtr url options action = do
+coordinateReading' fileCoordinator url options action = do
   result <- newAccessorResult
-  m_NSFileCoordinator_coordinateReadingItem
-    fileCoordinator
-    url
-    (fromReadingOptions options)
-    errPtr
-    $ \newUrl ->
-      runAccessorBody result $
-        action =<< filePathFromNSURL newUrl
-  when (errPtr /= nullPtr) $ peek errPtr >>= throwNonNullNSError
+  throwingNSError $
+    m_NSFileCoordinator_coordinateReadingItem
+      fileCoordinator
+      url
+      (fromReadingOptions options)
+      $ \newUrl ->
+        runAccessorBody result $
+          action =<< filePathFromNSURL newUrl
   accessorResult result
 
 coordinateWriting' ::
   Ptr NSFileCoordinator ->
-  Ptr (Ptr NSError) ->
   Ptr NSURL ->
   WritingOptions ->
   (FilePath -> IO a) ->
   IO a
-coordinateWriting' fileCoordinator errPtr url options action = do
+coordinateWriting' fileCoordinator url options action = do
   result <- newAccessorResult
-  m_NSFileCoordinator_coordinateWritingItem
-    fileCoordinator
-    url
-    (fromWritingOptions options)
-    errPtr
-    $ \newUrl ->
-      runAccessorBody result $
-        action =<< filePathFromNSURL newUrl
-  when (errPtr /= nullPtr) $ peek errPtr >>= throwNonNullNSError
+  throwingNSError $
+    m_NSFileCoordinator_coordinateWritingItem
+      fileCoordinator
+      url
+      (fromWritingOptions options)
+      $ \newUrl ->
+        runAccessorBody result $
+          action =<< filePathFromNSURL newUrl
   accessorResult result
 
 coordinateReadingThenWriting' ::
   Ptr NSFileCoordinator ->
-  Ptr (Ptr NSError) ->
   Ptr NSURL ->
   ReadingOptions ->
   Ptr NSURL ->
   WritingOptions ->
   (FilePath -> FilePath -> IO a) ->
   IO a
-coordinateReadingThenWriting' fileCoordinator errPtr readingUrl readingOptions writingUrl writingOptions action = do
+coordinateReadingThenWriting' fileCoordinator readingUrl readingOptions writingUrl writingOptions action = do
   result <- newAccessorResult
-  m_NSFileCoordinator_coordinateReadingAndWritingItem
-    fileCoordinator
-    readingUrl
-    (fromReadingOptions readingOptions)
-    writingUrl
-    (fromWritingOptions writingOptions)
-    errPtr
-    $ \newReadingUrl newWritingUrl -> runAccessorBody result do
-      readingPath <- filePathFromNSURL newReadingUrl
-      writingPath <- filePathFromNSURL newWritingUrl
-      action readingPath writingPath
-  when (errPtr /= nullPtr) $ peek errPtr >>= throwNonNullNSError
+  throwingNSError $
+    m_NSFileCoordinator_coordinateReadingAndWritingItem
+      fileCoordinator
+      readingUrl
+      (fromReadingOptions readingOptions)
+      writingUrl
+      (fromWritingOptions writingOptions)
+      $ \newReadingUrl newWritingUrl -> runAccessorBody result do
+        readingPath <- filePathFromNSURL newReadingUrl
+        writingPath <- filePathFromNSURL newWritingUrl
+        action readingPath writingPath
   accessorResult result
 
 coordinateWritingAndWriting' ::
   Ptr NSFileCoordinator ->
-  Ptr (Ptr NSError) ->
   Ptr NSURL ->
   WritingOptions ->
   Ptr NSURL ->
   WritingOptions ->
   (FilePath -> FilePath -> IO a) ->
   IO a
-coordinateWritingAndWriting' fileCoordinator errPtr writingUrl1 writingOptions1 writingUrl2 writingOptions2 action = do
+coordinateWritingAndWriting' fileCoordinator writingUrl1 writingOptions1 writingUrl2 writingOptions2 action = do
   result <- newAccessorResult
-  m_NSFileCoordinator_coordinateWritingItem
-    fileCoordinator
-    writingUrl1
-    (fromWritingOptions writingOptions1)
-    errPtr
-    $ \newWritingUrl1 -> runAccessorBody result do
-      writingPath1 <- filePathFromNSURL newWritingUrl1
-      coordinateWriting' fileCoordinator errPtr writingUrl2 writingOptions2 $
-        action writingPath1
-  when (errPtr /= nullPtr) $ peek errPtr >>= throwNonNullNSError
+  throwingNSError $
+    m_NSFileCoordinator_coordinateWritingItem
+      fileCoordinator
+      writingUrl1
+      (fromWritingOptions writingOptions1)
+      $ \newWritingUrl1 -> runAccessorBody result do
+        writingPath1 <- filePathFromNSURL newWritingUrl1
+        -- an error of the second file is thrown here, in the body of the
+        -- first, and so becomes the result of the whole
+        coordinateWriting' fileCoordinator writingUrl2 writingOptions2 $
+          action writingPath1
+  accessorResult result
+
+-- | Prepares for the reading and writing of the files of the two arrays,
+-- and runs the action when that is done. An error of the preparing is
+-- thrown, as an error of reading or writing one file is.
+coordinateAccessing' ::
+  Ptr NSFileCoordinator ->
+  Ptr NSArray ->
+  ReadingOptions ->
+  Ptr NSArray ->
+  WritingOptions ->
+  IO a ->
+  IO a
+coordinateAccessing' fileCoordinator readingUrls readingOptions writingUrls writingOptions action = do
+  result <- newAccessorResult
+  throwingNSError $
+    m_NSFileCoordinator_prepareForReadingAndWritingItems
+      fileCoordinator
+      readingUrls
+      (fromReadingOptions readingOptions)
+      writingUrls
+      (fromWritingOptions writingOptions)
+      (runAccessorBody result action)
   accessorResult result
 
 #endif
@@ -290,9 +334,8 @@ coordinateReading :: FilePath -> Bool -> ReadingOptions -> (FilePath -> IO a) ->
 #ifdef darwin_HOST_OS
 coordinateReading path isDirectory options action = runResourceT do
   (_, fileCoordinator) <- allocate nsFileCoordinator_init m_release
-  (_, errPtr) <- allocate calloc free
   (_, url) <- allocateNSURL path isDirectory
-  liftIO $ coordinateReading' fileCoordinator errPtr url options action
+  liftIO $ coordinateReading' fileCoordinator url options action
 #else
 coordinateReading path _ _ action = action path
 #endif
@@ -301,9 +344,8 @@ coordinateWriting :: FilePath -> Bool -> WritingOptions -> (FilePath -> IO a) ->
 #ifdef darwin_HOST_OS
 coordinateWriting path isDirectory options action = runResourceT do
   (_, fileCoordinator) <- allocate nsFileCoordinator_init m_release
-  (_, errPtr) <- allocate calloc free
   (_, url) <- allocateNSURL path isDirectory
-  liftIO $ coordinateWriting' fileCoordinator errPtr url options action
+  liftIO $ coordinateWriting' fileCoordinator url options action
 #else
 coordinateWriting path _ _ action = action path
 #endif
@@ -312,10 +354,9 @@ coordinateReadingThenWriting :: FilePath -> Bool -> ReadingOptions -> FilePath -
 #ifdef darwin_HOST_OS
 coordinateReadingThenWriting readingPath readingIsDirectory readingOptions writingPath writingIsDirectory writingOptions action = runResourceT do
   (_, fileCoordinator) <- allocate nsFileCoordinator_init m_release
-  (_, errPtr) <- allocate calloc free
   (_, readingUrl) <- allocateNSURL readingPath readingIsDirectory
   (_, writingUrl) <- allocateNSURL writingPath writingIsDirectory
-  liftIO $ coordinateReadingThenWriting' fileCoordinator errPtr readingUrl readingOptions writingUrl writingOptions action
+  liftIO $ coordinateReadingThenWriting' fileCoordinator readingUrl readingOptions writingUrl writingOptions action
 #else
 coordinateReadingThenWriting readingPath _ _ writingPath _ _ action = action readingPath writingPath
 #endif
@@ -324,10 +365,9 @@ coordinateWritingAndWriting :: FilePath -> Bool -> WritingOptions -> FilePath ->
 #ifdef darwin_HOST_OS
 coordinateWritingAndWriting writingPath1 writingIsDirectory1 writingOptions1 writingPath2 writingIsDirectory2 writingOptions2 action = runResourceT do
   (_, fileCoordinator) <- allocate nsFileCoordinator_init m_release
-  (_, errPtr) <- allocate calloc free
   (_, writingUrl1) <- allocateNSURL writingPath1 writingIsDirectory1
   (_, writingUrl2) <- allocateNSURL writingPath2 writingIsDirectory2
-  liftIO $ coordinateWritingAndWriting' fileCoordinator errPtr writingUrl1 writingOptions1 writingUrl2 writingOptions2 action
+  liftIO $ coordinateWritingAndWriting' fileCoordinator writingUrl1 writingOptions1 writingUrl2 writingOptions2 action
 #else
 coordinateWritingAndWriting writingPath1 _ _ writingPath2 _ _ action = action writingPath1 writingPath2
 #endif
@@ -375,24 +415,17 @@ coordinateAccessing FilesToCoordinate{..} action = runResourceT do
     (_, readingUrlsArray) <- allocateNSArray (ordNub $ readingUrls ^.. folded)
     (_, writingUrlsArray) <- allocateNSArray (ordNub $ writingUrls ^.. folded)
     (_, fileCoordinator) <- allocate nsFileCoordinator_init m_release
-    (_, errPtr) <- allocate calloc free
-    let readingAccessors =
-          readingUrls <&> \url -> WrappedReader \readingOptions readingAction ->
-            coordinateReading' fileCoordinator errPtr url readingOptions readingAction
-    let writingAccessors =
-          writingUrls <&> \url -> WrappedWriter \writingOptions writingAction ->
-            coordinateWriting' fileCoordinator errPtr url writingOptions writingAction
-    result <- liftIO newAccessorResult
     liftIO $
-      m_NSFileCoordinator_prepareForReadingAndWritingItems
+      coordinateAccessing'
         fileCoordinator
         readingUrlsArray
-        (fromReadingOptions blanketReadingOptions)
+        blanketReadingOptions
         writingUrlsArray
-        (fromWritingOptions blanketWritingOptions)
-        errPtr
-        (runAccessorBody result $ action readingAccessors writingAccessors)
-    liftIO $ accessorResult result
+        blanketWritingOptions
+        ( action
+            (readingUrls <&> \url -> WrappedReader (coordinateReading' fileCoordinator url))
+            (writingUrls <&> \url -> WrappedWriter (coordinateWriting' fileCoordinator url))
+        )
 #else
 coordinateAccessing FilesToCoordinate{..} action =
   let readingAccessors = readingPaths <&> \(path, _) -> WrappedReader \_ readingAction -> readingAction path
@@ -500,6 +533,225 @@ spec_coordinatedPathKept = do
             <*> for writers (\w -> unwrappingWriter w defaultWritingOptions keeping)
       )
       `afterwards` ([file], [file <> ".other"])
+
+-- | What a coordinated access autoreleases is freed when the access returns,
+-- and not kept for as long as its thread lives: each call of the bindings
+-- runs in an autorelease pool of its own. The body of each access
+-- autoreleases an object here, as file coordination does around it.
+spec_coordinationFreesAutoreleased :: Spec
+spec_coordinationFreesAutoreleased = do
+#ifdef darwin_HOST_OS
+  let inTempFile :: (FilePath -> IO ()) -> IO ()
+      inTempFile test = withSystemTempDirectory "coordination" \dir -> do
+        writeFile (dir </> "file") "content"
+        test (dir </> "file")
+      allFreed :: (HasCallStack) => [Marker] -> IO ()
+      allFreed markers = traverse wasFreed markers >>= (`shouldSatisfy` and)
+      inAnotherThread :: IO a -> IO a
+      inAnotherThread = async >=> wait
+  it "after reading" $ inTempFile \file -> do
+    marker <-
+      coordinateReading file False defaultReadingOptions (const autoreleaseMarker)
+    wasFreed marker `shouldReturn` True
+  it "after writing" $ inTempFile \file -> do
+    marker <-
+      coordinateWriting file False defaultWritingOptions (const autoreleaseMarker)
+    wasFreed marker `shouldReturn` True
+  it "after reading then writing" $ inTempFile \file -> do
+    marker <-
+      coordinateReadingThenWriting
+        file
+        False
+        defaultReadingOptions
+        (file <> ".other")
+        False
+        defaultWritingOptions
+        (\_ _ -> autoreleaseMarker)
+    wasFreed marker `shouldReturn` True
+  it "after writing two files" $ inTempFile \file -> do
+    marker <-
+      coordinateWritingAndWriting
+        file
+        False
+        defaultWritingOptions
+        (file <> ".other")
+        False
+        defaultWritingOptions
+        (\_ _ -> autoreleaseMarker)
+    wasFreed marker `shouldReturn` True
+  it "after accessing several files, by the whole and by each access" $
+    inTempFile \file -> do
+      markers <-
+        coordinateAccessing
+          FilesToCoordinate
+            { readingPaths = [(file, False)],
+              blanketReadingOptions = defaultReadingOptions,
+              writingPaths = [(file <> ".other", False)],
+              blanketWritingOptions = defaultWritingOptions
+            }
+          ( \readers writers -> do
+              ofTheWhole <- autoreleaseMarker
+              ofReaders <- for readers \reader ->
+                unwrappingReader reader defaultReadingOptions (const autoreleaseMarker)
+              ofWriters <- for writers \writer ->
+                unwrappingWriter writer defaultWritingOptions (const autoreleaseMarker)
+              pure (ofTheWhole : ofReaders <> ofWriters)
+          )
+      length markers `shouldBe` 3
+      allFreed markers
+  it "after each access of several files, in a thread of its own" $
+    inTempFile \file -> do
+      -- A change to the graph runs its readers and writers so. Each is
+      -- looked at while the whole is still held: the pool of the whole is
+      -- another thread's, and it is not left yet.
+      freed <-
+        coordinateAccessing
+          FilesToCoordinate
+            { readingPaths = [(file, False)],
+              blanketReadingOptions = defaultReadingOptions,
+              writingPaths = [(file <> ".other", False)],
+              blanketWritingOptions = defaultWritingOptions
+            }
+          ( \readers writers -> do
+              ofReaders <- for readers \reader ->
+                inAnotherThread $
+                  unwrappingReader reader defaultReadingOptions (const autoreleaseMarker)
+              ofWriters <- for writers \writer ->
+                inAnotherThread $
+                  unwrappingWriter writer defaultWritingOptions (const autoreleaseMarker)
+              (,) <$> traverse wasFreed ofReaders <*> traverse wasFreed ofWriters
+          )
+      freed `shouldBe` ([True], [True])
+  it "after many reads in one thread" $ inTempFile \file -> do
+    markers <-
+      replicateM 200 $
+        coordinateReading file False defaultReadingOptions (const autoreleaseMarker)
+    allFreed markers
+#else
+  pure ()
+#endif
+
+-- | An error of file coordination is thrown by the call that it belongs to,
+-- with its domain, code and description, and the body is not run. (The
+-- error is made inside the autorelease pool of the call, and read after
+-- it.) A coordinator that was cancelled fails every call with
+-- @NSUserCancelledError@.
+spec_coordinationError :: Spec
+spec_coordinationError = do
+#ifdef darwin_HOST_OS
+  let withCancelled ::
+        (Ptr NSFileCoordinator -> Ptr NSURL -> Ptr NSURL -> IO a) -> IO a
+      withCancelled call = withSystemTempDirectory "coordination" \dir ->
+        runResourceT do
+          liftIO $ writeFile (dir </> "file") "content"
+          (_, fileCoordinator) <- allocate nsFileCoordinator_init m_release
+          (_, url) <- allocateNSURL (dir </> "file") False
+          (_, other) <- allocateNSURL (dir </> "other") False
+          liftIO do
+            m_NSFileCoordinator_cancel fileCoordinator
+            call fileCoordinator url other
+      isCancelled :: NSErrorException -> Bool
+      isCancelled e =
+        (e.domain, e.code, e.description)
+          == ("NSCocoaErrorDomain", 3072, "the operation was cancelled")
+      -- a body that says that it ran
+      failsWithoutRunning ::
+        (HasCallStack) => (IO () -> Ptr NSFileCoordinator -> Ptr NSURL -> Ptr NSURL -> IO ()) -> IO ()
+      failsWithoutRunning call = do
+        ran <- newIORef False
+        withCancelled (call (writeIORef ran True)) `shouldThrow` isCancelled
+        readIORef ran `shouldReturn` False
+  it "of reading" $ failsWithoutRunning \body coordinator url _ ->
+    coordinateReading' coordinator url defaultReadingOptions (const body)
+  it "of writing" $ failsWithoutRunning \body coordinator url _ ->
+    coordinateWriting' coordinator url defaultWritingOptions (const body)
+  it "of reading then writing" $ failsWithoutRunning \body coordinator url other ->
+    coordinateReadingThenWriting'
+      coordinator
+      url
+      defaultReadingOptions
+      other
+      defaultWritingOptions
+      (\_ _ -> body)
+  it "of writing two files" $ failsWithoutRunning \body coordinator url other ->
+    coordinateWritingAndWriting'
+      coordinator
+      url
+      defaultWritingOptions
+      other
+      defaultWritingOptions
+      (\_ _ -> body)
+  it "of preparing to access several files" $
+    failsWithoutRunning \body coordinator url other -> runResourceT do
+      (_, reading) <- allocateNSArray [url]
+      (_, writing) <- allocateNSArray [other]
+      liftIO $
+        coordinateAccessing'
+          coordinator
+          reading
+          defaultReadingOptions
+          writing
+          defaultWritingOptions
+          body
+  it "of each of many calls in a row" $
+    withCancelled \coordinator url _ ->
+      replicateM_ 500 $
+        coordinateReading' coordinator url defaultReadingOptions (const (pure ()))
+          `shouldThrow` isCancelled
+  it "and is freed once it is thrown" $ withCancelled \coordinator url _ -> do
+    ofError <- newIORef Nothing
+    throwingNSError
+      ( do
+          nsError <-
+            m_NSFileCoordinator_coordinateReadingItem
+              coordinator
+              url
+              (fromReadingOptions defaultReadingOptions)
+              (const (pure ()))
+          weakTo nsError >>= writeIORef ofError . Just
+          pure nsError
+      )
+      `shouldThrow` isCancelled
+    (readIORef ofError >>= traverse wasFreed) `shouldReturn` Just True
+  it "and leaves nothing behind when it is read: not what its description autoreleases" do
+    -- an error whose description is a string that only it holds: asking
+    -- for it autoreleases the string
+    made <- newIORef Nothing
+    let describedError =
+          withCString "a domain that only this test has" \domain ->
+            withCString "a description that only this test has" \description -> do
+              nsError <- nsError_initDescribed domain 5 description
+              weak <- (,) <$> weakTo nsError <*> weakToDescription nsError
+              writeIORef made (Just weak)
+              pure nsError
+    throwingNSError describedError `shouldThrow` \(e :: NSErrorException) ->
+      (e.domain, e.code, e.description)
+        == ( "a domain that only this test has",
+             5,
+             "a description that only this test has"
+           )
+    Just (ofError, ofDescription) <- readIORef made
+    ((,) <$> wasFreed ofError <*> wasFreed ofDescription)
+      `shouldReturn` (True, True)
+  it "of the second of two files, when the first is held" $
+    withSystemTempDirectory "coordination" \dir -> runResourceT do
+      (_, fileCoordinator) <- allocate nsFileCoordinator_init m_release
+      (_, url) <- allocateNSURL (dir </> "file") False
+      (_, other) <- allocateNSURL (dir </> "other") False
+      liftIO do
+        ran <- newIORef False
+        -- cancelled by the body of the first, so only the second fails
+        coordinateWriting' fileCoordinator url defaultWritingOptions
+          ( \_ -> do
+              m_NSFileCoordinator_cancel fileCoordinator
+              coordinateWriting' fileCoordinator other defaultWritingOptions $
+                const (writeIORef ran True)
+          )
+          `shouldThrow` isCancelled
+        readIORef ran `shouldReturn` False
+#else
+  pure ()
+#endif
 
 -- | A body that throws must not end the process (on macOS the body runs in
 -- a callback called from Objective-C): its caller gets the exception.
