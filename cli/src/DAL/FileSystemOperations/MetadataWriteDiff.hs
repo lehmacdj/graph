@@ -280,24 +280,59 @@ keptFileLeftOver file e =
     <> fileFailure "remove" e
     <> ". It is left over, and fsck will report it."
 
+-- | What a dry run says that a change would do to a file. A change's lines
+-- are printed in the order of what they would do, the file's path, and the
+-- line: the files that the change would delete and then the files that it
+-- would write, each in the order of their paths (for the node files of a
+-- graph that is the order of the nodes' ids; what fix kept of a node's file
+-- comes after that file).
+data WouldDo = WouldDelete | WouldWrite
+  deriving (Eq, Ord)
+
+-- | Says what the change would delete and write instead of doing it: one
+-- line for each file, in the order given with 'WouldDo', so the same change
+-- to the same graph is described by the same text every time.
+--
+-- 'writeGraphDiff_' writes many files at once, so it asks for the lines from
+-- many threads, in an order that differs from run to run, and for several
+-- at the same moment. So they are collected, and printed by one thread when
+-- the change has been gone through: in the order above, and each one whole.
 runGraphMetadataFilesystemOperationsWriteDiffDryRun ::
   (Members [RawGraph, IOE, Error UserError] effs) =>
   Eff (GraphMetadataFilesystemOperationsWriteDiff ': effs) a ->
   Eff effs a
 runGraphMetadataFilesystemOperationsWriteDiffDryRun = interpret \_ -> \case
   WriteGraphDiff asLoaded changes changedNodes others -> do
-    let wouldDelete path = say $ "would delete at path: " <> tshow path
+    collected <- newIORef []
+    -- A line is worked out in full where it is asked for, not when it is
+    -- printed: the path that a callback is given is good only while the
+    -- callback runs. (It is read, when it is first looked at, from memory
+    -- that file coordination frees afterwards: 'filePathFromNSURL'.)
+    let collect :: (MonadIO m) => WouldDo -> FilePath -> Text -> m ()
+        collect wouldDo path line = liftIO do
+          said <- (wouldDo,,) <$> evaluate (force path) <*> evaluate (force line)
+          atomicModifyIORef' collected \sofar -> (said : sofar, ())
+        wouldDelete path =
+          collect WouldDelete path $ "would delete at path: " <> tshow path
+        wouldWrite path node =
+          collect WouldWrite path $
+            "would write: " <> tshow node <> " -> " <> tshow path
+        sayCollected =
+          readIORef collected >>= traverse_ (\(_, _, line) -> say line) . sort
     -- Nothing is written, so each of these files stays as it was read for
     -- the change. The command has read it then, as it has in the real run:
     -- what a later step of it reads is compared with a file that only
     -- writing read (that of a neighbour of a deleted node, say) as well.
+    --
+    -- A change that is given up part way still says what it got to.
     fmap fst . fst
       <$> writeGraphDiff_
         (readNodeMetadata_ False)
-        (\path node -> say $ "would write: " <> tshow node <> " -> " <> tshow path)
+        wouldWrite
         wouldDelete
         wouldDelete
         asLoaded
         changes
         changedNodes
         others
+        `finally` sayCollected

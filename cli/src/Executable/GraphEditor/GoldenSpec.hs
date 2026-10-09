@@ -467,7 +467,46 @@ spec_regexAnchors = do
     "regex:\"(?m)^a\"" `finds` [1, 2, 4, 5, 6]
 
 spec_dryRun :: Spec
-spec_dryRun =
+spec_dryRun = do
+  it "says what a change would delete, then what it would write, by file name" $
+    withTempGraph Nothing \directory -> do
+      -- the origin -t-> each of sixty nodes -c-> a node of its own; deleting
+      -- the sixty deletes their files and writes those of their neighbours.
+      -- (No two of the ids differ only in the case of a letter: such file
+      -- names are one file where the tests run.)
+      let middle = [62 * tens + ones | tens <- [1 .. 6], ones <- [0 .. 9]] :: [Int]
+          ownOf = (620 +)
+          edges =
+            ["0 -t-> " <> tshow n | n <- middle]
+              <> [tshow n <> " -c-> " <> tshow (ownOf n) | n <- middle]
+          fileOf = takeFileName . metadataFile directory . smallNID
+          kept = map ((fileOf 70 <> ".unparsable") <>) ["", "-2"]
+      writeBaseGraph directory (encodeUtf8 (unlines edges))
+      for_ kept \name -> B.writeFile (directory </> name) "{not json"
+      before <- directoryAsItIs directory
+      let dryRun = runGe directory ["--dry-run", "-e", "rmnf t"] ""
+          -- of each line that says what would become of a file, what would
+          -- and the file's name
+          changes out =
+            [ (would, takeFileName (unpack file))
+            | line <- lines (decodeUtf8 out),
+              (would, said) <-
+                [ ("delete" :: Text, "would delete at path: "),
+                  ("write", "would write: ")
+                ],
+              said `isPrefixOf` line,
+              -- a path is shown as a string is, in quotes
+              _ : file : _ <- [reverse (T.splitOn "\"" line)]
+            ]
+      (code, out, err) <- dryRun
+      (code, err) `shouldBe` (0, "")
+      changes out
+        `shouldBe` ( map ("delete",) (sort (map fileOf middle <> kept))
+                       <> map ("write",) (sort (map fileOf (0 : map ownOf middle)))
+                   )
+      -- and the same text every time
+      for_ [1 .. 5 :: Int] \_ -> dryRun `shouldReturn` (code, out, err)
+      directoryAsItIs directory `shouldReturn` before
   it "says what opening the graph would add, and adds nothing" $
     withTempGraph Nothing \directory -> do
       -- a graph that has none of the system nodes, and a command that reads
