@@ -8,7 +8,8 @@ raw 2 "{not json"
 mk x
 nid
 ==========stdout==========
-g> g> @000000000000
+g> created 1 new node and 1 new edge
+g> @000000000000
 g> Goodbye!
 ==========stderr==========
 ==========graph-dump==========

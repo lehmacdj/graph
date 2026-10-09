@@ -1,0 +1,23 @@
+==========graph==========
+1
+2
+==========input==========
+mk c/!{@000000000002}/a & (a & c)/@ & a/@000000000001 & c/@000000000002 & */!{@000000000001, @000000000002}/z
+==========stdout==========
+g> g> Goodbye!
+==========stderr==========
+These steps could each follow an edge that another of them creates, so mk has no order to take them in: `c/!{@000000000002}` and the node where `a` and `c` meet. If a step means the same edge as a step into a node where steps meet, leave it out and write what follows it after that node, as in (a & c)/@/b for a/b & (a & c)/@; otherwise write the node a step should go to (/@N after it), or create them with separate commands. Nothing was changed. (CircularSuppliers)
+==========graph-dump==========
+@000000000000{out=[], in=[@0daCJjMrQel8 via "origin"]}
+@000000000001{out=[], in=[]}
+@000000000002{out=[], in=[]}
+@0daCJjMrQel8{out=[@zsBuPkn5mh8F via "file-extensions", @AhQufiPzgyRf via "file-hashes", @3JJvxFUHGAA1 via "historical-special-nodes", @S00KkOYoVpFu via "import-dates", @a0fVkm0kR7KE via "import-urls", @927u9Xyky2pC via "mime-types", @000000000000 via "origin", @pbYxBO6fzBQV via "tags"], in=[]}
+@3JJvxFUHGAA1{out=[@VEfLhuTgZ88Z via "sequence-ids"], in=[@0daCJjMrQel8 via "historical-special-nodes"]}
+@927u9Xyky2pC{out=[], in=[@0daCJjMrQel8 via "mime-types"]}
+@AhQufiPzgyRf{out=[], in=[@0daCJjMrQel8 via "file-hashes"]}
+@S00KkOYoVpFu{out=[], in=[@0daCJjMrQel8 via "import-dates"]}
+@VEfLhuTgZ88Z{out=[], in=[@3JJvxFUHGAA1 via "sequence-ids"]}
+@a0fVkm0kR7KE{out=[], in=[@0daCJjMrQel8 via "import-urls"]}
+@pbYxBO6fzBQV{out=[], in=[@0daCJjMrQel8 via "tags"]}
+@zsBuPkn5mh8F{out=[], in=[@0daCJjMrQel8 via "file-extensions"]}
+==========data==========

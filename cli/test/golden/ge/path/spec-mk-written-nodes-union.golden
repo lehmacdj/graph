@@ -2,32 +2,21 @@
 
 ==========input==========
 mk @000000000009/x + @000000000008/y
-mk --allow-orphans @000000000008/y
+mk @000000000008/y
 ==========stdout==========
 g> g> g> Goodbye!
 ==========stderr==========
-This path has 2 possible repairs. Nothing was changed. Pin a node with @N or exclude one with !{@N} to choose.
-  1. @000000000008 -"y"-> new1
-    creates: @000000000008 -"y"-> new1
-    use: mk --allow-orphans @000000000008/y
-  2. @000000000009 -"x"-> new1
-    creates: @000000000009 -"x"-> new1
-    use: mk --allow-orphans @000000000009/x
-
+This path needs @000000000008, @000000000009, which do not exist, and a node with a written id is never created: mk gives every new node a new id. Nothing was changed. (MissingNodes)
+This path needs @000000000008, which does not exist, and a node with a written id is never created: mk gives every new node a new id. Nothing was changed. (MissingNodes)
 ==========graph-dump==========
 @000000000000{out=[], in=[@0daCJjMrQel8 via "origin"]}
-@000000000008{out=[@O8OhMSVtjevt via "y"], in=[@sYumkceKpoAh via "00:00:00.000000000000"]}
 @0daCJjMrQel8{out=[@zsBuPkn5mh8F via "file-extensions", @AhQufiPzgyRf via "file-hashes", @3JJvxFUHGAA1 via "historical-special-nodes", @S00KkOYoVpFu via "import-dates", @a0fVkm0kR7KE via "import-urls", @927u9Xyky2pC via "mime-types", @000000000000 via "origin", @pbYxBO6fzBQV via "tags"], in=[]}
 @3JJvxFUHGAA1{out=[@VEfLhuTgZ88Z via "sequence-ids"], in=[@0daCJjMrQel8 via "historical-special-nodes"]}
 @927u9Xyky2pC{out=[], in=[@0daCJjMrQel8 via "mime-types"]}
 @AhQufiPzgyRf{out=[], in=[@0daCJjMrQel8 via "file-hashes"]}
-@DQ1KCJgauHiV{out=[@sYumkceKpoAh via "01"], in=[@Pqf7kGOdKJIr via "01"]}
-@O8OhMSVtjevt{out=[], in=[@sYumkceKpoAh via "00:00:00.000000000000", @000000000008 via "y"]}
-@Pqf7kGOdKJIr{out=[@DQ1KCJgauHiV via "01"], in=[@S00KkOYoVpFu via "1970"]}
-@S00KkOYoVpFu{out=[@Pqf7kGOdKJIr via "1970"], in=[@0daCJjMrQel8 via "import-dates"]}
+@S00KkOYoVpFu{out=[], in=[@0daCJjMrQel8 via "import-dates"]}
 @VEfLhuTgZ88Z{out=[], in=[@3JJvxFUHGAA1 via "sequence-ids"]}
 @a0fVkm0kR7KE{out=[], in=[@0daCJjMrQel8 via "import-urls"]}
 @pbYxBO6fzBQV{out=[], in=[@0daCJjMrQel8 via "tags"]}
-@sYumkceKpoAh{out=[@000000000008 via "00:00:00.000000000000", @O8OhMSVtjevt via "00:00:00.000000000000"], in=[@DQ1KCJgauHiV via "01"]}
 @zsBuPkn5mh8F{out=[], in=[@0daCJjMrQel8 via "file-extensions"]}
 ==========data==========

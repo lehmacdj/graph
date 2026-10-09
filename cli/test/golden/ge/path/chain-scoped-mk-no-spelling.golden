@@ -5,7 +5,7 @@ mk (x/@ | s)/((c & y)/@/e & d)
 ==========stdout==========
 g> g> Goodbye!
 ==========stderr==========
-This path has 8 possible repairs. Nothing was changed. Pin a node with @N or exclude one with !{@N} to choose.
+This path can be created in 8 ways; nothing was changed. To choose one, write @N after a step for the node it should go to, or !{@N} for nodes it should not, or keep one side of a +.
   1. @000000000000 -"s"-> new1 -"c"-> new2 -"e"-> new3 & @000000000000 -"s"-> new1 -"y"-> new2 -"e"-> new3 & @000000000000 -"s"-> new1 -"d"-> new4
     creates: @000000000000 -"s"-> new1, new1 -"c"-> new2, new1 -"d"-> new4, new1 -"y"-> new2, new2 -"e"-> new3
     use: mk s/((c & y)/@/e & d)
@@ -20,6 +20,7 @@ This path has 8 possible repairs. Nothing was changed. Pin a node with @N or exc
     use: mk (s/c & x/@/y)/@/e & s/d
   5. @000000000000 -"s"-> new1 -"c"-> new2 -"e"-> new3 & @000000000000 -"x"-> new4 -"y"-> new2 -"e"-> new3 & @000000000000 -"x"-> new4 -"d"-> new5
     creates: @000000000000 -"s"-> new1, @000000000000 -"x"-> new4, new1 -"c"-> new2, new2 -"e"-> new3, new4 -"d"-> new5, new4 -"y"-> new2
+    (no command was found that creates just this)
   ... and 3 more
 
 ==========graph-dump==========

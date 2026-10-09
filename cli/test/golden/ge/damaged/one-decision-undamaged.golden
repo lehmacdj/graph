@@ -11,7 +11,15 @@ at (a + b) rmnf z
 mg a i
 at @000000000000 ls
 ==========stdout==========
-g> g> g> g> g> g> [0m[0;1ma[0m[0m [0;34m@000000000001[0m [0m[0m
+g> created 1 new node and 1 new edge
+created 1 new node and 1 new edge
+g> created 1 new node and 1 new edge
+created 1 new node and 1 new edge
+g> created 1 new node and 1 new edge
+created 1 new node and 1 new edge
+created 1 new node and 1 new edge
+created 1 new node and 1 new edge
+g> g> g> [0m[0;1ma[0m[0m [0;34m@000000000001[0m [0m[0m
 [0m[0;1mb[0m[0m [0;34m@000000000002[0m [0m[0m
 [0m[0;1mi[0m[0m [0;34m@000000000001[0m [0m[0m
 [0m[0;1my[0m[0m [0;34m@OBlFGnwL1N3D[0m [0m[0m[0;33mnow[0m

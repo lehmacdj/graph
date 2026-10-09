@@ -4,7 +4,7 @@ mk a + *
 ==========stdout==========
 g> g> Goodbye!
 ==========stderr==========
-Cannot create the * edge without a label (repair 2 below), and even with one this path has 2 possible repairs. mk does not fall back to a repair that needs no label; nothing was changed. Give the edge a literal label, or pin a node with @N or exclude one with !{@N} to choose a repair. (UnsupportedLabel)
+Cannot create the * edge without a label (possibility 2 below), and even with one this path can be created in 2 ways. mk does not choose one that needs no label; nothing was changed. Give the edge a literal label, or write @N after a step for the node it should go to, or !{@N} for nodes it should not, or keep one side of a +. (UnsupportedLabel)
   1. @000000000000 -"a"-> new1
     creates: @000000000000 -"a"-> new1
   2. @000000000000 -*-> new1

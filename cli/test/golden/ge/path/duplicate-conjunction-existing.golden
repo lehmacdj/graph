@@ -4,7 +4,8 @@
 ==========input==========
 mk a & a
 ==========stdout==========
-g> g> Goodbye!
+g> created 0 new nodes and 0 new edges
+g> Goodbye!
 ==========stderr==========
 ==========graph-dump==========
 @000000000000{out=[@000000000001 via "a", @000000000002 via "a"], in=[@0daCJjMrQel8 via "origin"]}

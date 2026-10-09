@@ -71,7 +71,7 @@ the history at that moment:
 | form | expands to |
 |---|---|
 | `%targets(p)` | the nodes `ls p` finds, as a `+` union of `@N` (`%never` when there are none; the command's error then says so). `p` is a query of its own: a `+` in it is `\|` unless an `%override` written inside `p` says otherwise (2.9) |
-| `%override({key = value, …}, p)` | `p` with these settings changed inside it: `plus = shared` or `plus = relational` (how `+` is read), and `max-repairs = N` or `unlimited` (the limit on what `mk` considers); both are in [commands.md](commands.md#5-settings-and-the-one-limit). `%override({}, p)` is `p` |
+| `%override({key = value, …}, p)` | `p` with these settings changed inside it: `plus = shared` or `plus = relational` (how `+` is read), and `max-repairs = N` or `unlimited` (the limit on the walks `mk` makes); both are in [commands.md](commands.md#5-settings-and-the-one-limit). `%override({}, p)` is `p` |
 | `%history(n)` | `@N` for the node `n` steps back in the history; `%history(0)` is the current node, a negative `n` goes forward (after `back`), and an `n` beyond either end of the history gives the node at that end |
 | `%last` | `%history(1)` |
 | `https://…`, `http://…` | imports the resource and becomes its node; a URL extends to the next space ([commands.md](commands.md#27-history-and-urls)) |
@@ -565,8 +565,9 @@ a/c @9
 $ ls %override({plus = shared}, (a + b)/(c & d))
 no targets
 $ mk (a + b)/(c & d)
-This path has 2 possible repairs. Nothing was changed. Pin a node with @N or
-    exclude one with !{@N} to choose.
+This path can be created in 2 ways; nothing was changed. To choose one, write
+    @N after a step for the node it should go to, or !{@N} for nodes it should
+    not, or keep one side of a +.
   1. @0 -"a"-> @1 -"c"-> @9 & @0 -"a"-> @1 -"d"-> new1
     creates: @1 -"d"-> new1
     use: mk a/(c & d)
@@ -575,7 +576,7 @@ This path has 2 possible repairs. Nothing was changed. Pin a node with @N or
     use: mk b/(c & d)
 ```
 
-`mk` reads `+` as `++`, so it offers one repair per side and does not
+`mk` reads `+` as `++`, so it offers one way of creating the path per side and does not
 offer to create `a/c & b/d` ([commands.md](commands.md#4-mk)). The
 argument of a `%targets(…)` is a query of its own, in which `+` starts
 again as `|`: an `%override` around the `%targets(…)` governs the union
@@ -843,6 +844,7 @@ no targets
 $ ls (a & b)/@
 no targets
 $ mk a & b
+created 0 new nodes and 0 new edges
 ```
 
 (`mk` printed nothing and created nothing: the path already holds.) For
@@ -1590,9 +1592,9 @@ no targets
 ```
 
 That path has `3^7 = 2187` alternatives. The one limit there is belongs
-to `mk`, which stops when it would have to consider more than 5000
-candidate repairs (`TooManyRepairs`,
-[commands.md](commands.md#52-candidate-repairs-max-repairs)).
+to `mk`, which stops when it would have to walk the path in more than
+5000 ways (`TooManyRepairs`,
+[commands.md](commands.md#52-walks-max-repairs)).
 [path-cost-limits.md](path-cost-limits.md) records what was tried as a
 limit on the cost of a path, and why there is none.
 
@@ -1807,7 +1809,7 @@ In a query, a `*` step finds what the `|` union of every label in the
 graph finds, in every context, because each copy of a `*` chooses its
 edge on its own as each copy of a `|` chooses its side. It is not the
 `++` of the labels. The law is one of queries: `mk` cannot create a `*`
-edge ([commands.md](commands.md#41-how-a-repair-is-found)).
+edge ([commands.md](commands.md#41-what-a-step-does)).
 
 ```ge
 graph: 0 -a-> 1, 1 -c-> 9, 0 -b-> 2, 2 -d-> 9
@@ -2232,19 +2234,43 @@ walk, has not.
 After `mk p` succeeds, `p` holds from the node it ran at: `mk p` run
 again at that node changes nothing, and a query of `p` finds a node
 when the walks of `p` end at one node. This holds for every path `mk`
-accepts (a path with `%never` in a walk cannot be constructed,
-[commands.md](commands.md#4-mk)).
+accepts: a path with `%never` in a walk cannot be constructed, and a
+path that writes a node `@N` that does not exist is an error, since
+`mk` creates no node with a written id
+([commands.md](commands.md#4-mk)). What `mk` creates does not depend on
+the order in which the conjuncts of a group or the sides of a union
+are written.
 
 ```ge
 graph: 0
 $ mk a/b; ls a/b; mk a/b
+created 2 new nodes and 2 new edges
 a/b @Pqf7kGOdKJIr
+created 0 new nodes and 0 new edges
 + 0 -a-> O8OhMSVtjevt
 + O8OhMSVtjevt -b-> Pqf7kGOdKJIr
 $ mk x/@/(c & d); mk x/@/(c & d)
+created 3 new nodes and 3 new edges
+created 0 new nodes and 0 new edges
 + 0 -x-> O8OhMSVtjevt
 + O8OhMSVtjevt -c-> Pqf7kGOdKJIr
 + O8OhMSVtjevt -d-> DQ1KCJgauHiV
+```
+
+```ge
+graph: 0, 2
+$ mk x/~x/a & a/@2
+created 1 new node and 2 new edges
++ 0 -a-> 2
++ 0 -x-> O8OhMSVtjevt
+$ mk a/@2 & x/~x/a
+created 1 new node and 2 new edges
++ 0 -a-> 2
++ 0 -x-> O8OhMSVtjevt
+$ mk a/@7
+This path needs @7, which does not exist, and a node with a written id is
+    never created: mk gives every new node a new id. Nothing was changed.
+    (MissingNodes)
 ```
 
 ### 4.12 Reversal
@@ -2305,7 +2331,7 @@ decided, that.
 - **A side written twice.** Every written side is a side of its own
   (2.9), which has consequences that may surprise: writing a side again
   can turn a path that runs into one that is refused (3.1); `mk` with a
-  `|` lists more repairs for it; and `p | p` can compile to more than
+  `|` lists more ways of creating the path for it; and `p | p` can compile to more than
   `p` does even where the two find the same (4.2).
 - **The refusal sometimes refuses a path in which no meeting point
   would be copied.** Each of these is something the designer may relax;

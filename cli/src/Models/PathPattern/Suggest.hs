@@ -1,15 +1,26 @@
--- | Paths that choose one repair of an ambiguous construction
--- (docs/path-route-ir.md, Residuation, @mk@).
+-- | Paths that choose one possibility of an ambiguous construction
+-- (docs/path-route-ir.md section 5).
 --
--- For a surviving repair, keep only the @+@ alternative it came from, then
--- pin with @/\@N@ every step whose output it binds to an existing node, and
--- exclude with @/!{…}@ the nodes other survivors bind a step's output to
--- where it creates one. Rewrites that are not needed are dropped again. A
--- candidate is only suggested if residuating it gives exactly that repair,
--- so a suggested path is never wrong; when none is confirmed there is none.
+-- The possibilities of a path differ in the alternative they are of and
+-- in the node taken wherever steps had edges to several nodes to follow
+-- ('Branch'). The line for a possibility is the path with only the @+@
+-- alternative it came from, @/\@N@ after each step that took an existing
+-- node there, and @/!{…}@ naming the other nodes after each step that took
+-- the created one. A possibility that cannot be written that way has no
+-- line: one whose step could have gone to another created node, which has
+-- no name, or one in which the copies of a written step went different
+-- ways. And a line is only shown if walking it creates exactly the
+-- possibility, so a shown line is never wrong.
 module Models.PathPattern.Suggest
   ( suggestPaths,
-    suggestPathsReference,
+    alternativeChoices,
+    Written (..),
+    writtenSteps,
+    stepAsTyped,
+    typedTimes,
+    joinAfter,
+    mapStepsIndexed,
+    reassociate,
     renderSurfacePath,
     parseSurfacePath,
     spec_suggestPath,
@@ -17,17 +28,18 @@ module Models.PathPattern.Suggest
   )
 where
 
+import Control.Monad (zipWithM)
 import Control.Monad.State.Strict qualified as S
 import Data.Functor.Const (Const (..))
 import Data.Map.Strict qualified as Map
 import Graph.SystemNodes (tagsNID)
-import Models.Graph (Graph, maybeNodeLookup)
+import Models.Graph (Graph)
 import Models.NID
 import Models.Path.Parse (pPath)
 import Models.Path.Simple
 import Models.Path.TH (path)
 import Models.PathPattern
-import Models.PathPattern.Compile (compileAlternatives, compilePath)
+import Models.PathPattern.Compile (checkCopies, compileAlternatives, compilePath)
 import Models.PathPattern.Residuate
 import Models.PathPattern.TestCorpus
 import MyPrelude
@@ -35,201 +47,258 @@ import Utils.Parsing (isIdentChar, whitespace)
 import Utils.Parsing.Common (eof, runParser)
 import Utils.Testing
 
--- | What to add after a step.
+-- | What to add after a step: @/\@N@ or @/!{…}@.
 data Rewrite = Pin NID | Exclude (Set NID)
+  deriving stock (Eq, Ord, Show)
 
--- | For each of the given survivors, a path that residuates to exactly it
--- (modulo renaming of created nodes), if one is found, given every survivor
--- of the same path. The lookup and chooser must be the ones the survivors
--- were residuated with.
+-- | For each of the given possibilities of the path, a path that creates
+-- exactly it (modulo the names of created nodes), where one can be
+-- written. The lookup and chooser must be the ones the possibilities were
+-- found with.
 --
--- The path's alternatives are compiled once, each with a choice of @+@
--- sides that gives it ('compileAlternatives'), until those of the given
--- survivors are found: at most about the compilation residuation already
--- did. Each suggestion then
--- residuates paths without @+@, at most 'maxResiduations' times.
+-- The path's alternatives are compiled once more, each with a choice of
+-- @+@ sides that gives it ('compileAlternatives'), until those of the
+-- given possibilities are found: at most about the compilation the walk
+-- already had. Each line then costs two compilations of a path without
+-- @+@ and one walk of it, within the default limit.
 --
--- The suggestions are those of 'suggestPathsReference'. Two things spare
--- residuations, which cost as much as the one that gave the survivors
--- when a candidate path pins little:
---
--- * A candidate path is residuated once, whichever survivors it is tried
---   for: its repair, if it has exactly one, is kept by what it compiles to.
--- * A candidate that compiles to just an alternative that two or more of
---   the survivors are of is not residuated: it has those repairs still
---   ('stillAmbiguous').
+-- The walk is what makes a shown line right. What is written after a
+-- step does more than choose: a step with @/\@N@ creates its edge to @N@
+-- if there is none, where the step it is written for only followed an
+-- edge that another step creates, and that edge then counts for steps it
+-- did not count for; it changes the order of the operations; and the
+-- path with it may be one whose shape @mk@ refuses, which has no line.
 suggestPaths ::
-  forall m.
   (Monad m) =>
   NodeLookup m ->
   LabelChooser m ->
   NID ->
   Path ->
-  NonEmpty Residual ->
   [Residual] ->
   m [Maybe Path]
-suggestPaths lookupNode chooser cur surface survivors =
-  \wanted -> flip S.evalStateT mempty do
-    let bases = choicesFor (setFromList (map (.patternPath) wanted))
-    for wanted \survivor ->
-      case lookup survivor.patternPath bases of
-        Nothing -> pure Nothing
-        Just base -> suggestFrom survivor base
+suggestPaths lookupNode chooser cur surface wanted =
+  for wanted \r -> case lookup r.patternPath bases >>= lineFor r of
+    Nothing -> pure Nothing
+    Just line ->
+      residuate lookupNode chooser cur (compilePath line) <&> \case
+        Right (Repairs (r' :| []))
+          | patchSubsumes r'.patch r.patch && patchSubsumes r.patch r'.patch ->
+              Just line
+        _ -> Nothing
   where
-    -- a choice for each wanted alternative, stopping once all are found
-    choicesFor :: Set PatternPath -> Map PatternPath Path
-    choicesFor = go mempty (compileAlternatives surface)
-      where
-        go found _ wanted | null wanted = found
-        go found [] _ = found
-        go found ((alternative, choice) : rest) wanted
-          | alternative `member` wanted =
-              go
-                (insertMap alternative choice found)
-                rest
-                (deleteSet alternative wanted)
-          | otherwise = go found rest wanted
-    suggestFrom survivor base = do
-      let rewrites = stepRewrites survivors survivor base
-          candidate keep =
-            reassociate (applyRewrites (Map.restrictKeys rewrites keep) base)
-          dropIfUnneeded keep i = do
-            let keep' = deleteSet i keep
-            ok <- confirms survivor (candidate keep')
-            pure (if ok then keep' else keep)
-          -- within the budget; rewrites beyond it are kept
-          droppable = take (maxResiduations - 1) (keys rewrites)
-      ok <- confirms survivor (candidate (keysSet rewrites))
-      if ok
-        then
-          Just . candidate
-            <$> foldM dropIfUnneeded (keysSet rewrites) droppable
-        else pure Nothing
-    -- the text shown parses back to the path, and the path has exactly this
-    -- repair
-    confirms :: Residual -> Path -> Confirming m Bool
-    confirms survivor p
-      | parseSurfacePath (renderSurfacePath p) /= Just p = pure False
-      | otherwise =
-          onlyRepair (compilePath p) <&> \case
-            Just patch ->
-              patchSubsumes patch survivor.patch
-                && patchSubsumes survivor.patch patch
-            Nothing -> False
-    -- the patch of a query's repair, if it has exactly one
-    onlyRepair :: PathQuery -> Confirming m (Maybe Patch)
-    onlyRepair q
-      | stillAmbiguous survivors q = pure Nothing
-      | otherwise =
-          S.gets (lookup q) >>= \case
-            Just known -> pure known
-            Nothing -> do
-              found <-
-                lift (residuate lookupNode chooser cur q) <&> \case
-                  Right (Repairs (r :| [])) -> Just r.patch
-                  _ -> Nothing
-              S.modify' (insertMap q found)
-              pure found
+    bases = alternativeChoices surface (setFromList (map (.patternPath) wanted))
 
--- | Confirming candidate paths, with the repair of each query residuated
--- so far, if it has exactly one.
-type Confirming m = S.StateT (Map PathQuery (Maybe Patch)) m
-
--- | Whether a query is just one alternative that two or more of the
--- survivors are of. Residuating it alone then gives two repairs or more,
--- or an error, and never just one:
---
--- * its candidates are those the alternative had among the path's, since
---   an alternative's candidates do not depend on the others, so none of
---   them has an empty patch and there are no more of them;
--- * a candidate is dominated only by one of its alternative, so the same
---   ones are;
--- * a survivor was no strict superset of any candidate of the path with
---   pins among its own, so it is none of a candidate of the alternative;
--- * two survivors are not equal modulo renaming, so deduplication keeps
---   a patch for each.
-stillAmbiguous :: NonEmpty Residual -> PathQuery -> Bool
-stillAmbiguous survivors q = case toList q.alternatives of
-  [alternative] ->
-    not . null . drop 1 $
-      filter ((== alternative) . (.patternPath)) (toList survivors)
-  _ -> False
-
--- | 'suggestPaths' as it is defined, residuating every candidate path:
--- the reference it is tested against.
---
--- For each of the given survivors, a path that residuates to exactly it
--- (modulo renaming of created nodes), if one is found, given every survivor
--- of the same path. The lookup and chooser must be the ones the survivors
--- were residuated with.
---
--- The path's alternatives are compiled once, each with a choice of @+@
--- sides that gives it ('compileAlternatives'), until those of the given
--- survivors are found: at most about the compilation residuation already
--- did. Each suggestion then
--- residuates paths without @+@, at most 'maxResiduations' times.
-suggestPathsReference ::
-  forall m.
-  (Monad m) =>
-  NodeLookup m ->
-  LabelChooser m ->
-  NID ->
-  Path ->
-  NonEmpty Residual ->
-  [Residual] ->
-  m [Maybe Path]
-suggestPathsReference lookupNode chooser cur surface survivors =
-  \wanted -> do
-    let bases = choicesFor (setFromList (map (.patternPath) wanted))
-    for wanted \survivor ->
-      case lookup survivor.patternPath bases of
-        Nothing -> pure Nothing
-        Just base -> suggestFrom survivor base
+-- | A choice of @+@ sides for each wanted alternative of the path,
+-- stopping once all are found.
+alternativeChoices :: Path -> Set PatternPath -> Map PatternPath Path
+alternativeChoices surface = go mempty (compileAlternatives surface)
   where
-    -- a choice for each wanted alternative, stopping once all are found
-    choicesFor :: Set PatternPath -> Map PatternPath Path
-    choicesFor = go mempty (compileAlternatives surface)
-      where
-        go found _ wanted | null wanted = found
-        go found [] _ = found
-        go found ((alternative, choice) : rest) wanted
-          | alternative `member` wanted =
-              go
-                (insertMap alternative choice found)
-                rest
-                (deleteSet alternative wanted)
-          | otherwise = go found rest wanted
-    suggestFrom survivor base = do
-      let rewrites = stepRewrites survivors survivor base
-          candidate keep =
-            reassociate (applyRewrites (Map.restrictKeys rewrites keep) base)
-          dropIfUnneeded keep i = do
-            let keep' = deleteSet i keep
-            ok <- confirms survivor (candidate keep')
-            pure (if ok then keep' else keep)
-          -- within the budget; rewrites beyond it are kept
-          droppable = take (maxResiduations - 1) (keys rewrites)
-      ok <- confirms survivor (candidate (keysSet rewrites))
-      if ok
-        then
-          Just . candidate
-            <$> foldM dropIfUnneeded (keysSet rewrites) droppable
-        else pure Nothing
-    -- the text shown parses back to the path, and the path has exactly this
-    -- repair
-    confirms :: Residual -> Path -> m Bool
-    confirms survivor p
-      | parseSurfacePath (renderSurfacePath p) /= Just p = pure False
-      | otherwise =
-          residuate lookupNode chooser cur (compilePath p) <&> \case
-            Right (Repairs (r :| [])) ->
-              patchSubsumes r.patch survivor.patch
-                && patchSubsumes survivor.patch r.patch
-            _ -> False
+    go found _ wanted | null wanted = found
+    go found [] _ = found
+    go found ((alternative, choice) : rest) wanted
+      | alternative `member` wanted =
+          go
+            (insertMap alternative choice found)
+            rest
+            (deleteSet alternative wanted)
+      | otherwise = go found rest wanted
 
--- | Residuations spent on one suggestion at most.
-maxResiduations :: Int
-maxResiduations = 16
+-- | The line for a possibility, from the path of its alternative (a path
+-- without @+@ that compiles to the possibility's pattern): after each
+-- written step with a copy into a vertex where the walk had several nodes
+-- to go to, @/\@N@ if it took the existing node @N@, and @/!{…}@ with the
+-- other nodes if it took a created one. There is no line if another of
+-- the nodes is a created one too, if the copies of a step need different
+-- things written, or if the result cannot be typed or is a path that no
+-- command runs ('checkCopies').
+lineFor :: Residual -> Path -> Maybe Path
+lineFor r base = do
+  positions <- lineUp r.patternPath base
+  let -- the vertices that the copies of each written step lead to
+      outputs :: Map Int [PVertex]
+      outputs = Map.fromListWith (<>) [(i, [h.target]) | (h, i) <- positions]
+      branchAt :: Map PVertex Branch
+      branchAt = mapFromList [(b.vertex, b) | b <- r.branches]
+      rewriteOf b = case b.taken of
+        Existing n -> Just (Pin n)
+        Fresh _ ->
+          Exclude . setFromList
+            <$> for b.others \case
+              Existing n -> Just n
+              Fresh _ -> Nothing
+  rewrites <-
+    for outputs \vs -> case ordNub (map rewriteOf (mapMaybe (`lookup` branchAt) vs)) of
+      [] -> Just Nothing
+      [rewrite] -> Just <$> rewrite
+      _ -> Nothing
+  let line = reassociate (applyRewrites (Map.mapMaybe id rewrites) base)
+  guard (parseSurfacePath (renderSurfacePath line) == Just line)
+  guard (isRight (checkCopies line))
+  pure line
+
+-- | The path with each step's matcher replaced by a unique literal, and
+-- the step and matcher each literal stands for. The hops of what it
+-- compiles to say which step they are copies of. Compilation does not
+-- look at matchers, so the pattern is the same otherwise.
+tagSteps :: Path -> (Path, Map Text (Int, Matcher))
+tagSteps p =
+  ( flip mapStepsIndexed p \i -> \case
+      Backwards _ -> Backwards (Literal (tag i))
+      _ -> Literal (tag i),
+    mapFromList
+      [ (tag i, (i, stepMatcher s))
+      | (i, s) <- zip [0 ..] (getConst (traverseSteps (\s -> Const [s]) p))
+      ]
+  )
+  where
+    tag i = "\0step " <> tshow (i :: Int)
+
+-- | Compile a path without @+@ and line its routes up with a pattern's,
+-- hop by hop: for every hop of the pattern, the written step the hop is a
+-- copy of. 'Nothing' when the path is not one alternative with the same
+-- routes, directions and matchers.
+lineUp :: PatternPath -> Path -> Maybe [(Hop, Int)]
+lineUp p written = case toList (compilePath tagged).alternatives of
+  [t]
+    | length t.routes == length p.routes ->
+        concat <$> zipWithM lineRoute (toList p.routes) (toList t.routes)
+  _ -> Nothing
+  where
+    (tagged, steps) = tagSteps written
+    lineRoute rp rt
+      | length rp.hops /= length rt.hops = Nothing
+      | otherwise = zipWithM hop rp.hops rt.hops
+    hop hp ht = case ht.matcher of
+      MLiteral l
+        | Just (i, m) <- lookup l steps,
+          m == hp.matcher,
+          hp.direction == ht.direction ->
+            Just (hp, i)
+      _ -> Nothing
+
+-- | The steps of one alternative of a path as they were written: the path
+-- with only the sides of its unions that give the alternative (as
+-- 'alternativeChoices' finds it, without its limits and with @~@ pushed
+-- down to the steps), its steps in that path's order ('traverseSteps'),
+-- and for each step of the alternative the written step it is a copy of,
+-- by its place in that order. Several steps of the alternative are copies
+-- of one written step where the product rule copies it. For each of those
+-- written steps, its place among the steps of the whole path as typed
+-- (all union sides, in the order typed, also inside a @~(…)@), and those
+-- steps as typed ('stepAsTyped').
+data Written = Written
+  { path :: Path,
+    steps :: [Path],
+    copyOf :: Map EdgeId Int,
+    typedAt :: [Int],
+    typed :: [Text]
+  }
+  deriving stock (Eq, Show)
+
+-- | 'Written' for an alternative of the path: 'Nothing' when no choice of
+-- union sides gives it, or its steps cannot be lined up with the path as
+-- typed. It compiles the path, with each step made a literal of its own
+-- ('tagTyped'), until it finds the alternative, as 'alternativeChoices'
+-- does.
+writtenSteps :: Path -> PatternPath -> Maybe Written
+writtenSteps surface alternative = do
+  let (tagged, originals) = tagTyped surface
+      origin :: Map Text (Int, Path)
+      origin = mapFromList [(stepTag i, (i, s)) | (i, (s, _)) <- zip [0 ..] originals]
+      untagHop h = case h.matcher of
+        MLiteral l | Just (_, s) <- lookup l origin -> Just (Hop h.edge h.direction (stepMatcher s) h.target)
+        _ -> Nothing
+      untagged a =
+        PatternPath a.tests
+          <$> for a.routes \r -> Route r.root <$> for r.hops untagHop
+  (found, choice) <-
+    headMay [(a, c) | (a, c) <- compileAlternatives tagged, untagged a == Just alternative]
+  let choiceSteps = getConst (traverseSteps (\s -> Const [s]) choice)
+      tagOf = \case
+        Literal l -> lookup l origin
+        Backwards (Literal l) -> lookup l origin
+        _ -> Nothing
+  places <- for choiceSteps (fmap fst . tagOf)
+  let base = flip mapStepsIndexed choice \_ -> \case
+        Literal l | Just (_, s) <- lookup l origin -> s
+        Backwards (Literal l) | Just (_, s) <- lookup l origin -> Backwards s
+        s -> s
+      baseIndex = Map.fromListWith (<>) [(i, [j]) | (j, i) <- zip [0 :: Int ..] places]
+  copies <- for (concatMap (.hops) (toList found.routes)) \h -> case h.matcher of
+    MLiteral l
+      | Just (i, _) <- lookup l origin,
+        Just [j] <- lookup i baseIndex ->
+          Just (h.edge, j)
+    _ -> Nothing
+  pure
+    Written
+      { path = base,
+        steps = getConst (traverseSteps (\s -> Const [s]) base),
+        copyOf = mapFromList copies,
+        typedAt = places,
+        typed = map snd originals
+      }
+
+-- | A written step as it was typed: @#t@ for the step after the node of
+-- tags, and ('Written') where else it is written as that.
+stepAsTyped :: Written -> Int -> Text
+stepAsTyped w i = fromMaybe "" (headMay (drop i w.typedAt) >>= \k -> headMay (drop k w.typed))
+
+-- | How often the step is typed in the whole path, and which of those it
+-- is, from 1.
+typedTimes :: Written -> Int -> (Int, Int)
+typedTimes w i = case headMay (drop i w.typedAt) of
+  Nothing -> (1, 1)
+  Just k ->
+    let t = fromMaybe "" (headMay (drop k w.typed))
+     in (length (filter (== t) w.typed), 1 + length (filter (== t) (take k w.typed)))
+
+-- | The path with each step made the literal 'stepTag' of its place among
+-- the steps as typed: in the order typed, a @~@ around several steps
+-- taken apart (a step written @~a@, or @~(~a)@, is one step), and inside
+-- the limits. With each step, the step without its direction and how it
+-- is typed.
+tagTyped :: Path -> (Path, [(Path, Text)])
+tagTyped p0 = second reverse (S.runState (go False p0) [])
+  where
+    go :: Bool -> Path -> S.State [(Path, Text)] Path
+    go afterTags = \case
+      p@(Literal t) -> found True p ((if afterTags then "#" else "") <> renderSurfacePath (Literal t))
+      p@Wild -> found True p (renderSurfacePath p)
+      p@(RegexMatch _) -> found True p (renderSurfacePath p)
+      p@(Backwards q) | Just (forward, s) <- directed q -> found (not forward) s (renderSurfacePath p)
+      Backwards p -> Backwards <$> go False p
+      l :/ r -> (:/) <$> go afterTags l <*> go (endsWithTags l) r
+      l :& r -> (:&) <$> go False l <*> go False r
+      Union k l r -> Union k <$> go False l <*> go False r
+      WithLimits a l p -> WithLimits a l <$> go afterTags p
+      p -> pure p
+    found forward s shown = S.state \steps' ->
+      let tagged = Literal (stepTag (length steps'))
+       in (if forward then tagged else Backwards tagged, (s, shown) : steps')
+    -- a step under any number of ~, and whether it goes forward
+    directed = \case
+      Backwards q -> first not <$> directed q
+      s | isStep s -> Just (True, s)
+      _ -> Nothing
+    isStep = \case
+      Literal _ -> True
+      Wild -> True
+      RegexMatch _ -> True
+      _ -> False
+    endsWithTags = \case
+      Absolute n -> n == tagsNID
+      _ :/ r -> endsWithTags r
+      _ -> False
+
+stepTag :: Int -> Text
+stepTag i = "\0typed step " <> tshow i
+
+-- | The path with a join (@/\@@) after its i-th step, so that what
+-- follows the step continues from one edge of it: @*/(a & b)@ becomes
+-- @*/\@/(a & b)@.
+joinAfter :: Int -> Path -> Path
+joinAfter i = reassociate . mapStepsIndexed \j s -> if j == i then s :/ One else s
 
 -- | Apply to each step (with @~@ pushed down to steps), in written order.
 traverseSteps :: (Applicative f) => (Path -> f Path) -> Path -> f Path
@@ -255,73 +324,6 @@ stepMatcher = \case
   RegexMatch r -> MRegex r
   Backwards s -> stepMatcher s
   _ -> error "stepMatcher: not a step"
-
--- | The rewrite for each step of a union-free path, from the survivor's
--- binding of the step's outputs. A step that distribution copied into
--- routes with different bindings gets none.
-stepRewrites :: NonEmpty Residual -> Residual -> Path -> Map Int Rewrite
-stepRewrites survivors survivor p =
-  case toList (compilePath tagged).alternatives of
-    [t]
-      | untag t == survivor.patternPath ->
-          mapFromList
-            [ (i, rw)
-            | (i, vs) <- mapToList (outputs t),
-              Just rw <- [rewriteFor (toList vs)]
-            ]
-    _ -> mempty
-  where
-    -- Compile with each step's matcher replaced by a unique literal, so the
-    -- hops say which step they came from. Compilation does not look at
-    -- matchers, so the pattern is the same otherwise.
-    tag i = "\0step " <> tshow (i :: Int)
-    tagged = flip mapStepsIndexed p \i -> \case
-      Backwards _ -> Backwards (Literal (tag i))
-      _ -> Literal (tag i)
-    steps = zip [0 ..] (getConst (traverseSteps (\s -> Const [s]) p))
-    matchers =
-      mapFromList [(tag i, stepMatcher s) | (i, s) <- steps] :: Map Text Matcher
-    stepIndex = mapFromList [(tag i, i) | (i, _) <- steps] :: Map Text Int
-    untag t = PatternPath t.tests (untagRoute <$> t.routes)
-    untagRoute rt = Route rt.root (untagHop <$> rt.hops)
-    untagHop h = Hop h.edge h.direction (untagMatcher h.matcher) h.target
-    untagMatcher = \case
-      MLiteral l | Just m <- lookup l matchers -> m
-      m -> m
-    outputs :: PatternPath -> Map Int (Set PVertex)
-    outputs t =
-      Map.fromListWith
-        (<>)
-        [ (i, singletonSet h.target)
-        | rt <- toList t.routes,
-          h <- rt.hops,
-          MLiteral l <- [h.matcher],
-          Just i <- [lookup l stepIndex]
-        ]
-    isVar = \case
-      Var _ -> True
-      _ -> False
-    rewriteFor vs
-      | not (all isVar vs) = Nothing
-      | otherwise = case ordNub (mapMaybe (`lookup` survivor.sigma) vs) of
-          [Existing n] -> Just (Pin n)
-          bs
-            | all isFresh bs,
-              not (null excluded) ->
-                Just (Exclude excluded)
-          _ -> Nothing
-      where
-        isFresh = \case
-          Fresh _ -> True
-          Existing _ -> False
-        excluded =
-          setFromList
-            [ n
-            | other <- toList survivors,
-              other.patternPath == survivor.patternPath,
-              v <- vs,
-              Just (Existing n) <- [lookup v other.sigma]
-            ]
 
 applyRewrites :: Map Int Rewrite -> Path -> Path
 applyRewrites rewrites = mapStepsIndexed \i s -> case lookup i rewrites of
@@ -400,21 +402,28 @@ parseSurfacePath t = case runParser (whitespace *> pPath <* eof) "" t of
 
 -- * Tests
 
--- | The suggestion for each survivor of an ambiguous @mk p@.
+-- | The possibilities of an ambiguous @mk p@.
+possibilitiesIn :: Graph Text () -> Path -> NonEmpty Residual
+possibilitiesIn g p =
+  case residuatePure (corpusNode g) (const Nothing) corpusCurrent (compilePath p) of
+    Right (Repairs rs) -> rs
+    other -> error ("expected possibilities: " <> show other)
+
+-- | The line for each possibility of an ambiguous @mk p@.
 suggestionsIn :: Graph Text () -> Path -> [Maybe Text]
 suggestionsIn g p =
-  case residuatePure lookupNode (const Nothing) corpusCurrent (compilePath p) of
-    Right (Repairs rs) ->
-      map (fmap renderSurfacePath) . runIdentity $
-        suggestPaths (pure . lookupNode) noLabels corpusCurrent p rs (toList rs)
-    other -> error ("expected repairs: " <> show other)
-  where
-    lookupNode = (`maybeNodeLookup` g)
+  map (fmap renderSurfacePath) . runIdentity $
+    suggestPaths
+      (pure . (corpusNode g))
+      noLabels
+      corpusCurrent
+      p
+      (toList (possibilitiesIn g p))
 
 spec_suggestPath :: Spec
 spec_suggestPath = describe "suggestPaths" do
   let n = tshow . smallNID
-  it "pins the node a step binds: mk a/b with two a children" $
+  it "writes the node a step took: mk a/b with two a children" $
     suggestionsIn (graphWithEdges [edge' 1 "a" 2, edge' 1 "a" 3]) [path| a/b |]
       `shouldBe` [Just ("a/" <> n 2 <> "/b"), Just ("a/" <> n 3 <> "/b")]
   it "keeps the alternative: mk a + b" $
@@ -425,29 +434,41 @@ spec_suggestPath = describe "suggestPaths" do
       (graphWithEdges [edge' 2 "x" 2, edge' 3 "x" 3])
       [path| x/(%never ++ @000000000002 ++ @000000000003) |]
       `shouldBe` [Just ("x/" <> n 2), Just ("x/" <> n 3)]
-  it "pins or excludes right evidence: mk a/b/@5" $
-    suggestionsIn (graphWithEdges [edge' 6 "b" 5]) [path| a/b/@000000000005 |]
-      `shouldBe` [ Just ("a/!{" <> n 6 <> "}/b/" <> n 5),
-                   Just ("a/" <> n 6 <> "/b/" <> n 5)
-                 ]
-  it "writes or excludes a pinned node: mk a & a/@2" $
-    suggestionsIn (graphWithEdges [edge' 2 "x" 2]) [path| a & a/@000000000002 |]
-      `shouldBe` [ Just ("a/!{" <> n 2 <> "} & a/" <> n 2),
-                   Just ("a/" <> n 2 <> " & a/" <> n 2)
-                 ]
-  it "pins to the current node: mk a/~a" $
-    suggestionsIn (graphWithEdges []) [path| a/~a |]
-      `shouldBe` [Just ("a/~a/!{" <> n 1 <> "}"), Just ("a/~a/" <> n 1)]
   it "keeps an @ alternative: mk (a & b)/(@ + c)" $
     suggestionsIn (graphWithEdges []) [path| (a & b)/(@ ++ c) |]
       `shouldBe` [Just "(a & b)/@", Just "(a & b)/c"]
-  it "omits a repair that no path selects: mk a/b/@5 & c/b/@5" $
-    -- a created node shared by two routes cannot be named, and nothing
-    -- forbids sharing it
+  it "writes a node this command creates: mk a/@2/x & a/@3/y & a/z" $
     suggestionsIn
-      (graphWithEdges [edge' 5 "x" 5])
-      [path| a/b/@000000000005 & c/b/@000000000005 |]
+      (graphWithEdges [edge' 2 "q" 2, edge' 3 "q" 3])
+      [path| a/@000000000002/x & a/@000000000003/y & a/z |]
+      `shouldBe` [ Just ("a/" <> n 2 <> "/x & a/" <> n 3 <> "/y & a/" <> n 2 <> "/z"),
+                   Just ("a/" <> n 2 <> "/x & a/" <> n 3 <> "/y & a/" <> n 3 <> "/z")
+                 ]
+  it "excludes the other nodes for the created one: mk c & */b" $
+    -- b under the existing a node, or under the c node this command creates
+    suggestionsIn (graphWithEdges [edge' 1 "a" 2]) [path| c & */b |]
+      `shouldMatchList` [ Just ("c & */" <> n 2 <> "/b"),
+                          Just ("c & */!{" <> n 2 <> "}/b")
+                        ]
+  it "writes a join once for each step into it: mk (a & c)/@" $
+    suggestionsIn (graphWithEdges [edge' 1 "a" 2, edge' 1 "c" 5]) [path| (a & c)/@ |]
+      `shouldBe` [ Just ("(a/" <> n 2 <> " & c/" <> n 2 <> ")/@"),
+                   Just ("(a/" <> n 5 <> " & c/" <> n 5 <> ")/@")
+                 ]
+  it "has no line where the other node is a created one: mk a & b & */c" $
+    -- c under the new a node or the new b node: neither has a name
+    suggestionsIn (graphWithEdges []) [path| a & b & */c |]
       `shouldBe` [Nothing, Nothing]
+  it "has no line where copies of a step went different ways: mk a/(b & c)" $
+    map isJust (suggestionsIn (graphWithEdges [edge' 1 "a" 2, edge' 1 "a" 3]) [path| a/(b & c) |])
+      `shouldMatchList` [True, True, False, False]
+  it "shows no line that would create something else: mk (a & b)/(@ + a)" $
+    -- For the possibility in which the first a goes round the loop at the
+    -- current node and the last a goes round it again, the line would be
+    -- (a/@1 & b)/a/@1; but written so, the b has an edge to follow that it
+    -- did not have, and less is created. Each line is confirmed by a walk.
+    suggestionsIn (graphWithEdges [edge' 1 "a" 1, edge' 1 "a" 2]) [path| (a & b)/(@ ++ a) |]
+      `shouldSatisfy` any isNothing
   it "chooses among many written + without enumerating them" do
     -- 2^30 written choices, each %never side compiling to nothing
     let p =
@@ -458,53 +479,37 @@ spec_suggestPath = describe "suggestPaths" do
         g = graphWithEdges [edge' 1 "a" 2, edge' 1 "a" 3]
     result <- timeout 10000000 (evaluate (force (suggestionsIn g p)))
     fmap (map isJust) result `shouldBe` Just [True, True]
-  it "costs about one compilation more than residuation" do
-    -- 3^11 written choices, most contradicting each other only once glued
-    let p =
-          foldl'
-            ( \q _ ->
-                q
-                  :/ (Absolute (smallNID 2) :++ Absolute (smallNID 3) :++ One)
-            )
-            [path| a/b |]
-            [1 .. 11 :: Int]
-        g = graphWithEdges [edge' 1 "a" 2, edge' 1 "a" 3]
-    -- about 2.5s; recompiling per + choice and repair took about 9 times as long
-    result <- timeout 15000000 (evaluate (force (suggestionsIn g p)))
-    fmap (all isJust) result `shouldBe` Just True
-  it "every suggestion over the corpus selects exactly its repair" do
-    let survivors =
-          [ (surface, g, r, suggestion)
+  it "every line over the corpus creates exactly its possibility" do
+    let listed =
+          [ (surface, g, r, line)
           | surface <- corpusQueries,
             g <- corpusGraphs,
             Right (Repairs rs@(_ :| _ : _)) <-
               [ residuatePure
-                  (`maybeNodeLookup` g)
+                  (corpusNode g)
                   (const Nothing)
                   corpusCurrent
                   (compilePath surface)
               ],
-            (r, suggestion) <-
+            (r, line) <-
               zip (toList rs) . runIdentity $
                 suggestPaths
-                  (pure . (`maybeNodeLookup` g))
+                  (pure . (corpusNode g))
                   noLabels
                   corpusCurrent
                   surface
-                  rs
                   (toList rs)
           ]
-        suggested = [(surface, g, r, s) | (surface, g, r, Just s) <- survivors]
-    -- only steps that distribution copies with different bindings, as in
-    -- a/(a & b), get none (4049 of 4109 before the corpus had relational
-    -- unions copied by distribution, 94% after)
-    (length suggested * 100 `div` length survivors) `shouldSatisfy` (>= 90)
-    forM_ suggested \(surface, g, r, s) -> do
+        lines' = [(surface, g, r, s) | (surface, g, r, Just s) <- listed]
+    -- only steps that distribution copies and that go different ways, as
+    -- in a/(a & b), get none
+    (length lines' * 100 `div` length listed) `shouldSatisfy` (>= 90)
+    forM_ lines' \(surface, g, r, s) -> do
       let context = show (surface, g, renderSurfacePath s)
       (context, parseSurfacePath (renderSurfacePath s))
         `shouldBe` (context, Just s)
-      let lookupNode = (`maybeNodeLookup` g)
-      case residuatePure lookupNode (const Nothing) corpusCurrent (compilePath s) of
+      (context, isRight (checkCopies s)) `shouldBe` (context, True)
+      case residuatePure (corpusNode g) (const Nothing) corpusCurrent (compilePath s) of
         Right (Repairs (r' :| [])) ->
           ( context,
             patchSubsumes r'.patch r.patch && patchSubsumes r.patch r'.patch

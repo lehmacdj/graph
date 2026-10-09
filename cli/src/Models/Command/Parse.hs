@@ -43,7 +43,6 @@ commandPaths :: Command -> [ParsedPath]
 commandPaths = \case
   ChangeNode p -> [p]
   Make p -> [p]
-  MakeAllowingOrphans p -> [p]
   Merge args -> map mergeArgumentPath (toList args)
   Tag p q -> [p, q]
   Remove p -> [p]
@@ -76,10 +75,14 @@ pDualize :: Parser Command
 pDualize = command "d" $> Dualize
 
 pMake :: Parser Command
-pMake =
-  command "mk"
-    *> (try (command "--allow-orphans" $> MakeAllowingOrphans) <|> pure Make)
-    <*> path
+pMake = do
+  _ <- command "mk"
+  -- the option is gone; without this its name would be read as a label
+  gone <- optional (try (command "--allow-orphans"))
+  when (isJust gone) . fail $
+    "mk has no --allow-orphans any more: every node that mk creates is "
+      <> "connected to the graph, so write mk <path>"
+  Make <$> path
 
 -- | @mg p1 p2 …@: at least two paths; @--keep@ before at most one of them
 -- marks the node that survives.
@@ -239,7 +242,7 @@ test_parseCommand =
       "fix" `parsesTo` Fix ApplyRepairs,
       "fix --dry-run" `parsesTo` Fix ListRepairs,
       "mk a" `parsesTo` Make (Literal "a"),
-      "mk --allow-orphans a" `parsesTo` MakeAllowingOrphans (Literal "a"),
+      "mk --allow-orphans a" `failsWith` "no --allow-orphans any more",
       "cp a b" `parsesTo` Copy (Literal "a") (Literal "b"),
       "cl a b" `parsesTo` Alias OneParent (Literal "a") (Literal "b"),
       "clone a b" `parsesTo` Alias OneParent (Literal "a") (Literal "b"),
@@ -305,9 +308,6 @@ test_parseCommand =
       "mk z; mk q/%{foo}" `failsWith` "SpliceInCommand",
       "ls a/%targets(b/%{foo})" `failsWith` "SpliceInCommand",
       "t #t %{foo}" `failsWith` "SpliceInCommand",
-      "mk --allow-orphans %last/x"
-        `parsesTo` MakeAllowingOrphans
-          (directive (LocationFromHistory 1) :/ Literal "x"),
       "mg %targets(a) %last"
         `parsesTo` Merge
           ( twoElemList

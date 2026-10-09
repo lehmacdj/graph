@@ -60,8 +60,8 @@ alternatives p =
     Just pattern' <- [glueRoutes routes]
   ]
 
--- | A path without the nodes that carry its limits. A limit says how much
--- residuating the path may make (@max-repairs@), not what the path means,
+-- | A path without the nodes that carry its limits. A limit says how often
+-- @mk@ may walk the path (@max-repairs@), not what the path means,
 -- so everything here compiles the path without them: wherever such a node
 -- is, and however many are nested, the path compiles as if it were not
 -- there.
@@ -1221,10 +1221,14 @@ data WalksAcross = WalksAcross {from :: Path, arriving :: Bool}
 -- | How a union is read for a group to be next to another: one of its
 -- sides in its place (for a shared union, the side chosen), or, for a
 -- relational union, as one step, which is what it is for two routes
--- that chose different sides of it.
+-- that chose different sides of it. With the union is its place in the
+-- path that was checked, which tells it from a union written the same
+-- elsewhere: where unions of the same kind are written inside one
+-- another, they are read as one union, and its place is the outermost
+-- one's.
 data UnionReading
-  = SideInPlace {union :: Path, side :: Path}
-  | AsOneStep {union :: Path}
+  = SideInPlace {union :: Path, side :: Path, unionAt :: Place}
+  | AsOneStep {union :: Path, unionAt :: Place}
   deriving stock (Eq, Show)
 
 -- | An @\@@ that begins or ends a conjunct that is a plain walk (steps
@@ -1290,11 +1294,46 @@ checkCopies :: Path -> Either CopiedMeetingPoint [IdleJoin]
 checkCopies p = case scopeChain (pushBackwards (withoutLimits p)) of
   Nothing -> Right []
   Just chain -> case findings chain of
-    (refusal : _, _) -> Left (refused chain refusal)
+    (refusal : _, _) -> Left (refused placeOf chain refusal)
     ([], idle)
       -- no warning unless it is certain ('reordersRoutes')
       | reordersRoutes chain -> Right []
-      | otherwise -> Right (map (idleJoin chain) idle)
+      | otherwise -> Right (map (idleJoin placeOf chain) idle)
+  where
+    places = unionPlaces p
+    placeOf name =
+      fromMaybe
+        (error "checkCopies: a union that scopeChain names is a union of the path")
+        (IntMap.lookup name places)
+
+-- | The place in a path of each of its unions, by the name 'scopeChain'
+-- gives it in the path without limits and with @~@ pushed down: from
+-- where its leaves start there and how many it has. @~@ reverses the
+-- order of what it is around.
+unionPlaces :: Path -> IntMap Place
+unionPlaces path = IntMap.fromList (go [] 0 False path)
+  where
+    total = leaves path
+    go :: Place -> Int -> Bool -> Path -> [(Int, Place)]
+    go place pos reversed = \case
+      p@(Union kind l r) ->
+        let name = pos * (total + 1) + leaves p
+         in (if kind == Relational then name else negate name - 1, place)
+              : inOrder l r
+      Backwards q -> go (operand 0 place) pos (not reversed) q
+      WithLimits _ _ q -> go (operand 0 place) pos reversed q
+      l :/ r
+        -- under ~ the second operand of a sequence comes first
+        | reversed ->
+            go (operand 0 place) (pos + leaves r) reversed l
+              <> go (operand 1 place) pos reversed r
+        | otherwise -> inOrder l r
+      l :& r -> inOrder l r
+      _ -> []
+      where
+        inOrder l r =
+          go (operand 0 place) pos reversed l
+            <> go (operand 1 place) (pos + leaves l) reversed r
 
 -- | Whether a chain has, anywhere in it, a relational union with a join
 -- in the own chain of a side (through the unions in that side, read in
@@ -1829,12 +1868,17 @@ segAsPath = \case
       (Union (if isRelational name then Relational else Shared))
       (map chainAsPath cs)
 
-readingsOf :: Copier -> [UnionReading]
-readingsOf c =
+-- | How the unions between a group and its copier are read, each with
+-- its place in the path, given by its name.
+readingsOf :: (Int -> Place) -> Copier -> [UnionReading]
+readingsOf placeOf c =
   [ case reading of
-      Just side' -> SideInPlace (segAsPath u) (chainAsPath side')
-      Nothing -> AsOneStep (segAsPath u)
-  | (u, reading) <- c.how
+      Just side' -> SideInPlace (segAsPath u) (chainAsPath side') place
+      Nothing -> AsOneStep (segAsPath u) place
+  | (u, reading) <- c.how,
+    let place = case u of
+          SUnion name _ -> placeOf name
+          _ -> error "readingsOf: a copier is read through unions only"
   ]
 
 -- | The chain in which a group and its copier stand, rewritten: the
@@ -1878,15 +1922,15 @@ rewritten g c make = go
     holes :: [a] -> [([a], a, [a])]
     holes xs = [(take i xs, x, drop (i + 1) xs) | (i, x) <- zip [0 ..] xs]
 
-refused :: Chain -> Finding -> CopiedMeetingPoint
-refused chain f =
+refused :: (Int -> Place) -> Chain -> Finding -> CopiedMeetingPoint
+refused placeOf chain f =
   CopiedMeetingPoint
     { meeting = chainAsPath f.conjunct,
       join = maybe One segAsPath f.at,
       copied = chainAsPath f.copied,
       group = segAsPath f.group,
       copier = segAsPath f.copier.group,
-      readings = readingsOf f.copier,
+      readings = readingsOf placeOf f.copier,
       across =
         f.across <&> \(k, arrives) -> WalksAcross (chainAsPath k) arrives,
       joinedFirst = do
@@ -1913,14 +1957,14 @@ refused chain f =
             Just [SGroup (-2) [x <> between <> y | x <- as, y <- bs]]
       _ -> Nothing
 
-idleJoin :: Chain -> Finding -> IdleJoin
-idleJoin chain f =
+idleJoin :: (Int -> Place) -> Chain -> Finding -> IdleJoin
+idleJoin placeOf chain f =
   IdleJoin
     { conjunct = chainAsPath f.conjunct,
       begins = b,
       ends = e,
       copier = segAsPath f.copier.group,
-      readings = readingsOf f.copier,
+      readings = readingsOf placeOf f.copier,
       pinned = do
         guard (null f.copier.how)
         (whole, made) <- rewritten f.group f.copier.group inside chain

@@ -9,7 +9,8 @@ at @000000000002 rm ~b
 at @000000000002 mk y
 nid
 ==========stdout==========
-g> g> g> g> @000000000000
+g> g> g> created 1 new node and 1 new edge
+g> @000000000000
 g> Goodbye!
 ==========stderr==========
 the path of rm ("b") matched nothing; nothing was changed.

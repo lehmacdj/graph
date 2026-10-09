@@ -1,0 +1,76 @@
+==========graph==========
+0 -b-> 5
+0 -a-> 0
+1
+2
+==========input==========
+mk (a & b)/@ & a
+mk a/!{@000000000001}/b & a/c
+mk a & ~a
+mk c/!{@000000000002}/x & (x & c)/@ & x/@000000000001 & c/@000000000002
+mk (* & a)/@
+mk a/@/(@ & a)/@
+mk */x & */y
+mk regex:"^[ab]$"/x & */y
+mk (a ++ b)/(c & d & e & f & g)
+mk a/(c & d & e & f & g) ++ b/(c & d & e & f & g)
+tag (a & b)/@ & a @000000000001
+mk (a & b)/@
+mk a/@000000000002/a/@000000000002
+mk */@/(x & y)
+==========stdout==========
+g> g> g> g> g> g> g> g> g> g> g> g> g> created 0 new nodes and 2 new edges
+g> g> Goodbye!
+==========stderr==========
+These steps could each follow an edge that another of them creates, so mk has no order to take them in: the node where `a` and `b` meet and `a`. If a step means the same edge as a step into a node where steps meet, leave it out and write what follows it after that node, as in (a & c)/@/b for a/b & (a & c)/@; otherwise write the node a step should go to (/@N after it), or create them with separate commands. Nothing was changed. (CircularSuppliers)
+These steps could each follow an edge that another of them creates, so mk has no order to take them in: `a/!{@000000000001}` and `a`. Write the node a step should go to (/@N after it), or create them with separate commands. Nothing was changed. (CircularSuppliers)
+These steps could each follow an edge that another of them creates, so mk has no order to take them in: `a` and `~a`. Write the node a step should go to (/@N after it), or create them with separate commands. Nothing was changed. (CircularSuppliers)
+These steps could each follow an edge that another of them creates, so mk has no order to take them in: `c/!{@000000000002}` and the node where `x` and `c` meet. If a step means the same edge as a step into a node where steps meet, leave it out and write what follows it after that node, as in (a & c)/@/b for a/b & (a & c)/@; otherwise write the node a step should go to (/@N after it), or create them with separate commands. Nothing was changed. (CircularSuppliers)
+The step `*` has no label and meets `a` at a node that is not written, and mk does not use a step without a label to choose such a node. If it means the same edge as another step into the node, leave it out; otherwise write its label, or write the node where the steps meet (/@N). Nothing was changed. (WildcardJoin)
+This path leaves an unnamed node and comes back to it: `a/a` returns to the node that `a` reaches, and mk does not build a route that visits an unnamed node twice. Write a node that exists there both times, as in a/@N/a/@N, or create the node first and use its id in a second command. Nothing was changed. (ReturnsToMeetingPoint)
+This path has more than one * or regex step in one alternative: `*` and `*`. mk builds a path with at most one. Write the labels you mean; if steps from one node are meant to be one step, write it once, with a join after it for what continues from it, as in */@/(a & b) for */a & */b. Nothing was changed. (SeveralWildcards)
+This path has more than one * or regex step in one alternative: `regex:"^[ab]$"` and `*`. mk builds a path with at most one. Write the labels you mean. Nothing was changed. (SeveralWildcards)
+This path is too large for mk: its size, estimated from the path as written, is more than the limit of 256 route steps over all its alternatives. The estimate counts a + or ++ union that the product rule copies as if each copy took a side of its own, though the copies all take the same side. Written with its + and ++ unions outside the rest of the path, as in a/(c & d) ++ b/(c & d) for (a ++ b)/(c & d), the path means the same and its estimate is within the limit. Write it so, keep one side of each union, or create the path with several commands. Nothing was changed. (ExpansionTooLarge)
+This path can be created in 2 ways; nothing was changed. To choose one, write @N after a step for the node it should go to, or !{@N} for nodes it should not, or keep one side of a +.
+  1. @000000000000 -"a"-> @000000000000 -"c"-> new1 & @000000000000 -"a"-> @000000000000 -"d"-> new2 & @000000000000 -"a"-> @000000000000 -"e"-> new3 & @000000000000 -"a"-> @000000000000 -"f"-> new4 & @000000000000 -"a"-> @000000000000 -"g"-> new5
+    creates: @000000000000 -"c"-> new1, @000000000000 -"d"-> new2, @000000000000 -"e"-> new3, @000000000000 -"f"-> new4, @000000000000 -"g"-> new5
+    use: mk a/(c & d & e & f & g)
+  2. @000000000000 -"b"-> @000000000005 -"c"-> new1 & @000000000000 -"b"-> @000000000005 -"d"-> new2 & @000000000000 -"b"-> @000000000005 -"e"-> new3 & @000000000000 -"b"-> @000000000005 -"f"-> new4 & @000000000000 -"b"-> @000000000005 -"g"-> new5
+    creates: @000000000005 -"c"-> new1, @000000000005 -"d"-> new2, @000000000005 -"e"-> new3, @000000000005 -"f"-> new4, @000000000005 -"g"-> new5
+    use: mk b/(c & d & e & f & g)
+
+These steps could each follow an edge that another of them creates, so tag has no order to take them in: the node where `a` and `b` meet and `a`. If a step means the same edge as a step into a node where steps meet, leave it out and write what follows it after that node, as in (a & c)/@/b for a/b & (a & c)/@; otherwise write the node a step should go to (/@N after it), or create them with separate commands. Nothing was changed. (CircularSuppliers)
+This path can be created in 2 ways; nothing was changed. To choose one, write @N after a step for the node it should go to, or !{@N} for nodes it should not, or keep one side of a +.
+  1. @000000000000 -"a"-> @000000000000 & @000000000000 -"b"-> @000000000000
+    creates: @000000000000 -"b"-> @000000000000
+    use: mk (a/@000000000000 & b/@000000000000)/@
+  2. @000000000000 -"a"-> @000000000005 & @000000000000 -"b"-> @000000000005
+    creates: @000000000000 -"a"-> @000000000005
+    use: mk (a/@000000000005 & b/@000000000005)/@
+
+This path can be created in 3 ways; nothing was changed. To choose one, write @N after a step for the node it should go to, or !{@N} for nodes it should not, or keep one side of a +.
+  1. @000000000000 -"a"-> @000000000000 -"x"-> new1 & @000000000000 -"a"-> @000000000000 -"y"-> new2
+    creates: @000000000000 -"x"-> new1, @000000000000 -"y"-> new2
+    use: mk */@000000000000/@/(x & y)
+  2. @000000000000 -"a"-> @000000000002 -"x"-> new1 & @000000000000 -"a"-> @000000000002 -"y"-> new2
+    creates: @000000000002 -"x"-> new1, @000000000002 -"y"-> new2
+    use: mk */@000000000002/@/(x & y)
+  3. @000000000000 -"b"-> @000000000005 -"x"-> new1 & @000000000000 -"b"-> @000000000005 -"y"-> new2
+    creates: @000000000005 -"x"-> new1, @000000000005 -"y"-> new2
+    use: mk */@000000000005/@/(x & y)
+
+==========graph-dump==========
+@000000000000{out=[@000000000000 via "a", @000000000002 via "a", @000000000005 via "b"], in=[@000000000000 via "a", @0daCJjMrQel8 via "origin"]}
+@000000000001{out=[], in=[]}
+@000000000002{out=[@000000000002 via "a"], in=[@000000000000 via "a", @000000000002 via "a"]}
+@000000000005{out=[], in=[@000000000000 via "b"]}
+@0daCJjMrQel8{out=[@zsBuPkn5mh8F via "file-extensions", @AhQufiPzgyRf via "file-hashes", @3JJvxFUHGAA1 via "historical-special-nodes", @S00KkOYoVpFu via "import-dates", @a0fVkm0kR7KE via "import-urls", @927u9Xyky2pC via "mime-types", @000000000000 via "origin", @pbYxBO6fzBQV via "tags"], in=[]}
+@3JJvxFUHGAA1{out=[@VEfLhuTgZ88Z via "sequence-ids"], in=[@0daCJjMrQel8 via "historical-special-nodes"]}
+@927u9Xyky2pC{out=[], in=[@0daCJjMrQel8 via "mime-types"]}
+@AhQufiPzgyRf{out=[], in=[@0daCJjMrQel8 via "file-hashes"]}
+@S00KkOYoVpFu{out=[], in=[@0daCJjMrQel8 via "import-dates"]}
+@VEfLhuTgZ88Z{out=[], in=[@3JJvxFUHGAA1 via "sequence-ids"]}
+@a0fVkm0kR7KE{out=[], in=[@0daCJjMrQel8 via "import-urls"]}
+@pbYxBO6fzBQV{out=[], in=[@0daCJjMrQel8 via "tags"]}
+@zsBuPkn5mh8F{out=[], in=[@0daCJjMrQel8 via "file-extensions"]}
+==========data==========

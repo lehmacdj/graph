@@ -2,7 +2,8 @@
 ==========input==========
 mk (@ + a)/@000000000000
 ==========stdout==========
-g> g> Goodbye!
+g> created 0 new nodes and 0 new edges
+g> Goodbye!
 ==========stderr==========
 ==========graph-dump==========
 @000000000000{out=[], in=[@0daCJjMrQel8 via "origin"]}

@@ -8,14 +8,15 @@ module Models.PathPattern.TestCorpus
     corpusLargeEquivalences,
     corpusGraphs,
     corpusCurrent,
+    corpusNode,
     fewAlternatives,
   )
 where
 
 import Models.Edge (Edge' (..))
-import Models.Graph (Graph, emptyGraph, insertEdges, insertNode)
+import Models.Graph (Graph, emptyGraph, insertEdges, insertNode, maybeNodeLookup)
 import Models.NID
-import Models.Node (emptyNode)
+import Models.Node (Node, emptyNode)
 import Models.Path.Simple qualified as P
 import Models.Path.TH (path)
 import Models.PathPattern (PatternPath)
@@ -309,6 +310,12 @@ corpusGraphs =
     withNodes :: [Int] -> Graph Text ()
     withNodes =
       foldl' (\g n -> insertNode (emptyNode (smallNID n)) g) emptyGraph
+
+-- | The nodes of a graph for a command at the corpus's current node, which
+-- exists whether the graph has it or not: @mk@ creates no node that it is
+-- told by its id, so it has to stand on one that exists.
+corpusNode :: Graph Text () -> NID -> Maybe (Node Text ())
+corpusNode g n = maybeNodeLookup n g <|> (emptyNode n <$ guard (n == corpusCurrent))
 
 corpusCurrent :: NID
 corpusCurrent = smallNID 1

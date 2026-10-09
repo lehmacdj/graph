@@ -526,6 +526,22 @@ spec_dryRun = do
         `shouldContain` ( "warning: created the system nodes that had no file:"
                             <> " @0daCJjMrQel8, "
                         )
+  it "says what mk would create, and creates nothing" $
+    withTempGraph Nothing \directory -> do
+      writeBaseGraph directory "0 -a-> 1\n"
+      before <- sort <$> listDirectory directory
+      (code, out, _) <- runGe directory ["--dry-run", "-e", "mk a/b"] ""
+      code `shouldBe` 0
+      unpack (decodeUtf8 out)
+        `shouldContain` "would create 1 new node and 1 new edge"
+      unpack (decodeUtf8 out) `shouldNotContain` "created 1 new node"
+      (sort <$> listDirectory directory) `shouldReturn` before
+      -- and what it says when it does create them
+      (_, out', _) <- runGe directory ["-e", "mk a/b"] ""
+      unpack (decodeUtf8 out') `shouldContain` "created 1 new node and 1 new edge"
+      -- then the path resolves
+      (_, out'', _) <- runGe directory ["-e", "mk a/b"] ""
+      unpack (decodeUtf8 out'') `shouldContain` "created 0 new nodes and 0 new edges"
 
 -- | A directory as it is: the name of everything in it, with what each file
 -- holds (nothing for what can't be read as a file: a directory, a symbolic
@@ -715,7 +731,7 @@ spec_unusableNodeFiles = do
       err'' `shouldNotContain` "at did nothing"
     it "is not written, over or through" $ damaged \directory -> do
       -- the node is there, so this has nothing to make: it only reads
-      (code, _, err) <- ge directory "mk --allow-orphans @000000000002"
+      (code, _, err) <- ge directory "mk @000000000002"
       code `shouldBe` 0
       warnsOf why err
       ge directory "mk x/@000000000002" >>= refusedFor why

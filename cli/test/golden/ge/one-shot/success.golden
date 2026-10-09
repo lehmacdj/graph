@@ -3,6 +3,7 @@
 ==========expression==========
 mk b
 ==========stdout==========
+created 1 new node and 1 new edge
 ==========stderr==========
 ==========graph-dump==========
 @000000000000{out=[@000000000001 via "a", @O8OhMSVtjevt via "b"], in=[@0daCJjMrQel8 via "origin"]}

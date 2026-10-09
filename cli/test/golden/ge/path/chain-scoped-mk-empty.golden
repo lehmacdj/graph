@@ -3,7 +3,8 @@
 ==========input==========
 mk (x/@/w & b)/(c & d)
 ==========stdout==========
-g> g> Goodbye!
+g> created 7 new nodes and 7 new edges
+g> Goodbye!
 ==========stderr==========
 ==========graph-dump==========
 @000000000000{out=[@w4VxcgSm0Js6 via "b", @O8OhMSVtjevt via "x"], in=[@0daCJjMrQel8 via "origin"]}

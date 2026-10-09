@@ -5,7 +5,7 @@ mk (p & q)/((x/@ | zz) & z)
 ==========stdout==========
 g> g> Goodbye!
 ==========stderr==========
-This path has 4 possible repairs. Nothing was changed. Pin a node with @N or exclude one with !{@N} to choose.
+This path can be created in 4 ways; nothing was changed. To choose one, write @N after a step for the node it should go to, or !{@N} for nodes it should not, or keep one side of a +.
   1. @000000000000 -"p"-> new1 -"x"-> new2 & @000000000000 -"p"-> new1 -"z"-> new3 & @000000000000 -"q"-> new4 -"x"-> new5 & @000000000000 -"q"-> new4 -"z"-> new6
     creates: @000000000000 -"p"-> new1, @000000000000 -"q"-> new4, new1 -"x"-> new2, new1 -"z"-> new3, new4 -"x"-> new5, new4 -"z"-> new6
     use: mk (p & q)/(x/@ & z)

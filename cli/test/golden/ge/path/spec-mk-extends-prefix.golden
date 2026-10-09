@@ -3,7 +3,8 @@
 ==========input==========
 mk a/b
 ==========stdout==========
-g> g> Goodbye!
+g> created 1 new node and 1 new edge
+g> Goodbye!
 ==========stderr==========
 ==========graph-dump==========
 @000000000000{out=[@000000000001 via "a"], in=[@0daCJjMrQel8 via "origin"]}

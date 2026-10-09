@@ -308,6 +308,9 @@ $ at (a + c) nid
 @3
 @4
 $ at (a + c) {mk z/%targets(@)}
+created 0 new nodes and 1 new edge
+created 0 new nodes and 1 new edge
+created 0 new nodes and 1 new edge
 + 1 -z-> 1
 + 3 -z-> 3
 + 4 -z-> 4
@@ -323,6 +326,7 @@ $ at a {cd b; nid}
 $ at a {cd b; ls %history(0)}
 @2
 $ at a {cd b; mk q}
+created 1 new node and 1 new edge
 + 1 -q-> O8OhMSVtjevt
 $ at a {cd b}; nid
 @0
@@ -402,8 +406,9 @@ graph: 0 -p-> 1, 0 -p-> 2, 1 -x-> 9, 2 -y-> 9
 $ ls %targets(p)/(x & y)
 x @9
 $ mk x/%targets(p)
-This path has 2 possible repairs. Nothing was changed. Pin a node with @N or
-    exclude one with !{@N} to choose.
+This path can be created in 2 ways; nothing was changed. To choose one, write
+    @N after a step for the node it should go to, or !{@N} for nodes it should
+    not, or keep one side of a +.
   1. @0 -"x"-> @1
     creates: @0 -"x"-> @1
     use: mk x/@1
@@ -411,6 +416,7 @@ This path has 2 possible repairs. Nothing was changed. Pin a node with @N or
     creates: @0 -"x"-> @2
     use: mk x/@2
 $ mk x/%targets(p/@1)
+created 0 new nodes and 1 new edge
 + 0 -x-> 1
 $ mk a/%targets(zz)/b
 This path cannot be constructed.
@@ -707,44 +713,47 @@ $ at @1 rn ~a z/@0
 
 ## 4. `mk`
 
-> **This section describes `mk` as this build has it, and is about to
-> be replaced.** How `mk` chooses what to create (4.1 to 4.4), the
-> `use:` lines it suggests (4.3) and the limit on what it considers
-> (5.2) are being rebuilt; what follows is true of the build this
-> document is checked in with and will not be true of the next.
-
-`mk p` makes the path hold from the current node: it keeps the walks
-of `p` that exist and creates the nodes and edges that are missing. If
-the path already holds, nothing is created and nothing is printed.
+`mk p` makes the path hold from the current node: it walks `p` from
+left to right, follows the edges that are there and creates the nodes
+and edges that are missing. It then says how many it created; if the
+path already holds, that is `created 0 new nodes and 0 new edges`.
 `mk` does not append `/@`: the walks of a fork need not end at one
 node (`mk a & b` makes an `a` edge and a `b` edge). A `+` in `mk` is
 `++`: one side is chosen for the whole path. A path with `%never` in a
 walk cannot hold and is an error.
 
+Every node `mk` creates is a new node with a new id. It never creates
+a node whose id is written in the path: `mk a/@7` when there is no node
+7 is an error (4.5).
+
 ```ge
 graph: 0
 $ mk a/b/c
+created 3 new nodes and 3 new edges
 + 0 -a-> O8OhMSVtjevt
 + O8OhMSVtjevt -b-> Pqf7kGOdKJIr
 + Pqf7kGOdKJIr -c-> DQ1KCJgauHiV
 $ mk a & b
+created 2 new nodes and 2 new edges
 + 0 -a-> O8OhMSVtjevt
 + 0 -b-> Pqf7kGOdKJIr
 $ mk a/b & a/c
+created 3 new nodes and 3 new edges
 + 0 -a-> O8OhMSVtjevt
 + O8OhMSVtjevt -b-> Pqf7kGOdKJIr
 + O8OhMSVtjevt -c-> DQ1KCJgauHiV
 $ mk (a & b)/@
+created 1 new node and 2 new edges
 + 0 -a-> O8OhMSVtjevt
 + 0 -b-> O8OhMSVtjevt
 $ mk x/@/(c & d)
+created 3 new nodes and 3 new edges
 + 0 -x-> O8OhMSVtjevt
 + O8OhMSVtjevt -c-> Pqf7kGOdKJIr
 + O8OhMSVtjevt -d-> DQ1KCJgauHiV
 $ mk ~a
+created 1 new node and 1 new edge
 + O8OhMSVtjevt -a-> 0
-$ mk a/@7
-+ 0 -a-> 7
 $ mk a/%never
 This path cannot be constructed.
 ```
@@ -752,153 +761,185 @@ This path cannot be constructed.
 ```ge
 graph: 0 -a-> 1, 1 -b-> 2
 $ mk a/b
+created 0 new nodes and 0 new edges
 $ mk a/b/c
+created 1 new node and 1 new edge
 + 2 -c-> O8OhMSVtjevt
 $ mk a/(b & c)
+created 1 new node and 1 new edge
 + 1 -c-> O8OhMSVtjevt
 $ mk a/@2
+created 0 new nodes and 1 new edge
 + 0 -a-> 2
 $ mk x/@1/b
+created 0 new nodes and 1 new edge
 + 0 -x-> 1
 $ mk a/!{@1}
+created 1 new node and 1 new edge
 + 0 -a-> O8OhMSVtjevt
 ```
 
-### 4.1 How a repair is found
+### 4.1 What a step does
 
-A *repair* is a way of binding every position of the path to a node,
-existing or new, together with the edges that must then be created
-(its *patch*). `mk` finds every repair worth considering, then chooses
-(4.2). The repairs come from these rules, in user terms:
+`mk` walks every walk of the path from its start, one step at a time.
+A step's **distance** is how many steps it is from the start of its
+walk: in `x/~x/a` the `a` is at distance 3.
 
-1. The current node and every `@N` are given. (`mk` creates a missing
-   `@N`, and the current node if it does not exist.)
-2. A step may be matched to an existing edge when the node at one of
-   its ends is already placed: forward from a placed node (`a/b` with
-   `0 -a-> 1` existing: `b` leaves from `1`), or backward from a placed
-   node (`a/b/@5` with `6 -b-> 5` existing: `a` may lead to `6`). A
-   match from the far side is only ever an alternative; the repair
-   without it is kept too.
-3. A step that is not matched creates its edge; the edge leads to a
-   new node unless the position after the step is already placed
-   (`mk a/@7` creates only the edge `0 -a-> 7`, and node `7` if it was
-   missing).
+1. Standing on a node, a step looks for an edge with its label and
+   direction at that node: an edge of the graph, or one that this
+   command creates (rule 6 says which of those). If there is one, it
+   follows it. If there is none, it creates a new node and the edge to
+   it.
+2. A step followed by `@N` goes to node `N`: along an edge if there is
+   one, and along an edge it creates otherwise. Node `N` has to exist
+   (4.5).
+3. The steps into a join (`/@`) go together: to a node that one of
+   them can follow an edge to, the others creating their edges to it;
+   or, if none can follow an edge, to one new node.
 4. Two steps with the same label from the same node make one new node
-   (`a/b & a/c` creates one `a` edge, and `(x/@ & b)/(c & d)` one `x`
-   although its `@` pins nothing); two steps with the same label into
-   the same node (`a/b/@5 & c/b/@5`) may make one or two, and both are
-   offered.
-5. A new node may instead be an existing one (the current node, an
-   `@N`, or a node another step matched) when that makes two edges the
-   path must create one edge; this *pin* is always an alternative, so
-   the repair with the new node is offered too. `mk a/~a` is the
-   smallest case: the `~a` may lead back to the current node, or to a
-   new one.
-6. A `*` or regex step whose edge must be created has no label to
-   create it with. When a repair that survives the choice of 4.2 needs
-   such a label the command fails (`UnsupportedLabel`), listing the
-   repairs when there are several; it does not fall back to a repair
-   that needs no label. A repair that needs the label and is dropped
-   in 4.2 anyway does not matter: `mk a + a/*` creates `a`.
+   (`a/b & a/c` creates one `a` edge).
+5. Nothing is decided from the far end. With `1 -b-> 2`, `mk a/b/@2`
+   does not look for a node that already has a `b` edge to 2: it
+   creates `0 -a-> new -b-> 2`. Write `a/@1/b/@2` for node 1.
+   `mk a/b/@2 & c/b/@2` creates two nodes; write `(a & c)/@/b/@2` for
+   one.
+6. The walks of a path are walked at the same pace. An edge that this
+   command creates counts for a step like an edge of the graph, if the
+   step that creates it is no further from the start of its walk than
+   the step itself. `mk a & a/@2` creates only `0 -a-> 2`: both steps
+   are at distance 1. `mk a/~a` creates only `0 -a-> new` (the `~a`
+   walks back along it). `mk x/~x/a & a/@2` creates `0 -x-> new` and
+   `0 -a-> 2`: the `a` at distance 3 follows the edge created at
+   distance 1. But `mk a & b/~b/a/@2` creates `0 -a-> new`,
+   `0 -b-> new` and `0 -a-> 2`: the first `a` is at distance 1 and
+   does not see an edge that is created at distance 3. The steps into
+   a join count as far as the furthest of them.
+7. An edge never counts for a step if it is only there because of
+   where that step went: `mk a/~a/a/@2` creates both `0 -a-> new` and
+   `0 -a-> 2`.
+8. When steps at the same distance could each follow an edge that the
+   other creates, so that each would have to wait for the other, none
+   of them gets the others' edges: each does what it would do if the
+   others' edges were not there. (4.2 has an example.)
+9. A `*` or regex step follows any edge whose label matches and that
+   counts by rules 6 to 8, existing or created (`mk * & a` creates only
+   `a`). When it has to create an edge it has no label to create it
+   with, and the command fails (`UnsupportedLabel`); it does not fall
+   back to another way of creating the path that needs no label.
+
+```ge
+graph: 0, 2
+$ mk a & a/@2
+created 0 new nodes and 1 new edge
++ 0 -a-> 2
+$ mk a/b & a/@2/c
+created 2 new nodes and 3 new edges
++ 0 -a-> 2
++ 2 -b-> O8OhMSVtjevt
++ 2 -c-> Pqf7kGOdKJIr
+$ mk a/b/@2 & c/b/@2
+created 2 new nodes and 4 new edges
++ 0 -a-> O8OhMSVtjevt
++ 0 -c-> Pqf7kGOdKJIr
++ O8OhMSVtjevt -b-> 2
++ Pqf7kGOdKJIr -b-> 2
+$ mk (a & c)/@/b/@2
+created 1 new node and 3 new edges
++ 0 -a-> O8OhMSVtjevt
++ 0 -c-> O8OhMSVtjevt
++ O8OhMSVtjevt -b-> 2
+$ mk x/~x/a & a/@2
+created 1 new node and 2 new edges
++ 0 -a-> 2
++ 0 -x-> O8OhMSVtjevt
+$ mk a & b/~b/a/@2
+created 2 new nodes and 3 new edges
++ 0 -a-> 2
++ 0 -a-> O8OhMSVtjevt
++ 0 -b-> Pqf7kGOdKJIr
+$ mk a/~a/a/@2
+created 1 new node and 2 new edges
++ 0 -a-> 2
++ 0 -a-> O8OhMSVtjevt
+$ mk (x/y & a)/@ & a/@2
+created 1 new node and 3 new edges
++ 0 -a-> 2
++ 0 -x-> O8OhMSVtjevt
++ O8OhMSVtjevt -y-> 2
+```
+
+```ge
+graph: 1 -b-> 2, 0
+$ mk a/b/@2
+created 1 new node and 2 new edges
++ 0 -a-> O8OhMSVtjevt
++ O8OhMSVtjevt -b-> 2
+$ mk a/@1/b/@2
+created 0 new nodes and 1 new edge
++ 0 -a-> 1
+```
 
 ```ge
 graph: 0
 $ mk a/~a
-This path has 2 possible repairs. Nothing was changed. Pin a node with @N or
-    exclude one with !{@N} to choose.
-  1. @0 -"a"-> new1 <-"a"- new2
-    creates: @0 -"a"-> new1, new2 -"a"-> new1
-    use: mk a/~a/!{@0}
-  2. @0 -"a"-> new1 <-"a"- @0
-    creates: @0 -"a"-> new1
-    use: mk a/~a/@0
-$ mk a/b/@5 & c/b/@5
-This path has 2 possible repairs. Nothing was changed. Pin a node with @N or
-    exclude one with !{@N} to choose.
-  1. @0 -"a"-> new1 -"b"-> @5 & @0 -"c"-> new2 -"b"-> @5
-    creates: @0 -"a"-> new1, @0 -"c"-> new2, new1 -"b"-> @5, new2 -"b"-> @5
-  2. @0 -"a"-> new1 -"b"-> @5 & @0 -"c"-> new1 -"b"-> @5
-    creates: @0 -"a"-> new1, @0 -"c"-> new1, new1 -"b"-> @5
-$ mk (x/@ & b)/(c & d)
-Warning: the @ that ends `x/@` does nothing here: `(c & d)` copies `x/@`
-    whole, once for each of its conjuncts, so the @ joins nothing and pins
-    nothing. If one node was meant, write `x/@/(c & d) & b/(c & d)`; otherwise
-    leave the @ out. (JoinDoesNothing)
-+ 0 -b-> sYumkceKpoAh
-+ 0 -x-> O8OhMSVtjevt
-+ O8OhMSVtjevt -c-> Pqf7kGOdKJIr
-+ O8OhMSVtjevt -d-> DQ1KCJgauHiV
-+ sYumkceKpoAh -c-> w4VxcgSm0Js6
-+ sYumkceKpoAh -d-> w4P7BSd8jU2v
+created 1 new node and 1 new edge
++ 0 -a-> O8OhMSVtjevt
+$ mk a/a
+created 2 new nodes and 2 new edges
++ 0 -a-> O8OhMSVtjevt
++ O8OhMSVtjevt -a-> Pqf7kGOdKJIr
+$ mk * & a
+created 1 new node and 1 new edge
++ 0 -a-> O8OhMSVtjevt
 $ mk *
 Cannot create the * edge without a label: give it a literal label. Nothing was
     changed. (UnsupportedLabel)
   @0 -*-> new1
     creates: @0 -*-> new1
 $ mk * + a
-Cannot create the * edge without a label (repair 2 below), and even with one
-    this path has 2 possible repairs. mk does not fall back to a repair that
-    needs no label; nothing was changed. Give the edge a literal label, or pin
-    a node with @N or exclude one with !{@N} to choose a repair.
-    (UnsupportedLabel)
+Cannot create the * edge without a label (possibility 2 below), and even with
+    one this path can be created in 2 ways. mk does not choose one that needs
+    no label; nothing was changed. Give the edge a literal label, or write @N
+    after a step for the node it should go to, or !{@N} for nodes it should
+    not, or keep one side of a +. (UnsupportedLabel)
   1. @0 -"a"-> new1
     creates: @0 -"a"-> new1
   2. @0 -*-> new1
     creates: @0 -*-> new1
 $ mk a + a/*
+created 1 new node and 1 new edge
 + 0 -a-> O8OhMSVtjevt
 ```
 
 ```ge
-graph: 6 -b-> 5, 0
-$ mk a/b/@5
-This path has 2 possible repairs. Nothing was changed. Pin a node with @N or
-    exclude one with !{@N} to choose.
-  1. @0 -"a"-> new1 -"b"-> @5
-    creates: @0 -"a"-> new1, new1 -"b"-> @5
-    use: mk a/!{@6}/b/@5
-  2. @0 -"a"-> @6 -"b"-> @5
-    creates: @0 -"a"-> @6
-    use: mk a/@6/b/@5
+graph: 0, 2
+$ mk */@2 & a/@2
+created 0 new nodes and 1 new edge
++ 0 -a-> 2
+$ mk */@2/~b/@0
+Cannot create the * edge without a label: give it a literal label. Nothing was
+    changed. (UnsupportedLabel)
+  @0 -*-> @2 <-"b"- @0
+    creates: @0 -"b"-> @2, @0 -*-> @2
 ```
 
-```ge
-graph: 2, 0
-$ mk a & a/@2
-This path has 2 possible repairs. Nothing was changed. Pin a node with @N or
-    exclude one with !{@N} to choose.
-  1. @0 -"a"-> new1 & @0 -"a"-> @2
-    creates: @0 -"a"-> @2, @0 -"a"-> new1
-    use: mk a/!{@2} & a/@2
-  2. @0 -"a"-> @2 & @0 -"a"-> @2
-    creates: @0 -"a"-> @2
-    use: mk a/@2 & a/@2
-```
+In the last command the `*` does not go along the `b` edge that the
+path creates one step further on, and has no label of its own.
 
-### 4.2 Which repair is applied
+### 4.2 When a step has several edges to follow
 
-1. If the path already holds in some way, nothing is done.
-2. A repair that stops and creates where another matches on forward
-   along existing edges from a placed node loses to that other (so
-   `mk a/b` with `0 -a-> 1` creates `b` under `1` rather than a second
-   `a`). Matches from the far side and pins never win this way.
-3. A repair whose patch is a strict superset of another's (up to the
-   naming of new nodes) is dropped, unless the other uses a pin this
-   one does not: the repair without a pin is always offered. Equal
-   patches are one repair.
-4. The survivors are ordered: a repair with no far-side match and no
-   pin first, then by the number of nodes and edges created, then by a
-   fixed order on the edges.
-
-One survivor is applied. Several are an error that changes nothing and
-lists them (4.3). None means the path cannot hold (`mk a/%targets(zz)`
-when `zz` reaches nothing, 2.6).
+If a step has edges to several nodes that it could follow, `mk` does
+not choose: it creates nothing, lists what it could create, and asks.
+It makes no difference whether the edges are existing ones, ones this
+command creates, or both. To choose, write `@N` after the step for the
+node it should go to, or `!{@N}` for nodes it should not go to.
 
 ```ge
 graph: 0 -a-> 1, 0 -a-> 2
 $ mk a/b
-This path has 2 possible repairs. Nothing was changed. Pin a node with @N or
-    exclude one with !{@N} to choose.
+This path can be created in 2 ways; nothing was changed. To choose one, write
+    @N after a step for the node it should go to, or !{@N} for nodes it should
+    not, or keep one side of a +.
   1. @0 -"a"-> @1 -"b"-> new1
     creates: @1 -"b"-> new1
     use: mk a/@1/b
@@ -906,54 +947,111 @@ This path has 2 possible repairs. Nothing was changed. Pin a node with @N or
     creates: @2 -"b"-> new1
     use: mk a/@2/b
 $ mk a/@1/b
+created 1 new node and 1 new edge
 + 1 -b-> O8OhMSVtjevt
 $ mk a/!{@1}/b
+created 1 new node and 1 new edge
 + 2 -b-> O8OhMSVtjevt
 $ mk a/!{@1, @2}/b
+created 2 new nodes and 2 new edges
 + 0 -a-> O8OhMSVtjevt
 + O8OhMSVtjevt -b-> Pqf7kGOdKJIr
 ```
 
 ```ge
-graph: 2, 0
-$ mk a/@2 + (a & a/@2)
-+ 0 -a-> 2
-$ mk (a & a/@2) + a/@2/b
-This path has 3 possible repairs. Nothing was changed. Pin a node with @N or
-    exclude one with !{@N} to choose.
-  1. @0 -"a"-> @2 -"b"-> new1
-    creates: @0 -"a"-> @2, @2 -"b"-> new1
-    use: mk a/@2/b
-  2. @0 -"a"-> new1 & @0 -"a"-> @2
-    creates: @0 -"a"-> @2, @0 -"a"-> new1
-    use: mk a/!{@2} & a/@2
-  3. @0 -"a"-> @2 & @0 -"a"-> @2
-    creates: @0 -"a"-> @2
-    use: mk a/@2 & a/@2
+graph: 0 -a-> 1
+$ mk a/!{@1}/b & a/c
+These steps could each follow an edge that another of them creates, so mk has
+    no order to take them in: `a/!{@1}` and `a`. Write the node a step should
+    go to (/@N after it), or create them with separate commands. Nothing was
+    changed. (CircularSuppliers)
 ```
 
-### 4.3 The repair list and its `use:` lines
+```ge
+graph: 0 -a-> 1, 0 -c-> 5
+$ mk (a & c)/@
+This path can be created in 2 ways; nothing was changed. To choose one, write
+    @N after a step for the node it should go to, or !{@N} for nodes it should
+    not, or keep one side of a +.
+  1. @0 -"a"-> @1 & @0 -"c"-> @1
+    creates: @0 -"c"-> @1
+    use: mk (a/@1 & c/@1)/@
+  2. @0 -"a"-> @5 & @0 -"c"-> @5
+    creates: @0 -"a"-> @5
+    use: mk (a/@5 & c/@5)/@
+```
 
-An ambiguous `mk` lists at most five repairs, in the order of 4.2, and
-says how many more there are. Each repair is shown as the walks of the
-path with every position bound (existing nodes as `@N`, new nodes as
-`new1`, `new2`, …), then `creates:` with its patch, then, when a path
-that selects exactly that repair was found, `use: mk …` with that
-path, to be typed at the prompt. The path is the written path with
-steps pinned (`step/@N`) or nodes excluded (`step/!{@N, …}`) so that
-only that repair is left; when the command ran at another node than
-the prompt's (inside `at`) the line is `use: at @N mk …`, a repair
-that would create orphans gets `mk --allow-orphans`, and for `tag` it
-is a `tag` command. In this build the line is found by trying
-rewrites and confirming each by an internal `mk`; a change to
-construct the line from the repair directly is pending in another
-workspace (section 8).
+What is listed:
+
+1. If the path already holds in some way, nothing is done.
+2. A way of creating the path that creates everything another way
+   creates and more (up to the naming of new nodes) is not listed, and
+   ways that create the same are listed once.
+3. They are ordered by the number of nodes and edges created, then by
+   a fixed order of their text.
+
+One way left is what `mk` creates. Several are the error above. None
+means the path cannot hold (`mk a/%targets(zz)` when `zz` reaches
+nothing, 2.6).
+
+```ge
+graph: 0 -a-> 1, 0 -a-> 2, 1 -b-> 3
+$ mk a/b
+created 0 new nodes and 0 new edges
+$ mk a/b & a/c
+This path can be created in 2 ways; nothing was changed. To choose one, write
+    @N after a step for the node it should go to, or !{@N} for nodes it should
+    not, or keep one side of a +.
+  1. @0 -"a"-> @1 -"b"-> @3 & @0 -"a"-> @1 -"c"-> new1
+    creates: @1 -"c"-> new1
+    use: mk a/@1/b & a/@1/c
+  2. @0 -"a"-> @1 -"b"-> @3 & @0 -"a"-> @2 -"c"-> new1
+    creates: @2 -"c"-> new1
+    use: mk a/@1/b & a/@2/c
+```
+
+Steps that could follow each other's edges (rule 8 of 4.1) are listed
+in every way that holds together. Below, the `c` of the first conjunct
+may not go to node 2, and the join `(a & c)/@` can go to node 1 along
+the `a` edge or to node 2 along the `c` edge. In the first way the
+join goes to node 1 and creates `0 -c-> 1`, which the first `c` then
+follows. In the third and fourth the first `c` creates its own node
+first, and the join goes to node 2 or to that new node. In the second
+each does what it would do without the other's edge: the first `c`
+creates a node, and the join goes to node 1.
+
+```ge
+graph: 0, 1, 2
+$ mk c/!{@2}/a & (a & c)/@ & a/@1 & c/@2
+These steps could each follow an edge that another of them creates, so mk has
+    no order to take them in: `c/!{@2}` and the node where `a` and `c` meet.
+    If a step means the same edge as a step into a node where steps meet,
+    leave it out and write what follows it after that node, as in (a & c)/@/b
+    for a/b & (a & c)/@; otherwise write the node a step should go to (/@N
+    after it), or create them with separate commands. Nothing was changed.
+    (CircularSuppliers)
+```
+
+### 4.3 The list and its `use:` lines
+
+An ambiguous `mk` lists at most five ways and says how many more there
+are. Each is shown as the walks of the path with every position at a
+node (existing nodes as `@N`, new nodes as `new1`, `new2`, …), then
+`creates:` with the edges, then, where there is one, `use: mk …` with
+a path that creates exactly that, to be typed at the prompt. The path
+is the written path with `@N` after each step that went to an existing
+node where it had several to go to, and `!{@N, …}` naming the others
+after each step that went to the new one. When the command ran at
+another node than the prompt's (inside `at`) the line is
+`use: at @N mk …`, and for `tag` it is a `tag` command. A line is only
+shown when running it creates exactly what it stands beside.
 
 ```ge
 graph: 0 -a-> 1, 1 -b-> 2, 1 -b-> 3
 $ at a mk b/c
-This path has 2 possible repairs. Nothing was changed. Pin a node with @N or
-    exclude one with !{@N} to choose.
+This path can be created in 2 ways; nothing was changed. To choose one, write
+    @N after a step for the node it should go to, or !{@N} for nodes it should
+    not, or keep one side of a +.
   1. @1 -"b"-> @2 -"c"-> new1
     creates: @2 -"c"-> new1
     use: at @1 mk b/@2/c
@@ -961,64 +1059,51 @@ This path has 2 possible repairs. Nothing was changed. Pin a node with @N or
     creates: @3 -"c"-> new1
     use: at @1 mk b/@3/c
 $ at a mk b/@2/c
+created 1 new node and 1 new edge
 + 2 -c-> O8OhMSVtjevt
 ```
 
-There is no `use:` line when the repairs differ only in whether two
-new nodes are one (`mk a/b/@5 & c/b/@5` above: no path can say "two
-different new nodes"); when a step's copies would need different
-rewrites (`mk a/(b & c)` with two `a` nodes: pinning the one written
-`a` pins both copies); or when the repair's alternative of a `|` union
-has no spelling as a path without unions (repair 5 below, in which one
-`x` walk is shared between the conjunct `(c & y)/@/e` and `d`):
+There is no `use:` line when the step could also have gone to another
+new node, which has no name to write (`mk a & b & */c` below: `c` under
+the new `a` node or the new `b` node; write `a/c` or `b/c` instead);
+when the copies of a step went different ways (`mk a/(b & c)` with two
+`a` nodes: what is written after the one `a` applies to both copies);
+when steps waited for each other (the second way of the last example
+of 4.2); or when the way's side of a `|` union has no spelling as a
+path without unions.
+
+```ge
+graph: 0
+$ mk a & b & */c
+This path can be created in 2 ways; nothing was changed. To choose one, write
+    @N after a step for the node it should go to, or !{@N} for nodes it should
+    not, or keep one side of a +.
+  1. @0 -"a"-> new1 & @0 -"b"-> new2 & @0 -"a"-> new1 -"c"-> new3
+    creates: @0 -"a"-> new1, @0 -"b"-> new2, new1 -"c"-> new3
+    (no command was found that creates just this)
+  2. @0 -"a"-> new1 & @0 -"b"-> new2 & @0 -"b"-> new2 -"c"-> new3
+    creates: @0 -"a"-> new1, @0 -"b"-> new2, new2 -"c"-> new3
+    (no command was found that creates just this)
+```
 
 ```ge
 graph: 0 -a-> 1, 0 -a-> 2
 $ mk a/(b & c)
-This path has 4 possible repairs. Nothing was changed. Pin a node with @N or
-    exclude one with !{@N} to choose.
+This path can be created in 4 ways; nothing was changed. To choose one, write
+    @N after a step for the node it should go to, or !{@N} for nodes it should
+    not, or keep one side of a +.
   1. @0 -"a"-> @1 -"b"-> new1 & @0 -"a"-> @1 -"c"-> new2
     creates: @1 -"b"-> new1, @1 -"c"-> new2
     use: mk a/@1/(b & c)
   2. @0 -"a"-> @1 -"b"-> new1 & @0 -"a"-> @2 -"c"-> new2
     creates: @1 -"b"-> new1, @2 -"c"-> new2
+    (no command was found that creates just this)
   3. @0 -"a"-> @2 -"b"-> new1 & @0 -"a"-> @1 -"c"-> new2
     creates: @1 -"c"-> new2, @2 -"b"-> new1
+    (no command was found that creates just this)
   4. @0 -"a"-> @2 -"b"-> new1 & @0 -"a"-> @2 -"c"-> new2
     creates: @2 -"b"-> new1, @2 -"c"-> new2
     use: mk a/@2/(b & c)
-```
-
-```ge
-graph: 0
-$ mk (x/@ | s)/((c & y)/@/e & d)
-This path has 8 possible repairs. Nothing was changed. Pin a node with @N or
-    exclude one with !{@N} to choose.
-  1. @0 -"s"-> new1 -"c"-> new2 -"e"-> new3 & @0 -"s"-> new1 -"y"-> new2
-    -"e"-> new3 & @0 -"s"-> new1 -"d"-> new4
-    creates: @0 -"s"-> new1, new1 -"c"-> new2, new1 -"d"-> new4, new1 -"y"->
-    new2, new2 -"e"-> new3
-    use: mk s/((c & y)/@/e & d)
-  2. @0 -"x"-> new1 -"c"-> new2 -"e"-> new3 & @0 -"x"-> new1 -"y"-> new2
-    -"e"-> new3 & @0 -"x"-> new1 -"d"-> new4
-    creates: @0 -"x"-> new1, new1 -"c"-> new2, new1 -"d"-> new4, new1 -"y"->
-    new2, new2 -"e"-> new3
-    use: mk x/@/((c & y)/@/e & d)
-  3. @0 -"s"-> new1 -"c"-> new2 -"e"-> new3 & @0 -"s"-> new1 -"y"-> new2
-    -"e"-> new3 & @0 -"x"-> new4 -"d"-> new5
-    creates: @0 -"s"-> new1, @0 -"x"-> new4, new1 -"c"-> new2, new1 -"y"->
-    new2, new2 -"e"-> new3, new4 -"d"-> new5
-    use: mk (s/c & s/y)/@/e & x/@/d
-  4. @0 -"s"-> new1 -"c"-> new2 -"e"-> new3 & @0 -"x"-> new4 -"y"-> new2
-    -"e"-> new3 & @0 -"s"-> new1 -"d"-> new5
-    creates: @0 -"s"-> new1, @0 -"x"-> new4, new1 -"c"-> new2, new1 -"d"->
-    new5, new2 -"e"-> new3, new4 -"y"-> new2
-    use: mk (s/c & x/@/y)/@/e & s/d
-  5. @0 -"s"-> new1 -"c"-> new2 -"e"-> new3 & @0 -"x"-> new4 -"y"-> new2
-    -"e"-> new3 & @0 -"x"-> new4 -"d"-> new5
-    creates: @0 -"s"-> new1, @0 -"x"-> new4, new1 -"c"-> new2, new2 -"e"->
-    new3, new4 -"d"-> new5, new4 -"y"-> new2
-  ... and 3 more
 ```
 
 Suggested paths are written with `|` and `++` only (never `+`), so
@@ -1026,17 +1111,19 @@ they mean the same in every command.
 
 ### 4.4 Unions in `mk`
 
-A `+` is `++`: no repair of `mk (a + b)/(c & d)` mixes the sides
-between the copies, so on an empty graph there is one repair per side;
-on a graph where a side already matches in several ways, each way is a
-repair of its own (`mk (a/b ++ z)` with two `a` edges has three). A `|`
-written in `mk` chooses per copy, and offers the mixed repairs too:
+A `+` is `++`: no way of creating `mk (a + b)/(c & d)` mixes the sides
+between the copies, so on an empty graph there is one way per side,
+and `mk` asks which; on a graph where a side has several edges to
+follow, each is a way of its own (`mk (a/b ++ z)` with two `a` edges
+has three). A `|` written in `mk` chooses per copy, and offers the
+mixed ways too:
 
 ```ge
 graph: 0
 $ mk (a + b)/(c & d)
-This path has 2 possible repairs. Nothing was changed. Pin a node with @N or
-    exclude one with !{@N} to choose.
+This path can be created in 2 ways; nothing was changed. To choose one, write
+    @N after a step for the node it should go to, or !{@N} for nodes it should
+    not, or keep one side of a +.
   1. @0 -"a"-> new1 -"c"-> new2 & @0 -"a"-> new1 -"d"-> new3
     creates: @0 -"a"-> new1, new1 -"c"-> new2, new1 -"d"-> new3
     use: mk a/(c & d)
@@ -1044,8 +1131,9 @@ This path has 2 possible repairs. Nothing was changed. Pin a node with @N or
     creates: @0 -"b"-> new1, new1 -"c"-> new2, new1 -"d"-> new3
     use: mk b/(c & d)
 $ mk (a | b)/(c & d)
-This path has 4 possible repairs. Nothing was changed. Pin a node with @N or
-    exclude one with !{@N} to choose.
+This path can be created in 4 ways; nothing was changed. To choose one, write
+    @N after a step for the node it should go to, or !{@N} for nodes it should
+    not, or keep one side of a +.
   1. @0 -"a"-> new1 -"c"-> new2 & @0 -"a"-> new1 -"d"-> new3
     creates: @0 -"a"-> new1, new1 -"c"-> new2, new1 -"d"-> new3
     use: mk a/(c & d)
@@ -1065,8 +1153,9 @@ This path has 4 possible repairs. Nothing was changed. Pin a node with @N or
 ```ge
 graph: 0 -a-> 1, 0 -a-> 2
 $ mk (a/b ++ z)
-This path has 3 possible repairs. Nothing was changed. Pin a node with @N or
-    exclude one with !{@N} to choose.
+This path can be created in 3 ways; nothing was changed. To choose one, write
+    @N after a step for the node it should go to, or !{@N} for nodes it should
+    not, or keep one side of a +.
   1. @0 -"a"-> @1 -"b"-> new1
     creates: @1 -"b"-> new1
     use: mk a/@1/b
@@ -1078,34 +1167,81 @@ This path has 3 possible repairs. Nothing was changed. Pin a node with @N or
     use: mk z
 ```
 
-### 4.5 Orphans
+### 4.5 Nodes written by their id
 
-A repair whose new nodes form a piece with no edge to any existing
-node is refused unless `--allow-orphans` is given:
+`mk` gives every node it creates a new id. A node that the path writes
+as `@N` has to exist already: a way of creating the path that would
+need a node `@N` that does not exist is no way. If that leaves none,
+`mk` fails, names the nodes and changes nothing; `ge -e` exits with 1.
+A side of a union that needs such a node is left out, and the other
+sides are created as if it were not written. A node inside `!{…}` need
+not exist: it only says where a step may not go.
 
 ```ge
 graph: 0
-$ mk @5/a
-This path would create nodes that are not connected to the existing graph;
-    nothing was changed. Use mk --allow-orphans to create them anyway.
-  @5, new1
-$ mk --allow-orphans @5/a
-+ 5 -a-> O8OhMSVtjevt
+$ ge -e 'mk a/@7'
+This path needs @7, which does not exist, and a node with a written id is
+    never created: mk gives every new node a new id. Nothing was changed.
+    (MissingNodes)
+[exit code 1]
+$ mk a/@7/b/@8
+This path needs @7, @8, which do not exist, and a node with a written id is
+    never created: mk gives every new node a new id. Nothing was changed.
+    (MissingNodes)
+$ mk @7/x
+This path needs @7, which does not exist, and a node with a written id is
+    never created: mk gives every new node a new id. Nothing was changed.
+    (MissingNodes)
+$ mk a/@7 + b
+created 1 new node and 1 new edge
+Note: mk left out `a/@7`, which needs @7: that node does not exist, and a node
+    with a written id is never created.
++ 0 -b-> O8OhMSVtjevt
+$ mk (a/@7 | b)
+created 1 new node and 1 new edge
+Note: mk left out `a/@7`, which needs @7: that node does not exist, and a node
+    with a written id is never created.
++ 0 -b-> O8OhMSVtjevt
+$ mk a/@7 + b/@8
+This path needs @7, @8, which do not exist, and a node with a written id is
+    never created: mk gives every new node a new id. Nothing was changed.
+    (MissingNodes)
+$ mk a/!{@7}
+created 1 new node and 1 new edge
++ 0 -a-> O8OhMSVtjevt
+```
+
+`mk --allow-orphans p` does what `mk p` does. The option allows new
+nodes that no edge connects to an existing node, and no path creates
+such nodes: every walk starts at a node that exists.
+
+```ge
+graph: 0
+$ mk --allow-orphans @7/x
+<interactive>:1:20:
+  |
+1 | mk --allow-orphans @7/x
+  |                    ^
+mk has no --allow-orphans any more: every node that mk creates is connected to
+    the graph, so write mk <path>
 ```
 
 ### 4.6 `tag`
 
-`tag p q` (or `t p q`) constructs `p` like `mk` (with `+` as `++`),
-then links the end of every walk of `p`'s first match to the one target
-of `q` with an edge labelled `""`. The first match is the first
-alternative of `p` in the compiler's order (for a union that need not
-be the side written first: `tag (b | a) t` links the `a` end) and its
-first way of matching; other matches are not linked. `q` must reach
-exactly one node (none or several is an error, section 2). `#t` is
-`@<tags>/t`, so `tag #todo a/b` tags the target of `a/b` with `todo`,
-creating the tag node if needed. An ambiguous `p` lists its repairs
-with `use: tag … @N` lines (4.3). The target and the nodes `p` created
-get the same timestamp.
+`tag p q` (or `t p q`) constructs `p` like `mk` (with `+` as `++`, and
+with the same error for a written node that does not exist), then
+links the end of every walk of one match of `p` to the one target of
+`q` with an edge labelled `""`. Which match: the alternatives of `p`
+that match are ordered by their first match, and matches by the nodes
+and labels along their walks; `tag` takes the first match of the first
+alternative. That order depends on the graph, not on how a union is
+written: `tag (b | a) t` below links the `a` end. Other matches are
+not linked. `q` must reach exactly one node (none or several is an
+error, section 2). `#t` is `@<tags>/t`, so `tag #todo a/b` tags the
+target of `a/b` with `todo`, creating the tag node if needed. An
+ambiguous `p` is listed with `use: tag … @N` lines (4.3). `tag` does
+not say how much it created. The target and the nodes `p` created get
+the same timestamp.
 
 ```ge
 graph: 0 -a-> 1, 1 -b-> 2
@@ -1125,28 +1261,126 @@ $ tag (a & b) t
 $ tag (b | a) t
 + 1 -""-> 9
 $ tag a/x t
-This path has 2 possible repairs. Nothing was changed. Pin a node with @N or
-    exclude one with !{@N} to choose.
+This path can be created in 2 ways; nothing was changed. To choose one, write
+    @N after a step for the node it should go to, or !{@N} for nodes it should
+    not, or keep one side of a +.
   1. @0 -"a"-> @1 -"x"-> new1
     creates: @1 -"x"-> new1
     use: tag a/@1/x @9
   2. @0 -"a"-> @3 -"x"-> new1
     creates: @3 -"x"-> new1
     use: tag a/@3/x @9
+$ tag a/@7 t
+This path needs @7, which does not exist, and a node with a written id is
+    never created: tag gives every new node a new id. Nothing was changed.
+    (MissingNodes)
 ```
+
+### 4.7 One command after another
+
+`mk p` and then `mk p/q` usually leaves what `mk p/q` alone leaves, but
+not always. It does when `q` begins with a step, both commands decide
+without asking, and the path writes no label twice and has no `*` or
+regex. Outside that, these break it:
+
+```ge
+graph: 0, 2
+$ mk a/@2/(a & b)
+created 2 new nodes and 3 new edges
++ 0 -a-> 2
++ 2 -a-> O8OhMSVtjevt
++ 2 -b-> Pqf7kGOdKJIr
+$ mk a ; mk a/@2/(a & b)
+created 1 new node and 1 new edge
+created 2 new nodes and 3 new edges
++ 0 -a-> 2
++ 0 -a-> O8OhMSVtjevt
++ 2 -a-> w4VxcgSm0Js6
++ 2 -b-> w4P7BSd8jU2v
+```
+
+`mk a` cannot know that the `a` was to lead to node 2 (the cut is just
+before `@2`), so its node is left over.
+
+```ge
+graph: 0 -a-> 0, 3
+$ mk a/a/@3/a
+created 1 new node and 2 new edges
++ 0 -a-> 3
++ 3 -a-> O8OhMSVtjevt
+$ mk a/a/@3 ; mk a/a/@3/a
+created 0 new nodes and 1 new edge
+This path can be created in 2 ways; nothing was changed. To choose one, write
+    @N after a step for the node it should go to, or !{@N} for nodes it should
+    not, or keep one side of a +.
+  1. @0 -"a"-> @3 -"a"-> @3 -"a"-> @3
+    creates: @3 -"a"-> @3
+    use: mk a/@3/a/@3/a
+  2. @0 -"a"-> @0 -"a"-> @3 -"a"-> new1
+    creates: @3 -"a"-> new1
+    use: mk a/@0/a/@3/a
+Note: the command before this one in the line had already run; what it did
+    stays.
++ 0 -a-> 3
+```
+
+The first command adds `0 -a-> 3` beside the `0 -a-> 0` that its own
+first step follows; after it the first `a` has two edges.
+
+```ge
+graph: 0, 4
+$ mk (b & c/~c/b/@4)/b
+created 4 new nodes and 5 new edges
++ 0 -b-> 4
++ 0 -b-> O8OhMSVtjevt
++ 0 -c-> DQ1KCJgauHiV
++ 4 -b-> sYumkceKpoAh
++ O8OhMSVtjevt -b-> Pqf7kGOdKJIr
+$ mk b & c/~c/b/@4 ; mk (b & c/~c/b/@4)/b
+created 2 new nodes and 3 new edges
+created 1 new node and 1 new edge
++ 0 -b-> 4
++ 0 -b-> O8OhMSVtjevt
++ 0 -c-> Pqf7kGOdKJIr
++ 4 -b-> w4P7BSd8jU2v
+```
+
+The first `b` is at distance 1 and does not see the `0 -b-> 4` created
+at distance 3, so it creates a node of its own. The second command
+finds both `b` edges in the graph; going along `0 -b-> 4` creates
+less, and nothing is put under the first command's node.
+
+```ge
+graph: 0 -c-> 0
+$ mk (*/a & */c)/b
+This path has more than one * or regex step in one alternative: `*` and `*`.
+    mk builds a path with at most one. Write the labels you mean; if steps
+    from one node are meant to be one step, write it once, with a join after
+    it for what continues from it, as in */@/(a & b) for */a & */b. Nothing
+    was changed. (SeveralWildcards)
+$ mk */a & */c ; mk (*/a & */c)/b
+This path has more than one * or regex step in one alternative: `*` and `*`.
+    mk builds a path with at most one. Write the labels you mean; if steps
+    from one node are meant to be one step, write it once, with a join after
+    it for what continues from it, as in */@/(a & b) for */a & */b. Nothing
+    was changed. (SeveralWildcards)
+```
+
+The first command creates `0 -a-> new`, and after it each `*` has two
+edges to follow, the loop and the new edge.
 
 ## 5. Settings and the one limit
 
 `%override({key = value, …}, p)` changes a setting for the part `p` of
 a path. There are two settings: `plus` (5.3), which says how `+` is
-read, and `max-repairs` (5.2), the limit on what `mk` considers. That
+read, and `max-repairs` (5.2), the limit on the walks `mk` makes. That
 limit is the only one there is: nothing limits what a path compiles to
 (5.1).
 
 ### 5.1 Nothing limits what a path compiles to
 
 No command refuses a path for what it compiles to. (`mk` alone has a
-limit, on the candidates it considers, 5.2.) Each copy of a `|` union
+limit, on the walks it makes, 5.2.) Each copy of a `|` union
 chooses on its own, so a `k`-way `|` that a fork copies into `n` walks
 has up to `k^n` alternatives, and groups written one after the other
 multiply their walks; a command compiles its path however much that
@@ -1187,7 +1421,7 @@ command that runs long:
   (section 1), so a prefix that would take long never holds the prompt.
 
 In `mk`, a `+` is `++`, so many alternatives arise only for a `|`
-written there; `mk` then lists as many repairs
+written there; `mk` then lists as many ways of creating the path
 (`mk (a | b | c)/(d & e & f & g & h & i & j)` on an empty graph has
 2187), or stops at its own limit (5.2).
 
@@ -1196,65 +1430,61 @@ limit on alternatives, why a count of alternatives does not predict how
 long a command takes, where the time of a path command goes, and what a
 check would look like if one is wanted.
 
-### 5.2 Candidate repairs: `max-repairs`
+### 5.2 Walks: `max-repairs`
 
-> **This limit belongs to `mk` as this build has it, and is about to be
-> replaced with it** (see the notice in section 4).
+A step with edges to several nodes multiplies the ways `mk` has to
+walk the path: `n` edges at each of `k` steps are `n^k` walks, and
+every one is walked before any is dropped (4.2). `mk` counts the walks
+it makes and stops with an error, nothing changed, as soon as there are
+more than the limit: 5000 (`defaultMaxRepairs`) unless
+`%override({max-repairs = N}, p)` (or `unlimited`) says otherwise. The
+largest limit among the parts of the path applies to all of it, since
+a walk is of the whole path; an override on a part never lowers the
+limit. A path that already holds is found to hold whatever the limit.
+Writing `@N` after a step leaves it one node to go to and divides the
+count. Steps that have one edge to follow, or none, do not multiply
+anything: ten existing conjuncts and a new one are one walk.
 
-`mk` counts the ways the steps of its path can be matched to existing
-nodes or left to be created (the candidate repairs before 4.2 drops
-any), and stops as soon as there are more than 5000
-(`defaultMaxRepairs`), with `TooManyRepairs` and nothing changed. The
-count is of what has to be considered, not of what survives: a path
-with one repair can have thousands of candidates. A path that already
-holds is a no-op whatever the limit. `%override({max-repairs = N}, p)`
-(or `unlimited`) changes the limit: the largest limit among the parts
-of the path applies to all of it, so to lower the limit wrap the whole
-path.
+The count is of walks made, not of ways listed. Ways that create more
+than another are walked and then dropped. And when `mk` finds that a
+step was taken before an edge that counts for it was created (4.1,
+rule 6: this happens between steps at the same distance, and with a
+join one of whose steps is nearer the start than another), it walks
+the path again with that step waiting, and those walks count too. In
+the example the second `a` is taken first and goes to node 1; then the
+first `a` creates a node that the second could have gone to as well.
+That is one walk, and two more when the path is walked again.
+
+```ge
+graph: 0 -a-> 1, 0 -a-> 2, 0 -a-> 3, 0 -a-> 4, 0 -a-> 5, 0 -a-> 6
+$ mk %override({max-repairs = 5}, a/b)
+Working out what this path creates takes too long: its steps have several
+    edges to follow, and every combination of the edges followed has to be
+    worked out, over all alternatives of the path; there are more combinations
+    than the limit of 5. This does not mean that the path cannot be created.
+    Nothing was changed. Write @N after a step for the node it should go to,
+    or !{@N} for nodes it should not, so that fewer edges can be followed, or
+    raise the limit with %override({max-repairs = …}, …). (TooManyRepairs)
+```
+
+```ge
+graph: 0 -a-> 1
+$ mk %override({max-repairs = 2}, a/!{@1}/b & a/c)
+These steps could each follow an edge that another of them creates, so mk has
+    no order to take them in: `a/!{@1}` and `a`. Write the node a step should
+    go to (/@N after it), or create them with separate commands. Nothing was
+    changed. (CircularSuppliers)
+$ mk %override({max-repairs = 3}, a/!{@1}/b & a/c)
+These steps could each follow an edge that another of them creates, so mk has
+    no order to take them in: `a/!{@1}` and `a`. Write the node a step should
+    go to (/@N after it), or create them with separate commands. Nothing was
+    changed. (CircularSuppliers)
+```
+
+The setting combines with `plus` (`{plus = shared, max-repairs = 5000}`).
 Queries accept the setting and ignore it. The `use:` lines of an
 ambiguous `mk` are confirmed within the default limit, not the
 override's.
-
-```ge
-graph: 0
-$ mk a/~a & b/~b & c/~c
-This path has 8 possible repairs. Nothing was changed. Pin a node with @N or
-    exclude one with !{@N} to choose.
-  1. @0 -"a"-> new1 <-"a"- new2 & @0 -"b"-> new3 <-"b"- new4 & @0 -"c"-> new5
-    <-"c"- new6
-    creates: @0 -"a"-> new1, @0 -"b"-> new3, @0 -"c"-> new5, new2 -"a"-> new1,
-    new4 -"b"-> new3, new6 -"c"-> new5
-    use: mk a/~a/!{@0} & b/~b/!{@0} & c/~c/!{@0}
-  2. @0 -"a"-> new1 <-"a"- @0 & @0 -"b"-> new2 <-"b"- @0 & @0 -"c"-> new3
-    <-"c"- @0
-    creates: @0 -"a"-> new1, @0 -"b"-> new2, @0 -"c"-> new3
-    use: mk a/~a/@0 & b/~b/@0 & c/~c/@0
-  3. @0 -"a"-> new1 <-"a"- @0 & @0 -"b"-> new2 <-"b"- @0 & @0 -"c"-> new3
-    <-"c"- new4
-    creates: @0 -"a"-> new1, @0 -"b"-> new2, @0 -"c"-> new3, new4 -"c"-> new3
-    use: mk a/~a/@0 & b/~b/@0 & c/~c/!{@0}
-  4. @0 -"a"-> new1 <-"a"- @0 & @0 -"b"-> new2 <-"b"- new3 & @0 -"c"-> new4
-    <-"c"- @0
-    creates: @0 -"a"-> new1, @0 -"b"-> new2, @0 -"c"-> new4, new3 -"b"-> new2
-    use: mk a/~a/@0 & b/~b/!{@0} & c/~c/@0
-  5. @0 -"a"-> new1 <-"a"- new2 & @0 -"b"-> new3 <-"b"- @0 & @0 -"c"-> new4
-    <-"c"- @0
-    creates: @0 -"a"-> new1, @0 -"b"-> new3, @0 -"c"-> new4, new2 -"a"-> new1
-    use: mk a/~a/!{@0} & b/~b/@0 & c/~c/@0
-  ... and 3 more
-$ mk (a & b & c)/~a/(a & b & c)/~b/!{@0}
-Working out how to construct this path would take too long: its steps can be
-    matched to existing nodes, or left to be created, in more ways than the
-    limit of 5000, and each way has to be considered. Nothing was changed. Pin
-    a step to a node with @N or exclude nodes with !{@N} so that fewer match,
-    or raise the limit with %override({max-repairs = …}, …). (TooManyRepairs)
-$ mk %override({max-repairs = 100}, a/~a & b/~b & c/~c & d/~d & e/~e & f/~f & g/~g)
-Working out how to construct this path would take too long: its steps can be
-    matched to existing nodes, or left to be created, in more ways than the
-    limit of 100, and each way has to be considered. Nothing was changed. Pin
-    a step to a node with @N or exclude nodes with !{@N} so that fewer match,
-    or raise the limit with %override({max-repairs = …}, …). (TooManyRepairs)
-```
 
 ### 5.3 `%override({plus = …}, p)`
 
@@ -1328,6 +1558,7 @@ Usage: ge <graph directory> [-e|--expression <command>] [--new] [--dry-run]
   Manipulate information graphs.
 [exit code 1]
 $ ge -e 'mk q; cd zz; mk r'
+created 1 new node and 1 new edge
 cd needs a path that resolves to a single node
 but it resolved to: []
 Note: the command before this one in the line had already run; what it did
@@ -1335,12 +1566,14 @@ Note: the command before this one in the line had already run; what it did
 [exit code 1]
 + 0 -q-> O8OhMSVtjevt
 $ mk q; cd zz; mk r
+created 1 new node and 1 new edge
 cd needs a path that resolves to a single node
 but it resolved to: []
 Note: the command before this one in the line had already run; what it did
     stays.
 + 0 -q-> O8OhMSVtjevt
 $ ge -e 'at c {mk q; cd zz}'
+created 1 new node and 1 new edge
 cd needs a path that resolves to a single node
 but it resolved to: []
 Note: the command before this one in the line had already run; what it did
@@ -1348,13 +1581,15 @@ Note: the command before this one in the line had already run; what it did
 [exit code 1]
 + 3 -q-> O8OhMSVtjevt
 $ ge -e 'mk q; mk r; cd zz'
+created 1 new node and 1 new edge
+created 1 new node and 1 new edge
 cd needs a path that resolves to a single node
 but it resolved to: []
 Note: the 2 commands before this one in the line had already run; what they
     did stays.
 [exit code 1]
 + 0 -q-> O8OhMSVtjevt
-+ 0 -r-> Pqf7kGOdKJIr
++ 0 -r-> w4VxcgSm0Js6
 $ ge --dry-run -e 'ls a; rn zz y'
 a @1
 rn needs one selected source route, but found 0.
@@ -1371,8 +1606,8 @@ Note: the command before this one in the line had already run; what it did
 Note: at had already run the command at @1; what it did there stays.
 [exit code 1]
 $ ge --dry-run -e 'rm a'
-would write: @1{out=[]} -> "GRAPH/1.json"
 would write: @0{out=[@3 via "c", @4 via "c"]} -> "GRAPH/0.json"
+would write: @1{out=[]} -> "GRAPH/1.json"
 ```
 
 In the first example the two errors come after the output because
@@ -1427,22 +1662,16 @@ Each item says what the build does and what is pending or undecided.
   prints "Note: the command before this one in the line had already
   run; what it did stays." twice, once for the block and once for the
   line.
-- An ambiguous `mk` can list a repair without a `use:` line because its
-  alternative has no spelling as a path (4.3), besides the two reasons
-  that no path can express.
-- The `use:` lines are found by trying rewrites and confirming each by
-  an internal `mk` (4.3); constructing them from the repair directly is
-  a pending change in another workspace. `mk` as a whole is about to be
-  replaced (section 4).
-- Next to a missing node file `mk` gives advice that does not work.
-  With `0 -a-> 1` recorded in the file of node `0` and no file for node
-  `1`, `mk a/b` fails with "This path would create nodes that are not
-  connected to the existing graph; nothing was changed. Use mk
-  --allow-orphans to create them anyway.", and `mk --allow-orphans a/b`
-  is then refused because the graph is damaged where it applies
-  (section 7). The damage is what has to be dealt with.
+- An ambiguous `mk` can list a way of creating the path without a
+  `use:` line because its alternative has no spelling as a path (4.3),
+  besides the reasons that no path can express.
+- When steps could follow each other's edges, `mk` lists every way
+  that holds together, among them one in which each step ignores the
+  other's edge and one more node is created than in another way
+  listed (4.2).
+- `mk --allow-orphans` does nothing that `mk` does not (4.5).
 - Nothing bounds the cost of compiling or matching a large path (5.1),
-  and `max-repairs` bounds a count of candidates, not time (5.2).
+  and `max-repairs` bounds a count of walks, not time (5.2).
 - The rough edges of the language itself are in
   [path-language.md](path-language.md#5-known-rough-edges-and-what-may-change).
 
@@ -1464,7 +1693,7 @@ These are bugs. They are known, and they are not being fixed now.
   a `000000000000.data` in the graph.
 - **Node ids that differ only in letter case are one file** on a volume
   that does not tell upper from lower case in file names, which is the
-  usual kind on a Mac. There, after `mk a/@aBcDeFgHiJkL`, a
+  usual kind on a Mac. There, in a graph with a node `aBcDeFgHiJkL`,
   `mk b/@AbCdEfGhIjKl` is refused as an edit next to damage
   ("AbCdEfGhIjKl.json says it is the node @aBcDeFgHiJkL"); and a graph
   that has two such nodes, brought from a volume that tells them apart,

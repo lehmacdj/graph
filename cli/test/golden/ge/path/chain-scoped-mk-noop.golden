@@ -13,16 +13,17 @@ mk (x/@/w & b)/(c & d)/@
 ls (x/@/w & b)/(c & d)
 mk x/@/w/(c & d) & b/(c & d)
 ==========stdout==========
-g> g> [0mx/w/[0;1mc[0m[0m [0;34m@000000000009[0m [0m[0m
+g> created 0 new nodes and 0 new edges
+g> [0mx/w/[0;1mc[0m[0m [0;34m@000000000009[0m [0m[0m
 g> g> Goodbye!
 ==========stderr==========
-This path has 2 possible repairs. Nothing was changed. Pin a node with @N or exclude one with !{@N} to choose.
+This path can be created in 2 ways; nothing was changed. To choose one, write @N after a step for the node it should go to, or !{@N} for nodes it should not, or keep one side of a +.
   1. @000000000000 -"x"-> @000000000001 -"w"-> @000000000002 -"c"-> @000000000009 & @000000000000 -"x"-> @000000000001 -"w"-> @000000000002 -"d"-> new1 & @000000000000 -"b"-> @000000000005 -"c"-> @000000000009 & @000000000000 -"b"-> @000000000005 -"d"-> @000000000009
     creates: @000000000002 -"d"-> new1
-    use: mk x/@/w/@000000000002/(c & d) & b/@000000000005/(c & d)
+    use: mk x/@000000000001/@/w/(c & d) & b/(c & d)
   2. @000000000000 -"x"-> @000000000003 -"w"-> @000000000004 -"c"-> new1 & @000000000000 -"x"-> @000000000003 -"w"-> @000000000004 -"d"-> @000000000009 & @000000000000 -"b"-> @000000000005 -"c"-> @000000000009 & @000000000000 -"b"-> @000000000005 -"d"-> @000000000009
     creates: @000000000004 -"c"-> new1
-    use: mk x/@/w/@000000000004/(c & d) & b/@000000000005/(c & d)
+    use: mk x/@000000000003/@/w/(c & d) & b/(c & d)
 
 ==========graph-dump==========
 @000000000000{out=[@000000000005 via "b", @000000000001 via "x", @000000000003 via "x"], in=[@0daCJjMrQel8 via "origin"]}

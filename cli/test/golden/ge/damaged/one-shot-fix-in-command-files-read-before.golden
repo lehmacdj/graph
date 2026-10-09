@@ -8,6 +8,7 @@ at @000000000001 {ls ; fix ; at @000000000002 mk x}
 no targets
 repairs:
 - add the edge @000000000001 -"b"-> @000000000002 to the outgoing edges in 000000000001.json
+created 1 new node and 1 new edge
 ==========stderr==========
 ==========graph-dump==========
 @000000000000{out=[@000000000001 via "a"], in=[@0daCJjMrQel8 via "origin"]}

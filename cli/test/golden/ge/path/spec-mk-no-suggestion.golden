@@ -3,24 +3,24 @@
 ==========input==========
 mk a/b/@000000000005 & c/b/@000000000005
 ==========stdout==========
-g> g> Goodbye!
+g> created 2 new nodes and 4 new edges
+g> Goodbye!
 ==========stderr==========
-This path has 2 possible repairs. Nothing was changed. Pin a node with @N or exclude one with !{@N} to choose.
-  1. @000000000000 -"a"-> new1 -"b"-> @000000000005 & @000000000000 -"c"-> new2 -"b"-> @000000000005
-    creates: @000000000000 -"a"-> new1, @000000000000 -"c"-> new2, new1 -"b"-> @000000000005, new2 -"b"-> @000000000005
-  2. @000000000000 -"a"-> new1 -"b"-> @000000000005 & @000000000000 -"c"-> new1 -"b"-> @000000000005
-    creates: @000000000000 -"a"-> new1, @000000000000 -"c"-> new1, new1 -"b"-> @000000000005
-
 ==========graph-dump==========
-@000000000000{out=[], in=[@0daCJjMrQel8 via "origin"]}
-@000000000005{out=[@000000000005 via "x"], in=[@000000000005 via "x"]}
+@000000000000{out=[@O8OhMSVtjevt via "a", @Pqf7kGOdKJIr via "c"], in=[@0daCJjMrQel8 via "origin"]}
+@000000000005{out=[@000000000005 via "x"], in=[@O8OhMSVtjevt via "b", @Pqf7kGOdKJIr via "b", @000000000005 via "x"]}
 @0daCJjMrQel8{out=[@zsBuPkn5mh8F via "file-extensions", @AhQufiPzgyRf via "file-hashes", @3JJvxFUHGAA1 via "historical-special-nodes", @S00KkOYoVpFu via "import-dates", @a0fVkm0kR7KE via "import-urls", @927u9Xyky2pC via "mime-types", @000000000000 via "origin", @pbYxBO6fzBQV via "tags"], in=[]}
 @3JJvxFUHGAA1{out=[@VEfLhuTgZ88Z via "sequence-ids"], in=[@0daCJjMrQel8 via "historical-special-nodes"]}
 @927u9Xyky2pC{out=[], in=[@0daCJjMrQel8 via "mime-types"]}
 @AhQufiPzgyRf{out=[], in=[@0daCJjMrQel8 via "file-hashes"]}
-@S00KkOYoVpFu{out=[], in=[@0daCJjMrQel8 via "import-dates"]}
+@DQ1KCJgauHiV{out=[@sYumkceKpoAh via "01"], in=[@S00KkOYoVpFu via "1970"]}
+@O8OhMSVtjevt{out=[@000000000005 via "b"], in=[@w4VxcgSm0Js6 via "00:00:00.000000000000", @000000000000 via "a"]}
+@Pqf7kGOdKJIr{out=[@000000000005 via "b"], in=[@w4VxcgSm0Js6 via "00:00:00.000000000000", @000000000000 via "c"]}
+@S00KkOYoVpFu{out=[@DQ1KCJgauHiV via "1970"], in=[@0daCJjMrQel8 via "import-dates"]}
 @VEfLhuTgZ88Z{out=[], in=[@3JJvxFUHGAA1 via "sequence-ids"]}
 @a0fVkm0kR7KE{out=[], in=[@0daCJjMrQel8 via "import-urls"]}
 @pbYxBO6fzBQV{out=[], in=[@0daCJjMrQel8 via "tags"]}
+@sYumkceKpoAh{out=[@w4VxcgSm0Js6 via "01"], in=[@DQ1KCJgauHiV via "01"]}
+@w4VxcgSm0Js6{out=[@O8OhMSVtjevt via "00:00:00.000000000000", @Pqf7kGOdKJIr via "00:00:00.000000000000"], in=[@sYumkceKpoAh via "01"]}
 @zsBuPkn5mh8F{out=[], in=[@0daCJjMrQel8 via "file-extensions"]}
 ==========data==========

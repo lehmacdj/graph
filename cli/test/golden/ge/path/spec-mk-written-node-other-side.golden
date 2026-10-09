@@ -1,0 +1,35 @@
+==========graph==========
+0 -q-> 1
+==========input==========
+mk a/@000000000007 + b
+mk (a/@000000000007 | c)
+mk d/!{@000000000007}
+mk e/@000000000007 + f/@000000000008
+==========stdout==========
+g> created 1 new node and 1 new edge
+g> created 1 new node and 1 new edge
+g> created 1 new node and 1 new edge
+g> g> Goodbye!
+==========stderr==========
+Note: mk left out `a/@000000000007`, which needs @000000000007: that node does not exist, and a node with a written id is never created.
+Note: mk left out `a/@000000000007`, which needs @000000000007: that node does not exist, and a node with a written id is never created.
+This path needs @000000000007, @000000000008, which do not exist, and a node with a written id is never created: mk gives every new node a new id. Nothing was changed. (MissingNodes)
+==========graph-dump==========
+@000000000000{out=[@O8OhMSVtjevt via "b", @w4VxcgSm0Js6 via "c", @w4P7BSd8jU2v via "d", @000000000001 via "q"], in=[@0daCJjMrQel8 via "origin"]}
+@000000000001{out=[], in=[@000000000000 via "q"]}
+@0daCJjMrQel8{out=[@zsBuPkn5mh8F via "file-extensions", @AhQufiPzgyRf via "file-hashes", @3JJvxFUHGAA1 via "historical-special-nodes", @S00KkOYoVpFu via "import-dates", @a0fVkm0kR7KE via "import-urls", @927u9Xyky2pC via "mime-types", @000000000000 via "origin", @pbYxBO6fzBQV via "tags"], in=[]}
+@3JJvxFUHGAA1{out=[@VEfLhuTgZ88Z via "sequence-ids"], in=[@0daCJjMrQel8 via "historical-special-nodes"]}
+@927u9Xyky2pC{out=[], in=[@0daCJjMrQel8 via "mime-types"]}
+@AhQufiPzgyRf{out=[], in=[@0daCJjMrQel8 via "file-hashes"]}
+@DQ1KCJgauHiV{out=[@sYumkceKpoAh via "01"], in=[@Pqf7kGOdKJIr via "01"]}
+@O8OhMSVtjevt{out=[], in=[@sYumkceKpoAh via "00:00:00.000000000000", @000000000000 via "b"]}
+@Pqf7kGOdKJIr{out=[@DQ1KCJgauHiV via "01"], in=[@S00KkOYoVpFu via "1970"]}
+@S00KkOYoVpFu{out=[@Pqf7kGOdKJIr via "1970"], in=[@0daCJjMrQel8 via "import-dates"]}
+@VEfLhuTgZ88Z{out=[], in=[@3JJvxFUHGAA1 via "sequence-ids"]}
+@a0fVkm0kR7KE{out=[], in=[@0daCJjMrQel8 via "import-urls"]}
+@pbYxBO6fzBQV{out=[], in=[@0daCJjMrQel8 via "tags"]}
+@sYumkceKpoAh{out=[@O8OhMSVtjevt via "00:00:00.000000000000", @w4VxcgSm0Js6 via "00:00:01.000000000000", @w4P7BSd8jU2v via "00:00:02.000000000000"], in=[@DQ1KCJgauHiV via "01"]}
+@w4P7BSd8jU2v{out=[], in=[@sYumkceKpoAh via "00:00:02.000000000000", @000000000000 via "d"]}
+@w4VxcgSm0Js6{out=[], in=[@sYumkceKpoAh via "00:00:01.000000000000", @000000000000 via "c"]}
+@zsBuPkn5mh8F{out=[], in=[@0daCJjMrQel8 via "file-extensions"]}
+==========data==========

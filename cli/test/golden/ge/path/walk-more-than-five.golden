@@ -1,0 +1,50 @@
+==========graph==========
+0 -a-> 1
+0 -a-> 2
+0 -a-> 3
+0 -a-> 4
+0 -a-> 5
+0 -a-> 6
+0 -a-> 7
+==========input==========
+mk a/b
+==========stdout==========
+g> g> Goodbye!
+==========stderr==========
+This path can be created in 7 ways; nothing was changed. To choose one, write @N after a step for the node it should go to, or !{@N} for nodes it should not, or keep one side of a +.
+  1. @000000000000 -"a"-> @000000000001 -"b"-> new1
+    creates: @000000000001 -"b"-> new1
+    use: mk a/@000000000001/b
+  2. @000000000000 -"a"-> @000000000002 -"b"-> new1
+    creates: @000000000002 -"b"-> new1
+    use: mk a/@000000000002/b
+  3. @000000000000 -"a"-> @000000000003 -"b"-> new1
+    creates: @000000000003 -"b"-> new1
+    use: mk a/@000000000003/b
+  4. @000000000000 -"a"-> @000000000004 -"b"-> new1
+    creates: @000000000004 -"b"-> new1
+    use: mk a/@000000000004/b
+  5. @000000000000 -"a"-> @000000000005 -"b"-> new1
+    creates: @000000000005 -"b"-> new1
+    use: mk a/@000000000005/b
+  ... and 2 more
+
+==========graph-dump==========
+@000000000000{out=[@000000000001 via "a", @000000000002 via "a", @000000000003 via "a", @000000000004 via "a", @000000000005 via "a", @000000000006 via "a", @000000000007 via "a"], in=[@0daCJjMrQel8 via "origin"]}
+@000000000001{out=[], in=[@000000000000 via "a"]}
+@000000000002{out=[], in=[@000000000000 via "a"]}
+@000000000003{out=[], in=[@000000000000 via "a"]}
+@000000000004{out=[], in=[@000000000000 via "a"]}
+@000000000005{out=[], in=[@000000000000 via "a"]}
+@000000000006{out=[], in=[@000000000000 via "a"]}
+@000000000007{out=[], in=[@000000000000 via "a"]}
+@0daCJjMrQel8{out=[@zsBuPkn5mh8F via "file-extensions", @AhQufiPzgyRf via "file-hashes", @3JJvxFUHGAA1 via "historical-special-nodes", @S00KkOYoVpFu via "import-dates", @a0fVkm0kR7KE via "import-urls", @927u9Xyky2pC via "mime-types", @000000000000 via "origin", @pbYxBO6fzBQV via "tags"], in=[]}
+@3JJvxFUHGAA1{out=[@VEfLhuTgZ88Z via "sequence-ids"], in=[@0daCJjMrQel8 via "historical-special-nodes"]}
+@927u9Xyky2pC{out=[], in=[@0daCJjMrQel8 via "mime-types"]}
+@AhQufiPzgyRf{out=[], in=[@0daCJjMrQel8 via "file-hashes"]}
+@S00KkOYoVpFu{out=[], in=[@0daCJjMrQel8 via "import-dates"]}
+@VEfLhuTgZ88Z{out=[], in=[@3JJvxFUHGAA1 via "sequence-ids"]}
+@a0fVkm0kR7KE{out=[], in=[@0daCJjMrQel8 via "import-urls"]}
+@pbYxBO6fzBQV{out=[], in=[@0daCJjMrQel8 via "tags"]}
+@zsBuPkn5mh8F{out=[], in=[@0daCJjMrQel8 via "file-extensions"]}
+==========data==========

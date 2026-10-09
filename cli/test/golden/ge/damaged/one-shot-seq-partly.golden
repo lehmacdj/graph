@@ -7,6 +7,8 @@ id 2 3
 ==========expression==========
 mk q ; mk p ; mk b/x ; mk r
 ==========stdout==========
+created 1 new node and 1 new edge
+created 1 new node and 1 new edge
 ==========stderr==========
 this change was not written: the graph is damaged where it applies (damaged-graph)
 - 000000000002.json says it is the node @000000000003

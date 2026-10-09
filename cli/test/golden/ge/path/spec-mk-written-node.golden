@@ -4,9 +4,7 @@ mk @000000000005/a
 ==========stdout==========
 g> g> Goodbye!
 ==========stderr==========
-This path would create nodes that are not connected to the existing graph; nothing was changed. Use mk --allow-orphans to create them anyway.
-  @000000000005, new1
-
+This path needs @000000000005, which does not exist, and a node with a written id is never created: mk gives every new node a new id. Nothing was changed. (MissingNodes)
 ==========graph-dump==========
 @000000000000{out=[], in=[@0daCJjMrQel8 via "origin"]}
 @0daCJjMrQel8{out=[@zsBuPkn5mh8F via "file-extensions", @AhQufiPzgyRf via "file-hashes", @3JJvxFUHGAA1 via "historical-special-nodes", @S00KkOYoVpFu via "import-dates", @a0fVkm0kR7KE via "import-urls", @927u9Xyky2pC via "mime-types", @000000000000 via "origin", @pbYxBO6fzBQV via "tags"], in=[]}

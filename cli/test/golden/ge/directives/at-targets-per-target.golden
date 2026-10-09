@@ -5,7 +5,9 @@
 at * mk z/%targets(@)
 ls */z
 ==========stdout==========
-g> g> [0ma/[0;1mz[0m[0m [0;34m@000000000001[0m [0m[0m
+g> created 0 new nodes and 1 new edge
+created 0 new nodes and 1 new edge
+g> [0ma/[0;1mz[0m[0m [0;34m@000000000001[0m [0m[0m
 [0mb/[0;1mz[0m[0m [0;34m@000000000002[0m [0m[0m
 g> Goodbye!
 ==========stderr==========

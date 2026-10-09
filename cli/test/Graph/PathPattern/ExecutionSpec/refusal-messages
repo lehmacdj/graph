@@ -1,0 +1,231 @@
+$ H1: mk (c & a/c)/@ & (~c & a)/@
+These steps could each follow an edge that another of them creates, so mk has no order to take them in: the node where `c` and `a/c` meet, `a` and the node where `~c` and `a` meet. If a step means the same edge as a step into a node where steps meet, leave it out and write what follows it after that node, as in (a & c)/@/b for a/b & (a & c)/@; otherwise write the node a step should go to (/@N after it), or create them with separate commands. Nothing was changed. (CircularSuppliers)
+
+$ H2: mk (a & b/c)/@ & a
+These steps could each follow an edge that another of them creates, so mk has no order to take them in: the node where `a` and `b/c` meet and `a`. If a step means the same edge as a step into a node where steps meet, leave it out and write what follows it after that node, as in (a & c)/@/b for a/b & (a & c)/@; otherwise write the node a step should go to (/@N after it), or create them with separate commands. Nothing was changed. (CircularSuppliers)
+
+$ H3: mk (a & b)/@ & a
+These steps could each follow an edge that another of them creates, so mk has no order to take them in: the node where `a` and `b` meet and `a`. If a step means the same edge as a step into a node where steps meet, leave it out and write what follows it after that node, as in (a & c)/@/b for a/b & (a & c)/@; otherwise write the node a step should go to (/@N after it), or create them with separate commands. Nothing was changed. (CircularSuppliers)
+
+$ H4: mk (a & b/c)/@ & a & (x & x/x)/@ & x/~x
+These steps could each follow an edge that another of them creates, so mk has no order to take them in: the node where `x` and `x/x` meet, `x`, `x` and `x/~x`. If a step means the same edge as a step into a node where steps meet, leave it out and write what follows it after that node, as in (a & c)/@/b for a/b & (a & c)/@; otherwise write the node a step should go to (/@N after it), or create them with separate commands. Nothing was changed. (CircularSuppliers)
+
+$ H4b: mk (a & b/c)/@ & a & (x & x/x)/@ & x/~x
+These steps could each follow an edge that another of them creates, so mk has no order to take them in: the node where `x` and `x/x` meet, `x`, `x` and `x/~x`. If a step means the same edge as a step into a node where steps meet, leave it out and write what follows it after that node, as in (a & c)/@/b for a/b & (a & c)/@; otherwise write the node a step should go to (/@N after it), or create them with separate commands. Nothing was changed. (CircularSuppliers)
+
+$ H5: mk (a & b/c)/@ & a & x/@7 & */@7
+These steps could each follow an edge that another of them creates, so mk has no order to take them in: the node where `a` and `b/c` meet and `a`. If a step means the same edge as a step into a node where steps meet, leave it out and write what follows it after that node, as in (a & c)/@/b for a/b & (a & c)/@; otherwise write the node a step should go to (/@N after it), or create them with separate commands. Nothing was changed. (CircularSuppliers)
+
+$ H6: mk (a & b/c)/@ & a & */@7 & x/@7
+These steps could each follow an edge that another of them creates, so mk has no order to take them in: the node where `a` and `b/c` meet and `a`. If a step means the same edge as a step into a node where steps meet, leave it out and write what follows it after that node, as in (a & c)/@/b for a/b & (a & c)/@; otherwise write the node a step should go to (/@N after it), or create them with separate commands. Nothing was changed. (CircularSuppliers)
+
+$ H7: mk c/!{@2}/a & (a & c)/@ & a/@1 & c/@2
+These steps could each follow an edge that another of them creates, so mk has no order to take them in: `c/!{@000000000002}` and the node where `a` and `c` meet. If a step means the same edge as a step into a node where steps meet, leave it out and write what follows it after that node, as in (a & c)/@/b for a/b & (a & c)/@; otherwise write the node a step should go to (/@N after it), or create them with separate commands. Nothing was changed. (CircularSuppliers)
+
+$ H9: mk (* & a)/@
+The step `*` has no label and meets `a` at a node that is not written, and mk does not use a step without a label to choose such a node. If it means the same edge as another step into the node, leave it out; otherwise write its label, or write the node where the steps meet (/@N). Nothing was changed. (WildcardJoin)
+
+$ H11: mk (x/y & a)/@ & a
+These steps could each follow an edge that another of them creates, so mk has no order to take them in: the node where `x/y` and `a` meet and `a`. If a step means the same edge as a step into a node where steps meet, leave it out and write what follows it after that node, as in (a & c)/@/b for a/b & (a & c)/@; otherwise write the node a step should go to (/@N after it), or create them with separate commands. Nothing was changed. (CircularSuppliers)
+
+$ E4: mk a/!{@1}/b & a/c
+These steps could each follow an edge that another of them creates, so mk has no order to take them in: `a/!{@000000000001}` and `a`. Write the node a step should go to (/@N after it), or create them with separate commands. Nothing was changed. (CircularSuppliers)
+
+$ X9: mk (a & b)/@ & (b & c)/@ & (c & a)/@
+These steps could each follow an edge that another of them creates, so mk has no order to take them in: the node where `a` and `b` meet, the node where `b` and `c` meet and the node where `c` and `a` meet. Write the node a step should go to (/@N after it), or create them with separate commands. Nothing was changed. (CircularSuppliers)
+
+$ N1: mk b & (* & a)/@
+The step `*` has no label and meets `a` at a node that is not written, and mk does not use a step without a label to choose such a node. If it means the same edge as another step into the node, leave it out; otherwise write its label, or write the node where the steps meet (/@N). Nothing was changed. (WildcardJoin)
+
+$ N3: mk (c & ~a/*)/@ & c
+The step `~a/*` has no label and meets `c` at a node that is not written, and mk does not use a step without a label to choose such a node. If it means the same edge as another step into the node, leave it out; otherwise write its label, or write the node where the steps meet (/@N). Nothing was changed. (WildcardJoin)
+
+$ N4: mk (c & */b)/@ & c
+These steps could each follow an edge that another of them creates, so mk has no order to take them in: the node where `c` and `*/b` meet, `*` and `c`. If a step means the same edge as a step into a node where steps meet, leave it out and write what follows it after that node, as in (a & c)/@/b for a/b & (a & c)/@; otherwise write the node a step should go to (/@N after it), or create them with separate commands. Nothing was changed. (CircularSuppliers)
+
+$ N13: mk */@2 & (a & *)/@
+The step `*` has no label and meets `a` at a node that is not written, and mk does not use a step without a label to choose such a node. If it means the same edge as another step into the node, leave it out; otherwise write its label, or write the node where the steps meet (/@N). Nothing was changed. (WildcardJoin)
+
+$ N14: mk regex:"^a$" & (* & a)/@
+The step `*` has no label and meets `a` at a node that is not written, and mk does not use a step without a label to choose such a node. If it means the same edge as another step into the node, leave it out; otherwise write its label, or write the node where the steps meet (/@N). Nothing was changed. (WildcardJoin)
+
+$ N15: mk (* & a)/@ & (b & regex:"^a$")/@
+The step `*` has no label and meets `a` at a node that is not written, and mk does not use a step without a label to choose such a node. If it means the same edge as another step into the node, leave it out; otherwise write its label, or write the node where the steps meet (/@N). Nothing was changed. (WildcardJoin)
+
+$ F1: mk a & (b & a & b/~a)/@
+These steps could each follow an edge that another of them creates, so mk has no order to take them in: `a` and the node where `b`, `a` and `b/~a` meet. If a step means the same edge as a step into a node where steps meet, leave it out and write what follows it after that node, as in (a & c)/@/b for a/b & (a & c)/@; otherwise write the node a step should go to (/@N after it), or create them with separate commands. Nothing was changed. (CircularSuppliers)
+
+$ F2: mk (a/(b & f)/@/g & a & e/b/r)/@
+These steps could each follow an edge that another of them creates, so mk has no order to take them in: the node where `a/b` and `a/f` meet and `e/b`. If a step means the same edge as a step into a node where steps meet, leave it out and write what follows it after that node, as in (a & c)/@/b for a/b & (a & c)/@; otherwise write the node a step should go to (/@N after it), or create them with separate commands. Nothing was changed. (CircularSuppliers)
+
+$ F5: mk (a & b/*)/@ & a
+The step `b/*` has no label and meets `a` at a node that is not written, and mk does not use a step without a label to choose such a node. If it means the same edge as another step into the node, leave it out; otherwise write its label, or write the node where the steps meet (/@N). Nothing was changed. (WildcardJoin)
+
+$ T3: mk a & b & (a & b)/@
+These steps could each follow an edge that another of them creates, so mk has no order to take them in: `a`, `b` and the node where `a` and `b` meet. If a step means the same edge as a step into a node where steps meet, leave it out and write what follows it after that node, as in (a & c)/@/b for a/b & (a & c)/@; otherwise write the node a step should go to (/@N after it), or create them with separate commands. Nothing was changed. (CircularSuppliers)
+
+$ T4: mk a & b & (b & a)/@
+These steps could each follow an edge that another of them creates, so mk has no order to take them in: `a`, `b` and the node where `b` and `a` meet. If a step means the same edge as a step into a node where steps meet, leave it out and write what follows it after that node, as in (a & c)/@/b for a/b & (a & c)/@; otherwise write the node a step should go to (/@N after it), or create them with separate commands. Nothing was changed. (CircularSuppliers)
+
+$ T5: mk a/!{@1} & a/b
+These steps could each follow an edge that another of them creates, so mk has no order to take them in: `a/!{@000000000001}` and `a`. Write the node a step should go to (/@N after it), or create them with separate commands. Nothing was changed. (CircularSuppliers)
+
+$ Y1: mk a/@/(@ & ~a/a)/@
+This path leaves an unnamed node and comes back to it: `a/~a/a` returns to the node that `a` reaches, and mk does not build a route that visits an unnamed node twice. Write a node that exists there both times, as in a/@N/a/@N, or create the node first and use its id in a second command. Nothing was changed. (ReturnsToMeetingPoint)
+
+$ Y2: mk a/@/(@ & b/~*)/@
+This path leaves an unnamed node and comes back to it: `a/b/~*` returns to the node that `a` reaches, and mk does not build a route that visits an unnamed node twice. Write a node that exists there both times, as in a/@N/a/@N, or create the node first and use its id in a second command. Nothing was changed. (ReturnsToMeetingPoint)
+
+$ Y3: mk a/@/(@ & a)/@
+This path leaves an unnamed node and comes back to it: `a/a` returns to the node that `a` reaches, and mk does not build a route that visits an unnamed node twice. Write a node that exists there both times, as in a/@N/a/@N, or create the node first and use its id in a second command. Nothing was changed. (ReturnsToMeetingPoint)
+
+$ Y4: mk a/@/(@ & a)/@
+This path leaves an unnamed node and comes back to it: `a/a` returns to the node that `a` reaches, and mk does not build a route that visits an unnamed node twice. Write a node that exists there both times, as in a/@N/a/@N, or create the node first and use its id in a second command. Nothing was changed. (ReturnsToMeetingPoint)
+
+$ Y6: mk */@0 & (a & *)/@
+The step `*` has no label and meets `a` at a node that is not written, and mk does not use a step without a label to choose such a node. If it means the same edge as another step into the node, leave it out; otherwise write its label, or write the node where the steps meet (/@N). Nothing was changed. (WildcardJoin)
+
+$ Y7: mk a & b & (* & a)/@
+The step `*` has no label and meets `a` at a node that is not written, and mk does not use a step without a label to choose such a node. If it means the same edge as another step into the node, leave it out; otherwise write its label, or write the node where the steps meet (/@N). Nothing was changed. (WildcardJoin)
+
+$ P5: mk (a & b)/@ & (a & c)/@
+These steps could each follow an edge that another of them creates, so mk has no order to take them in: the node where `a` and `b` meet and the node where `a` and `c` meet. Write the node a step should go to (/@N after it), or create them with separate commands. Nothing was changed. (CircularSuppliers)
+
+$ P6: mk (a & b)/@ & a & x/@7
+These steps could each follow an edge that another of them creates, so mk has no order to take them in: the node where `a` and `b` meet and `a`. If a step means the same edge as a step into a node where steps meet, leave it out and write what follows it after that node, as in (a & c)/@/b for a/b & (a & c)/@; otherwise write the node a step should go to (/@N after it), or create them with separate commands. Nothing was changed. (CircularSuppliers)
+
+$ P9: mk a/@/(@ & a)/@
+This path leaves an unnamed node and comes back to it: `a/a` returns to the node that `a` reaches, and mk does not build a route that visits an unnamed node twice. Write a node that exists there both times, as in a/@N/a/@N, or create the node first and use its id in a second command. Nothing was changed. (ReturnsToMeetingPoint)
+
+$ mk (a ++ b)/(c & d & e & f & g)
+This path is too large for mk: its size, estimated from the path as written, is more than the limit of 256 route steps over all its alternatives. The estimate counts a + or ++ union that the product rule copies as if each copy took a side of its own, though the copies all take the same side. Written with its + and ++ unions outside the rest of the path, as in a/(c & d) ++ b/(c & d) for (a ++ b)/(c & d), the path means the same and its estimate is within the limit. Write it so, keep one side of each union, or create the path with several commands. Nothing was changed. (ExpansionTooLarge)
+
+$ mk (p & q)/(x/@ + w/@)/((c & y)/@/e & d)
+This path is too large for mk: its size, estimated from the path as written, is more than the limit of 256 route steps over all its alternatives. The estimate counts a + or ++ union that the product rule copies as if each copy took a side of its own, though the copies all take the same side. Written with its + and ++ unions outside the rest of the path, as in a/(c & d) ++ b/(c & d) for (a ++ b)/(c & d), the path means the same and its estimate is within the limit. Write it so, keep one side of each union, or create the path with several commands. Nothing was changed. (ExpansionTooLarge)
+
+$ mk a & ~a
+These steps could each follow an edge that another of them creates, so mk has no order to take them in: `a` and `~a`. Write the node a step should go to (/@N after it), or create them with separate commands. Nothing was changed. (CircularSuppliers)
+
+$ mk */a & */c
+This path has more than one * or regex step in one alternative: `*` and `*`. mk builds a path with at most one. Write the labels you mean; if steps from one node are meant to be one step, write it once, with a join after it for what continues from it, as in */@/(a & b) for */a & */b. Nothing was changed. (SeveralWildcards)
+
+$ mk */(a & b)
+The step `*` is written once, but the product rule copies it into 2 walks, so one alternative of this path has 2 * or regex steps, and mk builds a path with at most one. If the walks are to go on from one edge of it, write a join after it: */@/(a & b). Otherwise write the labels you mean. Nothing was changed. (SeveralWildcards)
+
+$ mk @1/a/@/(@ & b)/@
+This path leaves an unnamed node and comes back to it: `@000000000001/a/b` returns to the node that `@000000000001/a` reaches, and mk does not build a route that visits an unnamed node twice. Write a node that exists there both times, as in a/@N/a/@N, or create the node first and use its id in a second command. Nothing was changed. (ReturnsToMeetingPoint)
+
+$ mk (a & b)/(c & d)/(e & f)/(g & h)/(i & j)/(k & l)/(m & n)
+This path is too large for mk: its size, estimated from the path as written, is more than the limit of 256 route steps over all its alternatives. Create the path with several commands. Nothing was changed. (ExpansionTooLarge)
+
+$ mk (a | b | c)/(d & e & f & g & h & i & j)
+This path is too large for mk: its size, estimated from the path as written, is more than the limit of 256 route steps over all its alternatives. Keep one side of each union or create the path with several commands. Nothing was changed. (ExpansionTooLarge)
+
+$ mk (a ++ b) & (c ++ d) & (e ++ f) & (g ++ h) & (i ++ j) & (k ++ l) & (m ++ n) & (o ++ p) & (q ++ r)
+This path is too large for mk: its size, estimated from the path as written, is more than the limit of 256 route steps over all its alternatives. Keep one side of each union or create the path with several commands. Nothing was changed. (ExpansionTooLarge)
+
+$ mk x/*/(a & b)
+The step `*` is written once, but the product rule copies it into 2 walks, so one alternative of this path has 2 * or regex steps, and mk builds a path with at most one. If the walks are to go on from one edge of it, write a join after it: x/*/@/(a & b). Otherwise write the labels you mean. Nothing was changed. (SeveralWildcards)
+
+$ mk (a & b)/*
+The step `*` is written once, but the product rule copies it into 2 walks, so one alternative of this path has 2 * or regex steps, and mk builds a path with at most one. Write the labels you mean. Nothing was changed. (SeveralWildcards)
+
+$ mk */(a & b) & regex:"^c$"
+This path has more than one * or regex step in one alternative: `*` (copied into 2 walks) and `regex:"^c$"`. mk builds a path with at most one. Write the labels you mean. Nothing was changed. (SeveralWildcards)
+
+$ mk (x & y)/*/@
+The step `*` has no label and is written once, but the product rule copies it into 2 walks, and its copies `x/*` and `y/*` meet at a node that is not written. mk does not use a step without a label to choose such a node. Write its label. Nothing was changed. (WildcardJoin)
+
+$ mk ((x & y)/* & z)/@
+The step `*` has no label and is written once, but the product rule copies it into 2 walks, and its copies `x/*` and `y/*` meet `z` at a node that is not written. mk does not use a step without a label to choose such a node. Write its label. Nothing was changed. (WildcardJoin)
+
+$ mk i/(!{@1} & f)
+The step `i` is written once, but the product rule copies it into 2 walks, and its copies `i/!{@000000000001}` and `i` could each follow an edge that another of them creates, so mk has no order to take them in. If the walks are to go on from one edge of it, write a join after it: i/@/(!{@000000000001} & f). Otherwise write the node it should go to after it (/@N), or create the walks with separate commands. Nothing was changed. (CircularSuppliers)
+
+$ mk b/(c & !{@0})
+The step `b` is written once, but the product rule copies it into 2 walks, and its copies `b` and `b/!{@000000000000}` could each follow an edge that another of them creates, so mk has no order to take them in. If the walks are to go on from one edge of it, write a join after it: b/@/(c & !{@000000000000}). Otherwise write the node it should go to after it (/@N), or create the walks with separate commands. Nothing was changed. (CircularSuppliers)
+
+$ mk b/(c & !{@0}) ++ zz
+The step `b` is written once, but the product rule copies it into 2 walks, and its copies `b` and `b/!{@000000000000}` could each follow an edge that another of them creates, so mk has no order to take them in. Write the node it should go to after it (/@N), or create the walks with separate commands. Nothing was changed. (CircularSuppliers)
+
+$ mk b/(c & !{@0}) & b/!{@0}
+These steps could each follow an edge that another of them creates, so mk has no order to take them in: `b` (the first of the 2 written, and the product rule copies it into 2 walks: `b` and `b/!{@000000000000}`) and `b/!{@000000000000}`. Write the node a step should go to (/@N after it), or create them with separate commands. Nothing was changed. (CircularSuppliers)
+
+$ mk a/b & (a & c)/@
+These steps could each follow an edge that another of them creates, so mk has no order to take them in: `a` and the node where `a` and `c` meet. If a step means the same edge as a step into a node where steps meet, leave it out and write what follows it after that node, as in (a & c)/@/b for a/b & (a & c)/@; otherwise write the node a step should go to (/@N after it), or create them with separate commands. Nothing was changed. (CircularSuppliers)
+
+$ mk (a & b)/@ & (b & c)/@ & (c & a)/@
+These steps could each follow an edge that another of them creates, so mk has no order to take them in: the node where `a` and `b` meet, the node where `b` and `c` meet and the node where `c` and `a` meet. Write the node a step should go to (/@N after it), or create them with separate commands. Nothing was changed. (CircularSuppliers)
+
+$ mk (x ++ y)/(c & d)/(e & f)/(g & h)/(i & j)/(k & l)
+This path is too large for mk: its size, estimated from the path as written, is more than the limit of 256 route steps over all its alternatives. Keep one side of each union or create the path with several commands. Nothing was changed. (ExpansionTooLarge)
+
+$ mk (a | b)/(c & d & e & f & g)
+This path is too large for mk: its size, estimated from the path as written, is more than the limit of 256 route steps over all its alternatives. Keep one side of each union or create the path with several commands. Nothing was changed. (ExpansionTooLarge)
+
+$ mk (a ++ b)/(c & d)/(e & f)/(g & h)/(i & j)/(k & l)/(m & n)
+This path is too large for mk: its size, estimated from the path as written, is more than the limit of 256 route steps over all its alternatives. Create the path with several commands. Nothing was changed. (ExpansionTooLarge)
+
+$ mk (%never ++ @1 ++ @2)/(c & d & e & f & g & h & i & j & k)
+This path is too large for mk: its size, estimated from the path as written, is more than the limit of 256 route steps over all its alternatives. The estimate counts a + or ++ union that the product rule copies as if each copy took a side of its own, though the copies all take the same side. Written with its + and ++ unions outside the rest of the path, as in a/(c & d) ++ b/(c & d) for (a ++ b)/(c & d), the path means the same and its estimate is within the limit. Write it so, keep one side of each union, or create the path with several commands. Nothing was changed. (ExpansionTooLarge)
+
+$ mk c/~c & a/c
+These steps could each follow an edge that another of them creates, so mk has no order to take them in: `c/~c` and `a/c`. Write the node a step should go to (/@N after it), or create them with separate commands. Nothing was changed. (CircularSuppliers)
+
+$ mk x/(a & ~a)
+These steps could each follow an edge that another of them creates, so mk has no order to take them in: `x/a` and `x/~a`. Write the node a step should go to (/@N after it), or create them with separate commands. Nothing was changed. (CircularSuppliers)
+
+$ mk (p & q)/b/(c & !{@0})
+The step `b` is written once, but the product rule copies it into 4 walks, and its copies `p/b`, `p/b/!{@000000000000}`, `q/b` and `q/b/!{@000000000000}` could each follow an edge that another of them creates, so mk has no order to take them in. Write the node it should go to after it (/@N), or create the walks with separate commands. Nothing was changed. (CircularSuppliers)
+
+$ mk p/b/(c & !{@0})
+The step `b` is written once, but the product rule copies it into 2 walks, and its copies `p/b` and `p/b/!{@000000000000}` could each follow an edge that another of them creates, so mk has no order to take them in. If the walks are to go on from one edge of it, write a join after it: p/b/@/(c & !{@000000000000}). Otherwise write the node it should go to after it (/@N), or create the walks with separate commands. Nothing was changed. (CircularSuppliers)
+
+$ mk b/(c & !{@0} & d)
+The step `b` is written once, but the product rule copies it into 3 walks, and its copies, `b` twice and `b/!{@000000000000}`, could each follow an edge that another of them creates, so mk has no order to take them in. If the walks are to go on from one edge of it, write a join after it: b/@/(c & !{@000000000000} & d). Otherwise write the node it should go to after it (/@N), or create the walks with separate commands. Nothing was changed. (CircularSuppliers)
+
+$ mk b/(c & !{@0} & d) & b/!{@0}
+These steps could each follow an edge that another of them creates, so mk has no order to take them in: `b` (the first of the 2 written, and the product rule copies it into 3 walks: `b` twice and `b/!{@000000000000}`) and `b/!{@000000000000}`. Write the node a step should go to (/@N after it), or create them with separate commands. Nothing was changed. (CircularSuppliers)
+
+$ mk ((((@/((*/(@ & !{@1}))/!{@1})) ++ @) ++ a) + @1)
+The step `*` has no label and is written once, but the product rule copies it into 2 walks, and its copies, `*/!{@000000000001}` twice, meet at a node that is not written. mk does not use a step without a label to choose such a node. Write its label. Nothing was changed. (WildcardJoin)
+
+$ mk */(a & b) ++ */(c & d)
+The step `*` is written twice in this path; the product rule copies the first of them into 2 walks, so one alternative of this path has 2 * or regex steps, and mk builds a path with at most one. Write the labels you mean. Nothing was changed. (SeveralWildcards)
+
+$ mk c/(b & (!{@1, @3}/c))
+The step `c` is written twice in this path; the product rule copies the first of them into 2 walks, and its copies `c` and `c/!{@000000000001, @000000000003}` could each follow an edge that another of them creates, so mk has no order to take them in. If the walks are to go on from one edge of it, write a join after it: c/@/(b & !{@000000000001, @000000000003}/c). Otherwise write the node it should go to after it (/@N), or create the walks with separate commands. Nothing was changed. (CircularSuppliers)
+
+$ mk #x/(!{@1} & f)
+The step `#x` is written once, but the product rule copies it into 2 walks, and its copies `#x/!{@000000000001}` and `#x` could each follow an edge that another of them creates, so mk has no order to take them in. If the walks are to go on from one edge of it, write a join after it: #x/@/(!{@000000000001} & f). Otherwise write the node it should go to after it (/@N), or create the walks with separate commands. Nothing was changed. (CircularSuppliers)
+
+$ mk (@1 ++ @2)/(c & d & e & f & g & h & i & j & k)
+This path is too large for mk: its size, estimated from the path as written, is more than the limit of 256 route steps over all its alternatives. The estimate counts a + or ++ union that the product rule copies as if each copy took a side of its own, though the copies all take the same side. Written with its + and ++ unions outside the rest of the path, as in a/(c & d) ++ b/(c & d) for (a ++ b)/(c & d), the path means the same and its estimate is within the limit. Write it so, keep one side of each union, or create the path with several commands. Nothing was changed. (ExpansionTooLarge)
+
+$ mk (a1 & a2 & a3 & a4 & a5 & a6 & a7 & a8 & a9 & a10 & a11 & a12 & a13 & a14 & a15 & a16 & a17) | b1/b2/b3/b4/b5/b6/b7/b8/b9/b10/b11/b12/b13/b14/b15/b16/b17
+This path is too large for mk: its size, estimated from the path as written, is more than the limit of 256 route steps over all its alternatives. Keep one side of each union or create the path with several commands. Nothing was changed. (ExpansionTooLarge)
+
+$ mk (x & y)/@/b/(c & !{@0})
+The step `b` is written once, but the product rule copies it into 2 walks, and its copies `x/b` and `x/b/!{@000000000000}` could each follow an edge that another of them creates, so mk has no order to take them in. If the walks are to go on from one edge of it, write a join after it: (x & y)/@/b/@/(c & !{@000000000000}). Otherwise write the node it should go to after it (/@N), or create the walks with separate commands. Nothing was changed. (CircularSuppliers)
+
+$ mk ~(~b)/(c & !{@0})
+The step `~(~b)` is written once, but the product rule copies it into 2 walks, and its copies `b` and `b/!{@000000000000}` could each follow an edge that another of them creates, so mk has no order to take them in. Write the node it should go to after it (/@N), or create the walks with separate commands. Nothing was changed. (CircularSuppliers)
+
+$ mk b/(c & !{@1} & d & @0)
+The step `b` is written once, but the product rule copies it into 4 walks, and 3 of its copies, `b` twice and `b/!{@000000000001}`, could each follow an edge that another of them creates, so mk has no order to take them in. If the walks are to go on from one edge of it, write a join after it: b/@/(c & !{@000000000001} & d & @000000000000). Otherwise write the node it should go to after it (/@N), or create the walks with separate commands. Nothing was changed. (CircularSuppliers)
+
+$ mk (@0 & b) & ~b/(b & @0 & !{@1})
+These steps could each follow an edge that another of them creates, so mk has no order to take them in: `b` and `~b` (written once, and the product rule copies it into 3 walks, among them `~b` and `~b/!{@000000000001}`). Write the node a step should go to (/@N after it), or create them with separate commands. Nothing was changed. (CircularSuppliers)
+
+$ mk %targets(…), which became (%never ++ @1 ++ @2)/(c & d & e & f & g & h & i & j & k)
+This path is too large for mk: its size, estimated from the path as written, is more than the limit of 256 route steps over all its alternatives. Create the path with several commands. Nothing was changed. (ExpansionTooLarge)
+
+$ tag (a & b)/@ & a @0
+These steps could each follow an edge that another of them creates, so tag has no order to take them in: the node where `a` and `b` meet and `a`. If a step means the same edge as a step into a node where steps meet, leave it out and write what follows it after that node, as in (a & c)/@/b for a/b & (a & c)/@; otherwise write the node a step should go to (/@N after it), or create them with separate commands. Nothing was changed. (CircularSuppliers)
+
+$ tag b/@7 @0
+This path needs @000000000007, which does not exist, and a node with a written id is never created: tag gives every new node a new id. Nothing was changed. (MissingNodes)
+
+$ tag (* & a)/@ @0
+The step `*` has no label and meets `a` at a node that is not written, and tag does not use a step without a label to choose such a node. If it means the same edge as another step into the node, leave it out; otherwise write its label, or write the node where the steps meet (/@N). Nothing was changed. (WildcardJoin)
+

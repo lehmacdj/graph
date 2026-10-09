@@ -12,10 +12,14 @@ ls */h
 cd %last
 nid
 ==========stdout==========
-g> g> @000000000000
+g> created 0 new nodes and 1 new edge
+created 0 new nodes and 1 new edge
+g> @000000000000
 g> [0ma/[0;1my[0m[0m [0;34m@000000000000[0m [0m[0m
 [0mb/[0;1my[0m[0m [0;34m@000000000000[0m [0m[0m
-g> g> [0ma/[0;1mh[0m[0m [0;34m@000000000000[0m [0m[0m
+g> created 0 new nodes and 1 new edge
+created 0 new nodes and 1 new edge
+g> [0ma/[0;1mh[0m[0m [0;34m@000000000000[0m [0m[0m
 [0mb/[0;1mh[0m[0m [0;34m@000000000000[0m [0m[0m
 g> g> @000000000000
 g> Goodbye!

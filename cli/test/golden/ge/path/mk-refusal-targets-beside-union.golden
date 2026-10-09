@@ -1,0 +1,41 @@
+==========graph==========
+0 -a-> 1
+1 -b-> 2
+0 -q-> 1
+0 -q-> 2
+==========input==========
+mk %targets(q)/(c & d & e & f & g & h & i & j & k)
+mk (%targets(a/b) | @000000000001)/(c & d & e & f & g & h & i & j & k)
+mk (%targets(a/b) ++ @000000000001)/(c & d & e & f & g & h & i & j & k)
+mk (%never ++ @000000000001 ++ @000000000002)/(c & d & e & f & g & h & i & j & k) & %targets(a)
+mk %override({max-repairs = 100}, %targets(q)/(c & d & e & f & g & h & i & j & k))
+mk %override({plus = shared}, %targets(q)/(c & d & e & f & g & h & i & j & k))
+mk %override({max-repairs = 100}, (%targets(a/b) | @000000000001)/(c & d & e & f & g & h & i & j & k))
+mk %override({max-repairs = 100}, (%targets(a/b) ++ @000000000001)/(c & d & e & f & g & h & i & j & k))
+tag (%targets(a/b) | @000000000001)/(c & d & e & f & g & h & i & j & k) @
+==========stdout==========
+g> g> g> g> g> g> g> g> g> g> Goodbye!
+==========stderr==========
+This path is too large for mk: its size, estimated from the path as written, is more than the limit of 256 route steps over all its alternatives. Create the path with several commands. Nothing was changed. (ExpansionTooLarge)
+This path is too large for mk: its size, estimated from the path as written, is more than the limit of 256 route steps over all its alternatives. Keep one side of each union or create the path with several commands. Nothing was changed. (ExpansionTooLarge)
+This path is too large for mk: its size, estimated from the path as written, is more than the limit of 256 route steps over all its alternatives. The estimate counts a + or ++ union that the product rule copies as if each copy took a side of its own, though the copies all take the same side. Written with its + and ++ unions outside the rest of the path, as in a/(c & d) ++ b/(c & d) for (a ++ b)/(c & d), the path means the same and its estimate is within the limit. Write it so, keep one side of each union, or create the path with several commands. Nothing was changed. (ExpansionTooLarge)
+This path is too large for mk: its size, estimated from the path as written, is more than the limit of 256 route steps over all its alternatives. The estimate counts a + or ++ union that the product rule copies as if each copy took a side of its own, though the copies all take the same side. Written with its + and ++ unions outside the rest of the path, as in a/(c & d) ++ b/(c & d) for (a ++ b)/(c & d), the path means the same and its estimate is within the limit. Write it so, keep one side of each union, or create the path with several commands. Nothing was changed. (ExpansionTooLarge)
+This path is too large for mk: its size, estimated from the path as written, is more than the limit of 256 route steps over all its alternatives. Create the path with several commands. Nothing was changed. (ExpansionTooLarge)
+This path is too large for mk: its size, estimated from the path as written, is more than the limit of 256 route steps over all its alternatives. Create the path with several commands. Nothing was changed. (ExpansionTooLarge)
+This path is too large for mk: its size, estimated from the path as written, is more than the limit of 256 route steps over all its alternatives. Keep one side of each union or create the path with several commands. Nothing was changed. (ExpansionTooLarge)
+This path is too large for mk: its size, estimated from the path as written, is more than the limit of 256 route steps over all its alternatives. The estimate counts a + or ++ union that the product rule copies as if each copy took a side of its own, though the copies all take the same side. Written with its + and ++ unions outside the rest of the path, as in a/(c & d) ++ b/(c & d) for (a ++ b)/(c & d), the path means the same and its estimate is within the limit. Write it so, keep one side of each union, or create the path with several commands. Nothing was changed. (ExpansionTooLarge)
+This path is too large for tag: its size, estimated from the path as written, is more than the limit of 256 route steps over all its alternatives. Keep one side of each union or create the path with several commands. Nothing was changed. (ExpansionTooLarge)
+==========graph-dump==========
+@000000000000{out=[@000000000001 via "a", @000000000001 via "q", @000000000002 via "q"], in=[@0daCJjMrQel8 via "origin"]}
+@000000000001{out=[@000000000002 via "b"], in=[@000000000000 via "a", @000000000000 via "q"]}
+@000000000002{out=[], in=[@000000000001 via "b", @000000000000 via "q"]}
+@0daCJjMrQel8{out=[@zsBuPkn5mh8F via "file-extensions", @AhQufiPzgyRf via "file-hashes", @3JJvxFUHGAA1 via "historical-special-nodes", @S00KkOYoVpFu via "import-dates", @a0fVkm0kR7KE via "import-urls", @927u9Xyky2pC via "mime-types", @000000000000 via "origin", @pbYxBO6fzBQV via "tags"], in=[]}
+@3JJvxFUHGAA1{out=[@VEfLhuTgZ88Z via "sequence-ids"], in=[@0daCJjMrQel8 via "historical-special-nodes"]}
+@927u9Xyky2pC{out=[], in=[@0daCJjMrQel8 via "mime-types"]}
+@AhQufiPzgyRf{out=[], in=[@0daCJjMrQel8 via "file-hashes"]}
+@S00KkOYoVpFu{out=[], in=[@0daCJjMrQel8 via "import-dates"]}
+@VEfLhuTgZ88Z{out=[], in=[@3JJvxFUHGAA1 via "sequence-ids"]}
+@a0fVkm0kR7KE{out=[], in=[@0daCJjMrQel8 via "import-urls"]}
+@pbYxBO6fzBQV{out=[], in=[@0daCJjMrQel8 via "tags"]}
+@zsBuPkn5mh8F{out=[], in=[@0daCJjMrQel8 via "file-extensions"]}
+==========data==========

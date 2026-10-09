@@ -6,7 +6,7 @@ mk a/b
 ==========stdout==========
 g> g> Goodbye!
 ==========stderr==========
-This path has 2 possible repairs. Nothing was changed. Pin a node with @N or exclude one with !{@N} to choose.
+This path can be created in 2 ways; nothing was changed. To choose one, write @N after a step for the node it should go to, or !{@N} for nodes it should not, or keep one side of a +.
   1. @000000000000 -"a"-> @000000000001 -"b"-> new1
     creates: @000000000001 -"b"-> new1
     use: mk a/@000000000001/b

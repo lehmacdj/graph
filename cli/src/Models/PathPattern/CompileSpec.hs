@@ -3373,18 +3373,38 @@ spec_compileCopiedMeetingPoints = describe "a product may not copy a meeting poi
     -- no merging of equal conjuncts
     refuses [path| ((a & a) | z)/((c & y)/@/e & d) |]
     ((.readings) <$> either Just (const Nothing) (checkCopies [path| ((a & b) | z)/((c & y)/@/e & d) |]))
-      `shouldBe` Just [SideInPlace [path| (a & b) | z |] [path| a & b |]]
+      `shouldBe` Just [SideInPlace [path| (a & b) | z |] [path| a & b |] [0]]
+  it "gives each union it reads with its place in the path" do
+    let readingsOf p = (.readings) <$> either Just (const Nothing) (checkCopies p)
+    -- (p & q)/(x/@ | w/@)/((c & y)/@/e & d) is ((p & q)/(x/@ | w/@))/(…)
+    readingsOf [path| (p & q)/(x/@ | w/@)/((c & y)/@/e & d) |]
+      `shouldBe` Just [AsOneStep [path| x/@ | w/@ |] [0, 1]]
+    -- under ~, which reverses the sequence around the union
+    readingsOf [path| ~((p & q)/(x/@ | w/@)/((c & y)/@/e & d)) |]
+      `shouldBe` Just [AsOneStep [path| @/~x | @/~w |] [0, 0, 1]]
+    readingsOf [path| ~(z/((c & y)/@/e & d)/(x/@ | w/@)/(p & q)) |]
+      `shouldBe` Just [AsOneStep [path| @/~x | @/~w |] [0, 0, 1]]
+    -- inside an %override that sets limits
+    readingsOf [path| %override({max-repairs = 100}, (p & q)/(x/@ | w/@)/((c & y)/@/e & d)) |]
+      `shouldBe` Just [AsOneStep [path| x/@ | w/@ |] [0, 0, 1]]
+    -- unions of one kind inside one another are one union, at the
+    -- outermost one's place
+    readingsOf [path| (p & q)/(x/@ | (w/@ | v/@))/((c & y)/@/e & d) |]
+      `shouldBe` Just [AsOneStep [path| x/@ | w/@ | v/@ |] [0, 1]]
+    -- a union written the same as another is told from it by its place
+    readingsOf [path| (x/@ | w/@) & (p & q)/(x/@ | w/@)/((c & y)/@/e & d) |]
+      `shouldBe` Just [AsOneStep [path| x/@ | w/@ |] [1, 0, 1]]
   it "a | keeps no two groups apart, whatever joins its sides have" do
     refuses [path| (p & q)/(x/@ | w/@)/((c & y)/@/e & d) |]
     refuses [path| (p & q)/(@000000000001 | @000000000002)/((c & y)/@/e & d) |]
     ((.readings) <$> either Just (const Nothing) (checkCopies [path| (p & q)/(x/@ | w/@)/((c & y)/@/e & d) |]))
-      `shouldBe` Just [AsOneStep [path| x/@ | w/@ |]]
+      `shouldBe` Just [AsOneStep [path| x/@ | w/@ |] [0, 1]]
     -- a side written twice is two sides, for the check as for the
     -- compiler: p and q may take one each, and then pass the union as a
     -- step
     refuses [path| (p & q)/(x/@ | x/@)/((c & y)/@/e & d) |]
     ((.readings) <$> either Just (const Nothing) (checkCopies [path| (p & q)/(x/@ | x/@)/((c & y)/@/e & d) |]))
-      `shouldBe` Just [AsOneStep [path| x/@ | x/@ |]]
+      `shouldBe` Just [AsOneStep [path| x/@ | x/@ |] [0, 1]]
     copiesMeetingPoint [path| (p & q)/(x/@ | x/@)/((c & y)/@/e & d) |] `shouldBe` True
     -- so are two sides that compile to the same thing in place (the
     -- check refused this while the compiler had one side: no more)

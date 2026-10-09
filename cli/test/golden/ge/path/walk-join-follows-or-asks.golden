@@ -1,19 +1,25 @@
 ==========graph==========
-0 -target-> 1
+0 -a-> 1
+0 -c-> 5
 ==========input==========
-tag (@000000000009/x + @000000000008/y) target
+mk (a & d)/@
+mk (a & c)/@
 ==========stdout==========
+g> created 0 new nodes and 1 new edge
 g> g> Goodbye!
 ==========stderr==========
-This path has 2 possible repairs. Nothing was changed. Pin a node with @N or exclude one with !{@N} to choose.
-  1. @000000000008 -"y"-> new1
-    creates: @000000000008 -"y"-> new1
-  2. @000000000009 -"x"-> new1
-    creates: @000000000009 -"x"-> new1
+This path can be created in 2 ways; nothing was changed. To choose one, write @N after a step for the node it should go to, or !{@N} for nodes it should not, or keep one side of a +.
+  1. @000000000000 -"a"-> @000000000001 & @000000000000 -"c"-> @000000000001
+    creates: @000000000000 -"c"-> @000000000001
+    use: mk (a/@000000000001 & c/@000000000001)/@
+  2. @000000000000 -"a"-> @000000000005 & @000000000000 -"c"-> @000000000005
+    creates: @000000000000 -"a"-> @000000000005
+    use: mk (a/@000000000005 & c/@000000000005)/@
 
 ==========graph-dump==========
-@000000000000{out=[@000000000001 via "target"], in=[@0daCJjMrQel8 via "origin"]}
-@000000000001{out=[], in=[@000000000000 via "target"]}
+@000000000000{out=[@000000000001 via "a", @000000000005 via "c", @000000000001 via "d"], in=[@0daCJjMrQel8 via "origin"]}
+@000000000001{out=[], in=[@000000000000 via "a", @000000000000 via "d"]}
+@000000000005{out=[], in=[@000000000000 via "c"]}
 @0daCJjMrQel8{out=[@zsBuPkn5mh8F via "file-extensions", @AhQufiPzgyRf via "file-hashes", @3JJvxFUHGAA1 via "historical-special-nodes", @S00KkOYoVpFu via "import-dates", @a0fVkm0kR7KE via "import-urls", @927u9Xyky2pC via "mime-types", @000000000000 via "origin", @pbYxBO6fzBQV via "tags"], in=[]}
 @3JJvxFUHGAA1{out=[@VEfLhuTgZ88Z via "sequence-ids"], in=[@0daCJjMrQel8 via "historical-special-nodes"]}
 @927u9Xyky2pC{out=[], in=[@0daCJjMrQel8 via "mime-types"]}

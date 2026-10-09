@@ -5,6 +5,7 @@
 ==========expression==========
 at @000000000007 mk z/@000000000001
 ==========stdout==========
+created 0 new nodes and 1 new edge
 ==========stderr==========
 warning: the graph is damaged where this command read it (damaged-graph)
 - the edge @000000000000 -"x"-> @000000000000 is among the outgoing edges in 000000000000.json but not among the incoming edges in 000000000000.json

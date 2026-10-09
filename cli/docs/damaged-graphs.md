@@ -67,8 +67,8 @@ ones that it is about to write, with each other:
   `<id>.json`: a directory of that name and a symbolic link to a file that
   isn't there are not missing nodes either, and nothing is written over
   the one or through the other. (A symbolic link to a node file is used as
-  that file.) `mk --allow-orphans @2` next to such a `2.json` makes nothing,
-  since the node is there, and warns.
+  that file.) `mk @2` next to such a `2.json` makes nothing, since the node
+  is there, and warns.
 - `cd` fails if its destination has no node file, and `at` runs nothing if
   one of its targets has none (`at did nothing: a target has no node file
   (damaged-graph)`, with the edge that led there).
@@ -204,13 +204,15 @@ since no undamaged graph gets damaged this way:
    read records an edge with. The node that was lost then looks as if it
    were there: `fsck` reports a one-sided edge where it would have reported
    a missing file, and `fix` adds the record instead of saying that the
-   node's other edges and its data are lost.
+   node's other edges and its data are lost. Only the program's own nodes
+   are created at an id that is fixed beforehand. `mk` and `tag` give every
+   node they create a new id, and fail for a path that writes a node `@N`
+   which has no file: with `2 -d-> 1` recorded in `1.json` and no `2.json`,
+   `mk x/@2` and `tag x/@2 @1` write nothing and say that `@2` does not
+   exist (`MissingNodes`).
 
    | graph | command | written |
    |---|---|---|
-   | `2 -d-> 1` recorded in `1.json`, no `2.json` | `mk x/@2` | `2.json` with the new records only |
-   | only `1.json` records `1 -d-> 2`, no `2.json` | `tag x/@2 k` | `2.json` with the new records only |
-   | the same | `mk --allow-orphans @2` | `2.json` without edges |
    | no file for the tags node, which a node `5` records `foo` from, and the system node doesn't record `tags` | any command (opening the graph creates the tags node) | the tags file with the `tags` edge only, announced as a created system node |
 
 Likewise `mk b/x` adds a second `b` edge when only the file of the node

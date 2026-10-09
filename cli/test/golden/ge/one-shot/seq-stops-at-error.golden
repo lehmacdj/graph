@@ -3,6 +3,7 @@
 ==========expression==========
 mk q ; cd nowhere ; mk r
 ==========stdout==========
+created 1 new node and 1 new edge
 ==========stderr==========
 cd needs a path that resolves to a single node
 but it resolved to: []

@@ -10,7 +10,9 @@ mg a b/c/d
 cd a
 :d
 ==========stdout==========
-g> g> g> g> g> g> @000000000000
+g> created 2 new nodes and 2 new edges
+g> g> created 2 new nodes and 2 new edges
+g> g> g> @000000000000
 g> g> g> g> current node:
 @000000000000{out=[@000000000000 via "a", @Pqf7kGOdKJIr via "b"]}
 history:

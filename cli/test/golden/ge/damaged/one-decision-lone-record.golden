@@ -13,7 +13,8 @@ at k mk x
 rmnf b
 ==========stdout==========
 g> g> g> g> g> [0m[0;1mc[0m[0m [0;34m@000000000003[0m [0m[0m
-g> g> g> Goodbye!
+g> created 1 new node and 1 new edge
+g> g> Goodbye!
 ==========stderr==========
 this change was not written: the graph is damaged where it applies (damaged-graph)
 - the edge @000000000000 -"b"-> @000000000002 is among the outgoing edges in 000000000000.json but not among the incoming edges in 000000000002.json

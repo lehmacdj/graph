@@ -26,8 +26,6 @@ data Command
     Dualize
   | -- | mk
     Make ParsedPath
-  | -- | mk --allow-orphans: also create nodes not connected to the graph
-    MakeAllowingOrphans ParsedPath
   | -- | mg [--keep] p1 [--keep] p2 …: merge the nodes, one per argument,
     -- into one; at most one argument is marked @--keep@ (see 'MergeArgument')
     Merge (TwoElemList MergeArgument)

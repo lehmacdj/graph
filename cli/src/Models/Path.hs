@@ -18,6 +18,10 @@ module Models.Path
     WithLimitsVal,
     Path'Constraints,
     handleDirectivesWith,
+    Place,
+    operand,
+    directivePlaces,
+    placesIn,
     handleDirectivesQ,
     parsedFromPartial,
   )
@@ -85,8 +89,8 @@ data Path' (p :: PathPhase)
     -- kind. It does not exist in the Prenormal phase.
     DefaultUnion (DefaultUnionVal p) (Path' p) (Path' p)
   | -- | The path inside an @%override@ that sets a limit, after directives
-    -- are expanded: with @max-repairs@, residuation allows that many
-    -- candidate repairs. It only exists in the Prenormal phase.
+    -- are expanded: with @max-repairs@, @mk@ walks the path in at most
+    -- that many ways. It only exists in the Prenormal phase.
     WithLimits (WithLimitsVal p) PathLimits (Path' p)
   | -- | intersection
     Path' p ::& Path' p
@@ -112,13 +116,13 @@ data UnionKind
     Shared
   deriving (Eq, Ord, Show, Generic, Lift)
 
--- | How many candidate repairs residuating a path may make.
+-- | How many walks @mk@ may make of a path (@max-repairs@).
 data RepairsLimit = AtMostRepairs Int | UnlimitedRepairs
   deriving (Eq, Ord, Show, Generic, Lift)
 
 -- | The limits an @%override@ sets; 'Nothing' keeps the outer one.
 data PathLimits = PathLimits
-  { -- | how many candidate repairs residuation may make
+  { -- | how many walks @mk@ may make of the path
     maxRepairs :: Maybe RepairsLimit
   }
   deriving (Eq, Ord, Show, Generic, Lift)
@@ -127,7 +131,7 @@ data PathLimits = PathLimits
 data OverrideSettings = OverrideSettings
   { -- | the union @+@ is lowered to
     plus :: Maybe UnionKind,
-    -- | how many candidate repairs residuation may make
+    -- | how many walks @mk@ may make of the path
     maxRepairs :: Maybe RepairsLimit
   }
   deriving (Eq, Ord, Show, Generic, Lift)
@@ -298,6 +302,59 @@ handleDirectivesWith plus interpretDirective = \case
   Directive ann directive -> go =<< interpretDirective ann directive
   where
     go = handleDirectivesWith plus interpretDirective
+
+-- | Where a part of a path is: the operand taken at each operator on the
+-- way down to it from the whole path, 0 for the first (or only) operand
+-- and 1 for the second. The path inside a 'WithLimits' is its operand 0.
+type Place = [Int]
+
+-- | The place of an operand of what is at a place.
+operand :: Int -> Place -> Place
+operand i place = place <> [i]
+
+-- | The places of what the directives for which the first argument holds
+-- expand to, in the path that 'handleDirectivesWith' makes of this one:
+-- each is where the directive was, but that the path of an @%override@
+-- that sets limits is inside a 'WithLimits'. What a directive expands to
+-- is not looked inside, but the path of an @%override@ is.
+directivePlaces ::
+  (Directive 'WithDirectives -> Bool) ->
+  Path' 'WithDirectives ->
+  [Place]
+directivePlaces wanted =
+  map fst . placesIn \_ -> \case
+    Directive _ d | wanted d -> Just ()
+    _ -> Nothing
+
+-- | The places of the parts of a path for which the function gives
+-- something, in the path that 'handleDirectivesWith' makes of this one,
+-- with what it gives: each is where the part was, but that the path of an
+-- @%override@ that sets limits is inside a 'WithLimits'. The function is
+-- also told whether an @%override@ around the part says what a @+@ is.
+-- What a directive expands to is not looked inside, but the path of an
+-- @%override@ is.
+placesIn ::
+  (Bool -> Path' 'WithDirectives -> Maybe a) ->
+  Path' 'WithDirectives ->
+  [(Place, a)]
+placesIn found = go [] False
+  where
+    go place plusSet p =
+      toList ((place,) <$> found plusSet p) <> case p of
+        Directive _ (Override settings q) ->
+          go
+            (if isJust (overrideLimits settings) then operand 0 place else place)
+            (plusSet || isJust settings.plus)
+            q
+        Directive _ _ -> []
+        Backwards' q -> go (operand 0 place) plusSet q
+        l ::/ r -> both l r
+        Union _ l r -> both l r
+        DefaultUnion () l r -> both l r
+        l ::& r -> both l r
+        _ -> []
+      where
+        both l r = go (operand 0 place) plusSet l <> go (operand 1 place) plusSet r
 
 handleDirectivesQ ::
   -- | the kind of each @+@

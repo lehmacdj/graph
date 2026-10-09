@@ -6,7 +6,9 @@ cd world/"!"
 cd @000000000000
 ls
 ==========stdout==========
-g> g> g> g> g> g> [0m[0;1mhello[0m[0m [0;34m@O8OhMSVtjevt[0m [0m[0m[0;33mnow[0m
+g> created 1 new node and 1 new edge
+g> g> created 2 new nodes and 2 new edges
+g> g> g> [0m[0;1mhello[0m[0m [0;34m@O8OhMSVtjevt[0m [0m[0m[0;33mnow[0m
 g> Goodbye!
 ==========stderr==========
 ==========graph-dump==========

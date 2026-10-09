@@ -629,35 +629,35 @@ Stated as plainly as the benefits:
 
 ## 5. What remains bounded today
 
-> **`mk` is about to be replaced, and this limit with it.** This
-> section, and the `mk` timings of sections 3 and 6, describe `mk` as
-> the build this note is checked in with has it.
+One thing: the walks `mk` makes.
 
-One thing: the candidates `mk` considers.
-
-`mk` works out how to construct a path by residuation: it lists the
-ways the steps of the path can be matched to existing nodes or left to
-be created (candidates), and selects among them. Candidates multiply
-with the matches of each step. `Models.PathPattern.Residuate` stops
-after 5000 of them by default (`defaultMaxRepairs`), counted over all
-alternatives of the path, and the command fails without changing
-anything:
+`mk` works out what to create by walking the routes of the path from
+left to right (`cli/docs/path-route-ir.md`, section 5). A step with
+edges to several nodes to follow is walked once for each, so the walks
+multiply with such steps. `Models.PathPattern.Residuate` stops after
+5000 walks by default (`defaultMaxRepairs`), counted over all
+alternatives of the path and over every time an alternative is walked
+again, and the command fails without changing anything:
 
 ```
-Working out how to construct this path would take too long: its steps can be matched to existing nodes, or left to be created, in more ways than the limit of 5000, and each way has to be considered. Nothing was changed. Pin a step to a node with @N or exclude nodes with !{@N} so that fewer match, or raise the limit with %override({max-repairs = …}, …). (TooManyRepairs)
+Working out what this path creates would take too long: its steps have several edges to follow, in more combinations than the limit of 5000, and each has to be walked. Nothing was changed. Write @N after a step for the node it should go to, or !{@N} for nodes it should not, so that fewer edges can be followed, or raise the limit with %override({max-repairs = …}, …). (TooManyRepairs)
 ```
 
 `%override({max-repairs = N}, p)`, with `N` a positive number or
 `unlimited`, changes it; the largest limit among the parts of a path
 applies to the whole path. A path that already resolves is a no-op
-whatever the limit. When a path has several repairs, `mk` lists five
-of them and changes nothing.
+whatever the limit. When a path can be created in several ways, `mk`
+lists five of them and changes nothing.
 
-It bounds a count, not time: what one candidate costs grows with the
-pattern (`cli/docs/path-route-ir.md`, Residuation, has the
-measurements, and section 3 above has the cost of `mk` on large
-patterns). And it bounds only `mk`'s planning. Compiling the path, for
-`mk` as for every other command, is not bounded by anything.
+It bounds a count, not time: what one walk costs grows with the
+pattern (`cli/docs/path-route-ir.md`, section 5, has the
+measurements). And it bounds only what `mk` works out. Compiling the
+path, for `mk` as for every other command, is not bounded by anything.
+
+The `mk` timings of sections 3 and 6 are of an `mk` that listed, for
+every step, the nodes it could be matched to or left to be created at,
+and selected among those; they have not been measured on the `mk`
+that walks.
 
 Two other things stop a path, neither of them for its size. A path in
 which a product would copy a meeting point is refused by reading it

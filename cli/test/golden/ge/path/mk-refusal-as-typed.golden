@@ -1,0 +1,57 @@
+==========graph==========
+0 -q-> 1
+0 -q-> 2
+0 -x-> 3
+3 -p-> 5
+0 -y-> 4
+4 -q-> 5
+0 -a-> 6
+6 -c-> 7
+6 -d-> 7
+6 -e-> 7
+6 -f-> 7
+6 -g-> 7
+==========input==========
+mk */(a & b)
+mk %override({plus = shared}, */(a & b))
+mk %targets(q)/(c & d & e & f & g & h & i & j & k)
+mk (@000000000001 ++ @000000000002)/(c & d & e & f & g & h & i & j & k)
+mk %override({plus = relational}, (a ++ b)/(c & d & e & f & g) & (x + y)/(p & q))
+mk %override({plus = relational}, a/(c & d & e & f & g) & (x + y)/(p & q) ++ b/(c & d & e & f & g) & (x + y)/(p & q))
+mk %override({plus = relational}, a/(c & d & e & f & g) & x/(p & q) ++ a/(c & d & e & f & g) & y/(p & q) ++ b/(c & d & e & f & g) & x/(p & q) ++ b/(c & d & e & f & g) & y/(p & q))
+==========stdout==========
+g> g> g> g> g> g> created 0 new nodes and 0 new edges
+g> g> Goodbye!
+==========stderr==========
+The step `*` is written once, but the product rule copies it into 2 walks, so one alternative of this path has 2 * or regex steps, and mk builds a path with at most one. If the walks are to go on from one edge of it, write a join after it: */@/(a & b). Otherwise write the labels you mean. Nothing was changed. (SeveralWildcards)
+The step `*` is written once, but the product rule copies it into 2 walks, so one alternative of this path has 2 * or regex steps, and mk builds a path with at most one. Write the labels you mean. Nothing was changed. (SeveralWildcards)
+This path is too large for mk: its size, estimated from the path as written, is more than the limit of 256 route steps over all its alternatives. Create the path with several commands. Nothing was changed. (ExpansionTooLarge)
+This path is too large for mk: its size, estimated from the path as written, is more than the limit of 256 route steps over all its alternatives. The estimate counts a + or ++ union that the product rule copies as if each copy took a side of its own, though the copies all take the same side. Written with its + and ++ unions outside the rest of the path, as in a/(c & d) ++ b/(c & d) for (a ++ b)/(c & d), the path means the same and its estimate is within the limit. Write it so, keep one side of each union, or create the path with several commands. Nothing was changed. (ExpansionTooLarge)
+This path is too large for mk: its size, estimated from the path as written, is more than the limit of 256 route steps over all its alternatives. The estimate counts a union that the product rule copies as if each copy took a side of its own. The copies of a ++ union all take the same side, and so do those of a + that mk reads as ++, but not those of a + that an %override({plus = relational}, …) makes |. Written with its ++ unions and the + that mk reads as ++ outside the rest of the path, as in a/(c & d) ++ b/(c & d) for (a ++ b)/(c & d), the path means the same and its estimate is within the limit. Write it so, keep one side of each union, or create the path with several commands. Nothing was changed. (ExpansionTooLarge)
+This path can be created in 2 ways; nothing was changed. To choose one, write @N after a step for the node it should go to, or !{@N} for nodes it should not, or keep one side of a +.
+  1. @000000000000 -"a"-> @000000000006 -"c"-> @000000000007 & @000000000000 -"a"-> @000000000006 -"d"-> @000000000007 & @000000000000 -"a"-> @000000000006 -"e"-> @000000000007 & @000000000000 -"a"-> @000000000006 -"f"-> @000000000007 & @000000000000 -"a"-> @000000000006 -"g"-> @000000000007 & @000000000000 -"x"-> @000000000003 -"p"-> @000000000005 & @000000000000 -"x"-> @000000000003 -"q"-> new1
+    creates: @000000000003 -"q"-> new1
+    use: mk a/(c & d & e & f & g) & x/(p & q)
+  2. @000000000000 -"a"-> @000000000006 -"c"-> @000000000007 & @000000000000 -"a"-> @000000000006 -"d"-> @000000000007 & @000000000000 -"a"-> @000000000006 -"e"-> @000000000007 & @000000000000 -"a"-> @000000000006 -"f"-> @000000000007 & @000000000000 -"a"-> @000000000006 -"g"-> @000000000007 & @000000000000 -"y"-> @000000000004 -"p"-> new1 & @000000000000 -"y"-> @000000000004 -"q"-> @000000000005
+    creates: @000000000004 -"p"-> new1
+    use: mk a/(c & d & e & f & g) & y/(p & q)
+
+==========graph-dump==========
+@000000000000{out=[@000000000006 via "a", @000000000001 via "q", @000000000002 via "q", @000000000003 via "x", @000000000004 via "y"], in=[@0daCJjMrQel8 via "origin"]}
+@000000000001{out=[], in=[@000000000000 via "q"]}
+@000000000002{out=[], in=[@000000000000 via "q"]}
+@000000000003{out=[@000000000005 via "p"], in=[@000000000000 via "x"]}
+@000000000004{out=[@000000000005 via "q"], in=[@000000000000 via "y"]}
+@000000000005{out=[], in=[@000000000003 via "p", @000000000004 via "q"]}
+@000000000006{out=[@000000000007 via "c", @000000000007 via "d", @000000000007 via "e", @000000000007 via "f", @000000000007 via "g"], in=[@000000000000 via "a"]}
+@000000000007{out=[], in=[@000000000006 via "c", @000000000006 via "d", @000000000006 via "e", @000000000006 via "f", @000000000006 via "g"]}
+@0daCJjMrQel8{out=[@zsBuPkn5mh8F via "file-extensions", @AhQufiPzgyRf via "file-hashes", @3JJvxFUHGAA1 via "historical-special-nodes", @S00KkOYoVpFu via "import-dates", @a0fVkm0kR7KE via "import-urls", @927u9Xyky2pC via "mime-types", @000000000000 via "origin", @pbYxBO6fzBQV via "tags"], in=[]}
+@3JJvxFUHGAA1{out=[@VEfLhuTgZ88Z via "sequence-ids"], in=[@0daCJjMrQel8 via "historical-special-nodes"]}
+@927u9Xyky2pC{out=[], in=[@0daCJjMrQel8 via "mime-types"]}
+@AhQufiPzgyRf{out=[], in=[@0daCJjMrQel8 via "file-hashes"]}
+@S00KkOYoVpFu{out=[], in=[@0daCJjMrQel8 via "import-dates"]}
+@VEfLhuTgZ88Z{out=[], in=[@3JJvxFUHGAA1 via "sequence-ids"]}
+@a0fVkm0kR7KE{out=[], in=[@0daCJjMrQel8 via "import-urls"]}
+@pbYxBO6fzBQV{out=[], in=[@0daCJjMrQel8 via "tags"]}
+@zsBuPkn5mh8F{out=[], in=[@0daCJjMrQel8 via "file-extensions"]}
+==========data==========

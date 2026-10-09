@@ -70,6 +70,7 @@ library
       Graph.Import.FileSystem
       Graph.NodeLocated
       Graph.PathPattern.Execution
+      Graph.PathPattern.ExecutionSpec
       Graph.PathPattern.Resolve
       Graph.Paths
       Graph.SystemNodes
@@ -109,6 +110,7 @@ library
       Models.Path.Simple
       Models.Path.TH
       Models.PathPattern
+      Models.PathPattern.Admit
       Models.PathPattern.Compile
       Models.PathPattern.CompileSpec
       Models.PathPattern.LawsSpec
@@ -119,6 +121,7 @@ library
       Models.PathPattern.Suggest
       Models.PathPattern.SuggestSpec
       Models.PathPattern.TestCorpus
+      Models.PathPattern.WalkSpec
       Models.PathPatternSpec
       MyPrelude
       MyPrelude.Collections

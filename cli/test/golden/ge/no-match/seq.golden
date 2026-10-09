@@ -6,7 +6,9 @@
 rm zz; mk after
 mv zz c; cp zz c; mk later
 ==========stdout==========
-g> g> g> Goodbye!
+g> created 1 new node and 1 new edge
+g> created 1 new node and 1 new edge
+g> Goodbye!
 ==========stderr==========
 the path of rm ("zz") matched nothing; nothing was changed.
 the first argument of mv ("zz") matched nothing; nothing was changed.

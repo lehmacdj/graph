@@ -11,7 +11,11 @@ at (a + b) {mk y/%last; mk w/%targets(k)}
 ls */y
 ls */w
 ==========stdout==========
-g> g> g> g> [0ma/[0;1my[0m[0m [0;34m@000000000003[0m [0m[0m
+g> g> g> created 0 new nodes and 1 new edge
+created 0 new nodes and 1 new edge
+created 0 new nodes and 1 new edge
+created 0 new nodes and 1 new edge
+g> [0ma/[0;1my[0m[0m [0;34m@000000000003[0m [0m[0m
 [0mb/[0;1my[0m[0m [0;34m@000000000003[0m [0m[0m
 g> [0ma/[0;1mw[0m[0m [0;34m@000000000004[0m [0m[0m
 [0mb/[0;1mw[0m[0m [0;34m@000000000005[0m [0m[0m

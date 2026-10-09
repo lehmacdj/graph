@@ -1004,8 +1004,9 @@ spec_interruptedCommand = do
   it "names only the targets at which something was written" $
     -- the targets are the origin, 1 and 2, in that order; at 1 the edge d
     -- is there already and mk writes nothing, and the interrupt arrives
-    -- there, in what nid says
-    interrupted (AtOutput 2) "at (@ | b | b/d) { mk d ; nid }"
+    -- there, in what nid says: each mk says what it created, so the
+    -- outputs are mk and nid at the origin, then mk and nid at 1
+    interrupted (AtOutput 4) "at (@ | b | b/d) { mk d ; nid }"
       `shouldReturn` ([atChangedAt ["0"]], True)
   it "leaves the REPL where it was when at is interrupted" do
     (_, went, location) <-
@@ -1029,8 +1030,9 @@ spec_interruptedCommand = do
   it "says nothing when the commands that had run changed nothing" do
     interrupted (AtOutput 2) "nid ; nid" `shouldReturn` ([], True)
     interrupted (OnceMade []) "nid ; ls b ; mk xx" `shouldReturn` ([], True)
-    -- mk of what is there already writes nothing
-    interrupted (AtOutput 1) "mk b/d ; nid" `shouldReturn` ([], True)
+    -- mk of what is there already writes nothing; it says so (output 1),
+    -- and the interrupt arrives in what nid says after it
+    interrupted (AtOutput 2) "mk b/d ; nid" `shouldReturn` ([], True)
   it "says both of an at in a line" $
     interrupted (OnceMade ["xx", "yy"]) "mk xx ; at (b | b/d) mk yy"
       `shouldReturn` ([atChangedAt ["1"], oneBefore], True)

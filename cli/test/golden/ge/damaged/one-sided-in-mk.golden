@@ -7,7 +7,8 @@
 mk b/x
 nid
 ==========stdout==========
-g> g> @000000000000
+g> created 2 new nodes and 2 new edges
+g> @000000000000
 g> Goodbye!
 ==========stderr==========
 ==========graph-dump==========

@@ -8,6 +8,7 @@ at b {ls @000000000000/b ; fix ; mk x}
 [0m[0;1mb[0m[0m [0;34m@000000000002[0m [0m[0m
 repairs:
 - add the edge @000000000000 -"b"-> @000000000002 to the incoming edges in 000000000002.json
+created 1 new node and 1 new edge
 ==========stderr==========
 warning: the graph is damaged where this command read it (damaged-graph)
 - the edge @000000000000 -"b"-> @000000000002 is among the outgoing edges in 000000000000.json but not among the incoming edges in 000000000002.json
