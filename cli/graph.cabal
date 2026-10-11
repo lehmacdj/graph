@@ -111,6 +111,7 @@ library
       Models.PathPattern
       Models.PathPattern.Compile
       Models.PathPattern.CompileSpec
+      Models.PathPattern.LawsSpec
       Models.PathPattern.Match
       Models.PathPattern.MatchSpec
       Models.PathPattern.Residuate

@@ -1,0 +1,31 @@
+==========graph==========
+0 -x-> 1
+0 -x-> 2
+1 -c-> 9
+2 -d-> 9
+0 -b-> 3
+3 -c-> 9
+3 -d-> 9
+==========expression==========
+ls (x/@ & b)/(c & d); ls (x/@ & b)/(c & d)
+==========stdout==========
+[0mx/[0;1mc[0m[0m [0;34m@000000000009[0m [0m[0m
+[0mx/[0;1mc[0m[0m [0;34m@000000000009[0m [0m[0m
+==========stderr==========
+Warning: the @ that ends `x/@` does nothing here: `(c & d)` copies `x/@` whole, once for each of its conjuncts, so the @ joins nothing and pins nothing. If one node was meant, write `x/@/(c & d) & b/(c & d)`; otherwise leave the @ out. (JoinDoesNothing)
+==========graph-dump==========
+@000000000000{out=[@000000000003 via "b", @000000000001 via "x", @000000000002 via "x"], in=[@0daCJjMrQel8 via "origin"]}
+@000000000001{out=[@000000000009 via "c"], in=[@000000000000 via "x"]}
+@000000000002{out=[@000000000009 via "d"], in=[@000000000000 via "x"]}
+@000000000003{out=[@000000000009 via "c", @000000000009 via "d"], in=[@000000000000 via "b"]}
+@000000000009{out=[], in=[@000000000001 via "c", @000000000003 via "c", @000000000002 via "d", @000000000003 via "d"]}
+@0daCJjMrQel8{out=[@zsBuPkn5mh8F via "file-extensions", @AhQufiPzgyRf via "file-hashes", @3JJvxFUHGAA1 via "historical-special-nodes", @S00KkOYoVpFu via "import-dates", @a0fVkm0kR7KE via "import-urls", @927u9Xyky2pC via "mime-types", @000000000000 via "origin", @pbYxBO6fzBQV via "tags"], in=[]}
+@3JJvxFUHGAA1{out=[@VEfLhuTgZ88Z via "sequence-ids"], in=[@0daCJjMrQel8 via "historical-special-nodes"]}
+@927u9Xyky2pC{out=[], in=[@0daCJjMrQel8 via "mime-types"]}
+@AhQufiPzgyRf{out=[], in=[@0daCJjMrQel8 via "file-hashes"]}
+@S00KkOYoVpFu{out=[], in=[@0daCJjMrQel8 via "import-dates"]}
+@VEfLhuTgZ88Z{out=[], in=[@3JJvxFUHGAA1 via "sequence-ids"]}
+@a0fVkm0kR7KE{out=[], in=[@0daCJjMrQel8 via "import-urls"]}
+@pbYxBO6fzBQV{out=[], in=[@0daCJjMrQel8 via "tags"]}
+@zsBuPkn5mh8F{out=[], in=[@0daCJjMrQel8 via "file-extensions"]}
+==========data==========

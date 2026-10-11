@@ -676,49 +676,156 @@ one of the paths in a law is refused, the law says what its product
 written out means. The table says for each law what its tests do, which
 is often less than the law. To read it:
 
-- The tests are in `Models.PathPattern.CompileSpec` unless the row says
-  otherwise.
+- The tests are in `Models.PathPattern.CompileSpec` unless the row
+  names `LawsSpec`, which is `Models.PathPattern.LawsSpec`.
 - *Random* is a fixed sample drawn from a seeded generator, the same
   paths at every run, less the paths that `fewAlternatives` finds too
-  large (§6). Unless the row says otherwise the generator makes steps,
-  reversed steps, `*`, `@`, `@1`, `!{@1}`, `/`, `&`, `|`, `++` and `~`
-  of a sub-path. *Fixed* is examples
-  written in the test. *Corpus* is the 107 queries and 265 graphs of
-  `Models.PathPattern.TestCorpus`; those graphs have the nodes `1` and
-  `2` and the labels `a` and `b` only.
+  large (§6). There is no one generator, and what a test can find
+  depends on what its generator makes, so the row names it:
+  - `genPath` of `spec_compileUnionMonotoneRandom`: the steps `a`, `b`,
+    `~a` and `*`, `@`, `@1`, `!{@1}`, with `/`, `&`, `|`, `++` and `~`
+    of a sub-path.
+  - `genPath` of `spec_compileRepeatedConjunct` and that of
+    `spec_compileUnionIsItsChoices`: the same without `~` of a
+    sub-path.
+  - `genPath` of `spec_compileCopies`: the steps `a`, `b` and `c` with
+    `/`, `&` and `|`; no join, no `@N`, no `++`, no `~`.
+  - `genRelative` of `spec_compileReversal`: the steps `a`, `b`, `c`,
+    `~a` and `*`, `@`, `!{@1}`, with `/`, `&`, `|`, `++` and `~` of a
+    sub-path; no `@N`. `genJoined` there: two groups of two or three
+    conjuncts from a fixed pool with `@` and forks, in five draws of
+    eight with a step before or after them, `c/@` before, `@/c` after,
+    or a `~` around them.
+  - `genScoped`: every step has a label of its own (so no two sides of
+    a union are alike) and is sometimes reversed; `@`, `!{@1}` and,
+    with its argument, `@1`; groups and `|` and `++` unions of two or
+    three; `~` of a chain; no `*`.
+  - `genStretchy`: eight labels and, rarely, `*`; `@`, `@1` to `@3`,
+    `!{@7}`; `~` of a step or of a group. Four draws in five (before a
+    path of more than 16 steps and joins is drawn again) are two or
+    three groups in one chain, each sometimes a side of a union.
+    After each group may come a step (two times in five), then a
+    union, `|` or `++` (one in five), then a join (about one in twelve), each
+    drawn on its own; a join or a step may stand before the first
+    group, and a step after the last. The fifth draw is a plain
+    sequence of one to three segments, each a step, a join, a group or
+    a union.
+  - `genPlanted`: one of thirteen kernels, wrapped up to three times in
+    a conjunct, a side of a union or a sequence, with a group next to
+    it or not. Six kernels are one conjunct with a fork and an `@` or
+    `!{@2}` in its chain (in two of them an `@1` stands between the
+    two). Six are two neighbouring groups, a conjunct of one holding
+    several walks together with an `@1` and a conjunct of the other
+    having an `@` or `!{@2}` (in three of them in a group a level
+    deeper). One is two neighbouring groups with an `@` or `!{@2}` on
+    one walk and nothing held together, which is no meeting point.
+  - `genPath` of `LawsSpec`: the steps `a`, `b`, `c` and their
+    reverses, `*`, `@`, `@1`, `!{@1}`, with `/`, `&`, `|`, `++` and `~`
+    of a sub-path. `genHoled` there is a *context*, a path with one
+    place to write another path in: a random one (3 draws in 24), or
+    that place in a chain (4), in a conjunct of a group (3), in a side
+    of a `|` or `++` union (4), or in a conjunct of a group in such a
+    side (2), or a small context made of steps in which just one thing
+    copies the place (`genCopying`, 8). In the four kinds in the
+    middle, next to the place on either side, in the chain all that
+    stands in, is any of nothing, a step, a group, a step and then a
+    group, a join and then a group, a union with a join in a side and
+    then a group, a union with a group in a side, and a join and then
+    such a union; and one time in six a `~` is written around the
+    whole. In a side, between the place and each end of the side
+    stands nothing, a step, a join, or a step and a join in either
+    order: a join there cuts the place off from a fork outside the
+    union on that end. A `genCopying` context has one of: a fork next
+    to the place; a fork next to the group the place is in a conjunct
+    of, or a step away from it; a union with a fork in a side next to
+    the place, or a step away; and a fork beyond a union with a join
+    in a side. `genFollowed` is the context of the properties of 4.6,
+    4.7 and 4.8: nothing (1 draw in 8), a step behind the place (4),
+    a fork of two steps behind it (1), or a random context (2).
+- *Fixed* is examples written in the test. *Corpus* is the 107 queries
+  and 265 graphs of `Models.PathPattern.TestCorpus`; those graphs have
+  the nodes `1` and `2` and the labels `a` and `b` only.
 - *Exact* compares what `compilePath` gives: the same alternatives,
   each with its routes in the same order. *Up to route order*
   disregards the order of the routes in an alternative. *Targets*
   compares only the nodes reached on some graphs.
+- In `LawsSpec`, *targets* is the nodes `ls` finds for the two paths
+  of a pair in two places. One is from every node of two random
+  graphs on four nodes with the labels `a`, `b` and `c` (of sixty,
+  with two to five tenths of the edges they can have); the test fails
+  when fewer than the percentage named of these comparisons find a
+  node on either side, and also when fewer than 95% of the comparisons
+  of the other place do. The other is on the graphs that the two paths
+  themselves describe (`modelOf`: a node for every vertex and an edge
+  for every hop of an alternative, for up to four alternatives of
+  each path, and for the first also with the current node or a
+  variable made node `1`), from the node the path is run at there: an
+  alternative finds a node on its own graph, and a second path that
+  finds the same everywhere has to find it too. A comparison whose
+  matches could be more than 8,000 is left out (`matchesBound`), and
+  the test fails when those left out are more than a fifth of the
+  comparisons that were made (a sixth of all that were tried).
+- In `LawsSpec`, the condition of a law is read off the path as it is
+  written (`written`, `uncopied`, `productWithin`, `heldTogether`,
+  `leftWithin`, `rightWithin`, `relative`), by code of its own. Of the
+  compiler it uses `pushBackwards`, which applies every `~`, so that a
+  chain is read in the order it is walked; and where a test asks
+  whether commands run a path it asks the compiler's check (`runs`,
+  3.1). A property with a condition is a `Law`
+  there: its cases are the first so many that a seeded generator gives
+  within the condition. *Each clause dropped* names the clauses of the
+  condition, and means this for every one of them: the same property
+  is run with that one clause left out of the condition, on the cases
+  the same generator and seed then give and as many of them, and it
+  has to fail in the first half of the cases (`needsEveryClause`).
+  What counts as failing is a pair of paths that commands run and for
+  which `ls` finds different nodes on one of the graphs
+  (`firstToldApart`), or, for the bound of 2.9, a path over the bound.
+  A pair that only compiles to different routes does not count: a join
+  that is one thing in one path and two in the other does not show at
+  the very end of a query, where `ls` joins the walks anyway.
+  The generators are aimed, so that without a clause some twenty
+  cases of a sample fail (eight at the least, on eight seeds tried on
+  2026-10-11). *Fixed* in those rows is the
+  counterexamples of path-language.md, each on its graph, with what
+  `ls` finds for both paths.
 - "Not pinned" means no test was found that states the law; examples
   of it may still pass through other tests.
 
 | law (path-language.md) | test | paths | compared |
 |---|---|---|---|
-| 4.1 `/` regroups: `p/(q/c)` is `(p/q)/c` | `spec_compileUnionMonotoneRandom` | random, 400 triples, not placed in a context | exact |
-| 4.2 the order and grouping of sides never matter | `spec_compileEverySide`: every union of the path, `\|` and `++`, reversed, rotated and regrouped (random, over 600 paths, among them paths with one label for every step and paths with a side written twice), and five fixed examples in every order and grouping. `spec_compileUnionMonotoneRandom`: the one `\|` union under test in three regroupings and one swap (random, in contexts). `spec_compileSubUnions`: the sides of one `\|` union reversed (random from fixed pools) | random; fixed | exact |
+| 4.1 `/` regroups: `p/(q/c)` is `(p/q)/c` | `spec_compileUnionMonotoneRandom` | random (its `genPath`), up to 400 triples, not placed in a context | exact |
+| 4.2 the order and grouping of sides never matter | `spec_compileEverySide`: every union of the path, `\|` and `++`, reversed, rotated and regrouped. Random: 700 paths of `genScoped` with `@1` and 700 of `genStretchy`, each also with every label written `a` (a `*`, which `genStretchy` makes, stays a `*`); and the first 500 of those 1,400 as they were drawn, which are `genScoped` paths and not those copies, also with the first side of every union written again after the others. Of all these, the paths that have a union and are within the size limit are compared: over 600 together, over 100 of them paths with the side written again. And five fixed examples in every order and grouping. `spec_compileUnionMonotoneRandom`: five comparisons of one `\|` union, each of its 400 cases in one context drawn from seven (none, `x/c`, `c/x`, `x & c`, `c/x/d`, `(x & c)/d`, `c/(x & d)`, for two random paths `c` and `d`), with `other` the union `c \| d`: `p \| (other \| p)`, `(p \| p) \| other` and `(other \| p) \| p` against `(p \| other) \| p`; `other \| p` against `p \| other`; and `p \| p'` against `p \| p`, where `p'` is `p` with the two sides of every union in it, `\|` or `++`, swapped (random, its `genPath`). `spec_compileSubUnions`: the sides of one `\|` union reversed (random from fixed pools) | random; fixed | exact |
 | 4.2 a side written twice is two sides | `spec_compileSameSides`, `spec_compileEverySide` (fixed examples: exact, and counts of alternatives, 2 against 1). `spec_compileEverySide` also writes a side of every union twice in over 100 random paths and requires that more than 20 of them compile to something else than without the twin | fixed; random | exact; a count of paths that differ |
-| 4.2 `p \| p` is `p` where nothing copies the union | `spec_compileEverySide`: four joined `p` in four contexts with one route through the union (*Relational unions in detail*, 6) | fixed only | exact |
-| 4.2 `p \| p` is `p` where the union is copied and `p` has no join of its own chain and no `++` | `spec_compileUnionMonotoneRandom` (over 60 cases, none of which is the known exception); the exception and its counts in `spec_compileEverySide` | random; fixed | exact; targets on four graphs for the exception |
-| 4.2 `p ++ p` is `p` | `spec_compileEverySide`: `(a/@ ++ a/@)/(d & e)` against `a/@/(d & e)`, and `((x \| y)/@ ++ (x \| y)/@)/(d & e)` against `(x \| y)/@/(d & e)`. No random test | fixed, two examples | exact |
-| 4.3 `p \| %never` is `p` | `spec_compileUnionMonotoneRandom` (both orders), `spec_compileEverySide` | random; fixed | exact |
-| 4.3 `p ++ %never` is `p` | not pinned (one fixed pair in the corpus) | | |
-| 4.4 adding a side never removes an alternative | `spec_compileUnionMonotoneRandom` (`\|` and `++`, over 400 pairs), `spec_compileSubUnions` (`\|`, sides and contexts from fixed pools), `spec_compileUnionMonotone` (`\|` and `++`) | random; random from pools; corpus | up to route order, and targets on 10 graphs; up to route order; targets |
-| 4.5 `*` is the `\|` of all labels | `spec_compileWildIsUnion` (5 pairs on 128 graphs with the labels `a` to `d`), `spec_compilePerCopyChoice` (5 paths, one graph) | fixed, not "every context" | the routes matched; targets |
-| 4.6 the product identity for two groups written next to each other | `spec_compileProduct` | random: conjuncts from fixed pools (with `@`, `@1`, `!{@1}`, `\|` and forks; no `++`), in 8 contexts, over 400 pairs | up to route order; exact where every conjunct is one route without a union |
-| 4.6 with a step between the groups | `spec_compileUnionFree`: `(x/@/w & b)/k/(c & d)` against its four walks written out. No random test | fixed, one example | exact |
-| 4.6 with a `\|` union between the groups: that it holds without a join or an `&` in a side, and fails with one | not pinned | | |
-| 4.7, 4.8 distribution over a fork | `spec_compileCopies`: `(p & q)/r` is `p/r & q/r` and `r/(p & q)` is `r/p & r/q`, for the two steps `p` and `q` and a random `r` of the labels `a`, `b`, `c` with `/`, `&` and `\|` | random, over 100 pairs; no join, no `@N`, no `++` anywhere | up to route order |
-| 4.7, 4.8 the conditions on joins and `++`, and each way the laws fail | no test goes by the conditions, and none is random inside them. Single failures are fixed examples elsewhere: a join in a copied conjunct against the pin written out (`spec_compileChainScoped`, targets), `(a & b)/@/c` against `(a & b)/(@/c & @/c)` (`spec_compileRepeatedConjunct`, targets), a `++` chosen before the product (`spec_compileProduct`, exact) | fixed | targets; exact |
-| 4.9 `++` distributes over `/`; a union that nothing copies is the same written `\|` or `++`; `a \| b` and the regex | not pinned (a few fixed pairs with `++` in the corpus) | | |
-| 4.10 a conjunct written twice, sealed (with `@/` before it and `/@` after it) | `spec_compileRepeatedConjunct` | random `q` without `@N`, in 7 contexts, on 6 corpus graphs. Five of the contexts have a `c` step, which no corpus graph has, so both sides are empty there: only the bare context and `(a & b)/…` compare anything | targets |
-| 4.10 `ls P/(q & q)` finds what `ls P/q` finds | `spec_compileRepeatedConjunct`, only for the pairs in which `P` has no `&` anywhere (`oneOutput`) or `q` has no `@` and no `!{…}` in its own chain or in a union side there (`joinsItsChain`); its fixed counterexample outside that is `(a & b)/@/c` against `(a & b)/(@/c & @/c)` | random, over 120 pairs, 8 corpus graphs | targets |
+| 4.2 `p \| p` is `p` where nothing copies the union | `spec_lawSideTwice` in `LawsSpec`: `C[p \| p]` against `C[p]` for 250 pairs, `C` a `genHoled` context in which nothing copies the union (`uncopied`) and `p` a random path, in three draws of five one that has a join of its own chain or a `++` (half of those a small one: a walk with a join, or two steps with `++`). In at least 20 of the 250 the union stands in a side of another union and only a join written in that side cuts it off from a fork outside (`cutOffInSide`). Each clause dropped, four: no fork in the union's stretch; no fork in the stretch of a group or union it is written inside; a union with an `&` in a side is a fork; a join in a side of another union does not end the stretch. Also `spec_compileEverySide`: four joined `p` in four contexts with one route through the union (*Relational unions in detail*, 6), exact | random; fixed (the document's counterexamples, and pairs for a join in the side the union stands in and for an `&` in a side of another union); the older test fixed only | targets, 40%; the older test exact |
+| 4.2 `p \| p` is `p` where the union is copied and `p` has no join of its own chain and no `++` | `spec_compileUnionMonotoneRandom`: `C[p \| p]` against `C[p]` for those of its 400 cases in which `p` has no join of its own chain and no `++`, over 60, each in the one context it was drawn with (see the row above), so that something copies the union in some of them only; none is the known exception. The exception and its counts in `spec_compileEverySide` | random (its `genPath`); fixed | exact; targets on four graphs for the exception |
+| 4.2 `p ++ p` is `p` | `spec_lawSideTwice` in `LawsSpec`: `C[p ++ p]` against `C[p]` for over 180 pairs, any `genHoled` context and random `p`; the same pairs written with `\|` have to differ within the first 40. `spec_compileEverySide`: `(a/@ ++ a/@)/(d & e)` against `a/@/(d & e)`, and `((x \| y)/@ ++ (x \| y)/@)/(d & e)` against `(x \| y)/@/(d & e)` | random; fixed, two examples | exact |
+| 4.3 `p \| %never` is `p` | `spec_lawEmptySide` in `LawsSpec` (below); `spec_compileUnionMonotoneRandom` (both orders, each case in its one context), `spec_compileEverySide` | random (`genPath` of `LawsSpec` in `genHoled` contexts; the `genPath` of `spec_compileUnionMonotoneRandom`); fixed (`spec_compileEverySide`) | exact |
+| 4.3 `p ++ %never` is `p` | `spec_lawEmptySide` in `LawsSpec`: `C[p ++ %never]`, `C[%never ++ p]`, `C[p \| %never]` and `C[%never \| p]` against `C[p]`, over 150 pairs in `genHoled` contexts; and `C[p ++ q]` against `C[p]` has to differ within the first 5, which shows that the comparison can fail (the law has no condition to drop) | random; fixed (the document's `(a \| b \| %never)/(c & d)` and `(a \| %never)/(c & d)` on its graph, and `%never` as a step) | exact; the fixed paths also targets |
+| 4.4 adding a side never removes an alternative | `spec_compileUnionMonotoneRandom` (`\|` and `++`, over 400 pairs), `spec_compileSubUnions` (`\|`, sides and contexts from fixed pools), `spec_compileUnionMonotone` (`\|` and `++`) | random (the `genPath` of `spec_compileUnionMonotoneRandom`); random from fixed pools; corpus | up to route order, and targets on 10 graphs; up to route order; targets |
+| 4.5 `*` is the `\|` of all labels | `spec_lawWild` in `LawsSpec`: 40 paths with a `*` or a `~*` written in a `genHoled` context (which may have more of them), against the same paths with every `*` written `a \| b \| c`, the labels of the graphs. The law has no condition; that the comparison can fail is shown by the same paths with `a ++ b ++ c`, of which a pair has to differ within the first 20. Older: `spec_compileWildIsUnion` (5 pairs on 128 graphs with the labels `a` to `d`), `spec_compilePerCopyChoice` (5 paths, one graph) | random; fixed (one graph); the older tests fixed | targets, 40%; the older tests the routes matched, and targets |
+| 4.6 the product identity for two groups written next to each other | `spec_compileProduct` | random: conjuncts from fixed pools (with `@`, `@1`, `!{@1}`, `\|` and forks; no `++`), in one of 7 contexts (none, which is drawn twice as often as each of the six others), over 400 pairs | up to route order; exact where every conjunct is one route without a union |
+| 4.6 with steps between the groups | `spec_lawProduct` in `LawsSpec` (next row): 80 of its pairs have one step or two between the groups and nothing else, and 80 nothing. `spec_compileUnionFree`: `(x/@/w & b)/k/(c & d)` against its four walks written out | random; fixed, one example | up to route order; exact |
+| 4.6 with a `\|` union between the groups: that it holds without a join of its own chain, an `&` or a `++` in a side, and fails with one; and that it fails with a join between the groups | `spec_lawProduct` in `LawsSpec`: two groups and what is between them, against every conjunct of the one continued by every conjunct of the other, in a `genFollowed` context. 320 pairs within the condition (`productWithin`), each path within the size limit `fewAlternatives 100`: the first 160 drawn that have a `\|` union between the groups, the first 80 with steps only and the first 80 with nothing, the three kinds taking turns. Half the draws are groups of two or three conjuncts with joins and `\|` unions, and between them nothing or one or two of a step and a union of two or three sides. The other half are small: two groups of two conjuncts, each one or two steps, often with a join, and between them nothing, a step or a union of two sides. The small draws also make, mostly one at a time, what the clauses exclude: a join, an `&` or a `++` in a side, a conjunct `x/(y & z)` or `x ++ y`, a join or a `++` between the groups (the larger draws seldom fit the limit with these: the written-out path of the test's pair with a `++` in a side, `a/((x ++ y) \| z)/c & …`, has 81 alternatives). Within the condition a conjunct that forks has a join written in the chain the fork is written in (`heldTogether`, next row), and a side is a walk of steps and `*`, a `\|` union of such walks, or `%never`. Each clause dropped, six: no join of its own chain in a side; no `&` in a side; no `++` in a side; a conjunct that forks has a join; no `++` in a conjunct or between the groups; no join between the groups | random; fixed (the document's pairs for the identity and for each way it fails; and two pairs of the test's own, one with a `++` in a side, and `(a & b)/@/(c & d)` for a join between the groups) | up to route order; the fixed pairs targets |
+| 4.6 for a conjunct that forks in a side of a union: that it holds where a join is written in the chain the fork is written in, and fails where the join is in another side, or the fork outside the union | `spec_lawProduct` in `LawsSpec`: 200 pairs of `genSidedProduct` (two groups with a step or nothing between them, in a `genFollowed` context) in which some conjunct forks and has no join written in its own chain (`forksInSide`), within the condition, each path within the size limit `fewAlternatives 60`. Half the draws have two or three conjuncts in a group, each a walk, a walk with a join, or a union in whose sides, or next to which, forks and joins stand. The other half are small: two conjuncts in a group, one a walk with or without a join, the other that again or, half the time, a union of two sides, one of them a fork of two steps, with a join in that side, in the other side, or nowhere. The condition is `heldTogether`: every fork written in the conjunct's own chain or in a side of a union there, however deep in sides, has a join written, before it or after it, in the chain the fork is written in or in a chain around that (for a fork in a side: the side, the chain its union is written in, and so on out to the conjunct's own chain); a fork inside a conjunct of a group does not count. Commands run both paths of at least 10 of the pairs; of the others they refuse the first (3.1). Each clause dropped, two: the join is written in the chain the fork is written in or in a chain around it (in its place: anywhere path-language.md, section 4, counts a join of the conjunct's own chain); a conjunct that forks has a join | random; fixed (`(x/@ & b)/(c & (e & f \| @))`; the pair the first review of these tests found, `(~c/@ & a)/(b/a & (b & c \| @))`, with and without what was around it; and five that commands refuse, so that it is what the compiler makes of them that is compared: `(x/@ & b)/(c & (e & f)/(g/@ \| h/@))`, `(x/@ & b)/(c & (e & f)/k/(g/@ \| h/@))`, `(x/@ & b)/(c & (g/@ \| h/@)/(e & f))` and `(x/@ & b)/(c & ((e & f)/@ \| (g & h)))`, which differ from their products, and `(x/@ & b)/(c & k/@/(m/(e & f) & z))`, which compiles as its product) | up to route order; the fixed pairs targets, the last one exact |
+| 4.7 `(A & B)/C = A/C & B/C` under its condition, and each way it fails | `spec_lawLeftDistribution` in `LawsSpec`: 200 pairs within the condition (`leftWithin`: no join of its own chain in a conjunct, none in `C`, no `++` in `C`), two or three conjuncts and a `C` in a `genFollowed` context. Each of them is a random path or a small one (`genDistribution`): one or two steps, such a walk with a join, a union with that in a side, and, for `C`, also a fork of two walks, a union with such a fork in a side, or two walks with `++`. The property also compares 400 pairs within the condition with nothing aimed at a clause (`unaimedLeft`): every conjunct and `C` a random path, in no context (three draws in five) or in a random one; no clause is dropped on these. Each clause dropped, four: no join of its own chain in `A` and `B`; none in `C`; no `++` in `C`; a join in the top chain of a side of a union is a join of the chain | random; fixed (the document's pairs; `(a & b)/c/@/d` on another graph, since both paths find nothing on the document's) | up to route order; the fixed pairs targets |
+| 4.8 `R/(P & Q) = R/P & R/Q` under its condition, and each way it fails | `spec_lawRightDistribution` in `LawsSpec`: 200 pairs within the condition (`rightWithin`: no join of its own chain and no `++` in `R`, and no join of their own chain in `P` and `Q` when `R` has an `&` anywhere), from the same generator, `R` drawn as `C` is; and 400 more with nothing aimed at a clause (`unaimedRight`), drawn as those of the row of 4.7, on which no clause is dropped. Each clause dropped, five: no join of its own chain in `R`; no `++` in `R`; no join of their own chain in `P` and `Q` when `R` has an `&`; an `&` in a side of a union of `R` is an `&` of `R`; a join in the top chain of a side of a union is a join of the chain | random; fixed (the document's pairs) | up to route order; the fixed pairs targets |
+| 4.7, 4.8 older tests | `spec_compileCopies`: `(p & q)/r` is `p/r & q/r` and `r/(p & q)` is `r/p & r/q`, for the two steps `p` and `q` and a random `r` that has at least one `\|`. Single failures elsewhere: a join in a copied conjunct against the pin written out (`spec_compileChainScoped`, targets), `(a & b)/@/c` against `(a & b)/(@/c & @/c)` (`spec_compileRepeatedConjunct`, targets), a `++` chosen before the product (`spec_compileProduct`, exact) | random (`genPath` of `spec_compileCopies`), over 100 pairs; fixed | up to route order; targets; exact |
+| 4.9 `++` distributes over `/` | `spec_lawUnionsAndSequencing` in `LawsSpec`: `C[p/(q ++ r)]` against `C[p/q ++ p/r]` and `C[(p ++ q)/r]` against `C[p/r ++ q/r]`, over 200 pairs of random `p`, `q`, `r` in no context or a `genHoled` one. The same pairs written with `\|` have to be told apart by `ls` within the first 40 | random; fixed (the document's two pairs, and its two for `\|`) | exact; the `\|` pairs targets |
+| 4.9 a union that nothing copies finds the same written `\|` or `++` | `spec_lawUnionsAndSequencing` in `LawsSpec`: `C[p \| q]` against `C[p ++ q]` for 150 pairs, `C` a `genHoled` context in which nothing copies the union (`uncopied`; in at least 12 of them only because a join in the side the union stands in cuts it off, as in the row of 4.2), `p` and `q` random. Each clause dropped, the four of the row of 4.2. (`+` is lowered to one of the two before a path is compiled, so there is nothing to test for it here) | random; fixed (the document's pairs, and pairs for a join in the side the union stands in, for a join in a side of another union and for an `&` in a side of another union) | targets, 40% |
+| 4.9 `a \| b` finds what `regex:"^(a\|b)$"` finds | `spec_lawWild` in `LawsSpec`: `a \| b` against the regex in 40 `genHoled` contexts, on graphs that have the label `c` too. The law has no condition; that the comparison can fail is shown by `a ++ b`, which has to differ from the regex within the first 40 | random; fixed (one graph) | targets, 40% |
+| 4.10 a conjunct written twice, sealed (with `@/` before it and `/@` after it) | `spec_lawConjunctTwice` in `LawsSpec`: `C[@/(q & q)/@]` against `C[@/q/@]` for 150 pairs in which commands run both paths, `C` a `genHoled` context and `q` a relative path (`relative`): in half the draws a walk with a join, in one of fourteen two steps with `++`, in one of seven a random path that has a join of its own chain or a `++`, and in two of seven any random path. With them, 80 pairs with nothing aimed at the seal (`unaimedTwice`): `C` a context of the first five kinds of `genHoled` (3, 4, 3, 3 and 1 draws in 14) and `q` a random path, in three draws of five one that has a join of its own chain or a `++`. And `q & q` against `q` as whole queries for 60 random `q`. One clause dropped: the seal (`@/` before both paths and `/@` behind). The other two clauses of the condition are not dropped, because the property passes without either: the test requires instead that no pair is found to differ among 80 with a `q` that is not relative (`genEnded` paths in which an `@1` starts a walk) and 40 of which commands run one path and refuse the other (there it compares what the compiler makes of both). Older: `spec_compileRepeatedConjunct`, random `q` without `@N` (its `genPath`) in 7 contexts on 6 corpus graphs; five of the contexts have a `c` step, which no corpus graph has, so both sides are empty there | random; fixed (the document's three blocks, and one more graph for `(a & b)/(@/c & @/c)`) | targets, 35% for the sealed pairs (sealed, all the walks have to end at one node, and fewer comparisons find one) and 40% for the whole queries |
+| 4.10 `ls P/(q & q)` finds what `ls P/q` finds | `spec_compileRepeatedConjunct`, only for the pairs in which `P` has no `&` anywhere (`oneOutput`) or `q` has no `@` and no `!{…}` in its own chain or in a union side there (`joinsItsChain`); its fixed counterexample outside that is `(a & b)/@/c` against `(a & b)/(@/c & @/c)` | random (its `genPath`), over 120 pairs, 8 corpus graphs | targets |
 | 4.11 `mk` makes the path hold | `spec_residuationProperties` in `Models.PathPattern.ResiduateSpec`: after a repair is applied its own binding matches the pattern, residuating again says the path resolves, and applying it twice changes nothing. That a query of the path then finds a node is not tested | corpus | the pure residuation, no command |
-| 4.12 reversal | `spec_compileReversal` | random, relative, without `@N`: over 550 paths on graphs of three nodes | targets from every node to every node; the path is run exactly when its reverse is |
-| 4.12 a path is refused exactly when its reverse is | `spec_compileCopiedMeetingPoints` | random, 3,000 paths without `@N` | the verdict (refused, warned, quiet), both ways |
-| 3.1 the check agrees with the rule worked by writing the product out (`handRefuses`) | `spec_compileCopiedMeetingPoints` | random and planted, 4,500 paths, with `@1` | the verdict, both ways |
-| 3.1 the check agrees with the compiled routes (`copiedJoins`) | `spec_compileCopiedMeetingPoints`, in three parts. (a) 1,500 random paths with `@1` and 1,500 planted ones: no path that is run has, in any alternative, a written join that is two vertices with a fork at one (over 1,500 run and within the size limit). (b) 1,500 other random paths without `@N` and the same planted ones (over 2,400 within the limit; the source's condition is that no node tests contradict each other): the path has such a join, copies counted as written, exactly when it is refused. (c) the first 1,500: what has such a join is refused | random and planted, 4,500 paths | (a) and (c) one way, so the check may refuse more there (*Meeting points*); (b) both ways |
-| 3.2 a warned `@` can be left out | `spec_compileCopiedMeetingPoints` | random, over 400 warned paths | exact, with and without the `@`. One way only: nothing says that an `@` that can be left out is warned about |
+| 4.12 reversal | `spec_compileReversal` | random (`genRelative` and `genJoined`), relative, without `@N`: over 550 paths on graphs of three nodes | targets from every node to every node; the path is run exactly when its reverse is |
+| 4.12 a path is refused exactly when its reverse is | `spec_compileCopiedMeetingPoints` | random (`genScoped` without `@1`), 3,000 paths | the verdict (refused, warned, quiet), both ways |
+| 2.9 a union of `n` sides, each with a join in its own chain, is at most `n` nodes | `spec_lawSidesAndNodes` in `LawsSpec`. A union of two or three sides (half the time all written alike), each a walk, a join (`@` or `!{@1}`) and a step `m` after it, in a `genHoled` context or, one draw in three, in one with a fork of three steps next to the union or next to the group it is in a conjunct of. Within the condition the join is written in the own chain of every side (two unions in five are drawn with every side a group that has the join in a conjunct), and forks may copy the union but nothing copies a conjunct it stands in (`uncopied` without its first clause): in every alternative the `m` steps leave from at most `n` vertices (200 paths; in over 50 more routes go through the union than it has sides, and in over 70 the `n` vertices are reached). The same bound is required of 200 more unions with nothing aimed at a clause (`unaimedBounded`): the context is one of the first five kinds of `genHoled` (3, 4, 3, 3 and 1 draws in 14), and one side in four, each drawn by itself, is a group that has the join in a conjunct; no clause is dropped on these. Each clause dropped, two: the join of each side is written in the side's own chain; no product copies a conjunct that the union stands in. And `X/(S1/@ \| … \| Sn/@)/(c1 & … & ck)` against the `\|` of every way to give each continuation a side, those with the same side leaving from its one join (40 pairs); with the path added in which each continuation has a join to itself, `ls` has to tell the two apart within the first 40 | random; fixed (the document's examples, and one more pair for a join inside a conjunct of a side) | the number of vertices in what `compilePath` gives; up to route order; the fixed pairs targets |
+| 2.10 a relative path starts as if `@/` were written before it | `spec_lawRelative` in `LawsSpec`: `P` against `@/P` for 200 relative paths (`relative`, which reads the path with every `~` applied), over 60 of them with an `@N` and a `~` around more than a step (`genEnded`: random paths, mostly with an `@1` at an end of a walk and often a `~` around it). Each clause dropped, two: `P` is relative; where a walk starts is read with every `~` applied (in its place: off the path as it is written) | random; fixed (`a & @1/b`, `~(a/@1)`, `~(b/@2)`, and what `relative` says of six paths) | targets, 30% |
+| §4 the alternatives that match are gone through by their smallest witness | `spec_lawOrderOfAlternatives` in `LawsSpec`: for random paths on the random graphs, in over 600 cases with several alternatives that match, the resolutions are in the order of the smallest of all their witnesses (in over 70 that is not the order of the patterns); fixed: `b \| regex:"^a$"` on `0 -a-> 1`, `0 -b-> 2`, sides in either order, where the pattern with `b` sorts first and the alternative through `a` comes first. Goldens `path/union-witness-order` (`ls` lists `a` first) and `path/tag-union-witness-order` (`tag (b \| regex:"^a$") t` links node `1`); `path/tag-union-route-order` has `tag (b + a)`, which either order answers alike | random; fixed; three goldens | the order of `resolveQuery`'s resolutions; what `ge` prints and does |
+| 3.1 the check agrees with the rule worked by writing the product out (`handRefuses`) | `spec_compileCopiedMeetingPoints` | random (`genScoped` with `@1`, 2,500 paths) and planted (`genPlanted`, 2,000) | the verdict, both ways |
+| 3.1 the check agrees with the compiled routes (`copiedJoins`) | `spec_compileCopiedMeetingPoints`, in three parts. (a) 1,500 random paths with `@1` (`genScoped`) and 1,500 planted ones (`genPlanted`): no path that is run has, in any alternative, a written join that is two vertices with a fork at one (over 1,500 run and within the size limit). (b) 1,500 other random paths without `@N` and the same planted ones (over 2,400 within the limit; the source's condition is that no node tests contradict each other): the path has such a join, copies counted as written, exactly when it is refused. (c) the first 1,500 of (a), which are the random ones, less those over the size limit: what has such a join is refused | random and planted, 4,500 paths | (a) and (c) one way, so the check may refuse more there (*Meeting points*); (b) both ways |
+| 3.2 a warned `@` can be left out | `spec_compileCopiedMeetingPoints` | random (`genStretchy`, `genScoped` with `@1`, `genPlanted` and `genIdle`), over 400 warned paths | exact, with and without the `@`. One way only: nothing says that an `@` that can be left out is warned about |
+| 3.2 a command line prints each warning text once | goldens `path/warning-once-same-path` (the same path twice on one line: one warning), `path/warning-once-same-text` (two paths whose warnings read the same: one) and `path/warning-twice-two-texts` (two paths whose warnings differ: two); `path/join-does-nothing` has a path run at two nodes by `at` among its lines | fixed, each one `ge -e` line | what `ge` prints on stderr |
 
 One law that the tests state has no number in path-language.md (2.9
 has it in words: a query finds what any alternative finds):
