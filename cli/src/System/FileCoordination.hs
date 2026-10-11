@@ -29,6 +29,8 @@ module System.FileCoordination
     WrappedWriter (..),
     unwrappingWriter,
     coordinateAccessing,
+    FailingFrom (..),
+    coordinateAccessingFailing,
     ReadingOptions (..),
     defaultReadingOptions,
     WritingOptions (..),
@@ -403,7 +405,65 @@ coordinateAccessing ::
   ) ->
   IO a
 #ifdef darwin_HOST_OS
-coordinateAccessing FilesToCoordinate{..} action = runResourceT do
+coordinateAccessing = coordinateAccessingCancelling (const False)
+#else
+coordinateAccessing FilesToCoordinate{..} action =
+  let readingAccessors = readingPaths <&> \(path, _) -> WrappedReader \_ readingAction -> readingAction path
+      writingAccessors = writingPaths <&> \(path, _) -> WrappedWriter \_ writingAction -> writingAction path
+   in action readingAccessors writingAccessors
+#endif
+
+-- | From where a 'coordinateAccessingFailing' fails
+data FailingFrom
+  = -- | Preparing for the files fails, and the action is not run.
+    FailingToPrepare
+  | -- | Preparing succeeds, and every reader and writer that the action
+    -- uses fails.
+    FailingEachAccess
+  deriving (Eq, Show)
+
+-- | For the tests of what becomes of an error of file coordination: a
+-- 'coordinateAccessing' that file coordination fails, with the error of an
+-- operation that was cancelled (@NSCocoaErrorDomain@ 3072). On macOS its
+-- coordinator is cancelled, which makes it fail all that it is asked for
+-- afterwards; elsewhere, where nothing is coordinated, the same error is
+-- thrown in the same places.
+coordinateAccessingFailing ::
+  (Traversable t) =>
+  FailingFrom ->
+  FilesToCoordinate t ->
+  ( t (WrappedReader IO) ->
+    t (WrappedWriter IO) ->
+    IO a
+  ) ->
+  IO a
+#ifdef darwin_HOST_OS
+coordinateAccessingFailing = coordinateAccessingCancelling . (==)
+#else
+coordinateAccessingFailing failing FilesToCoordinate{..} action = case failing of
+  FailingToPrepare -> throwIO cancelled
+  FailingEachAccess ->
+    action
+      (readingPaths $> WrappedReader \_ _ -> throwIO cancelled)
+      (writingPaths $> WrappedWriter \_ _ -> throwIO cancelled)
+  where
+    cancelled =
+      NSErrorException "NSCocoaErrorDomain" 3072 "the operation was cancelled"
+#endif
+
+#ifdef darwin_HOST_OS
+-- | 'coordinateAccessing', with a coordinator that is cancelled at the
+-- points that are asked for (at none, unless a test wants it to fail).
+coordinateAccessingCancelling ::
+  (Traversable t) =>
+  (FailingFrom -> Bool) ->
+  FilesToCoordinate t ->
+  ( t (WrappedReader IO) ->
+    t (WrappedWriter IO) ->
+    IO a
+  ) ->
+  IO a
+coordinateAccessingCancelling cancelledAt FilesToCoordinate{..} action = runResourceT do
     readingUrls <- for readingPaths $ \(path, isDirectory) -> do
       (_, url) <- allocateNSURL path isDirectory
       pure url
@@ -415,22 +475,21 @@ coordinateAccessing FilesToCoordinate{..} action = runResourceT do
     (_, readingUrlsArray) <- allocateNSArray (ordNub $ readingUrls ^.. folded)
     (_, writingUrlsArray) <- allocateNSArray (ordNub $ writingUrls ^.. folded)
     (_, fileCoordinator) <- allocate nsFileCoordinator_init m_release
-    liftIO $
+    let cancelAt failingFrom =
+          when (cancelledAt failingFrom) (m_NSFileCoordinator_cancel fileCoordinator)
+    liftIO do
+      cancelAt FailingToPrepare
       coordinateAccessing'
         fileCoordinator
         readingUrlsArray
         blanketReadingOptions
         writingUrlsArray
         blanketWritingOptions
-        ( action
-            (readingUrls <&> \url -> WrappedReader (coordinateReading' fileCoordinator url))
-            (writingUrls <&> \url -> WrappedWriter (coordinateWriting' fileCoordinator url))
+        ( cancelAt FailingEachAccess
+            >> action
+              (readingUrls <&> \url -> WrappedReader (coordinateReading' fileCoordinator url))
+              (writingUrls <&> \url -> WrappedWriter (coordinateWriting' fileCoordinator url))
         )
-#else
-coordinateAccessing FilesToCoordinate{..} action =
-  let readingAccessors = readingPaths <&> \(path, _) -> WrappedReader \_ readingAction -> readingAction path
-      writingAccessors = writingPaths <&> \(path, _) -> WrappedWriter \_ writingAction -> writingAction path
-   in action readingAccessors writingAccessors
 #endif
 
 -- | An error from file coordination comes with what it means in words.
