@@ -7,16 +7,16 @@
 module MyPrelude.Regex
   ( CheckedRegex,
     compileRegex,
-    compileRegex',
     getRegex,
     textRegexing,
     byteStringRegexing,
     re,
+    spec_compileRegex,
   )
 where
 
 import ClassyPrelude hiding (lift)
-import Control.Lens (IndexedTraversal')
+import Control.Lens (IndexedTraversal', has)
 import Control.Lens.Regex.ByteString qualified as ByteString
 import Control.Lens.Regex.Text qualified as Text
 import Data.Function ((&))
@@ -26,6 +26,7 @@ import Language.Haskell.TH.Syntax (Lift (..))
 import Text.Regex.PCRE.Light as X (PCREOption, Regex)
 import Text.Regex.PCRE.Light qualified as PCRE
 import Unsafe.Coerce (unsafeCoerce)
+import Utils.Testing.External
 import Prelude (fail)
 
 -- | A regex pattern with options that has been validated at construction time
@@ -59,9 +60,43 @@ instance Show CheckedRegex where
     -- them when parsing
     "regex:\"" ++ asString (unpack (decodeUtf8 p)) ++ "\""
 
--- | Smart constructor that validates the regex pattern
+-- | Smart constructor that validates the regex pattern.
+--
+-- Every 'CheckedRegex' is made here (the ones of a path that a user writes,
+-- and the ones of 're'), with one set of options, so two of them are equal
+-- exactly when their patterns are.
+--
+-- The option: @$@ matches at the very end of the text and nowhere else. PCRE
+-- by default lets it match before a newline that ends the text as well, so
+-- @^(a|b)$@ would match the label @"a\n"@, which is neither @a@ nor @b@.
+-- (@^@ is the start of the text only, without an option. A pattern that
+-- turns on multiline matching itself, with @(?m)@, gets PCRE's lines for
+-- both.)
 compileRegex :: ByteString -> Either String CheckedRegex
-compileRegex = (`compileRegex'` [])
+compileRegex = (`compileRegex'` [PCRE.dollar_endonly])
+
+spec_compileRegex :: Spec
+spec_compileRegex = do
+  let compiled :: ByteString -> CheckedRegex
+      compiled = either (error . unpack) id . compileRegex
+      matches :: ByteString -> Text -> Bool
+      matches pat = has (textRegexing (compiled pat))
+  it "takes $ for the very end of the text, also when a newline ends it" do
+    ("a$" `matches` "a") `shouldBe` True
+    ("a$" `matches` "a\n") `shouldBe` False
+    ("^(a|b)$" `matches` "b\n") `shouldBe` False
+    ("a\n$" `matches` "a\n") `shouldBe` True
+  it "takes ^ for the start of the text only" do
+    ("^a" `matches` "a\nb") `shouldBe` True
+    ("^b" `matches` "a\nb") `shouldBe` False
+  it "takes a newline in the middle of the text for no end" do
+    ("a$" `matches` "a\nb") `shouldBe` False
+    ("b$" `matches` "a\nb") `shouldBe` True
+  it "compiles one pattern to one regex, shown as it is written" do
+    compiled "^a$" `shouldBe` compiled "^a$"
+    show (compiled "^a$") `shouldBe` "regex:\"^a$\""
+    compare (compiled "^a$") (compiled "^a$") `shouldBe` EQ
+    rnf (compiled "^a$") `shouldBe` ()
 
 compileRegex' :: ByteString -> [PCREOption] -> Either String CheckedRegex
 compileRegex' pat options =

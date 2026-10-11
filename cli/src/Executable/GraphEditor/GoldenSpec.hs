@@ -426,6 +426,46 @@ mkAdviceTest path = testCase (takeBaseName path) do
           not ((code :: ByteString) `isInfixOf` err)
             @? ("the commands still meet damage after fix: " <> show err)
 
+-- | In a regex of a path, @^@ and @$@ are the start and the very end of a
+-- label, whatever the label holds.
+spec_regexAnchors :: Spec
+spec_regexAnchors = do
+  let -- the origin's edges, each to a node of its own: 1 a, 2 a and a
+      -- newline, 3 b, 4 and 5 with a newline in the middle, 6 with one at
+      -- the start
+      graph =
+        "0 -a-> 1\n0 -\"a\\n\"-> 2\n0 -b-> 3\n0 -\"x\\na\"-> 4\n"
+          <> "0 -\"a\\nx\"-> 5\n0 -\"\\na\"-> 6\n"
+      -- the nodes that @ls@ lists
+      listed out =
+        [ T.take 12 afterAt
+        | afterAt <- drop 1 (T.splitOn "@" (decodeUtf8 out))
+        ]
+      finds :: (HasCallStack) => String -> [Int] -> Spec
+      finds path expected =
+        it (path <> " finds " <> show expected) $
+          withTempGraph Nothing \directory -> do
+            writeBaseGraph directory graph
+            (code, out, err) <- runGe directory ["-e", "ls " <> path] ""
+            (code, err) `shouldBe` (0, "")
+            sort (listed out)
+              `shouldBe` sort [tshow n & drop 1 | n <- map smallNID expected]
+  describe "$ is the very end of a label, not the place before a last newline" do
+    "regex:\"^(a|b)$\"" `finds` [1, 3]
+    "a | b" `finds` [1, 3]
+    "regex:\"a$\"" `finds` [1, 4, 6]
+    "regex:\"^a$\"" `finds` [1]
+  describe "^ is the start of a label only" do
+    "regex:\"^a\"" `finds` [1, 2, 5]
+    "regex:\"^x\"" `finds` [4]
+  describe "a newline in the middle of a label is no end and no start" do
+    "regex:\"x$\"" `finds` [5]
+    "regex:\"^a\\nx$\"" `finds` [5]
+    "regex:\"^x\\na$\"" `finds` [4]
+  describe "a regex that asks for lines itself gets them" do
+    "regex:\"(?m)a$\"" `finds` [1, 2, 4, 5, 6]
+    "regex:\"(?m)^a\"" `finds` [1, 2, 4, 5, 6]
+
 spec_dryRun :: Spec
 spec_dryRun =
   it "says what opening the graph would add, and adds nothing" $

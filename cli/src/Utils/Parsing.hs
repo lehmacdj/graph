@@ -140,6 +140,14 @@ pRegex = label "regex:\"<regex>\"" $ lexeme do
     & compileRegex . encodeUtf8
     & codiagonal . bimap fail pure
 
+-- | A regex that is parsed, shown and parsed again is the same regex, and
+-- the one that 're' makes of its pattern: they are all compiled alike.
+unit_pRegex_shownAndParsedAgain :: Assertion
+unit_pRegex_shownAndParsedAgain = do
+  let parsed = either (const Nothing) Just . runParserTest pRegex
+  parsed "regex:\"^(a|b)$\"" @?= Just [re|^(a|b)$|]
+  (parsed . tshow =<< parsed "regex:\"^(a|b)$\"") @?= Just [re|^(a|b)$|]
+
 unit_command_emptyStillRequiresSpace :: Assertion
 unit_command_emptyStillRequiresSpace = testParserFails (command "") "1"
 
