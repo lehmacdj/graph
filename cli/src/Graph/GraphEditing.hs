@@ -47,9 +47,10 @@ deletingDataWithNodes = interpose @GraphMetadataEditing \_ -> \case
 
 -- | Build up every change in memory and then write them to the filesystem
 -- once the action finishes: first the metadata, then the data. If the action
--- or writing the metadata fails, the data is not written. A change to data
--- alone is refused like any other change if the node files that the action
--- read are damaged.
+-- or writing the metadata fails, the data is not written. If writing the
+-- data fails, the metadata stays written, and the error says so
+-- ('DataNotWritten'). A change to data alone is refused like any other change
+-- if the node files that the action read are damaged.
 runGraphEditingTransactionally ::
   ( Members
       [ GraphMetadataFilesystemOperations,

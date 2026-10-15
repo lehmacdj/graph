@@ -1,7 +1,7 @@
 module Executable.GraphEditor.GoldenSpec where
 
 import DAL.DTO (nodeToDTO)
-import DAL.DirectoryFormat (metadataFile)
+import DAL.DirectoryFormat (legacyNodeDataFile, metadataFile)
 import DAL.DumpGraph
 import DAL.Serialization (serializeNodeEx)
 import Data.Aeson qualified as Aeson
@@ -22,9 +22,12 @@ import System.Directory
   ( createDirectory,
     createFileLink,
     doesPathExist,
+    getPermissions,
     listDirectory,
     removeFile,
     renameFile,
+    setOwnerWritable,
+    setPermissions,
   )
 import System.Environment (getEnvironment)
 import System.FilePath
@@ -511,7 +514,7 @@ spec_dryRun = do
     withTempGraph Nothing \directory -> do
       -- a graph that has none of the system nodes, and a command that reads
       writeBaseGraph directory "no system nodes\n0 -a-> 1\n"
-      before <- sort <$> listDirectory directory
+      before <- directoryAsItIs directory
       (code, _, err) <- runGe directory ["--dry-run", "-e", "nid"] ""
       code `shouldBe` 0
       unpack (decodeUtf8 err)
@@ -519,7 +522,7 @@ spec_dryRun = do
                             <> " file: @0daCJjMrQel8, "
                         )
       unpack (decodeUtf8 err) `shouldNotContain` "created the system nodes"
-      (sort <$> listDirectory directory) `shouldReturn` before
+      directoryAsItIs directory `shouldReturn` before
       -- and what it says when it does add them
       (_, _, err') <- runGe directory ["-e", "nid"] ""
       unpack (decodeUtf8 err')
@@ -529,13 +532,13 @@ spec_dryRun = do
   it "says what mk would create, and creates nothing" $
     withTempGraph Nothing \directory -> do
       writeBaseGraph directory "0 -a-> 1\n"
-      before <- sort <$> listDirectory directory
+      before <- directoryAsItIs directory
       (code, out, _) <- runGe directory ["--dry-run", "-e", "mk a/b"] ""
       code `shouldBe` 0
       unpack (decodeUtf8 out)
         `shouldContain` "would create 1 new node and 1 new edge"
       unpack (decodeUtf8 out) `shouldNotContain` "created 1 new node"
-      (sort <$> listDirectory directory) `shouldReturn` before
+      directoryAsItIs directory `shouldReturn` before
       -- and what it says when it does create them
       (_, out', _) <- runGe directory ["-e", "mk a/b"] ""
       unpack (decodeUtf8 out') `shouldContain` "created 1 new node and 1 new edge"
@@ -778,6 +781,85 @@ spec_keptFilesOfDeletedNode =
       (filter ("000000000002" `isPrefixOf`) <$> listDirectory directory)
         `shouldReturn` []
       (checked, _, _) <- runGe directory ["-e", "fsck"] ""
+      checked `shouldBe` 0
+
+spec_writeFailures :: Spec
+spec_writeFailures = do
+  let readOnly :: FilePath -> IO a -> IO a
+      readOnly path action = do
+        was <- getPermissions path
+        bracket_
+          (setPermissions path (setOwnerWritable False was))
+          (setPermissions path was)
+          action
+      ge directory command = do
+        (code, out, err) <- runGe directory ["-e", command] ""
+        pure (code, unpack (decodeUtf8 out), unpack (decodeUtf8 err))
+  it "refuses a change that can't write a node file, and writes nothing" $
+    withTempGraph Nothing \directory -> do
+      writeBaseGraph directory "0 -a-> 1\n"
+      let file = metadataFile directory (smallNID 1)
+      readOnly file do
+        before <- directoryAsItIs directory
+        (code, _, err) <- ge directory "mk a/b"
+        (code, lines err)
+          `shouldBe` ( 1,
+                       [ "this change was not written: files of it can't be"
+                           <> " written (unwritable-graph-file)",
+                         "- 000000000001.json can't be written: there is no"
+                           <> " permission to write it ("
+                           <> file
+                           <> ": access: permission denied (Permission denied))"
+                       ]
+                     )
+        directoryAsItIs directory `shouldReturn` before
+      (checked, _, _) <- ge directory "fsck"
+      checked `shouldBe` 0
+  it "refuses a change that can't create a node file, and writes nothing" $
+    withTempGraph Nothing \directory -> do
+      writeBaseGraph directory "0 -a-> 1\n"
+      readOnly directory do
+        before <- directoryAsItIs directory
+        (code, _, err) <- ge directory "mk a/b"
+        code `shouldBe` 1
+        case lines err of
+          [heading, finding] -> do
+            heading
+              `shouldBe` "this change was not written: files of it can't be"
+              <> " written (unwritable-graph-file)"
+            finding `shouldStartWith` "- the graph's directory can't be written, so "
+            -- the new node, and the nodes of the date that mk tags it with
+            finding `shouldContain` ".json, "
+            finding `shouldContain` ".json can't be created: "
+            finding
+              `shouldEndWith` ( ": there is no permission to write it ("
+                                  <> directory
+                                  <> ": access: permission denied (Permission denied))"
+                              )
+          _ -> expectationFailure ("said " <> err)
+        directoryAsItIs directory `shouldReturn` before
+  it "says that a node was deleted although its data could not be removed" $
+    withTempGraph Nothing \directory -> do
+      writeBaseGraph directory "0 -a-> 1\n0 -b-> 2\n"
+      let data1 = legacyNodeDataFile directory (smallNID 1)
+      createDirectory data1
+      B.writeFile (data1 </> "inside") "kept"
+      (code, _, err) <- ge directory "rmnf a"
+      code `shouldBe` 1
+      case lines err of
+        [heading, finding] -> do
+          heading
+            `shouldBe` "the data of a node could not be changed, though the rest"
+            <> " of the change was written (data-not-written)"
+          -- in words, which depend on the system (macOS refuses to unlink a
+          -- directory with EPERM), then what the system said
+          finding
+            `shouldStartWith` "- the data of @000000000001 could not be removed: "
+          finding `shouldContain` (" (" <> data1 <> ": ")
+        _ -> expectationFailure ("said " <> err)
+      (_, out, _) <- ge directory "ls"
+      out `shouldNotContain` "000000000001"
+      (checked, _, _) <- ge directory "fsck"
       checked `shouldBe` 0
 
 test_adviceIsTrue :: IO TestTree

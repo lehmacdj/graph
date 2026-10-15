@@ -10,6 +10,7 @@ import Data.List.NonEmpty qualified as NonEmpty
 import Data.Map.Strict qualified as Map
 import Error.UserError
 import Error.Warn
+import Foreign.C.Error (errnoToIOError, getErrno)
 import Models.Augmentation.NodeEdits
 import Models.Connect
 import Models.Damage (damageAmong, damageNear, fileFailure, filesNewTo)
@@ -19,6 +20,7 @@ import MyPrelude
 import System.Directory (removeFile)
 import System.FileCoordination
 import System.FilePath (takeFileName)
+import System.Posix.Internals (c_access, withFilePath)
 
 data GraphMetadataFilesystemOperationsWriteDiff :: Effect where
   WriteGraphDiff ::
@@ -84,6 +86,7 @@ writeGraphDiff_
     let blanketReadingOptions = defaultReadingOptions
         blanketWritingOptions = defaultWritingOptions
     writes <- getGraphWrites
+    directory <- getGraphFilePath
     withUnliftIORawGraphUserError \(UnliftIO unliftIO) ->
       coordinateAccessing FilesToCoordinate {..} \wrappedReaders wrappedWriters -> do
         let withReading ::
@@ -123,11 +126,9 @@ writeGraphDiff_
                 Nothing -> Just upToDateNode
         -- the one of the node with the least id
         for_ (headMay failures) (unliftIO . throwError)
-        let notUpToDateNids = keysSet $ filterMap (== Nothing) upToDateNodes'
-        unless (null notUpToDateNids) $
-          unliftIO . throwText $
-            "The following nodes were changed before trying to write the diff: "
-              ++ tshow notUpToDateNids
+        let notUpToDateNids = keys $ filterMap (== Nothing) upToDateNodes'
+        for_ (NonEmpty.nonEmpty notUpToDateNids) $
+          unliftIO . throwError . ChangedMeanwhile
         let upToDateNodes = map (unwrapEx "node exists due to above check") upToDateNodes'
         -- All of the checks come before the first write: once a file is
         -- written there is no going back, and a change written only in part
@@ -169,43 +170,83 @@ writeGraphDiff_
                 ]
         for_ (NonEmpty.nonEmpty mismatches) $
           unliftIO . throwError . InconsistentNodeRecords
+        -- Nor if a file of it can't be written: a file that is replaced must
+        -- be writable, and so must the directory where a file is created or
+        -- deleted. (What the system says when asked, without writing
+        -- anything; a write can still fail, see below.)
+        let fileChanges =
+              Map.mapMaybe (\planned -> (,planned) <$> fileChangeOf planned) plannedWrites
+            pathOf nid = fst (unwrapEx "a path for every node we write" (writingPaths ^. at nid))
+        unwritableFiles <-
+          catMaybes <$> for (mapToList fileChanges) \case
+            (nid, (ReplacingFile, _)) -> fmap (nid,) <$> cannotWrite (pathOf nid)
+            _ -> pure Nothing
+        unwritableDirectory <-
+          case NonEmpty.nonEmpty
+            [(change, nid) | (nid, (change, _)) <- mapToList fileChanges, change /= ReplacingFile] of
+            Nothing -> pure Nothing
+            Just inDirectory -> fmap (,inDirectory) <$> cannotWrite directory
+        unless (null unwritableFiles && isNothing unwritableDirectory) $
+          unliftIO . throwError $
+            UnwritableChange unwritableFiles unwritableDirectory
         -- The files of the change are written as one: the program does not
-        -- end between two of them ('noMoreGraphChanges').
-        changingGraphFiles writes $
-          ipooledForConcurrentlyN_ 300 writingPaths \nid _ ->
-            case unwrapEx "a write is planned for nodes we are writing" $
-              plannedWrites ^. at nid of
-              (Just _, Nothing) ->
-                withWriting nid defaultWritingOptions {forDeleting = True} $
-                  unliftIO . deleteNodeMetadata'
-              (Nothing, Just node) ->
-                withWriting nid defaultWritingOptions $ \path ->
-                  unliftIO $ writeNodeMetadata' path node
-              (Just upToDateNode, Just changedNode)
-                | upToDateNode /= changedNode ->
-                    withWriting nid defaultWritingOptions \path ->
-                      unliftIO $ writeNodeMetadata' path changedNode
-                | otherwise ->
-                    -- node didn't change
-                    pure ()
-              (Nothing, Nothing) ->
-                -- node never existed and still doesn't exist
-                pure ()
+        -- end between two of them ('noMoreGraphChanges'). A file that fails
+        -- to be written all the same (no space is left, file coordination
+        -- refuses it) doesn't stop the others, which are written meanwhile:
+        -- once they are done, the error says which files were written and
+        -- which were not.
+        outcomes <-
+          changingGraphFiles writes $
+            ipooledForConcurrentlyN 300 fileChanges \nid (_, (_, changed)) ->
+              try @IO @SomeException case changed of
+                Nothing ->
+                  withWriting nid defaultWritingOptions {forDeleting = True} $
+                    unliftIO . deleteNodeMetadata'
+                Just node ->
+                  withWriting nid defaultWritingOptions \path ->
+                    unliftIO $ writeNodeMetadata' path node
+        let changeOf nid = fst (unwrapEx "a change for every outcome" (fileChanges ^. at nid))
+            failed =
+              [ (changeOf nid, nid, exceptionAsUserError e)
+              | (nid, Left e) <- mapToList outcomes
+              ]
+            written = [(changeOf nid, nid) | (nid, Right ()) <- mapToList outcomes]
         -- What fix kept of the file of a node that is deleted goes with the
         -- node. This comes after the change is written, and doesn't undo it:
         -- a kept file that can't be removed is left over, which whoever
         -- wrote the change says (fsck reports such a file, and fix removes
         -- it).
-        let deleted =
-              [ path
-              | (nid, (path, _)) <- mapToList writingPaths,
-                Just (Just _, Nothing) <- [plannedWrites ^. at nid]
-              ]
-        fmap ((plannedWrites,) . concat) . for deleted $ \path -> do
+        let deleted = [pathOf nid | (DeletingFile, nid) <- written]
+        leftOver <- fmap concat . for deleted $ \path -> do
           kept <- keptNodeFilesOf path
           fmap catMaybes . for kept $ \file ->
             either (Just . (file,)) (const Nothing)
               <$> try @IO @IOError (unliftIO (removeKeptFile' file))
+        -- (the kept files left over are not said then: fsck reports them)
+        for_ (NonEmpty.nonEmpty failed) $
+          unliftIO . throwError . ChangeWrittenInPart written
+        pure (plannedWrites, leftOver)
+
+-- | What writing a node file as planned does to it, given the node that its
+-- file is and the one that it is to be ('Nothing': no file)
+fileChangeOf :: (Maybe (Node Text ()), Maybe (Node Text ())) -> Maybe FileChange
+fileChangeOf = \case
+  (Just _, Nothing) -> Just DeletingFile
+  (Nothing, Just _) -> Just CreatingFile
+  (Just onDisk, Just changed)
+    | onDisk /= changed -> Just ReplacingFile
+  -- the node doesn't change, or never existed and still doesn't
+  _ -> Nothing
+
+-- | Why the file or directory at this path can't be written, if it can't: as
+-- the system says when it is asked, with access(2), which writes nothing.
+cannotWrite :: FilePath -> IO (Maybe IOError)
+cannotWrite path =
+  withFilePath path \cPath ->
+    -- 2 is W_OK, the same on every system that ge runs on
+    c_access cPath 2 >>= \case
+      0 -> pure Nothing
+      _ -> getErrno <&> \errno -> Just (errnoToIOError "access" errno Nothing (Just path))
 
 -- | How the node that applying a transaction's edits to the file of @nid@
 -- gives differs from the node the transaction computed. The two are the same
@@ -242,16 +283,22 @@ runGraphMetadataFilesystemOperationsWriteDiffIO ::
   Eff (GraphMetadataFilesystemOperationsWriteDiff ': effs) a ->
   Eff effs a
 runGraphMetadataFilesystemOperationsWriteDiffIO =
-  writingGraphDiffsRemovingKeptWith (liftIO . removeFile)
+  writingGraphDiffsWith
+    (writeNodeMetadata_ False)
+    (deleteNodeMetadata_ False)
+    (liftIO . removeFile)
 
--- | 'runGraphMetadataFilesystemOperationsWriteDiffIO', given how a file that
--- was kept of a deleted node's file is removed (which the tests have fail).
-writingGraphDiffsRemovingKeptWith ::
+-- | 'runGraphMetadataFilesystemOperationsWriteDiffIO', given how a node file
+-- is written and deleted, and how a file that was kept of a deleted node's
+-- file is removed (which the tests have fail).
+writingGraphDiffsWith ::
   (Members [RawGraph, IOE, Error UserError, Warn UserError] effs) =>
+  (FilePath -> Node Text () -> Eff RawGraphUserErrorIO ()) ->
+  (FilePath -> Eff RawGraphUserErrorIO ()) ->
   (FilePath -> Eff RawGraphUserErrorIO ()) ->
   Eff (GraphMetadataFilesystemOperationsWriteDiff ': effs) a ->
   Eff effs a
-writingGraphDiffsRemovingKeptWith removeKeptFile' = interpret \_ -> \case
+writingGraphDiffsWith writeNode deleteNode removeKeptFile' = interpret \_ -> \case
   WriteGraphDiff asLoaded changes changedNodes others -> do
     -- Each file that is changed is put on record here: what changes it is
     -- run with a record of its own ('withUnliftIORawGraphUserError'), and
@@ -260,8 +307,8 @@ writingGraphDiffsRemovingKeptWith removeKeptFile' = interpret \_ -> \case
     (written, leftOver) <-
       writeGraphDiff_
         (readNodeMetadata_ False)
-        (\path -> countingGraphFile writes . writeNodeMetadata_ False path)
-        (countingGraphFile writes . deleteNodeMetadata_ False)
+        (\path -> countingGraphFile writes . writeNode path)
+        (countingGraphFile writes . deleteNode)
         (countingGraphFile writes . removeKeptFile')
         asLoaded
         changes
@@ -269,6 +316,16 @@ writingGraphDiffsRemovingKeptWith removeKeptFile' = interpret \_ -> \case
         others
     traverse_ (warnString . uncurry keptFileLeftOver) leftOver
     pure (snd <$> written)
+
+-- | 'runGraphMetadataFilesystemOperationsWriteDiffIO', given how a file that
+-- was kept of a deleted node's file is removed (which the tests have fail).
+writingGraphDiffsRemovingKeptWith ::
+  (Members [RawGraph, IOE, Error UserError, Warn UserError] effs) =>
+  (FilePath -> Eff RawGraphUserErrorIO ()) ->
+  Eff (GraphMetadataFilesystemOperationsWriteDiff ': effs) a ->
+  Eff effs a
+writingGraphDiffsRemovingKeptWith =
+  writingGraphDiffsWith (writeNodeMetadata_ False) (deleteNodeMetadata_ False)
 
 -- | What is said of a file that was kept of a deleted node's file and could
 -- not be removed with the node.

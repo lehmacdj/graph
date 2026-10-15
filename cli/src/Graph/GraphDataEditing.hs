@@ -3,7 +3,9 @@
 module Graph.GraphDataEditing where
 
 import DAL.FileSystemOperations.Data
+import Data.List.NonEmpty qualified as NonEmpty
 import Effectful.State.Dynamic
+import Error.UserError
 import Models.Graph
 import Models.NID
 import Models.Node
@@ -64,9 +66,12 @@ runGraphDataEditing = interpret \_ -> \case
 
 -- | Hold all writes in memory until the action finishes and then write them
 -- to the filesystem. Reads see the writes made so far. If the action throws,
--- nothing is written.
+-- nothing is written. If the data of a node can't be written or removed,
+-- the data of the others is all the same, and then 'DataNotWritten' says
+-- which could not be: by then the rest of the change is written (the node
+-- files, which the action writes when it finishes).
 runGraphDataEditingTransactionally ::
-  (GraphDataFilesystemOperations :> r) =>
+  (Members [GraphDataFilesystemOperations, Error UserError] r) =>
   Eff (GraphDataEditing : r) a ->
   Eff r a
 runGraphDataEditingTransactionally action = do
@@ -88,5 +93,9 @@ runGraphDataEditingTransactionally action = do
           EditingDataOutside nid -> modify @(Set NID) $ insertSet nid
           PendingDataChanges ->
             (<>) <$> gets @(Map NID (Maybe ByteString)) keysSet <*> get @(Set NID)
-  runGraphDataEditing $ traverse_ (uncurry setRawData) (mapToList pending)
+  failed <- fmap catMaybes . for (mapToList pending) $ \(nid, d) ->
+    tryError @UserError (runGraphDataEditing (setRawData nid d)) <&> \case
+      Left (_, e) -> Just (maybe DeletingFile (const ReplacingFile) d, nid, e)
+      Right () -> Nothing
+  for_ (NonEmpty.nonEmpty failed) (throwError . DataNotWritten)
   pure result

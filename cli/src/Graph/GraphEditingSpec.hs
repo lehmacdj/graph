@@ -35,6 +35,7 @@ import System.Directory
     pathIsSymbolicLink,
     removeFile,
     renameFile,
+    setOwnerWritable,
     setPermissions,
   )
 import Utils.Testing
@@ -317,6 +318,176 @@ spec_runGraphEditingTransactionally = do
         throwText "failed"
       doesFileExist (legacyNodeDataFile dir n1) `shouldReturn` False
       runOnDisk dir listNodes `shouldReturn` singletonSet nilNID
+  describe "a change that can't write all of its files" do
+    let -- the origin -a-> n1
+        withOriginToN1 test = withEmptyTempGraph \dir -> do
+          runOnDisk dir $ insertEdge (Edge nilNID "a" n1)
+          test dir
+        -- the file or directory can't be written while the action runs
+        readOnly :: FilePath -> IO a -> IO a
+        readOnly path action = do
+          was <- getPermissions path
+          bracket_
+            (setPermissions path (setOwnerWritable False was))
+            (setPermissions path was)
+            action
+        endsWith result expected = case result of
+          Left e -> expected e
+          Right _ -> expectationFailure "the change was not refused"
+    it "is refused before anything is written if a file to replace can't be" $
+      withOriginToN1 \dir -> readOnly (metadataFile dir n1) do
+        before <- directoryContents dir
+        -- n2 can be created; n1 can't be replaced
+        for_ [runOnDiskEither, runDryEither] \run -> do
+          result <- run dir (insertEdge (Edge n1 "b" n2))
+          endsWith result \case
+            UnwritableChange [(nid, e)] Nothing -> do
+              nid `shouldBe` n1
+              isPermissionError e `shouldBe` True
+              ioeGetFileName e `shouldBe` Just (metadataFile dir n1)
+            e -> expectationFailure ("refused with " <> show e)
+          directoryContents dir `shouldReturn` before
+    it "is refused before anything is written if a file is to be created or deleted in a directory that can't be written" $
+      withOriginToN1 \dir -> readOnly dir do
+        before <- directoryContents dir
+        -- the files of n1 and of the origin can be replaced
+        let refusedFor change result = endsWith result \case
+              UnwritableChange [] (Just (e, changes)) -> do
+                toList changes `shouldBe` change
+                isPermissionError e `shouldBe` True
+                ioeGetFileName e `shouldBe` Just dir
+              e -> expectationFailure ("refused with " <> show e)
+        runOnDiskEither dir (insertEdge (Edge n1 "b" n2))
+          >>= refusedFor [(CreatingFile, n2)]
+        runOnDiskEither dir (deleteNode n1) >>= refusedFor [(DeletingFile, n1)]
+        -- what replaces files only is written
+        runOnDisk dir (insertEdge (Edge n1 "b" nilNID))
+        directoryContents dir `shouldNotReturn` before
+        keys <$> directoryContents dir `shouldReturn` keys before
+    let -- a file that fails to be written although it can be (no space is
+        -- left, say)
+        failingFor :: [NID] -> FilePath -> FilePath -> IO ()
+        failingFor nids dir path =
+          when (path `elem` map (metadataFile dir) nids) . ioError $
+            mkIOError fullErrorType "writing" Nothing (Just path)
+        runFailingFor :: [NID] -> FilePath -> Eff OnDisk a -> IO (Either UserError a)
+        runFailingFor nids dir action =
+          runEff
+            . runErrorNoCallStack @UserError
+            . runWarnings
+            . evalStateLocal noDamageReadPast
+            . runRawGraphWithPath dir
+            . runGraphDataFilesystemOperationsIO
+            . writingGraphDiffsWith
+              ( \path n -> do
+                  liftIO (failingFor nids dir path)
+                  writeNodeMetadata_ False path n
+              )
+              ( \path -> do
+                  liftIO (failingFor nids dir path)
+                  deleteNodeMetadata_ False path
+              )
+              (liftIO . removeFile)
+            . runGraphMetadataFilesystemOperationsIO True
+            $ runGraphEditingTransactionally action
+        runWarnings :: Eff (Warn UserError : es) b -> Eff es b
+        runWarnings = interpret \_ -> \case Warn _ -> pure ()
+    it "writes the files that it can, and says which were written and which not" $
+      withOriginToN1 \dir -> do
+        -- n1 is replaced, n2 created and the origin replaced
+        result <- runFailingFor [n2] dir do
+          insertEdge (Edge n1 "b" n2)
+          insertEdge (Edge nilNID "c" n1)
+        endsWith result \case
+          e@(ChangeWrittenInPart written ((CreatingFile, nid, IOFail io) :| [])) -> do
+            written `shouldBe` [(ReplacingFile, nilNID), (ReplacingFile, n1)]
+            nid `shouldBe` n2
+            isFullError io `shouldBe` True
+            lines (show e)
+              `shouldBe` [ "this change was written only in part: some of its"
+                             <> " files could not be written, so the graph may be"
+                             <> " damaged where it applies (change-written-in-part)",
+                           "- 000000000002.json could not be created: there is no"
+                             <> " space left for it ("
+                             <> metadataFile dir n2
+                             <> ": writing: resource exhausted)",
+                           "- written as the change has them: 000000000000.json,"
+                             <> " 000000000001.json",
+                           "fsck lists all such damage; fix repairs it, or says"
+                             <> " why it can't"
+                         ]
+          e -> expectationFailure ("failed with " <> show e)
+        fmap (.outgoing)
+          <$> runOnDisk dir (getNodeMetadata n1)
+            `shouldReturn` Just (singletonSet (Connect "b" n2))
+        doesFileExist (metadataFile dir n2) `shouldReturn` False
+    it "says that it wrote nothing when no file could be written" $
+      withOriginToN1 \dir -> do
+        before <- directoryContents dir
+        result <- runFailingFor [nilNID, n1] dir (deleteNode n1)
+        endsWith result \e -> case e of
+          ChangeWrittenInPart [] failed -> do
+            [(change, nid) | (change, nid, _) <- toList failed]
+              `shouldBe` [(ReplacingFile, nilNID), (DeletingFile, n1)]
+            lines (show e)
+              `shouldBe` [ "this change was not written: writing its files"
+                             <> " failed (change-not-written)",
+                           "- 000000000000.json could not be written: there is no"
+                             <> " space left for it ("
+                             <> metadataFile dir nilNID
+                             <> ": writing: resource exhausted)",
+                           "- 000000000001.json could not be deleted: there is no"
+                             <> " space left for it ("
+                             <> metadataFile dir n1
+                             <> ": writing: resource exhausted)"
+                         ]
+          _ -> expectationFailure ("failed with " <> show e)
+        directoryContents dir `shouldReturn` before
+    it "writes the data of the other nodes, and says whose it couldn't" $
+      withOriginToN1 \dir -> do
+        -- n1's data is a directory, which can't be removed
+        createDirectory (legacyNodeDataFile dir n1)
+        B.writeFile (legacyNodeDataFile dir n1 </> "inside") "kept"
+        result <- runOnDiskEither dir do
+          touchNode n2
+          writeRawData n2 "two"
+          deleteNode n1
+        endsWith result \e -> case e of
+          DataNotWritten ((DeletingFile, nid, IOFail io) :| []) -> do
+            nid `shouldBe` n1
+            ioeGetFileName io `shouldBe` Just (legacyNodeDataFile dir n1)
+            lines (show e)
+              `shouldSatisfy` \case
+                [heading, finding] ->
+                  heading
+                    == "the data of a node could not be changed, though the"
+                      <> " rest of the change was written (data-not-written)"
+                    && "- the data of @000000000001 could not be removed: "
+                      `isPrefixOf` finding
+                    && ("(" <> legacyNodeDataFile dir n1 <> ": ") `isInfixOf` finding
+                _ -> False
+          _ -> expectationFailure ("failed with " <> show e)
+        -- the node is deleted, and the other node's data is written
+        doesFileExist (metadataFile dir n1) `shouldReturn` False
+        runOnDisk dir (getRawData n2) `shouldReturn` Just "two"
+  it "is refused when a file that it read was changed meanwhile, naming it" do
+    withEmptyTempGraph \dir -> do
+      runOnDisk dir $ insertEdge (Edge nilNID "a" n1)
+      result <- runOnDiskEither dir do
+        _ <- getNodeMetadata n1
+        -- as another program does
+        liftIO . runOnDisk dir $ insertEdge (Edge n1 "z" n2)
+        touchNode (smallNID 3)
+      case result of
+        Left e@(ChangedMeanwhile (nid :| [])) -> do
+          nid `shouldBe` n1
+          show e
+            `shouldBe` "this change was not written: 000000000001.json is no"
+            <> " longer as the change read it: something else, another program"
+            <> " or a sync, changed it meanwhile (changed-meanwhile). Nothing of"
+            <> " the change was written; run the command again"
+        _ -> expectationFailure ("ended with " <> show result)
+      doesFileExist (metadataFile dir (smallNID 3)) `shouldReturn` False
 
 -- | Every file of a directory with its content
 directoryContents :: FilePath -> IO (Map FilePath ByteString)
@@ -908,6 +1079,24 @@ spec_transactionOnDamagedGraph = do
                      <> " the outgoing edges in 000000000000.json but there is"
                      <> " no 000000000002.json",
                    "fsck lists all such damage; fix repairs it, or says why it can't"
+                 ]
+  it "says which files of a change can't be written, and why" do
+    let denied path = mkIOError permissionErrorType "access" Nothing (Just path)
+        message =
+          show $
+            UnwritableChange
+              [(n1, denied "/g/000000000001.json")]
+              (Just (denied "/g", (CreatingFile, n2) :| [(DeletingFile, smallNID 3), (CreatingFile, smallNID 4)]))
+    lines message
+      `shouldBe` [ "this change was not written: files of it can't be written"
+                     <> " (unwritable-graph-file)",
+                   "- 000000000001.json can't be written: there is no permission"
+                     <> " to write it (/g/000000000001.json: access: permission"
+                     <> " denied)",
+                   "- the graph's directory can't be written, so"
+                     <> " 000000000002.json, 000000000004.json can't be created"
+                     <> " and 000000000003.json can't be deleted: there is no"
+                     <> " permission to write it (/g: access: permission denied)"
                  ]
   it "says which record contradicts a change that was miscomputed" do
     let message =

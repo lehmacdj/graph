@@ -1172,8 +1172,10 @@ runCommand' open = \case
             `finally` put history
         case result of
           Right () -> pure ()
-          -- each target is a change of its own: what failed here was not
-          -- written, what was done at the targets before it stays
+          -- each target is a change of its own: what was done at the targets
+          -- before it stays, and what failed here was not written, unless
+          -- its error says what of it was (a change that could be written
+          -- only in part, data that could not be changed)
           Left (_, e)
             | null done -> throwError e
             | otherwise -> throwError (e <> OtherError (alreadyRan done))
@@ -1249,9 +1251,11 @@ runCommand' open = \case
     n <- subsumeUserError @Missing currentLocation
     -- The editor writes the data file itself, but this is a change of the
     -- node's data like any other: it is refused, before the editor starts,
-    -- if the graph is damaged where the node is read.
+    -- if the graph is damaged where the node is read, and if the node has no
+    -- file (it was deleted while it was the current node): the data would
+    -- belong to no node.
     editing do
-      _ <- getNodeMetadata n
+      _ <- subsumeUserError @Missing (getNodeSem @Text n)
       editingDataOutside n
     path <- getGraphFilePath
     writes <- getGraphWrites
@@ -1299,8 +1303,10 @@ runCommand' open = \case
       forM_ (zip [0 :: Int ..] (toList ps)) $ \(before, command) -> do
         since <- graphFilesChanged
         writeIORef running (before, since)
-        -- each command is a change of its own: what failed was not written,
-        -- what the commands before it did stays
+        -- each command is a change of its own: what the commands before it
+        -- did stays, and what failed was not written, unless its error says
+        -- what of it was (a change that could be written only in part, data
+        -- that could not be changed)
         runCommand open command `catchError` \_ e ->
           if isDamageReport e
             then modifyIORef reports (e :)

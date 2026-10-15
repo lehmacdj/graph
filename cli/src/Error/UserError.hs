@@ -57,7 +57,50 @@ data UserError
   | -- | The graph's origin and system nodes could not be made ready, which
     -- every command but fsck and fix needs; with the reason
     CannotOpenGraph UserError
+  | -- | A change was not written because it can't change all of its node
+    -- files: each file to replace that can't be written, with the reason,
+    -- and, if files are to be created or deleted, the reason why the graph's
+    -- directory can't be written, with those files
+    UnwritableChange
+      [(NID, IOError)]
+      (Maybe (IOError, NonEmpty (FileChange, NID)))
+  | -- | Writing a change failed for some of its node files, after the checks:
+    -- the files that were written, and the ones that were not with why
+    ChangeWrittenInPart [(FileChange, NID)] (NonEmpty (FileChange, NID, UserError))
+  | -- | A change was not written because these node files are no longer as
+    -- they were when it read them
+    ChangedMeanwhile (NonEmpty NID)
+  | -- | The data of these nodes could not be written ('ReplacingFile') or
+    -- removed ('DeletingFile') after the rest of the change was written;
+    -- with why
+    DataNotWritten (NonEmpty (FileChange, NID, UserError))
   deriving stock (Generic)
+
+-- | What a change does to a file of the graph
+data FileChange = ReplacingFile | CreatingFile | DeletingFile
+  deriving stock (Eq, Ord, Show, Generic)
+
+-- | The verb for doing that to a file, as 'fileFailure' takes it
+fileChangeVerb :: FileChange -> String
+fileChangeVerb = \case
+  ReplacingFile -> "write"
+  CreatingFile -> "create"
+  DeletingFile -> "delete"
+
+-- | The past participle of 'fileChangeVerb'
+fileChangeDone :: FileChange -> String
+fileChangeDone = \case
+  ReplacingFile -> "written"
+  CreatingFile -> "created"
+  DeletingFile -> "deleted"
+
+-- | Why something could not be done to a file, from the error that doing it
+-- gave: in words, with what the system said ('fileFailure'), or as the error
+-- says it.
+describeFileFailure :: String -> UserError -> String
+describeFileFailure doing = \case
+  IOFail e -> fileFailure doing e
+  e -> show e
 
 -- | A difference between the file of a node with a change applied to it and
 -- the node that the change was computed to give. In each the first 'NID' is
@@ -193,6 +236,81 @@ instance Show UserError where
               ++ show target
           ]
         (_, damage) -> map describeDamage damage
+  show (UnwritableChange files directory) =
+    intercalate "\n" $
+      [ "this change was not written: files of it can't be written"
+          ++ " (unwritable-graph-file)"
+      ]
+        ++ [ "- " ++ nodeFileName nid ++ " can't be written: " ++ fileFailure "write" e
+           | (nid, e) <- files
+           ]
+        ++ [ "- the graph's directory can't be written, so "
+               ++ intercalate
+                 " and "
+                 [ intercalate ", " names ++ " can't be " ++ fileChangeDone change
+                 | change <- [CreatingFile, DeletingFile],
+                   let names = [nodeFileName nid | (change', nid) <- toList changes, change' == change],
+                   not (null names)
+                 ]
+               ++ ": "
+               ++ fileFailure "write" e
+           | (e, changes) <- toList directory
+           ]
+  show (ChangeWrittenInPart written failed) =
+    intercalate "\n" $
+      [ if null written
+          then "this change was not written: writing its files failed (change-not-written)"
+          else
+            "this change was written only in part: some of its files could"
+              ++ " not be written, so the graph may be damaged where it applies"
+              ++ " (change-written-in-part)"
+      ]
+        ++ [ "- "
+               ++ nodeFileName nid
+               ++ " could not be "
+               ++ fileChangeDone change
+               ++ ": "
+               ++ describeFileFailure (fileChangeVerb change) e
+           | (change, nid, e) <- toList failed
+           ]
+        ++ [ "- written as the change has them: "
+               ++ intercalate ", " (map writtenFile written)
+           | not (null written)
+           ]
+        ++ [repairHint | not (null written)]
+    where
+      writtenFile (change, nid) =
+        nodeFileName nid ++ case change of
+          ReplacingFile -> ""
+          CreatingFile -> " (created)"
+          DeletingFile -> " (deleted)"
+  show (ChangedMeanwhile nids) =
+    "this change was not written: "
+      ++ intercalate " and " (map nodeFileName (toList nids))
+      ++ (if length nids == 1 then " is" else " are")
+      ++ " no longer as the change read "
+      ++ (if length nids == 1 then "it" else "them")
+      ++ ": something else, another program or a sync, changed "
+      ++ (if length nids == 1 then "it" else "them")
+      ++ " meanwhile (changed-meanwhile). Nothing of the change was written;"
+      ++ " run the command again"
+  show (DataNotWritten failed) =
+    intercalate "\n" $
+      [ "the data of "
+          ++ (if length failed == 1 then "a node" else "some nodes")
+          ++ " could not be changed, though the rest of the change was written"
+          ++ " (data-not-written)"
+      ]
+        ++ [ "- the data of "
+               ++ show nid
+               ++ " could not be "
+               ++ (if change == DeletingFile then "removed" else "written")
+               ++ ": "
+               ++ describeFileFailure
+                 (if change == DeletingFile then "remove" else "write")
+                 e
+           | (change, nid, e) <- toList failed
+           ]
 
 -- | The damage that an error says a command was refused for. A command line
 -- doesn't warn of that damage as well ('Error.Warn.warningOfDamageReadPast').
@@ -253,12 +371,21 @@ throwLeft (Left err) = throwError $ toUserError err
 embedCatchingErrors ::
   (Members [Error UserError, IOE] r) => IO a -> Eff r a
 embedCatchingErrors = fromExceptionVia mapExceptionToUserError
-  where
-    mapExceptionToUserError = \case
-      (E.fromException @IOError -> Just e) -> IOFail e
-      (E.fromException @HttpException -> Just e) -> WebError e
-      (E.fromException @NSErrorException -> Just e) -> FileCoordinationError e
-      e -> OtherException e
+
+-- | The user error that an exception stands for
+mapExceptionToUserError :: SomeException -> UserError
+mapExceptionToUserError = \case
+  (E.fromException @IOError -> Just e) -> IOFail e
+  (E.fromException @HttpException -> Just e) -> WebError e
+  (E.fromException @NSErrorException -> Just e) -> FileCoordinationError e
+  e -> OtherException e
+
+-- | Like 'mapExceptionToUserError', for an exception that may be a user
+-- error thrown as one (as an unlifted action throws it), which stays as it is
+exceptionAsUserError :: SomeException -> UserError
+exceptionAsUserError = \case
+  (E.fromException @UserError -> Just e) -> e
+  e -> mapExceptionToUserError e
 
 spec_embedCatchingErrors :: Spec
 spec_embedCatchingErrors = do
