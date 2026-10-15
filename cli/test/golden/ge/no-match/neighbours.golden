@@ -27,8 +27,8 @@ expecting "!{", "%history(", "%last", "%never", "%override(", "%targets(", "%{",
 
 g> g> g> g> g> g> g> g> g> g> Goodbye!
 ==========stderr==========
-rm selected a zero-edge route. Put the edge branch first; nothing was changed.
-rm selected a zero-edge route. Put the edge branch first; nothing was changed.
+rm deletes the edge that the first walk of its path ends in, but that walk has no step, as in (@ & a); nothing was changed. Put the side with the edge first. (NoEdgeSelected)
+rm deletes the edge that the first walk of its path ends in, but that walk has no step, as in (@ & a); nothing was changed. Put the side with the edge first. (NoEdgeSelected)
 the path of rm (@000000000099) matched nothing; nothing was changed.
 the path of rm (@000000000099 / "x") matched nothing; nothing was changed.
 the last argument of mv needs a path that resolves to a single node
@@ -41,7 +41,7 @@ the last argument of cp needs a path that resolves to a single node
 but it resolved to: []
 the last argument of cp needs a path that resolves to a single node
 but it resolved to: [@000000000001,@000000000003]
-mv selected a zero-edge route. Put the edge branch first; nothing was changed.
+mv moves the edge that the first walk of its path ends in, but that walk has no step, as in (@ & a); nothing was changed. Put the side with the edge first. (NoEdgeSelected)
 the last argument of mv needs a path that resolves to a single node
 but it resolved to: []
 the first argument of cp (@000000000099 / "x") matched nothing; nothing was changed.

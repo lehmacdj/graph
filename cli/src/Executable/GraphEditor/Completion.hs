@@ -143,7 +143,27 @@ completeNID env (i, _) = do
     _ -> pure (i, [])
 
 spec_completePath :: Spec
-spec_completePath =
+spec_completePath = do
+  it "offers nothing for a path with a directive" $
+    withEmptyTempGraph \dir -> do
+      -- the origin -a-> 1 and -b-> 2, each consistent
+      let n1 = smallNID 1
+          n2 = smallNID 2
+          write :: Node Text () -> IO ()
+          write n = serializeNodeEx (n $> Nothing) dir
+      write $
+        emptyNode nilNID
+          & #outgoing .~ setFromList [Connect "a" n1, Connect "b" n2]
+      write $ emptyNode n1 & #incoming .~ singletonSet (Connect "a" nilNID)
+      write $ emptyNode n2 & #incoming .~ singletonSet (Connect "b" nilNID)
+      env <- initEnv dir (mkStdGen 0) defaultSettings
+      let offered line =
+            map replacement . snd
+              <$> completePath env (reverse line, "")
+      -- what is offered without a directive, for comparison
+      offered "ls " `shouldReturn` ["a", "b"]
+      for_ ["ls %last/a", "ls %history(0)/a", "ls a/%last/a", "ls %last/"] \line ->
+        offered line `shouldReturn` []
   it "completes past damage without a warning or an error" $
     withEmptyTempGraph \dir -> do
       -- the origin -b-> 1 -d-> 2, where the node 1 doesn't record b

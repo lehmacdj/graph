@@ -7,9 +7,11 @@
 -- process any more (not SIGKILL either). A terminal whose output is stopped
 -- (Ctrl-S), or that nobody reads, takes none. So a session leader that has
 -- written to such a terminal stays, as a process that is exiting, until the
--- terminal takes output again or is closed. (Measured with
--- @cli/tmp/impl-intfix3/c/ttyexit.c@ on macOS; a program that a shell
--- starts does not lead its session and is not affected.)
+-- terminal takes output again or is closed. (Measured on macOS with a small
+-- C program that is not part of the repository: it led a session on a
+-- pseudo-terminal that nobody read, wrote to it, made the calls of this
+-- module or not, and ended. A program that a shell starts does not lead its
+-- session and is not affected.)
 --
 -- Nothing tells a terminal that is a moment late from one that will never
 -- take the output: the system only says how much is queued. So whoever

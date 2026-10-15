@@ -9,7 +9,7 @@ cd %targets(nope) + %targets(nada)
 g> g> g> no targets
 g> g> Goodbye!
 ==========stderr==========
-This path cannot be constructed.
+This path cannot be constructed: each of its alternatives has a test that a node already there fails (such as an @N naming another node, or %never, which no node passes), and creating nodes and edges cannot change that. Nothing was changed. (Unsatisfiable)
 Note: %targets("nope") at line 1, columns 6-19 matched no nodes, so it expanded to %never.
 cd needs a path that resolves to a single node
 but it resolved to: []

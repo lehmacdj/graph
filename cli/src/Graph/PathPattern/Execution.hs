@@ -128,7 +128,7 @@ planConstruction name maxRepairs asTyped command cur p = do
           take shownPossibilities (toList rs)
       _ -> pure []
     pure (leftOut, result, lines')
-  let notes = leftOutNotes name p leftOut
+  let notes = leftOutNotes name cur p leftOut
   residuation <- case result of
     Right residuation -> pure residuation
     -- this error names the nodes itself
@@ -136,12 +136,17 @@ planConstruction name maxRepairs asTyped command cur p = do
     Left e -> failing notes (renderResidualError name asTyped cur p e)
   case chooseRepair residuation of
     NoChange -> pure (Nothing, notes)
-    Impossible -> failing notes "This path cannot be constructed."
+    Impossible -> failing notes unsatisfiable
     Ambiguous rs ->
       failing notes (renderChoiceError (map (fmap command) lines') rs)
     Apply r -> pure (Just r, notes)
   where
     limit = fromMaybe (P.AtMostRepairs defaultMaxRepairs) maxRepairs
+    unsatisfiable =
+      "This path cannot be constructed: each of its alternatives has a test "
+        <> "that a node already there fails (such as an @N naming another node, "
+        <> "or %never, which no node passes), and creating nodes and edges "
+        <> "cannot change that. Nothing was changed. (Unsatisfiable)"
 
 -- | The option @--max-repairs@ as it is typed, followed by a space, if it
 -- was given.
@@ -160,22 +165,32 @@ failing notes message =
     stripSuffix' t = if null notes then t else fromMaybe t (stripSuffix "\n" t)
 
 -- | A note for each alternative that was not built because it needs a
--- written node that does not exist: the path with the sides of its unions
+-- written node that does not exist, or the current node (the second
+-- argument) when it no longer does: the path with the sides of its unions
 -- that give the alternative, and the nodes.
-leftOutNotes :: Text -> P.Path -> [LeftOut] -> [Text]
-leftOutNotes name p leftOut =
+leftOutNotes :: Text -> NID -> P.Path -> [LeftOut] -> [Text]
+leftOutNotes name cur p leftOut =
   [ "Note: "
       <> name
       <> " left out "
       <> maybe "one side of a union" (\side -> "`" <> renderSurfacePath side <> "`") (lookup l.alternative sides)
       <> ", which needs "
-      <> intercalate ", " (map tshow (toList l.missing))
-      <> (if length l.missing > 1 then ": these nodes do not exist" else ": that node does not exist")
-      <> ", and a node with a written id is never created."
+      <> case (cur `elem` l.missing, filter (/= cur) (toList l.missing)) of
+        (True, []) -> currentNode <> ": it no longer exists; cd to another node."
+        (True, written) ->
+          currentNode
+            <> ", which no longer exists (cd to another node), and "
+            <> writtenNodes written
+        (False, written) -> writtenNodes written
   | l <- leftOut
   ]
   where
     sides = alternativeChoices p (setFromList (map (.alternative) leftOut))
+    currentNode = "the current node " <> tshow cur
+    writtenNodes written =
+      intercalate ", " (map tshow written)
+        <> (if length written > 1 then ": these nodes do not exist" else ": that node does not exist")
+        <> ", and a node with a written id is never created."
 
 -- | 'readNode', keeping every node read.
 readOnce ::
@@ -197,12 +212,29 @@ renderResidualError :: Text -> AsTyped -> NID -> P.Path -> ResidualError -> Text
 renderResidualError name asTyped cur p = \case
   Refused refusal -> renderRefusal name asTyped cur p refusal
   MissingNodes ns ->
+    -- the current node is not written, and is not created either: it was
+    -- deleted after it became the current node
     "This path needs "
-      <> intercalate ", " (map tshow (toList ns))
-      <> (if length ns > 1 then ", which do not exist" else ", which does not exist")
-      <> ", and a node with a written id is never created: "
-      <> name
-      <> " gives every new node a new id. Nothing was changed. (MissingNodes)"
+      <> case (cur `elem` ns, filter (/= cur) (toList ns)) of
+        (True, []) ->
+          currentNode
+            <> ", which no longer exists: cd to another node to "
+            <> name
+            <> " from there."
+        (True, written) ->
+          currentNode
+            <> ", which no longer exists (cd to another node), and "
+            <> writtenNodes written
+        (False, written) -> writtenNodes written
+      <> " Nothing was changed. (MissingNodes)"
+    where
+      currentNode = "the current node " <> tshow cur
+      writtenNodes written =
+        intercalate ", " (map tshow written)
+          <> (if length written > 1 then ", which do not exist" else ", which does not exist")
+          <> ", and a node with a written id is never created: "
+          <> name
+          <> " gives every new node a new id."
   TooManyRepairs n ->
     "Working out what this path creates takes too long: its steps have "
       <> "several edges to follow, and every combination of the edges "
@@ -754,7 +786,15 @@ constructTag maxRepairs prompt cur asTyped prefix target = do
     r : _ | w : _ <- witnesses r ->
       for_ (ordNub (map endOf (concreteRoutes r w))) \source ->
         insertEdge @Text (Edge source "" target)
-    _ -> throwError $ OtherError "The tag prefix has no complete match."
+    -- the path was just made to hold, so this is when the node files
+    -- where it goes contradict each other
+    _ ->
+      throwError . OtherError $
+        "tag made its path hold, but the path still has no match whose end "
+          <> "could be linked to the target, so nothing was linked; nothing "
+          <> "was changed. The node files where the path goes may contradict "
+          <> "each other: fsck lists such damage and fix repairs it. "
+          <> "(TagPathUnmatched)"
   pure (setFromList (toList created))
   where
     command q =
@@ -796,31 +836,50 @@ relabelPath removeOriginal parents cur source destination = do
   let command = if removeOriginal then "rn" else "cl"
   selected <- case selectedConcreteRoutes rs of
     [single] -> pure single
+    [] ->
+      throwError . OtherError $
+        command
+          <> " needs its first path to select one edge, but the path matched "
+          <> "nothing; nothing was changed. (NoSourceEdge)"
     routes ->
       throwError . OtherError $
         command
-          <> " needs one selected source route, but found "
+          <> " needs its first path to select one edge, but it selects "
           <> tshow (length routes)
-          <> "."
+          <> ", one for each way the path matched; nothing was changed. "
+          <> "Write @N after a step for the node it should go to, so that "
+          <> "the path matches one way. (SeveralSourceEdges)"
   (original, hop) <-
     lastEdgeOf selected
       `onNothing` throwError
-        ( OtherError $
-            command
-              <> " selected a zero-edge route. Put the branch containing "
-              <> "the edge first; nothing was changed."
+        ( OtherError
+            (noEdgeSelected command (if removeOriginal then "renames" else "copies"))
         )
-  edges <- prospectiveEdges cur destination hop.target
+  edges <- prospectiveEdges command cur destination hop.target
   when (null edges) $
     throwError . OtherError $
       command
-        <> " destination has no matching parent or final label; nothing "
-        <> "was changed."
+        <> " found no node to put the new edge under: the path of its "
+        <> "destination before the last label reaches no node, or a node "
+        <> "test after that label fails; nothing was changed. "
+        <> "(NoDestinationParent)"
   when (parents == OneParent && length edges > 1) $
     throwError . OtherError $
       renderSeveralParents command (keys edges)
   when removeOriginal $ deleteEdge @Text original
   traverse_ (insertEdge @Text) edges
+
+-- | The error of a command that edits the edge which the first walk of its
+-- path ends in, when that walk has no step: the command's name and what it
+-- does with the edge (@renames@).
+noEdgeSelected :: Text -> Text -> Text
+noEdgeSelected command does =
+  command
+    <> " "
+    <> does
+    <> " the edge that the first walk of its path ends in, but that walk has "
+    <> "no step, as in (@ & a); nothing was changed. Put the side with the "
+    <> "edge first. (NoEdgeSelected)"
 
 renderSeveralParents :: Text -> [NID] -> Text
 renderSeveralParents command ps =
@@ -840,22 +899,35 @@ renderSeveralParents command ps =
 -- the edge to create keyed by that parent node.
 prospectiveEdges ::
   (PathReading r, Error UserError :> r) =>
+  -- | the command, for what is said
+  Text ->
   NID ->
   P.Path ->
   NID ->
   Eff r (Map NID (Edge Text))
-prospectiveEdges cur destination endpoint = do
+prospectiveEdges command cur destination endpoint = do
   let q = compilePath (destination P.:/ P.Absolute endpoint)
   perAlternative <- for (toList q.alternatives) $ \p -> do
     let r0 :| rest = p.routes
     lastHop <-
       lastMay r0.hops
-        `onNothing` throwError (OtherError "The destination has no final label.")
+        `onNothing` throwError
+          ( OtherError $
+              "The destination of "
+                <> command
+                <> " has no last label to give the edge: its first walk has "
+                <> "no step; nothing was changed. Write the new label last. "
+                <> "(NoDestinationLabel)"
+          )
     label <- case lastHop.matcher of
       MLiteral l -> pure l
       _ ->
-        throwError $
-          OtherError "The destination must end in a literal label."
+        throwError . OtherError $
+          "The destination of "
+            <> command
+            <> " must end in a literal label, the label of the new edge, "
+            <> "not in * or a regex; nothing was changed. "
+            <> "(DestinationLabelNotLiteral)"
     let dropLast rt = case lastMay rt.hops of
           Just h | h.edge == lastHop.edge -> Route rt.root (initEx rt.hops)
           _ -> rt
@@ -874,8 +946,11 @@ prospectiveEdges cur destination endpoint = do
     [edges] -> pure edges
     _ ->
       throwError . OtherError $
-        "The destination matches through several alternatives; choose one."
-          <> " Nothing was changed."
+        "The destination of "
+          <> command
+          <> " would make different edges through different alternatives "
+          <> "(sides of a union, or nodes of a %targets(…)); choose one. "
+          <> "Nothing was changed. (SeveralDestinations)"
 
 -- | Relocate the traversal parent of each selected last edge. For an
 -- incoming traversal this is the edge's target in the stored graph.
@@ -894,9 +969,9 @@ relocateSelectedEdges removeOriginal cur destination source = do
   moves <- for routes \rt -> case lastEdgeOf rt of
     Nothing ->
       throwError . OtherError $
-        (if removeOriginal then "mv" else "cp")
-          <> " selected a zero-edge route. Put the edge branch first; "
-          <> "nothing was changed."
+        if removeOriginal
+          then noEdgeSelected "mv" "moves"
+          else noEdgeSelected "cp" "copies"
     Just (original, hop) ->
       pure
         ( original,
@@ -928,10 +1003,7 @@ removeSelectedEdges ::
 removeSelectedEdges cur p = do
   rs <- resolveCommandQuery cur p
   edges <- for (selectedConcreteRoutes rs) \rt -> case lastEdgeOf rt of
-    Nothing ->
-      throwError . OtherError $
-        "rm selected a zero-edge route. Put the edge branch first; "
-          <> "nothing was changed."
+    Nothing -> throwError (OtherError (noEdgeSelected "rm" "deletes"))
     Just (original, _) -> pure original
   traverse_ (deleteEdge @Text) edges
   pure edges

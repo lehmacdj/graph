@@ -248,10 +248,15 @@ pCommandTerm =
     <|> try pBack
     <|> try (braces pCommand)
 
+-- | One command, or several separated by @;@. A command that can't be
+-- parsed is reported where it is: after a @;@ nothing goes back to read the
+-- line as only the commands before it.
 pCommand :: Parser Command
 pCommand =
-  try (Seq <$> (pCommandTerm `sepBy2` symbol ";"))
-    <|> pCommandTerm
+  (pCommandTerm `sepBy1` symbol ";") <&> \case
+    [c] -> c
+    c1 : c2 : cs -> Seq (twoElemList c1 c2 cs)
+    [] -> error "pCommand: sepBy1 gave no command"
 
 -- | Parse a whole command line; trailing input is an error rather than
 -- silently ignored (@rm a b@ used to run @rm a@).
@@ -449,7 +454,16 @@ test_parseCommand =
         `parsesTo` Alias
           AllParents
           (directive (LocationFromHistory 1) :/ Literal "x")
-          (directive (Targets (Literal "a")) :/ Literal "y")
+          (directive (Targets (Literal "a")) :/ Literal "y"),
+      -- an error in a later command of a ; line is reported where it is,
+      -- not at the first ;
+      "cd a; back" `failsWith` "<interactive>:1:11:",
+      "mk n4; ls (" `failsWith` "<interactive>:1:12:",
+      "nid; nid; rm a b" `failsWith` "<interactive>:1:16:",
+      "{nid; back}" `failsWith` "<interactive>:1:11:",
+      "cd a;" `failsWith` "<interactive>:1:6:",
+      -- and one after a whole line is still an error there
+      "nid; rm a b" `failsWith` "<interactive>:1:11:"
     ]
   where
     directive = Directive testRange

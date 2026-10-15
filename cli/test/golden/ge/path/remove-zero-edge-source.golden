@@ -5,7 +5,7 @@ rm (@ & a)
 ==========stdout==========
 g> g> Goodbye!
 ==========stderr==========
-rm selected a zero-edge route. Put the edge branch first; nothing was changed.
+rm deletes the edge that the first walk of its path ends in, but that walk has no step, as in (@ & a); nothing was changed. Put the side with the edge first. (NoEdgeSelected)
 ==========graph-dump==========
 @000000000000{out=[@000000000000 via "a"], in=[@000000000000 via "a", @0daCJjMrQel8 via "origin"]}
 @0daCJjMrQel8{out=[@zsBuPkn5mh8F via "file-extensions", @AhQufiPzgyRf via "file-hashes", @3JJvxFUHGAA1 via "historical-special-nodes", @S00KkOYoVpFu via "import-dates", @a0fVkm0kR7KE via "import-urls", @927u9Xyky2pC via "mime-types", @000000000000 via "origin", @pbYxBO6fzBQV via "tags"], in=[]}

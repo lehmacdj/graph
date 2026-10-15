@@ -27,7 +27,7 @@ g> <interactive>:1:18:
 1 | ls --max-repairs 1 regex:"^[a-e]$"
   |                  ^
 unexpected '1'
-expecting "++", '&', '+', '/', '|', or end of input
+expecting "++", '&', '+', '/', ';', '|', or end of input
 
 g> <interactive>:1:15:
   |

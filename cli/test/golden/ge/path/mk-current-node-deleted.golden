@@ -1,0 +1,33 @@
+==========graph==========
+0 -a-> 1
+0 -c-> 2
+==========input==========
+cd a
+rmnf @000000000001
+mk b
+tag b @000000000000
+mk b + @000000000000/c
+mk b/@000000000007
+mk b + @000000000000/c/@000000000007
+==========stdout==========
+g> g> g> g> g> created 0 new nodes and 0 new edges
+g> g> g> Goodbye!
+==========stderr==========
+This path needs the current node @000000000001, which no longer exists: cd to another node to mk from there. Nothing was changed. (MissingNodes)
+This path needs the current node @000000000001, which no longer exists: cd to another node to tag from there. Nothing was changed. (MissingNodes)
+Note: mk left out `b`, which needs the current node @000000000001: it no longer exists; cd to another node.
+This path needs the current node @000000000001, which no longer exists (cd to another node), and @000000000007, which does not exist, and a node with a written id is never created: mk gives every new node a new id. Nothing was changed. (MissingNodes)
+This path needs the current node @000000000001, which no longer exists (cd to another node), and @000000000007, which does not exist, and a node with a written id is never created: mk gives every new node a new id. Nothing was changed. (MissingNodes)
+==========graph-dump==========
+@000000000000{out=[@000000000002 via "c"], in=[@0daCJjMrQel8 via "origin"]}
+@000000000002{out=[], in=[@000000000000 via "c"]}
+@0daCJjMrQel8{out=[@zsBuPkn5mh8F via "file-extensions", @AhQufiPzgyRf via "file-hashes", @3JJvxFUHGAA1 via "historical-special-nodes", @S00KkOYoVpFu via "import-dates", @a0fVkm0kR7KE via "import-urls", @927u9Xyky2pC via "mime-types", @000000000000 via "origin", @pbYxBO6fzBQV via "tags"], in=[]}
+@3JJvxFUHGAA1{out=[@VEfLhuTgZ88Z via "sequence-ids"], in=[@0daCJjMrQel8 via "historical-special-nodes"]}
+@927u9Xyky2pC{out=[], in=[@0daCJjMrQel8 via "mime-types"]}
+@AhQufiPzgyRf{out=[], in=[@0daCJjMrQel8 via "file-hashes"]}
+@S00KkOYoVpFu{out=[], in=[@0daCJjMrQel8 via "import-dates"]}
+@VEfLhuTgZ88Z{out=[], in=[@3JJvxFUHGAA1 via "sequence-ids"]}
+@a0fVkm0kR7KE{out=[], in=[@0daCJjMrQel8 via "import-urls"]}
+@pbYxBO6fzBQV{out=[], in=[@0daCJjMrQel8 via "tags"]}
+@zsBuPkn5mh8F{out=[], in=[@0daCJjMrQel8 via "file-extensions"]}
+==========data==========

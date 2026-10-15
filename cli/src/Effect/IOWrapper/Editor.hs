@@ -3,9 +3,10 @@
 module Effect.IOWrapper.Editor where
 
 import Control.Exception qualified as E
+import Data.Char (isSpace)
+import Error.UserError
 import MyPrelude
-import System.Directory
-import System.Environment
+import System.Environment (lookupEnv)
 import System.IO (hGetLine)
 import System.Posix.IO qualified as Posix
 import System.Process.Typed
@@ -18,15 +19,59 @@ makeEffect ''Editor
 
 -- | Makes the assumption that the graph is implemented using the filesystem
 -- structure with nid.json/nid.data for each node
+--
+-- The editor is @EDITOR@ (@vim@ when it is not set, or empty), run as a
+-- shell runs it ('editorProcess'). One that fails is a 'UserError' that
+-- says so.
 interpretEditorAsIOVim ::
-  (IOE :> effs) =>
+  (Members [IOE, Error UserError] effs) =>
   -- | interprets effect
   Eff (Editor : effs) ~> Eff effs
 interpretEditorAsIOVim = interpret \_ -> \case
   InvokeEditor paths -> do
-    editor <- liftIO $ getEnv "EDITOR"
-    editorToUse <- fromMaybe "vim" <$> liftIO (findExecutable editor)
-    liftIO $ runToEnd stopProcess (proc editorToUse paths)
+    editor <- liftIO (lookupEnv "EDITOR")
+    let (command, source) = case editor of
+          Just e | not (all isSpace e) -> (e, "the variable EDITOR")
+          _ -> ("vim", "EDITOR is not set")
+    liftIO (E.try (runToEnd stopProcess (editorProcess command paths)))
+      >>= either (throwError . OtherError . editorFailed command source) pure
+
+-- | The editor command (a value of @EDITOR@) run on the files the way a shell
+-- runs @$EDITOR file…@ in @git@ and others: by @sh@, with the files as its
+-- arguments, so that the value can hold arguments, quotes and
+-- redirections (@code --wait@, @sh -c 'echo hi > $0'@), and the names of
+-- the files are not read by the shell.
+--
+-- Run as a single program it was looked for by the whole value, which with
+-- a space was never found, and then vim ran instead: a @ge -e@ whose input
+-- is no terminal then waited forever.
+editorProcess :: String -> [FilePath] -> ProcessConfig () () ()
+editorProcess command paths =
+  proc "/bin/sh" (["-c", command <> " \"$@\"", command] <> paths)
+
+-- | What @vi@ says when the editor fails: the editor command, where it
+-- came from, and how it ended, the raw status as well.
+editorFailed :: String -> Text -> ExitCodeException -> Text
+editorFailed command source e =
+  "the editor "
+    <> tshow command
+    <> " ("
+    <> source
+    <> ") "
+    <> what
+    <> " (editor-failed: "
+    <> tshow (eceExitCode e)
+    <> ")"
+    <> afterwards
+  where
+    started = "; what it saved to the node's data before that stays"
+    (what, afterwards) = case eceExitCode e of
+      ExitFailure 127 ->
+        ("could not be started: the shell found no such command", "")
+      ExitFailure code
+        | code > 128 -> ("was ended by signal " <> tshow (code - 128), started)
+        | code < 0 -> ("was ended by signal " <> tshow (negate code), started)
+      _ -> ("exited with an error", started)
 
 -- | Run a process until it ends, like 'runProcess_': an exit status other
 -- than success is an 'ExitCodeException'. When whoever runs this is stopped

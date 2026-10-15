@@ -55,6 +55,7 @@ import System.Directory
   ( createDirectoryIfMissing,
     doesDirectoryExist,
     doesFileExist,
+    doesPathExist,
     listDirectory,
   )
 import System.Environment (getEnvironment)
@@ -273,11 +274,25 @@ graphDirInitialization graphDir options = do
     else
       -- whether its origin is there is for 'openGraph' to say, so that fsck
       -- and fix can run on a graph that has lost it
-      unless graphDirExists $
-        error $
-          "graph in directory "
-            ++ graphDir
-            ++ " doesn't exist"
+      unless graphDirExists do
+        eputStr =<< noGraphDirectory graphDir
+        exitWith (ExitFailure 1)
+
+-- | What @ge@ says when the directory of the graph it was given is not
+-- there, or is not a directory.
+noGraphDirectory :: FilePath -> IO String
+noGraphDirectory graphDir = do
+  isSomething <- doesPathExist graphDir
+  pure $
+    "there is no graph at "
+      ++ graphDir
+      ++ ": "
+      ++ ( if isSomething
+             then "it is not a directory"
+             else "there is no such directory"
+         )
+      ++ " (no-graph-directory); give the directory of a graph, or add"
+      ++ " --new to create a new graph there"
 
 -- | Run the program so that SIGTERM and SIGHUP (the terminal was closed) end
 -- it the way an interrupt signal does: as an exception in the main thread

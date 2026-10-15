@@ -4,9 +4,11 @@ module Models.LegacyPartialPath
     LegacyPartialPath (..),
     test_takeRelevantFromEnd,
     test_pLegacyPartialPath,
+    test_getLegacyPartialPath,
   )
 where
 
+import Data.Char (isSpace)
 import Graph.SystemNodes (tagsNID)
 import Models.Path.Parse
 import Models.Path.Simple
@@ -53,8 +55,15 @@ pLegacyPartialPath = do
 pLastLegacyPartialPath :: Parser LegacyPartialPath
 pLastLegacyPartialPath =
   try (c *> pLegacyPartialPath <* eof)
-    <|> (c *> pPath *> pLegacyPartialPath <* eof)
+    <|> (c *> wholeArgument *> pLegacyPartialPath <* eof)
   where
+    -- a path that is an argument before the one that is completed, which
+    -- a space ends; a path that the cursor is in is no such argument (with
+    -- a directive in it the path can't be completed, and is not read as an
+    -- argument followed by an empty one either)
+    wholeArgument = do
+      (text, _) <- match pPath
+      guard (maybe False isSpace (lastMay text))
     c = lexeme (many (oneOf (":.-_" :: String) <|> alphaNumChar) <* lookAhead s)
 
 consUnless :: Bool -> a -> [a] -> [a]
@@ -93,6 +102,25 @@ test_pLegacyPartialPath =
     ]
   where
     parsesTo i = testCase ("parse: " ++ show i) . testParserParses pLegacyPartialPath i
+
+-- | What completion reads before the cursor: the command, and the path that
+-- is completed after the paths before it.
+test_getLegacyPartialPath :: TestTree
+test_getLegacyPartialPath =
+  testGroup
+    "getLegacyPartialPath"
+    [ "ls a/b" `reads'` Just (LegacyPartialPath [Literal "a"] "b"),
+      "mv a b/c" `reads'` Just (LegacyPartialPath [Literal "b"] "c"),
+      "mv %last/a b/c" `reads'` Just (LegacyPartialPath [Literal "b"] "c"),
+      -- a path with a directive gets nothing
+      "ls %last/a" `reads'` Nothing,
+      "ls %last/" `reads'` Nothing,
+      "ls %history(0)/a" `reads'` Nothing,
+      "ls c/%last/a" `reads'` Nothing,
+      "mv a %last/b" `reads'` Nothing
+    ]
+  where
+    reads' i e = testCase (show i) $ getLegacyPartialPath i @?= e
 
 test_takeRelevantFromEnd :: TestTree
 test_takeRelevantFromEnd =

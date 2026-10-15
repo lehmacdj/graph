@@ -376,9 +376,22 @@ writeBaseGraph directory text = do
 -- | Run @ge@ on a graph with a data directory of its own (see
 -- 'runGraphEditor'): its exit code, stdout and stderr.
 runGe :: FilePath -> [String] -> ByteString -> IO (Int, ByteString, ByteString)
-runGe graph arguments stdin =
+runGe = runGeWith []
+
+-- | 'runGe' with these variables of the environment set as well (they
+-- replace those that 'runGe' sets, such as @EDITOR@).
+runGeWith ::
+  [(String, String)] ->
+  FilePath ->
+  [String] ->
+  ByteString ->
+  IO (Int, ByteString, ByteString)
+runGeWith variables graph arguments toStdin =
   withSystemTempDirectory "ge-data" $ \dataHome -> do
-    environment <- getEnvironment
+    environment <-
+      filter ((`notElem` map fst variables) . fst)
+        . geEnvironment dataHome
+        <$> getEnvironment
     (exitCode, out, err) <-
       readProcess $
         proc
@@ -390,8 +403,8 @@ runGe graph arguments stdin =
             ]
               <> arguments
           )
-          & setStdin (byteStringInput (fromStrict stdin))
-          & setEnv (geEnvironment dataHome environment)
+          & setStdin (byteStringInput (fromStrict toStdin))
+          & setEnv (variables <> environment)
     pure
       ( case exitCode of
           ExitSuccess -> 0
@@ -861,6 +874,74 @@ spec_writeFailures = do
       out `shouldNotContain` "000000000001"
       (checked, _, _) <- ge directory "fsck"
       checked `shouldBe` 0
+
+spec_noGraphDirectory :: Spec
+spec_noGraphDirectory = do
+  let says graph =
+        "there is no graph at "
+          <> graph
+          <> ": there is no such directory (no-graph-directory); give the"
+          <> " directory of a graph, or add --new to create a new graph there\n"
+  it "says readably that there is no graph where the directory is not" $
+    withSystemTempDirectory "no-graph" \directory -> do
+      let graph = directory </> "does-not-exist"
+      (code, out, err) <- runGe graph ["-e", "nid"] ""
+      (code, out, unpack (decodeUtf8 err)) `shouldBe` (1, "", says graph)
+      doesPathExist graph `shouldReturn` False
+  it "says that a file is not a directory" $
+    withSystemTempDirectory "no-graph" \directory -> do
+      let graph = directory </> "a-file"
+      B.writeFile graph "not a graph"
+      (code, _, err) <- runGe graph ["-e", "nid"] ""
+      code `shouldBe` 1
+      unpack (decodeUtf8 err)
+        `shouldBe` ( "there is no graph at "
+                       <> graph
+                       <> ": it is not a directory (no-graph-directory); give"
+                       <> " the directory of a graph, or add --new to create a"
+                       <> " new graph there\n"
+                   )
+  it "says it in the REPL too, before any prompt" $
+    withSystemTempDirectory "no-graph" \directory -> do
+      let graph = directory </> "does-not-exist"
+      (code, out, err) <- runGe graph [] "nid\n"
+      (code, out, unpack (decodeUtf8 err)) `shouldBe` (1, "", says graph)
+
+spec_editor :: Spec
+spec_editor = do
+  -- each run is given a minute: an editor that waits for input would
+  -- otherwise hold the tests forever
+  let editing editor command = withTempGraph Nothing \directory -> do
+        writeBaseGraph directory "0 -a-> 2\n"
+        ran <-
+          timeout 60000000 $
+            runGeWith [("EDITOR", editor)] directory ["-e", command] ""
+        dataFile <-
+          (Just <$> B.readFile (directory </> "000000000002.data"))
+            `catch` \(_ :: IOError) -> pure Nothing
+        pure (ran, dataFile)
+  it "runs an EDITOR with arguments and quotes the way a shell does" do
+    (ran, dataFile) <- editing "sh -c 'echo hi > $0'" "at @000000000002 vi"
+    ran `shouldBe` Just (0, "", "")
+    dataFile `shouldBe` Just "hi\n"
+  it "passes the file to the editor as one argument, unread by the shell" do
+    (ran, dataFile) <- editing "sh -c 'printf %s \"$#\" > \"$1\"' x" "at @000000000002 vi"
+    ran `shouldBe` Just (0, "", "")
+    dataFile `shouldBe` Just "1"
+  it "says readably that the editor failed, with its exit status" do
+    (ran, _) <- editing "false" "at @000000000002 vi"
+    fmap (\(code, _, err) -> (code, decodeUtf8 err)) ran
+      `shouldBe` Just
+        ( 1,
+          "the editor \"false\" (the variable EDITOR) exited with an error"
+            <> " (editor-failed: ExitFailure 1); what it saved to the node's"
+            <> " data before that stays\n"
+        )
+  it "says readably that there is no such editor" do
+    (ran, dataFile) <- editing "no-such-editor-for-ge" "at @000000000002 vi"
+    fmap (\(code, _, err) -> (code, "could not be started" `isInfixOf` decodeUtf8 err)) ran
+      `shouldBe` Just (1, True)
+    dataFile `shouldBe` Nothing
 
 test_adviceIsTrue :: IO TestTree
 test_adviceIsTrue =

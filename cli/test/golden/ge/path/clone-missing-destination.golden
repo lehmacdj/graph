@@ -5,7 +5,7 @@ cl a missing/b
 ==========stdout==========
 g> g> Goodbye!
 ==========stderr==========
-cl destination has no matching parent or final label; nothing was changed.
+cl found no node to put the new edge under: the path of its destination before the last label reaches no node, or a node test after that label fails; nothing was changed. (NoDestinationParent)
 ==========graph-dump==========
 @000000000000{out=[@000000000001 via "a"], in=[@0daCJjMrQel8 via "origin"]}
 @000000000001{out=[], in=[@000000000000 via "a"]}
