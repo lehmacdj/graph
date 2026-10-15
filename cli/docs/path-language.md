@@ -1251,9 +1251,18 @@ path is written, so a union is read in every way it can be taken:
   [commands.md](commands.md#48-paths-that-mk-refuses-for-their-shape)).
   Nothing falls back from the one to the other. The error shows
   the union as the command reads it, and says so where the union it
-  names was written with `+`; where that `+` stands inside an
-  `%override({plus = relational}, …)`, it says that the override makes
-  it `|` and that the way out is `plus = shared` in that override.
+  names was written with `+`, and what makes that `+` a `|`: the
+  command, an `%override({plus = relational}, …)` around it, or the
+  `%targets(…)` whose argument it is in. For a union passed as one
+  step it also says how to make the `+` a `++` (write `++` instead, or
+  `plus = shared` in the override, or the path wrapped in one), but
+  only where that is known to work: the union is written all with `+`
+  (no `|` or `++` read as one union with it), it is not inside or
+  beside a `%targets(…)`, and all its `+` take their kind from one
+  place. Elsewhere it says nothing about what to do with the `+`. Its
+  "write ++ there" is left out for a union that has in it what a
+  `%targets(…)` of several nodes became, which cannot be written as
+  `++`.
 
 ```ge
 graph: 0 -a-> 1, 0 -b-> 2, 1 -c-> 4, 1 -y-> 4, 2 -c-> 5, 2 -y-> 5, 4 -e-> 9, 5 -e-> 9, 1 -d-> 9, 2 -d-> 9, 0 -z-> 3, 3 -c-> 6, 3 -y-> 6, 6 -e-> 9, 3 -d-> 9, 0 -t-> 1, 0 -t-> 2
@@ -1287,9 +1296,7 @@ This path would copy a meeting point, which has no clear meaning, so the
     command): a path is refused when one way to take the sides of its | unions
     is. If the walks should come together between the two groups, put a join
     between them (/@). Otherwise write the copies out, one conjunct for each
-    pair. Writing ++ for that +, or %override({plus = shared}, …), does not
-    help here, since the path is refused with that side alone.
-    (CopiedMeetingPoint)
+    pair. (CopiedMeetingPoint)
 $ ls (a & b)/(x/@ | w/@)/((c & y)/@/e & d)
 This path would copy a meeting point, which has no clear meaning, so the
     command was not run. In `(c & y)/@/e` several walks meet at the `@` or
@@ -1321,11 +1328,9 @@ This path would copy a meeting point, which has no clear meaning, so the
     stands next to the group `((c & y)/@/e & d)` with no join of their chain
     between the two. Routes that take different sides of `(@1 | @2)` (written
     with +, which is | in this command) pass it as one step, so it keeps the
-    two groups apart for none of them; write ++ there to choose one side for
-    the whole path. If the walks should come together between the two groups,
-    put a join between them (/@). Otherwise write the copies out, one conjunct
-    for each pair. For that +, write ++ instead, or wrap the path in
-    %override({plus = shared}, …). (CopiedMeetingPoint)
+    two groups apart for none of them. If the walks should come together
+    between the two groups, put a join between them (/@). Otherwise write the
+    copies out, one conjunct for each pair. (CopiedMeetingPoint)
 ```
 
 ```ge
@@ -2547,11 +2552,9 @@ decided, that.
       it stands next to the group `((c & y)/@/e & d)` with no join of their
       chain between the two. Routes that take different sides of `(@1 | @2)`
       (written with +, which is | in this command) pass it as one step, so it
-      keeps the two groups apart for none of them; write ++ there to choose
-      one side for the whole path. If the walks should come together between
-      the two groups, put a join between them (/@). Otherwise write the copies
-      out, one conjunct for each pair. For that +, write ++ instead, or wrap
-      the path in %override({plus = shared}, …). (CopiedMeetingPoint)
+      keeps the two groups apart for none of them. If the walks should come
+      together between the two groups, put a join between them (/@). Otherwise
+      write the copies out, one conjunct for each pair. (CopiedMeetingPoint)
   ```
 
 - **A `cd` inside an `at` block** changes the history but not the node

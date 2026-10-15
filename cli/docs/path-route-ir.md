@@ -1407,9 +1407,9 @@ built so that steps follow each other's edges
 alone leaves" holds when `q` begins with a step (not with `@`, `@N` or
 `!{…}`), `mk p` and `mk p/q` alone both decide without asking, and the
 path writes no label twice (`a` and `~a` are the same label) and has no
-`*` or regex (`spec_walkStaging`; one failing cut is known inside that
-class, the fifth case below). Outside that class it fails in these
-ways:
+`*` or regex, but for one documented exception, the last case below
+(`spec_walkStaging` states the law with that exception). Outside that
+class it fails in these ways:
 
 - *A cut just before `@`, `@N` or `!{…}`.* What follows the cut says
   where the part before it ends. With node 2 and no edges,
@@ -1431,21 +1431,30 @@ ways:
   and `0 -b-> new2`, and then the `*` of `mk (*/a & c/b)/d` has three
   edges to follow; alone it has one, the loop, and decides.
 
-And one case inside the class, a documented exception to it: with
-`0 -x-> 0` and `0 -x-> 5`, `mk (x & @)/i/(l & @)/@` creates
-`0 -i-> new1` and `new1 -l-> new1`, and `mk (x & @)/i/(l & @)/@/b`
-alone creates those and `new1 -b-> new2`; but after the first command
-it asks between `N -b-> new1` (N the node the first created) and a way
-in which the `x` goes to 5, the `i` from there creates a node and the
-join goes there. Alone, that larger way contains the smaller one up to
-the naming of new nodes and is dropped; after the first command the
-smaller way's node exists, `patchSubsumes` never renames an existing
-node, and both stay. It takes a step that the product copies so that
-one copy goes into a join and the other past it (`i/(l & @)/@`), a
-conjunct `@` beside it, and a step with several edges or a union. Over
-seeds 1 to 30,000,000 of the staging property's generator, 1 of
-10,198,031 cuts failed this way; whether the class or `mk` should
-change has not been decided.
+And the exception inside the class: after `mk p`, `mk p/q` may ask
+where alone it decides. It then lists the way the law asks for (with
+what `mk p` created, it creates what `mk p/q` alone creates) and, beside
+it, only ways that alone are dropped: each of them, with what `mk p`
+created and that command's nodes counted as new again, creates
+everything `mk p/q` alone creates and more, up to the naming of new
+nodes. Such a way is listed after the first command only because an
+existing node is never renamed (`patchSubsumes`), and the nodes `mk p`
+created exist by then. With `0 -x-> 0` and `0 -x-> 5`,
+`mk (x & @)/i/(l & @)/@` creates `0 -i-> new1` and `new1 -l-> new1`,
+and `mk (x & @)/i/(l & @)/@/b` alone creates those and `new1 -b-> new2`;
+but after the first command it asks between `N -b-> new1` (N the node
+the first created) and a way in which the `x` goes to 5, the `i` from
+there creates a node and the join goes there. Alone, that larger way
+contains the smaller one up to the naming of new nodes and is dropped.
+The cases found take a step that the product copies so that one copy
+goes into a join and the other past it (`i/(l & @)/@`), a conjunct `@`
+beside it, and a step with several edges or a union. Over seeds 1 to
+30,000,000 of the staging property's generator, 1 of 10,198,031 cuts
+was this exception. The designer has ruled (2026-10-15) that `mk`
+stays as it is and that this is an exception to the law, not a fault:
+making the second command decide would take changing selection
+(4.2 of commands.md, what is listed) or the choices of a join (rule 3),
+both documented rules.
 
 **Costs.** As plainly as the benefits, counted (`WalkCost` is
 `{walks, batches}`; `spec_walkCostCounted`):
@@ -1547,8 +1556,9 @@ each end of the first match to the target with the label `""`).
   nothing iff the path already resolves; it asks iff at least two
   possibilities are left; neither the result nor whether the path is
   refused depends on the order of conjuncts or union sides;
-  `MissingNodes` only for written nodes that do not exist; the class
-  of paths for which staging holds (`spec_walkStaging`); what walking
+  `MissingNodes` only for written nodes that do not exist; staging
+  over its class, with its exception, which is pinned on the cases it
+  was found on (`spec_walkStaging`); what walking
   takes, in counted walks and batches (`spec_walkCostCounted`); the
   examples of §5 (`spec_walkExamples`), and the designer's table of
   paths built and refused (`spec_designExamples`); that the steps are

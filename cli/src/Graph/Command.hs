@@ -152,7 +152,7 @@ interpretDirective sourceRange = \case
   Targets p -> do
     currentNid <- currentLocation
     p' <- handleDirectivesWith (pure Relational) interpretDirective p
-    checkPath (plusWritten p) p'
+    checkPath (plusWrittenInTargets p) p'
     targets <- Paths.queryTargets currentNid p'
     when (null targets) $
       let shown =
@@ -341,27 +341,36 @@ editing ::
 editing = provideList_ @GraphEditing
 
 -- | Where the path as expanded has a union written @+@, and where it has
--- what a @%targets(…)@ became, a @+@ of nodes; each with whether an
--- @%override({plus = …}, …)@ around it, and not the command, says what
--- kind of union that @+@ is. A union is told by where it is, not by what
--- it looks like: a @|@ of nodes can be typed beside a @%targets(…)@.
+-- what a @%targets(…)@ became, a @+@ of nodes; each with the
+-- @%override({plus = …}, …)@ around it that says what kind of union that
+-- @+@ is, if one does and not the command. A union is told by where it
+-- is, not by what it looks like: a @|@ of nodes can be typed beside a
+-- @%targets(…)@.
 data PlusWritten = PlusWritten
-  { unions :: [(Place, Bool)],
-    targets :: [(Place, Bool)]
+  { unions :: [(Place, Maybe SourceRange)],
+    targets :: [(Place, Maybe SourceRange)],
+    -- | whether the path is the argument of a @%targets(…)@, where a @+@
+    -- is a @|@ whatever the command
+    insideTargets :: Bool
   }
 
 plusWritten :: ParsedPath -> PlusWritten
 plusWritten p =
   PlusWritten
     { unions = placesIn (\overridden -> \case DefaultUnion {} -> Just overridden; _ -> Nothing) p,
-      targets = placesIn (\overridden -> \case Directive _ (Targets _) -> Just overridden; _ -> Nothing) p
+      targets = placesIn (\overridden -> \case Directive _ (Targets _) -> Just overridden; _ -> Nothing) p,
+      insideTargets = False
     }
+
+-- | 'plusWritten' for the argument of a @%targets(…)@.
+plusWrittenInTargets :: ParsedPath -> PlusWritten
+plusWrittenInTargets p = (plusWritten p) {insideTargets = True}
 
 -- | For a union shown in an error, at a place of the path as expanded:
 -- whether it was written with @+@ (typed so, or inside what a
--- @%targets(…)@ became), and if so, whether an @%override({plus = …}, …)@
--- around it says what kind of union it is.
-plusAt :: PlusWritten -> Place -> Maybe Bool
+-- @%targets(…)@ became), and if so, which @%override({plus = …}, …)@
+-- around it says what kind of union it is, if one does.
+plusAt :: PlusWritten -> Place -> Maybe (Maybe SourceRange)
 plusAt written place =
   lookup place written.unions
     <|> (snd <$> find ((`isPrefixOf` place) . fst) written.targets)
@@ -373,7 +382,78 @@ writtenPlus written = isJust . plusAt written
 -- | Whether a union written with @+@ ('writtenPlus') has its kind from
 -- an @%override({plus = …}, …)@ around it, and not from the command.
 plusOverridden :: PlusWritten -> Place -> Bool
-plusOverridden written place = plusAt written place == Just True
+plusOverridden written place = isJust (join (plusAt written place))
+
+-- | The part of a path at a place.
+partAt :: Place -> Path -> Maybe Path
+partAt place p = case (place, p) of
+  ([], _) -> Just p
+  (0 : rest, Simple.Backwards q) -> partAt rest q
+  (i : rest, l Simple.:/ r) -> partAt rest =<< [l, r] `index` i
+  (i : rest, l Simple.:& r) -> partAt rest =<< [l, r] `index` i
+  (i : rest, Simple.Union _ l r) -> partAt rest =<< [l, r] `index` i
+  _ -> Nothing
+
+-- | The union at a place of the path as expanded, as 'checkCopies' reads
+-- it: with the unions of its kind right inside it (also under @~@) read
+-- as one with it. The places of its operators, and of its sides.
+readUnionAt :: Path -> Place -> ([Place], [Place])
+readUnionAt p here = case partAt here p of
+  Just u@(Simple.Union kind _ _) -> go kind here u
+  _ -> ([], [])
+  where
+    go kind place = \case
+      Simple.Union kind' l r
+        | kind' == kind ->
+            ([place], []) <> go kind (operand 0 place) l <> go kind (operand 1 place) r
+      Simple.Backwards q -> go kind (operand 0 place) q
+      _ -> ([], [place])
+
+-- | Whether a place of the path as expanded is in what a @%targets(…)@
+-- became.
+inTargets :: PlusWritten -> Place -> Bool
+inTargets written place = any ((`isPrefixOf` place) . fst) written.targets
+
+-- | Whether the union at a place of the path as expanded, read as one
+-- ('readUnionAt'), is or has beside it what a @%targets(…)@ became.
+besideTargets :: PlusWritten -> Path -> Place -> Bool
+besideTargets written p here =
+  any (inTargets written) (here : uncurry (<>) (readUnionAt p here))
+
+-- | Whether writing @++@ for every @|@ and @+@ of the union at a place of
+-- the path as expanded, read as one ('readUnionAt'), leaves no part of it
+-- a @|@: whether none of its operators is one of what a @%targets(…)@ of
+-- several nodes became, which cannot be written so. (A @%targets(…)@
+-- becomes a union of @%never@ and its first node, then of that and each
+-- other node: the first union is its first node alone.)
+plusPlusThere :: PlusWritten -> Path -> Place -> Bool
+plusPlusThere written p here =
+  not $
+    any
+      (\place -> inTargets written place && twoSides (partAt place p))
+      (fst (readUnionAt p here))
+  where
+    twoSides = \case
+      Just (Simple.Union _ Simple.Zero _) -> False
+      Just (Simple.Union _ _ Simple.Zero) -> False
+      _ -> True
+
+-- | For a union at a place of the path as expanded that is read as @|@
+-- and written with @+@: whether writing @++@ for that @+@, or saying
+-- @plus = shared@ where its kind comes from, is known to make it a @++@
+-- ('readUnionAt'). That is a union written all with @+@ (no @|@ or
+-- @++@ read as one with it), not inside or beside a @%targets(…)@ (whose
+-- union the user cannot write as @++@, and whose argument the override
+-- of the path does not reach), whose @+@ all take their kind from one
+-- place. If it is, that place: the @%override({plus = …}, …)@ around
+-- it, or the command.
+plusAdvisable :: PlusWritten -> Path -> Place -> Maybe (Maybe SourceRange)
+plusAdvisable written p here
+  | written.insideTargets || besideTargets written p here = Nothing
+  | otherwise =
+      case traverse (`lookup` written.unions) (fst (readUnionAt p here)) of
+        Just (source : others) | all (== source) others -> Just source
+        _ -> Nothing
 
 -- | What a path had as typed that it does not show once its directives
 -- are expanded, for what a refusal of its shape suggests. The path is one
@@ -423,14 +503,6 @@ spec_asTyped =
         mark = \case
           Targets _ -> Just (Literal "%targets")
           _ -> Nothing
-        partAt :: Place -> Path -> Maybe Path
-        partAt place p = case (place, p) of
-          ([], _) -> Just p
-          (0 : rest, Simple.Backwards q) -> partAt rest q
-          (i : rest, l Simple.:/ r) -> partAt rest =<< [l, r] `index` i
-          (i : rest, l Simple.:& r) -> partAt rest =<< [l, r] `index` i
-          (i : rest, Simple.Union _ l r) -> partAt rest =<< [l, r] `index` i
-          _ -> Nothing
         marksAt t = do
           p <- parseForTest "path" pPath t
           let places = (asTyped p).targets
@@ -464,7 +536,7 @@ checkPath ::
   Eff effs ()
 checkPath written p = case checkCopies p of
   Left refusal ->
-    throwError . OtherError $ renderCopiedMeetingPoint written refusal
+    throwError . OtherError $ renderCopiedMeetingPoint written p refusal
   Right idle ->
     for_ (renderIdleJoins idle) \warning -> do
       ShownWarnings shown <- get
@@ -490,8 +562,9 @@ plain p = "`" ++ renderSurfacePath p ++ "`"
 -- point, and what to write instead. Commands before it on the line have
 -- run, and the directives of the path are expanded already (a URL in it
 -- is imported), so the error says only that this command was not run.
-renderCopiedMeetingPoint :: PlusWritten -> CopiedMeetingPoint -> Text
-renderCopiedMeetingPoint written r =
+-- The path is the one refused, as expanded.
+renderCopiedMeetingPoint :: PlusWritten -> Path -> CopiedMeetingPoint -> Text
+renderCopiedMeetingPoint written p r =
   "This path would copy a meeting point, which has no clear meaning, so"
     ++ " the command was not run. "
     ++ ( case r.across of
@@ -564,8 +637,11 @@ renderCopiedMeetingPoint written r =
           ++ quoted u
           ++ plusAs here
           ++ " pass it as one step, so it keeps the two groups apart for"
-          ++ " none of them; write ++ there to choose one side for the"
-          ++ " whole path."
+          ++ " none of them"
+          ++ ( if plusPlusThere written p here
+                 then "; write ++ there to choose one side for the whole path."
+                 else "."
+             )
     plusAs here
       | writtenPlus written here =
           " (written with +, which is | " ++ plusFrom here ++ ")"
@@ -573,53 +649,29 @@ renderCopiedMeetingPoint written r =
     -- what makes a + the kind of union it is
     plusFrom here
       | plusOverridden written here = "by the %override({plus = …}, …) around it"
+      | written.insideTargets = "inside %targets(…)"
       | otherwise = "in this command"
     isShared = \case
       Union Shared _ _ -> True
       _ -> False
     stepped = [here | AsOneStep _ here <- r.readings, writtenPlus written here]
-    sided =
-      [ here
-      | SideInPlace u _ here <- r.readings,
-        not (isShared u),
-        writtenPlus written here
-      ]
-    -- what else makes a + a ++: an override around the path, or, where
-    -- the + is in one that makes it a | already, that one saying shared
-    sharedInstead us
-      | any (plusOverridden written) us =
-          "say plus = shared in the %override around it"
-      | otherwise = "wrap the path in %override({plus = shared}, …)"
-    plusNote
-      | not (null stepped) =
-          " For that +, write ++ instead, or "
-            ++ sharedInstead stepped
-            ++ "."
-      | not (null sided) =
-          " Writing ++ for that +, or "
-            ++ ( if any (plusOverridden written) sided
-                   then "plus = shared in the %override around it"
-                   else "%override({plus = shared}, …)"
-               )
-            ++ ", does not help here, since the path is refused with that"
-            ++ " side alone."
-      | otherwise = ""
+    -- the advice only where it is known to work ('plusAdvisable'), for
+    -- every + read as one step, all with their kind from one place
+    plusNote = case traverse (plusAdvisable written p) stepped of
+      Just (source : others)
+        | all (== source) others ->
+            " For that +, write ++ instead, or "
+              ++ ( case source of
+                     Just _ -> "say plus = shared in the %override around it"
+                     Nothing -> "wrap the path in %override({plus = shared}, …)"
+                 )
+              ++ "."
+      _ -> ""
 
 spec_renderCopiedMeetingPoint :: Spec
-spec_renderCopiedMeetingPoint =
+spec_renderCopiedMeetingPoint = do
   it "says that a union was written with + only where a + or a %targets(…) was" do
-    let -- the message for a path that ls refuses, with each %targets(…)
-        -- finding @000000000001 and @000000000002
-        message t = do
-          p0 <- parseForTest "path" pPath t
-          let found = \case
-                Targets _ ->
-                  Just (foldl' (\u n -> DefaultUnion () u (Absolute (smallNID n))) Zero [1, 2])
-                _ -> Nothing
-          p <- maybe (fail "a directive other than %targets") pure (handleDirectivesWith (Just Relational) (const found) p0)
-          pure (either (Just . renderCopiedMeetingPoint (plusWritten p0)) (const Nothing) (checkCopies p))
-        noted t = fmap (isInfixOf "(written with +") <$> message t
-        twoGroups u = "(a & b)/" <> u <> "/((c & y)/@/e & d)"
+    let noted t = fmap (isInfixOf "(written with +") <$> message t
     for_
       [ -- what a %targets(…) became, and a + typed
         (twoGroups "%targets(t)", True),
@@ -645,6 +697,74 @@ spec_renderCopiedMeetingPoint =
     fmap (isInfixOf overridden)
       <$> message (twoGroups "(@000000000001 | @000000000002)" <> " & %override({plus = relational}, %targets(t))")
         `shouldReturn` Just False
+  it "advises ++ or plus = shared for a + only where that makes it a ++" do
+    let wrap = "For that +, write ++ instead, or wrap the path in %override({plus = shared}, …)."
+        sayShared = "For that +, write ++ instead, or say plus = shared in the %override around it."
+        there = "write ++ there"
+        -- which of these the message for the path has
+        says t = fmap (\m -> [s | s <- [wrap, sayShared, there], s `isInfixOf` m]) <$> message t
+    for_
+      [ -- a union written all with +, its kind from one place
+        (twoGroups "(x/@ + w/@)", [wrap, there]),
+        ("%override({plus = relational}, " <> twoGroups "(x/@ + w/@)" <> ")", [sayShared, there]),
+        -- an %override that does not say plus says nothing about a +
+        ("%override({}, " <> twoGroups "(x/@ + w/@)" <> ")", [wrap, there]),
+        -- and does not hide what one around it says
+        ("%override({plus = relational}, %override({}, " <> twoGroups "(x/@ + w/@)" <> "))", [sayShared, there]),
+        -- a | read as one union with the +: ++ for the + alone keeps the |
+        (twoGroups "((x/@ | y/@) + w/@)", [there]),
+        -- beside a %targets(…), which cannot be written as ++
+        (twoGroups "(@000000000009 + %targets(t))", []),
+        (twoGroups "(@000000000009 | %targets(t))", []),
+        (twoGroups "%targets(t)", []),
+        -- a %targets(…) of one node is not a union: ++ for the + is a ++
+        -- there, but nothing is advised for a + beside a %targets(…)
+        (twoGroups "(%targets(v) + @000000000009 + x/@)", [there]),
+        -- a + whose kind comes from two places, an %override inside it
+        -- and the command
+        (twoGroups "(x/@ + %override({plus = relational}, y/@ + w/@))", [there]),
+        -- a route that takes a side: a ++ would be refused with that side
+        -- too, and nothing is advised for the +
+        ("((a & b) + z)/((c & y)/@/e & d)", []),
+        (twoGroups "(@000000000005 + (@000000000001 ++ (@000000000007 + @000000000004)))", [])
+      ]
+      \(t, advice) -> do
+        said <- says t
+        (t, said) `shouldBe` (t, Just advice)
+    -- the sentence that said that neither helps is gone
+    fmap (isInfixOf "does not help")
+      <$> message "((a & b) + z)/((c & y)/@/e & d)"
+        `shouldReturn` Just False
+    -- the facts of the note are kept
+    message (twoGroups "((x/@ | y/@) + w/@)")
+      `shouldReturn` Just "This path would copy a meeting point, which has no clear meaning, so the command was not run. In `(c & y)/@/e` several walks meet at the `@` or leave it, and `(a & b)` would copy it, once for each of its conjuncts: it stands next to the group `((c & y)/@/e & d)` with no join of their chain between the two. Routes that take different sides of `(x/@ | y/@ | w/@)` (written with +, which is | in this command) pass it as one step, so it keeps the two groups apart for none of them; write ++ there to choose one side for the whole path. If the walks should come together between the two groups, put a join between them (/@). Otherwise write the copies out, one conjunct for each pair. (CopiedMeetingPoint)"
+  it "says that a + is | inside %targets(…), and advises nothing for it there" do
+    said <- messageWith plusWrittenInTargets (twoGroups "(x/@ + w/@)")
+    fmap (isInfixOf "(written with +, which is | inside %targets(…))") said `shouldBe` Just True
+    fmap (isInfixOf "For that +") said `shouldBe` Just False
+  it "finds a union inside an & under ~" do
+    -- the place of a union under ~ in a conjunct: an & keeps its order
+    -- there, a sequence does not
+    fmap (isInfixOf "(written with +, which is | in this command)")
+      <$> message ("~(" <> twoGroups "(x1/@ + x2/@)" <> " & k1)")
+        `shouldReturn` Just True
+  where
+    -- the message for a path that ls refuses, with %targets(v) finding
+    -- @000000000003 and each other %targets(…) @000000000001 and
+    -- @000000000002
+    message = messageWith plusWritten
+    messageWith written t = do
+      p0 <- parseForTest "path" pPath t
+      let found = \case
+            Targets q ->
+              Just . foldl' (\u n -> DefaultUnion () u (Absolute (smallNID n))) Zero $
+                case q of
+                  Literal "v" -> [3]
+                  _ -> [1, 2]
+            _ -> Nothing
+      p <- maybe (fail "a directive other than %targets") pure (handleDirectivesWith (Just Relational) (const found) p0)
+      pure (either (Just . renderCopiedMeetingPoint (written p0) p) (const Nothing) (checkCopies p))
+    twoGroups u = "(a & b)/" <> u <> "/((c & y)/@/e & d)"
 
 -- | The warning about the joins of a path that do nothing, if it has any.
 renderIdleJoins :: [IdleJoin] -> Maybe Text

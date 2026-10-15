@@ -363,41 +363,132 @@ genDistinctCase = do
           wrap <- frequency [(9, pure id), (1, pure P.Backwards)]
           pure (wrap (op l r), rest')
 
+-- | A cut of a path @p/q@ for the staging law: the prefix @p@, what
+-- @mk p/q@ alone creates, what @mk p@ creates, and what @mk p/q@ does
+-- after it.
+data StagingCut = StagingCut
+  { prefix :: P.Path,
+    whole :: Patch,
+    first :: Patch,
+    after :: Either ResidualError Residuation
+  }
+  deriving stock (Eq, Show)
+
+-- | The cuts of a path that the staging law speaks of, on a graph: @q@
+-- begins with a step (not with @\@@, @\@N@ or @!{…}@), and @mk p@ and
+-- @mk p/q@ alone both decide without asking.
+stagingCuts :: P.Path -> Graph Text () -> [StagingCut]
+stagingCuts p g =
+  [ StagingCut {prefix, whole = whole', first = first', after = run (applyPatch first' g) p}
+  | let parts = sequenceParts p,
+    k <- [1 .. length parts - 1],
+    not (startsWithJoin (parts `indexEx` k)),
+    let prefix = foldl1Ex' (P.:/) (take k parts),
+    admitted prefix,
+    Just first' <- [decided (run g prefix)],
+    Just whole' <- [decided (run g p)]
+  ]
+
+-- | Whether a way of @mk p/q@ after @mk p@, with what @mk p@ created,
+-- creates what @mk p/q@ alone creates (the nodes @mk p@ created are new
+-- nodes of the whole, as in 'both').
+completes :: StagingCut -> Patch -> Bool
+completes c way = samePatch (both c.first way) c.whole
+
+-- | The staging law without its exception: after @mk p@, @mk p/q@
+-- decides, and with what @mk p@ created it creates what @mk p/q@ alone
+-- creates.
+stagingLawAlone :: StagingCut -> Bool
+stagingLawAlone c = case decided c.after of
+  Just rest -> completes c rest
+  Nothing -> False
+
+-- | The documented exception to the staging law (docs/commands.md 4.7,
+-- docs/path-route-ir.md section 5): after @mk p@, @mk p/q@ asks; exactly
+-- one of its ways is the one the law asks for; and each of the others,
+-- with what @mk p@ created and that command's nodes counted as new again,
+-- creates everything @mk p/q@ alone creates and more, up to the naming of
+-- new nodes. Alone such a way is dropped (selection drops a way that
+-- contains another), and it is listed after @mk p@ only because an
+-- existing node is never renamed.
+stagingException :: StagingCut -> Bool
+stagingException c = case c.after of
+  Right (Repairs rs@(_ :| _ : _)) ->
+    case partition (completes c) (map (.patch) (toList rs)) of
+      ([_], others) -> all larger others
+      _ -> False
+  _ -> False
+  where
+    larger way =
+      let combined = both c.first way
+       in patchSubsumes c.whole combined && not (patchSubsumes combined c.whole)
+
+-- | The staging law as the documents state it, with its exception.
+stagingHolds :: StagingCut -> Bool
+stagingHolds c = stagingLawAlone c || stagingException c
+
 spec_walkStaging :: Spec
 spec_walkStaging = describe "staging: mk p and then mk p/q" do
-  -- Not a law of every path (the examples of the exceptions are in
+  -- Not a law of every path (the examples of what breaks it are in
   -- "Models.PathPattern.ResiduateSpec"). It holds where q begins with a
   -- step, mk p and mk p/q alone both decide without asking, and the path
-  -- writes no label twice and has no * or regex.
-  let cuts (p, g) =
-        [ (prefix, whole', after', g)
-        | let parts = sequenceParts p,
-          k <- [1 .. length parts - 1],
-          not (startsWithJoin (parts `indexEx` k)),
-          let prefix = foldl1Ex' (P.:/) (take k parts),
-          admitted prefix,
-          Just first' <- [decided (run g prefix)],
-          Just whole' <- [decided (run g p)],
-          let after' = (first', run (applyPatch first' g) p)
-        ]
-      holds (_, whole', (first', after'), _) = case decided after' of
-        Just rest -> samePatch (both first' rest) whole'
-        Nothing -> False
-  it "leaves what mk p/q alone leaves, where no label is written twice" . withMaxSuccess 4000 $
+  -- writes no label twice and has no * or regex; with one exception,
+  -- 'stagingException'.
+  let guarded (p, g) = admitted p && not (tooMany (run g p))
+  it "leaves what mk p/q alone leaves, where no label is written twice, but for the exception" . withMaxSuccess 4000 $
     forAll genDistinctCase \c@(p, g) ->
-      (admitted p && not (tooMany (run g p)))
+      guarded c
         ==> conjoin
-          [ counterexample (show (prefix, whole', after')) (holds cut)
-          | cut@(prefix, whole', after', _) <- cuts c
-          ]
+          [counterexample (show cut) (stagingHolds cut) | cut <- stagingCuts p g]
   it "is tried on cuts of every kind" do
     -- the same paths every time
     let cases = [unGen genDistinctCase (mkQCGen seed) 30 | seed <- [1 .. 3000]]
-        tried = concatMap cuts (filter (\(p, g) -> admitted p && not (tooMany (run g p))) cases)
-        creating = [() | (_, _, (first', after'), _) <- tried, not (null first'.edges), after' /= Right AlreadyResolves]
+        tried = concatMap (uncurry stagingCuts) (filter guarded cases)
+        creating =
+          [ ()
+          | c <- tried,
+            not (null c.first.edges),
+            c.after /= Right AlreadyResolves
+          ]
     length tried `shouldSatisfy` (> 1000)
     length creating `shouldSatisfy` (> 300)
-    filter (not . holds) tried `shouldBe` []
+    -- none of them is the exception
+    filter (not . stagingLawAlone) tried `shouldBe` []
+  describe "the exception: the cases it was found on" do
+    -- docs/commands.md 4.7 and cli/tmp/law-staging's report, with node 1
+    -- for the current node (node 0 there); q is the last part
+    let exceptionAt nodes edges t = do
+          let p = typed t
+              g = corpusGraph nodes edges
+              cuts = stagingCuts p g
+              last' = [c | c <- cuts, c.prefix == foldl1Ex' (P.:/) (initEx (sequenceParts p))]
+          guarded (p, g) `shouldBe` True
+          -- at the last cut the law fails, and the exception holds
+          map stagingLawAlone last' `shouldBe` [False]
+          map stagingException last' `shouldBe` [True]
+          filter (not . stagingHolds) cuts `shouldBe` []
+    it "with no union: 1 -x-> 1, 1 -x-> 5 and (x & @)/i/(l & @)/@/b" $
+      exceptionAt [5] [(1, "x", 1), (1, "x", 5)] "(x & @)/i/(l & @)/@/b"
+    it "on a graph with no edges: ((a | !{@2}) & @)/i/(l & @)/@/b" $
+      exceptionAt [] [] "((a | !{@2}) & @)/i/(l & @)/@/b"
+    it "the same with ((a | @) & @)" $
+      exceptionAt [] [] "((a | @) & @)/i/(l & @)/@/b"
+    it "the same with ++" $
+      exceptionAt [] [] "((a ++ !{@2}) & @)/i/(l & @)/@/b"
+    it "from the generator, seed 6170797, shrunk" $
+      exceptionAt [3] [] "((@ & (j ++ @1))/f/(l & !{@2,@3,@4}))/!{@1,@2}/e"
+    it "the case the property first failed on" $
+      exceptionAt
+        [3, 4, 5]
+        [(1, "e", 3), (3, "i", 5), (4, "b", 5), (5, "c", 5)]
+        "(((a | @5) | !{@2}) & @)/i/(l & @)/@/b"
+  where
+    -- node 1 (the corpus's current node), these nodes and these edges
+    corpusGraph :: [Int] -> [(Int, Text, Int)] -> Graph Text ()
+    corpusGraph nodes edges =
+      insertEdges
+        [edge' s l t | (s, l, t) <- edges]
+        (foldl' (\g k -> insertNode (emptyNode (smallNID k)) g) emptyGraph (1 : nodes))
 
 -- * Paths built so that steps could follow each other's edges
 

@@ -292,19 +292,20 @@ directivePlaces wanted =
 -- something, in the path that 'handleDirectivesWith' makes of this one,
 -- with what it gives: each is where the part was (the path of an
 -- @%override@ takes the place of the override). The function is also
--- told whether an @%override@ around the part says what a @+@ is. What a
+-- told which @%override@ around the part says what a @+@ is, if one
+-- does: the innermost one that says it, by where it is written. What a
 -- directive expands to is not looked inside, but the path of an
 -- @%override@ is.
 placesIn ::
-  (Bool -> Path' 'WithDirectives -> Maybe a) ->
+  (Maybe SourceRange -> Path' 'WithDirectives -> Maybe a) ->
   Path' 'WithDirectives ->
   [(Place, a)]
-placesIn found = go [] False
+placesIn found = go [] Nothing
   where
     go place plusSet p =
       toList ((place,) <$> found plusSet p) <> case p of
-        Directive _ (Override settings q) ->
-          go place (plusSet || isJust settings.plus) q
+        Directive range (Override settings q) ->
+          go place (if isJust settings.plus then Just range else plusSet) q
         Directive _ _ -> []
         Backwards' q -> go (operand 0 place) plusSet q
         l ::/ r -> both l r

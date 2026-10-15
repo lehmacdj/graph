@@ -1390,8 +1390,8 @@ This path needs @7, which does not exist, and a node with a written id is
 `mk p` and then `mk p/q` usually leaves what `mk p/q` alone leaves, but
 not always. It does when `q` begins with a step, both commands decide
 without asking, and the path writes no label twice and has no `*` or
-regex, with one known exception (the last example below). Outside
-that, these break it:
+regex, with one documented exception (the last example below).
+Outside that, these break it:
 
 ```ge
 graph: 0, 2
@@ -1497,9 +1497,10 @@ Alone, the `*` has one edge to follow, the loop: the `b` edge is
 created further from the start. The first command creates `0 -a-> new`
 and `0 -b-> new`, and after it the `*` has three.
 
-One more case is inside the class, and is a known exception to it:
-both commands decide alone, `q` is the step `b`, no label is written
-twice, and there is no `*`. Yet after `mk p` the second command asks:
+One more case is inside the class, and is the documented exception to
+it: both commands decide alone, `q` is the step `b`, no label is
+written twice, and there is no `*`. Yet after `mk p` the second command
+asks:
 
 ```ge
 graph: 0 -x-> 0, 0 -x-> 5
@@ -1536,11 +1537,16 @@ everything the way that is kept creates and more, up to the naming of
 new nodes, and is dropped (4.2, "What is listed"). After the first
 command the node of the kept way exists, and an existing node is never
 renamed, so the larger way no longer contains the other and both are
-listed. What that takes is a step that the product copies so that one
-copy goes into a join and the other past it (`i/(l & @)/@`), a
+listed. That is the exception, and the whole of it: after `mk p`,
+`mk p/q` may ask, listing the way the law asks for and beside it only
+ways that alone are dropped, each of which, with what `mk p` created
+(its nodes counted as new), creates everything `mk p/q` alone creates
+and more. The cases found take a step that the product copies so that
+one copy goes into a join and the other past it (`i/(l & @)/@`), a
 conjunct `@` (or the current node) beside it, and something that has
 several edges to follow or a union. Of about ten million cuts of
-generated paths in the class, one failed this way.
+generated paths in the class, one was this exception. `mk` stays as it
+is: the designer has accepted the exception (2026-10-15).
 
 ### 4.8 Paths that `mk` refuses for their shape
 
@@ -2147,9 +2153,11 @@ Each item says what the build does and what is pending or undecided.
   counts high, so a path can be refused where the same path written
   out is built, and a conjunct that has nothing to do with the rest can
   tip a path over the limit.
-- `mk p` and then `mk p/q` can leave something else than `mk p/q`
-  alone for a path inside the class of 4.7 (its last example). Whether
-  the class, or `mk`, is to change is not decided.
+- `mk p` and then `mk p/q` can ask where `mk p/q` alone decides, for
+  a path inside the class of 4.7 (its last example), and the designer
+  has accepted that: the second command then lists, beside the way
+  `mk p/q` alone takes, only ways that alone are dropped for creating
+  more.
 - Nothing bounds the cost of compiling or matching a large path in a
   query (5.1). In `mk` and `tag` the estimate (4.8) bounds what a path
   compiles to, and `--max-repairs` bounds a count of walks, not time
