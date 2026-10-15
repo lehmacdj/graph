@@ -1,5 +1,6 @@
 module Executable.GraphEditor.GoldenSpec where
 
+import Control.Exception qualified as E
 import DAL.DTO (nodeToDTO)
 import DAL.DirectoryFormat (legacyNodeDataFile, metadataFile)
 import DAL.DumpGraph
@@ -11,6 +12,7 @@ import Data.Attoparsec.Combinator (lookAhead)
 import Data.ByteString qualified as B
 import Data.ByteString.Lazy qualified as BL
 import Data.Text qualified as T
+import GHC.Clock qualified as Clock
 import Graph.SystemNodes.Init (systemEdges)
 import Models.Connect
 import Models.Edge
@@ -36,6 +38,7 @@ import System.Directory
 import System.Environment (getEnvironment)
 import System.FilePath
 import System.FilePath.Glob
+import System.Posix.Signals (sigKILL, signalProcessGroup)
 import System.Process.Typed
 import Test.Tasty.Golden
 import Utils.Testing
@@ -208,7 +211,7 @@ runGraphEditor test@GoldenTest {..} =
       for_ baseGraph (writeBaseGraph tmpGraph)
       environment <- getEnvironment
       (exitCode', stdOut', stdErr') <-
-        readProcess $
+        readGeProcess $
           proc
             "ge"
             ( [ "--test-only-nid-generation-seed",
@@ -250,6 +253,50 @@ geEnvironment :: FilePath -> [(String, String)] -> [(String, String)]
 geEnvironment dataHome environment =
   [("XDG_DATA_HOME", dataHome), ("EDITOR", "true")]
     <> filter ((`notElem` ["XDG_DATA_HOME", "EDITOR"]) . fst) environment
+
+-- | 'readProcess' for a run of @ge@: its exit code, stdout and stderr. @ge@
+-- runs in a process group of its own, and when this is stopped from outside
+-- (by a 'timeout' around it) the whole group is killed first: @ge@ and
+-- whatever it started.
+--
+-- 'readProcess' alone did not end a run at a timeout. Its cleanup closes
+-- the pipes of stdout and stderr before it stops the process, and closing
+-- one waits for the thread that reads it, which waits for the end of the
+-- output: while @ge@ ran an editor that waited for input, that never came,
+-- @ge@ was never sent its SIGTERM, and the test waited for good (once 11
+-- hours, until the editors were killed).
+readGeProcess ::
+  ProcessConfig stdin stdout stderr ->
+  IO (ExitCode, LByteString, LByteString)
+readGeProcess config = E.mask \restore -> do
+  running <-
+    startProcess $
+      config
+        & setCreateGroup True
+        & setStdout byteStringOutput
+        & setStderr byteStringOutput
+  -- the number of the group: the process's, which stays the group's while
+  -- anything of the group is left, also once the process has ended
+  group <- getPid running
+  let killGroup = for_ group \pid ->
+        signalProcessGroup sigKILL pid `E.catch` \(_ :: IOException) -> pure ()
+  ran <-
+    restore
+      ( atomically $
+          (,,)
+            <$> waitExitCodeSTM running
+            <*> getStdout running
+            <*> getStderr running
+      )
+      `E.onException` do
+        killGroup
+        -- What stopped this comes out as itself, also when the stop fails,
+        -- as it does when the process ends while it is stopped (see
+        -- 'Effect.IOWrapper.Editor.runToEnd'): "waitForProcess: does not
+        -- exist (No child processes)".
+        stopProcess running `E.catch` \(_ :: IOException) -> pure ()
+  stopProcess running
+  pure ran
 
 data BaseGraphLine
   = BaseEdge (Edge Text)
@@ -397,7 +444,7 @@ runGeWith variables graph arguments toStdin =
         . geEnvironment dataHome
         <$> getEnvironment
     (exitCode, out, err) <-
-      readProcess $
+      readGeProcess $
         proc
           "ge"
           ( [ "--test-only-nid-generation-seed",
@@ -988,6 +1035,19 @@ spec_importUnreadable = do
       '\ESC' : '[' : rest -> uncoloured (drop 1 (dropWhile (/= 'm') rest))
       c : rest -> c : uncoloured rest
       [] -> []
+
+spec_readGeProcess :: Spec
+spec_readGeProcess =
+  it "ends the run, and what it started, at a timeout around it" do
+    -- in place of ge, a program that starts one that holds its output and
+    -- waits for 20 seconds: the run ended only when that one did
+    started <- Clock.getMonotonicTime
+    ran <-
+      timeout 1000000 . readGeProcess $
+        proc "sh" ["-c", "sleep 20 & wait"] & setStdin nullStream
+    took <- subtract started <$> Clock.getMonotonicTime
+    ran `shouldBe` Nothing
+    took `shouldSatisfy` (< 10)
 
 spec_editor :: Spec
 spec_editor = do
