@@ -7,10 +7,12 @@
 module Graph.Import.FileSystem where
 
 import Data.Digest.Pure.SHA
-import Effect.IOWrapper.Echo
+import Data.List.NonEmpty qualified as NonEmpty
 import Effect.IOWrapper.FileSystem
 import Effect.IOWrapper.GetTime
 import Error.Missing
+import Error.UserError
+import Error.Warn
 import Graph.FreshNID
 import Graph.GraphEditing (HasGraph)
 import Graph.GraphMetadataEditing
@@ -21,12 +23,19 @@ import Models.Edge
 import Models.NID
 import MyPrelude
 import System.Directory.Tree hiding (readDirectory)
+import System.FilePath qualified as FilePath
 
 computeSHA :: ByteString -> Text
 computeSHA = pack . showDigest . sha512 . fromStrict
 
+-- | Import the directory under the node. A directory that can't be read
+-- imports nothing and fails; the parts of it that can't be read are
+-- skipped, with a warning that names them.
 importDirectory ::
-  ( Members [GetTime, FreshNID, FileSystem, Echo, Error Missing] effs,
+  ( Members
+      [GetTime, FreshNID, FileSystem, Warn UserError, Error UserError]
+      effs,
+    Error Missing :> effs,
     HasGraph Text effs
   ) =>
   FilePath ->
@@ -34,13 +43,24 @@ importDirectory ::
   Eff effs ()
 importDirectory base nid = do
   fileTree <- readDirectory base
-  when (anyFailed fileTree) do
-    echo $
-      "error: search failed at least partially, "
-        ++ "missed directories will be ignored"
-    echo "the failed files are:"
-    echo . show $ failures fileTree
-  addDirectories fileTree nid
+  case fileTree of
+    Failed _ e -> throwError (UnreadableDirectory base e)
+    _ -> do
+      for_ (NonEmpty.nonEmpty (unreadableParts fileTree)) $
+        warn . UnreadablePartsSkipped base
+      addDirectories fileTree nid
+
+-- | The parts of a directory tree that could not be read, each by its path
+-- below the root of the tree, with why.
+unreadableParts :: DirTree a -> [(FilePath, IOError)]
+unreadableParts = \case
+  Dir _ children -> concatMap (go "") children
+  _ -> []
+  where
+    go above = \case
+      Failed name e -> [(above FilePath.</> name, e)]
+      Dir name children -> concatMap (go (above FilePath.</> name)) children
+      File _ _ -> []
 
 addDirectories ::
   (Members [FreshNID, Error Missing, GetTime] effs, HasGraph Text effs) =>

@@ -1320,7 +1320,7 @@ runCommand' open = \case
   Import fp -> do
     guardDangerousDualizedOperation
     fp' <- subsumeUserError @IOError . untry $ canonicalizePath fp
-    editing . subsumeUserError $ importDirectory fp' nilNID
+    editing . subsumeUserError @Missing $ importDirectory fp' nilNID
     changeLocation nilNID
   ImportUrl uri -> editing (importUrlOnce uri) >>= changeLocation
   Debug -> do

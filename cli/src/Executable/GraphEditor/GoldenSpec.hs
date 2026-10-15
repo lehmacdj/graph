@@ -19,13 +19,17 @@ import Models.NID
 import Models.Node (Node, Node' (..), emptyNode)
 import MyPrelude
 import System.Directory
-  ( createDirectory,
+  ( canonicalizePath,
+    createDirectory,
+    createDirectoryIfMissing,
     createFileLink,
     doesPathExist,
     getPermissions,
     listDirectory,
     removeFile,
     renameFile,
+    setOwnerExecutable,
+    setOwnerReadable,
     setOwnerWritable,
     setPermissions,
   )
@@ -906,6 +910,84 @@ spec_noGraphDirectory = do
       let graph = directory </> "does-not-exist"
       (code, out, err) <- runGe graph [] "nid\n"
       (code, out, unpack (decodeUtf8 err)) `shouldBe` (1, "", says graph)
+
+spec_importUnreadable :: Spec
+spec_importUnreadable = do
+  let ge directory command = do
+        (code, out, err) <- runGe directory ["-e", command] ""
+        pure (code, unpack (decodeUtf8 out), unpack (decodeUtf8 err))
+      -- the paths of the files and directories of the tree, made
+      -- unreadable while the action runs
+      unreadable :: [FilePath] -> IO a -> IO a
+      unreadable paths action = do
+        was <- traverse getPermissions paths
+        let none =
+              setOwnerReadable False . setOwnerExecutable False
+        bracket_
+          (for_ (zip paths was) \(path, p) -> setPermissions path (none p))
+          (for_ (zip paths was) (uncurry setPermissions))
+          action
+  it "fails, saying readably why, when the directory can't be read" $
+    withTempGraph Nothing \graph ->
+      withSystemTempDirectory "import" \scratch -> do
+        writeBaseGraph graph "0 -a-> 1\n"
+        -- what :i says has the whole path, as the system gives it
+        missing <- (</> "not-there") <$> canonicalizePath scratch
+        before <- directoryAsItIs graph
+        result <- ge graph (":i " <> missing)
+        result
+          `shouldBe` ( 1,
+                       "",
+                       "nothing was imported: "
+                         <> missing
+                         <> " could not be read (unreadable-directory): it is"
+                         <> " not there ("
+                         <> missing
+                         <> ": getDirectoryContents:openDirStream: does not"
+                         <> " exist (No such file or directory))\n"
+                     )
+        directoryAsItIs graph `shouldReturn` before
+  it "imports what it can read, and says readably what it skipped" $
+    withTempGraph Nothing \graph ->
+      withSystemTempDirectory "import" \scratch -> do
+        writeBaseGraph graph "0 -a-> 1\n"
+        tree <- (</> "tree") <$> canonicalizePath scratch
+        for_ ["sub", "deep" </> "inner"] (createDirectoryIfMissing True . (tree </>))
+        for_ ["ok.txt", "bad.txt", "sub" </> "in.txt", "deep" </> "y"] \file ->
+          B.writeFile (tree </> file) "text"
+        (code, _, err) <-
+          unreadable (map (tree </>) ["bad.txt", "sub", "deep" </> "inner"]) $
+            ge graph (":i " <> tree)
+        code `shouldBe` 0
+        case lines err of
+          heading : skipped -> do
+            heading
+              `shouldBe` "warning: parts of "
+              <> tree
+              <> " could not be read and were not imported (unreadable-files)"
+            sort skipped
+              `shouldBe` [ "- bad.txt: there is no permission to read it ("
+                             <> (tree </> "bad.txt")
+                             <> ": withBinaryFile: permission denied"
+                             <> " (Permission denied))",
+                           "- deep/inner: there is no permission to read it ("
+                             <> (tree </> "deep" </> "inner")
+                             <> ": getDirectoryContents:openDirStream:"
+                             <> " permission denied (Permission denied))",
+                           "- sub: there is no permission to read it ("
+                             <> (tree </> "sub")
+                             <> ": getDirectoryContents:openDirStream:"
+                             <> " permission denied (Permission denied))"
+                         ]
+          [] -> expectationFailure "said nothing"
+        (_, listed, _) <- ge graph "ls tree/* | tree/deep/*"
+        map (headEx . words) (lines (uncoloured listed))
+          `shouldMatchList` ["tree/deep", "tree/ok.txt", "tree/deep/y"]
+  where
+    uncoloured = \case
+      '\ESC' : '[' : rest -> uncoloured (drop 1 (dropWhile (/= 'm') rest))
+      c : rest -> c : uncoloured rest
+      [] -> []
 
 spec_editor :: Spec
 spec_editor = do

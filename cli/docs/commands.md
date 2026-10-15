@@ -81,6 +81,14 @@ fails, is reported with its exit status (`editor-failed`), and what it
 saved to the data before that stays. `vi` at a current node whose file
 is gone is refused, as `cd` and `text` are, and starts no editor.
 
+`:i dir` imports the directory `dir` of the file system under the
+origin, and moves there: an edge named after it to a node for it, and so
+on for what it holds, each file's content becoming the data of a node (files with the
+same content share one). A directory that can't be read imports nothing
+and fails, saying why with what the system said
+(`unreadable-directory`); the parts of it that can't be read are
+skipped, and a warning names each with why (`unreadable-files`).
+
 Commands can be sequenced with `;` and grouped with `{ … }`, with one
 exception: `text`, `desc` and `:i` take the rest of the line, as the
 text or the directory, so a `;` or a `}` after them is part of it.
@@ -2088,7 +2096,7 @@ would write: @1{out=[]} -> "GRAPH/1.json"
 
 In the first example the two errors come after the output because
 errors are printed on stderr, which these examples show last (in the
-REPL a parse error, and the failure of `:i`, are printed on stdout). In the
+REPL a parse error is printed on stdout). In the
 fifth and sixth, `q` was created and `r` was not. In the seventh, `at`
 stopped at its first target, `3`, where `q` stays, and did nothing at
 `4`. In the tenth, `at` failed at its second target, `3`, after the

@@ -74,6 +74,12 @@ data UserError
     -- removed ('DeletingFile') after the rest of the change was written;
     -- with why
     DataNotWritten (NonEmpty (FileChange, NID, UserError))
+  | -- | @:i@ imported nothing: the directory could not be read; with why
+    UnreadableDirectory FilePath IOError
+  | -- | Only ever a warning: @:i@ imported the directory (the first path)
+    -- without these parts of it, which could not be read: each by its path
+    -- in the directory, with why
+    UnreadablePartsSkipped FilePath (NonEmpty (FilePath, IOError))
   deriving stock (Generic)
 
 -- | What a change does to a file of the graph
@@ -311,9 +317,27 @@ instance Show UserError where
                  e
            | (change, nid, e) <- toList failed
            ]
+  -- \| The damage that an error says a command was refused for. A command line
+  -- doesn't warn of that damage as well ('Error.Warn.warningOfDamageReadPast').
+  show (UnreadableDirectory dir e) =
+    "nothing was imported: "
+      ++ dir
+      ++ " could not be read (unreadable-directory): "
+      ++ fileFailure "read" e
+  show (UnreadablePartsSkipped dir skipped) =
+    intercalate "\n" $
+      [ "warning: "
+          ++ (if length skipped == 1 then "a part" else "parts")
+          ++ " of "
+          ++ dir
+          ++ " could not be read and "
+          ++ (if length skipped == 1 then "was" else "were")
+          ++ " not imported (unreadable-files)"
+      ]
+        ++ [ "- " ++ part ++ ": " ++ fileFailure "read" e
+           | (part, e) <- toList skipped
+           ]
 
--- | The damage that an error says a command was refused for. A command line
--- doesn't warn of that damage as well ('Error.Warn.warningOfDamageReadPast').
 damageRefusedBy :: UserError -> Set Damage
 damageRefusedBy = \case
   DamagedGraph damage -> setFromList (toList damage)
