@@ -58,12 +58,12 @@ not undone (section 6).
 |---|---|---|---|
 | `ls [p]`, `preview [p]` | `p`, default `*` | `\|` | lists the targets (2.1) |
 | `cd p` | `p` | `\|` | moves to the one target (2.2) |
-| `mk p`, `mk --allow-orphans p` | `p` | `++` | creates what is missing for the path to hold (4) |
+| `mk [--max-repairs N] p` | `p` | `++` | creates what is missing for the path to hold (4) |
 | `rm p` | `p` | `\|` | deletes the last edge of the first walk of each match (3) |
 | `rmnf p` | `p` | `\|` | deletes the target nodes (2.3) |
 | `mv p q`, `cp p q` | `p` an edge path, `q` one node | `\|` | moves or copies the selected edge under `q` (3) |
 | `rn [--all-parents] p q`, `cl`/`clone`/`alias [--all-parents] p q` | `p` an edge path, `q` a destination | `\|` | renames or clones the selected edge (3) |
-| `tag p q`, `t p q` | `p` constructed, `q` one node | `++` in `p`, `\|` in `q` | links every end of `p`'s first match to `q`'s target with an empty label (4.6) |
+| `tag [--max-repairs N] p q`, `t …` | `p` constructed, `q` one node | `++` in `p`, `\|` in `q` | links every end of `p`'s first match to `q`'s target with an empty label (4.6) |
 | `at p cmd` | `p`; `cmd` has paths of its own | `\|` | runs `cmd` at each target (2.4) |
 | `mg [--keep] p1 [--keep] p2 …` | each one node | `\|` | merges the nodes (2.5) |
 | `%targets(p)` in any path | `p`, a query of its own | `\|`, whatever surrounds it, unless an `%override({plus = …}, …)` is written inside `p` | the nodes `p` reaches, as a union (2.6) |
@@ -73,6 +73,13 @@ not undone (section 6).
 `back n`, `vi`, `si` (`show-image`), `fsck`, `fix` and
 `fix --dry-run`, `wget URL` (`:import-url`, `:iurl`), `:i dir`
 (`:import`), `:d` (`:debug`)) take no path.
+
+`vi` edits the current node's data with the editor that `$EDITOR` names,
+run the way a shell runs it, so `$EDITOR` may hold arguments and quotes
+(`EDITOR="code --wait"`). An editor that cannot be started, or that
+fails, is reported with its exit status (`editor-failed`), and what it
+saved to the data before that stays. `vi` at a current node whose file
+is gone is refused, as `cd` and `text` are, and starts no editor.
 
 Commands can be sequenced with `;` and grouped with `{ … }`, with one
 exception: `text`, `desc` and `:i` take the rest of the line, as the
@@ -93,7 +100,7 @@ $ at a {desc foo}
 1 | at a {desc foo}
   |                ^
 unexpected end of input
-expecting "++", '&', '+', '/', '|', or '}'
+expecting "++", '&', '+', '/', ';', '|', or '}'
 ```
 
 TAB completion reads the path before the cursor too. It offers nothing
@@ -102,7 +109,8 @@ and nothing when the candidates are not ready in about
 half a second, which includes a node file that cannot be read yet
 (another program is writing it, or it is not downloaded). The prompt is
 usable again after that half second, and Ctrl-C during it gives a new
-prompt at once. Completion prints no warning.
+prompt at once, on which a line typed runs. Completion prints no
+warning.
 
 ## 2. Queries
 
@@ -127,21 +135,25 @@ does when its path reaches no node, one, or several:
 | `rn`, `cl` | error, "found 0" | renames or clones the edge | error, "found N" (counted as distinct first walks, section 3) |
 | `mk` | the path holds nowhere: creates it | the path holds: nothing | likewise |
 
-`ls` names the nodes without a node file that it comes to while it
-resolves its path, before its result ("nonexistent nodes: @7"). That
-is not every such node that is written: `ls (@7/@8 | a)` names
-neither, since a side whose tests contradict each other is no side.
-The other queries say nothing about such a node: a path through it
-matches nothing, with what that means for the command (`at @7 nid`
+`ls` names every node without a node file that an `@N` of its path
+refers to, before its result ("nonexistent nodes: @7"), whether or not
+a walk gets there (`ls zz/@7` names it though there is no `zz` edge),
+unless the side it is written in is dropped for tests that contradict
+each other: `ls (@7/@8 | a)` names neither, since such a side is no
+side. The other queries say nothing about such a node: a path through
+it matches nothing, with what that means for the command (`at @7 nid`
 runs nothing, `cd @7` fails as any `cd` without a target does). `tag`
-constructs its first path (4.6), and `tag @7 a` names the node in its
-refusal to create nodes that are not connected to the graph.
+constructs its first path (4.6), and `tag @7 a` fails as `mk` does for
+a written node that does not exist (`MissingNodes`, 4.5).
 
 ```ge
 graph: 0 -a-> 1, 1 -b-> 2, 0 -c-> 3, 0 -c-> 4
 $ ls zz
 no targets
 $ ls @7
+nonexistent nodes: @7
+no targets
+$ ls zz/@7
 nonexistent nodes: @7
 no targets
 $ ls (@7/@8 | a)
@@ -163,9 +175,12 @@ $ mv zz qq
 the last argument of mv needs a path that resolves to a single node
 but it resolved to: []
 $ rn zz z
-rn needs one selected source route, but found 0.
+rn needs its first path to select one edge, but the path matched nothing;
+    nothing was changed. (NoSourceEdge)
 $ rn c z
-rn needs one selected source route, but found 2.
+rn needs its first path to select one edge, but it selects 2, one for each way
+    the path matched; nothing was changed. Write @N after a step for the node
+    it should go to, so that the path matches one way. (SeveralSourceEdges)
 $ tag #t zz
 the last argument of tag needs a path that resolves to a single node
 but it resolved to: []
@@ -419,7 +434,10 @@ $ mk x/%targets(p/@1)
 created 0 new nodes and 1 new edge
 + 0 -x-> 1
 $ mk a/%targets(zz)/b
-This path cannot be constructed.
+This path cannot be constructed: each of its alternatives has a test that a
+    node already there fails (such as an @N naming another node, or %never,
+    which no node passes), and creating nodes and edges cannot change that.
+    Nothing was changed. (Unsatisfiable)
 Note: %targets("zz") at line 1, columns 6-17 matched no nodes, so it expanded
     to %never.
 ```
@@ -494,7 +512,9 @@ $ rn (a & b/c) z
 + 0 -z-> 9
 - 0 -a-> 9
 $ rn (b/c & a) z
-rn needs one selected source route, but found 2.
+rn needs its first path to select one edge, but it selects 2, one for each way
+    the path matched; nothing was changed. Write @N after a step for the node
+    it should go to, so that the path matches one way. (SeveralSourceEdges)
 $ rm (b/c & a)
 - 1 -c-> 9
 - 2 -c-> 9
@@ -507,19 +527,24 @@ A reversed step names the edge it walked (`rm ~a` at the target of an
 ```ge
 graph: 0 -a-> 0, 0 -b-> 1
 $ rm (@ & a)
-rm selected a zero-edge route. Put the edge branch first; nothing was changed.
+rm deletes the edge that the first walk of its path ends in, but that walk has
+    no step, as in (@ & a); nothing was changed. Put the side with the edge
+    first. (NoEdgeSelected)
 $ rm (a & @)
 - 0 -a-> 0
 $ rm ~a
 - 0 -a-> 0
 $ rn (@ & a) z
-rn selected a zero-edge route. Put the branch containing the edge first;
-    nothing was changed.
+rn renames the edge that the first walk of its path ends in, but that walk has
+    no step, as in (@ & a); nothing was changed. Put the side with the edge
+    first. (NoEdgeSelected)
 ```
 
 When the path matches nothing, `rn` and `cl` fail with "found 0". `rm`,
 and `mv` and `cp` for their first argument, change nothing and print a
-notice on stderr that names the path as it was written. The notice is
+notice on stderr that names the path as it was read (its labels
+quoted, and spaced as `ge` writes a path: `rm zz/ @7` names
+`("zz" / @7)`). The notice is
 no failure: the rest of a `;` line runs, `ge -e` exits with 0, and
 `at p cmd` goes on to its other targets, where the path may match (the
 notice then names the target). A path of which some side of a union
@@ -543,7 +568,8 @@ the path of rm ("b") matched nothing at @4; nothing was changed.
 $ ge -e 'rm zz'
 the path of rm ("zz") matched nothing; nothing was changed.
 $ ge -e 'rn zz y'
-rn needs one selected source route, but found 0.
+rn needs its first path to select one edge, but the path matched nothing;
+    nothing was changed. (NoSourceEdge)
 [exit code 1]
 ```
 
@@ -651,11 +677,16 @@ a reversed source step it is the source of the edge renamed
 ```ge
 graph: 0 -a-> 1, 1 -b-> 2, 0 -c-> 3, 0 -c-> 4
 $ rn a *
-The destination must end in a literal label.
+The destination of rn must end in a literal label, the label of the new edge,
+    not in * or a regex; nothing was changed. (DestinationLabelNotLiteral)
 $ rn a @
-The destination has no final label.
+The destination of rn has no last label to give the edge: its first walk has
+    no step; nothing was changed. Write the new label last.
+    (NoDestinationLabel)
 $ rn a zz/y
-rn destination has no matching parent or final label; nothing was changed.
+rn found no node to put the new edge under: the path of its destination before
+    the last label reaches no node, or a node test after that label fails;
+    nothing was changed. (NoDestinationParent)
 $ rn a c/z
 The rn destination's path before its final label resolves to 2 parent nodes
     (@3, @4); nothing was changed. Pin one with /@N before the final label, or
@@ -668,21 +699,25 @@ $ rn --all-parents a c/z
 + 4 -z-> 1
 - 0 -a-> 1
 $ rn a (y + z)
-The destination matches through several alternatives; choose one. Nothing was
-    changed.
+The destination of rn would make different edges through different
+    alternatives (sides of a union, or nodes of a %targets(…)); choose one.
+    Nothing was changed. (SeveralDestinations)
 $ rn a %targets(c)/z
-The destination matches through several alternatives; choose one. Nothing was
-    changed.
+The destination of rn would make different edges through different
+    alternatives (sides of a union, or nodes of a %targets(…)); choose one.
+    Nothing was changed. (SeveralDestinations)
 $ rn --all-parents a %targets(c)/z
-The destination matches through several alternatives; choose one. Nothing was
-    changed.
+The destination of rn would make different edges through different
+    alternatives (sides of a union, or nodes of a %targets(…)); choose one.
+    Nothing was changed. (SeveralDestinations)
 ```
 
 ```ge
 graph: 0 -a-> 1, 0 -c-> 2, 0 -d-> 3
 $ rn --all-parents a (c | d)/z
-The destination matches through several alternatives; choose one. Nothing was
-    changed.
+The destination of rn would make different edges through different
+    alternatives (sides of a union, or nodes of a %targets(…)); choose one.
+    Nothing was changed. (SeveralDestinations)
 $ rn --all-parents a */z
 + 1 -z-> 1
 + 2 -z-> 1
@@ -696,13 +731,16 @@ $ rn a (b/z | c/z)
 + 2 -z-> 1
 - 0 -a-> 1
 $ rn a (b/z | b/y)
-The destination matches through several alternatives; choose one. Nothing was
-    changed.
+The destination of rn would make different edges through different
+    alternatives (sides of a union, or nodes of a %targets(…)); choose one.
+    Nothing was changed. (SeveralDestinations)
 $ rn a z/@1
 + 0 -z-> 1
 - 0 -a-> 1
 $ rn a z/@7
-rn destination has no matching parent or final label; nothing was changed.
+rn found no node to put the new edge under: the path of its destination before
+    the last label reaches no node, or a node test after that label fails;
+    nothing was changed. (NoDestinationParent)
 $ rn a ~z/@1
 + 1 -z-> 0
 - 0 -a-> 1
@@ -725,6 +763,12 @@ walk cannot hold and is an error.
 Every node `mk` creates is a new node with a new id. It never creates
 a node whose id is written in the path: `mk a/@7` when there is no node
 7 is an error (4.5).
+
+`mk` walks the path once, from left to right, and takes every step
+after the steps whose edges it might follow (4.1). Some paths have no
+such order, or are more than that walk is made for; `mk` refuses them
+for their shape alone, before it reads the graph, also where the path
+already holds, and says what to write instead (4.8).
 
 ```ge
 graph: 0
@@ -755,7 +799,10 @@ $ mk ~a
 created 1 new node and 1 new edge
 + O8OhMSVtjevt -a-> 0
 $ mk a/%never
-This path cannot be constructed.
+This path cannot be constructed: each of its alternatives has a test that a
+    node already there fails (such as an @N naming another node, or %never,
+    which no node passes), and creating nodes and edges cannot change that.
+    Nothing was changed. (Unsatisfiable)
 ```
 
 ```ge
@@ -783,19 +830,24 @@ created 1 new node and 1 new edge
 
 `mk` walks every walk of the path from its start, one step at a time.
 A step's **distance** is how many steps it is from the start of its
-walk: in `x/~x/a` the `a` is at distance 3.
+walk: in `x/~x/a` the `a` is at distance 3. A step written after a
+join stands in every walk that comes to the join, and its distance is
+the greatest it has in them: in `(a/b & c)/@0/d` the `d` is at
+distance 3.
 
 1. Standing on a node, a step looks for an edge with its label and
    direction at that node: an edge of the graph, or one that this
    command creates (rule 6 says which of those). If there is one, it
    follows it. If there is none, it creates a new node and the edge to
-   it.
+   it. If there are edges to several nodes, see 4.2.
 2. A step followed by `@N` goes to node `N`: along an edge if there is
    one, and along an edge it creates otherwise. Node `N` has to exist
    (4.5).
-3. The steps into a join (`/@`) go together: to a node that one of
-   them can follow an edge to, the others creating their edges to it;
-   or, if none can follow an edge, to one new node.
+3. The steps into a join (`/@` or `/!{…}`) go together: to a node
+   that one of them can follow an edge to, the others creating their
+   edges to it; or, if none can follow an edge, to one new node. The
+   edge that one step of a join creates is never one that another step
+   of the same join follows.
 4. Two steps with the same label from the same node make one new node
    (`a/b & a/c` creates one `a` edge).
 5. Nothing is decided from the far end. With `1 -b-> 2`, `mk a/b/@2`
@@ -812,20 +864,29 @@ walk: in `x/~x/a` the `a` is at distance 3.
    `0 -a-> 2`: the `a` at distance 3 follows the edge created at
    distance 1. But `mk a & b/~b/a/@2` creates `0 -a-> new`,
    `0 -b-> new` and `0 -a-> 2`: the first `a` is at distance 1 and
-   does not see an edge that is created at distance 3. The steps into
-   a join count as far as the furthest of them.
-7. An edge never counts for a step if it is only there because of
-   where that step went: `mk a/~a/a/@2` creates both `0 -a-> new` and
-   `0 -a-> 2`.
-8. When steps at the same distance could each follow an edge that the
-   other creates, so that each would have to wait for the other, none
-   of them gets the others' edges: each does what it would do if the
-   others' edges were not there. (4.2 has an example.)
-9. A `*` or regex step follows any edge whose label matches and that
-   counts by rules 6 to 8, existing or created (`mk * & a` creates only
+   does not see an edge that is created at distance 3. Nor does it in
+   `mk a/~a/a/@2`, which creates both `0 -a-> new` and `0 -a-> 2`. The
+   steps into a join are taken together, at the distance of the
+   furthest of them: they follow the edges created that far from the
+   start or nearer. An edge that one of them creates counts for other
+   steps at the distance of the step that created it.
+7. Every step is taken after the steps that might create an edge it
+   could follow, so no step has to wait for another or be taken again.
+   Where steps might each create an edge that another of them could
+   follow, in a circle, there is no such order, and `mk` refuses the
+   path (`CircularSuppliers`, 4.8): `mk a & ~a`, in which the `a` could
+   follow the edge the `~a` creates and the other way round. Steps that
+   ask for the same edge (one step each, the same label, direction and
+   distance, into a node that is not written) are no circle: they are
+   taken together, and `mk a & a` creates one `a` edge.
+8. A `*` or regex step follows any edge whose label matches and that
+   counts by rule 6, existing or created (`mk * & a` creates only
    `a`). When it has to create an edge it has no label to create it
    with, and the command fails (`UnsupportedLabel`); it does not fall
-   back to another way of creating the path that needs no label.
+   back to another way of creating the path that needs no label. An
+   alternative of the path may have only one such step, each copy
+   counting (in `*/(a & b)` the `*` has two), and one may not be among
+   several steps into a join that is not written (4.8).
 
 ```ge
 graph: 0, 2
@@ -866,7 +927,27 @@ created 1 new node and 3 new edges
 + 0 -a-> 2
 + 0 -x-> O8OhMSVtjevt
 + O8OhMSVtjevt -y-> 2
+$ mk (a/b & c)/@0/d/@2 & x/@0/d
+created 2 new nodes and 6 new edges
++ 0 -a-> O8OhMSVtjevt
++ 0 -c-> 0
++ 0 -d-> 2
++ 0 -d-> Pqf7kGOdKJIr
++ 0 -x-> 0
++ O8OhMSVtjevt -b-> 0
+$ mk a & a
+created 1 new node and 1 new edge
++ 0 -a-> O8OhMSVtjevt
+$ mk a & ~a
+These steps could each follow an edge that another of them creates, so mk has
+    no order to take them in: `a` and `~a`. Write the node a step should go to
+    (/@N after it), or create them with separate commands. Nothing was
+    changed. (CircularSuppliers)
 ```
+
+In the last but two the `d` after the join is at distance 3 and the
+other `d` at distance 2, so the other does not see the `0 -d-> 2` that
+the first creates, and creates a node of its own.
 
 ```ge
 graph: 1 -b-> 2, 0
@@ -929,8 +1010,10 @@ path creates one step further on, and has no label of its own.
 ### 4.2 When a step has several edges to follow
 
 If a step has edges to several nodes that it could follow, `mk` does
-not choose: it creates nothing, lists what it could create, and asks.
-It makes no difference whether the edges are existing ones, ones this
+not choose: it tries each, and unless one way of creating the path is
+left by the rules below (a way that creates more than another is
+dropped), it creates nothing, lists what it could create, and asks. It
+makes no difference whether the edges are existing ones, ones this
 command creates, or both. To choose, write `@N` after the step for the
 node it should go to, or `!{@N}` for nodes it should not go to.
 
@@ -958,6 +1041,14 @@ created 2 new nodes and 2 new edges
 + O8OhMSVtjevt -b-> Pqf7kGOdKJIr
 ```
 
+An `!{@N}` on one of two steps with the same label does not always
+help. Below, the `a` that may not go to node 1 might create a node
+that the other `a` could then follow, and the other `a` might create
+an edge that the first could follow. The order of the steps is decided
+from the path alone, before the graph is read, so `mk` refuses the
+path (4.1, rule 7). Writing the node the other `a` goes to leaves
+nothing to decide:
+
 ```ge
 graph: 0 -a-> 1
 $ mk a/!{@1}/b & a/c
@@ -965,6 +1056,11 @@ These steps could each follow an edge that another of them creates, so mk has
     no order to take them in: `a/!{@1}` and `a`. Write the node a step should
     go to (/@N after it), or create them with separate commands. Nothing was
     changed. (CircularSuppliers)
+$ mk a/!{@1}/b & a/@1/c
+created 3 new nodes and 3 new edges
++ 0 -a-> O8OhMSVtjevt
++ 1 -c-> DQ1KCJgauHiV
++ O8OhMSVtjevt -b-> Pqf7kGOdKJIr
 ```
 
 ```ge
@@ -1010,15 +1106,12 @@ This path can be created in 2 ways; nothing was changed. To choose one, write
     use: mk a/@1/b & a/@2/c
 ```
 
-Steps that could follow each other's edges (rule 8 of 4.1) are listed
-in every way that holds together. Below, the `c` of the first conjunct
-may not go to node 2, and the join `(a & c)/@` can go to node 1 along
-the `a` edge or to node 2 along the `c` edge. In the first way the
-join goes to node 1 and creates `0 -c-> 1`, which the first `c` then
-follows. In the third and fourth the first `c` creates its own node
-first, and the join goes to node 2 or to that new node. In the second
-each does what it would do without the other's edge: the first `c`
-creates a node, and the join goes to node 1.
+Steps that could follow each other's edges (rule 7 of 4.1) are not
+listed in every order: the path is refused. Below, the `c` of the
+first conjunct may not go to node 2, and the join `(a & c)/@` can go
+to node 1 along the `a` edge or to node 2 along the `c` edge; the join
+might create a `c` edge that the first `c` could follow, and the first
+`c` one that the join could follow:
 
 ```ge
 graph: 0, 1, 2
@@ -1043,8 +1136,10 @@ is the written path with `@N` after each step that went to an existing
 node where it had several to go to, and `!{@N, …}` naming the others
 after each step that went to the new one. When the command ran at
 another node than the prompt's (inside `at`) the line is
-`use: at @N mk …`, and for `tag` it is a `tag` command. A line is only
-shown when running it creates exactly what it stands beside.
+`use: at @N mk …`, and for `tag` it is a `tag` command; when the
+command was given `--max-repairs N` (5.2), the line gives it too. A
+line is only shown when running it creates exactly what it stands
+beside, and when it is not a path that `mk` refuses (4.8).
 
 ```ge
 graph: 0 -a-> 1, 1 -b-> 2, 1 -b-> 3
@@ -1063,14 +1158,15 @@ created 1 new node and 1 new edge
 + 2 -c-> O8OhMSVtjevt
 ```
 
-There is no `use:` line when the step could also have gone to another
-new node, which has no name to write (`mk a & b & */c` below: `c` under
-the new `a` node or the new `b` node; write `a/c` or `b/c` instead);
-when the copies of a step went different ways (`mk a/(b & c)` with two
-`a` nodes: what is written after the one `a` applies to both copies);
-when steps waited for each other (the second way of the last example
-of 4.2); or when the way's side of a `|` union has no spelling as a
-path without unions.
+In place of the `use:` line, `(no command was found that creates just
+this)` is printed when the step could also have gone to another new
+node, which has no name to write (`mk a & b & */c` below: `c` under the
+new `a` node or the new `b` node; write `a/c` or `b/c` instead); when
+the copies of a step went different ways (`mk a/(b & c)` with two `a`
+nodes: what is written after the one `a` applies to both copies); when
+the way's side of a `|` union has no spelling as a path without
+unions; and when the line that would be written does not create
+exactly that way, or is refused.
 
 ```ge
 graph: 0
@@ -1174,8 +1270,13 @@ as `@N` has to exist already: a way of creating the path that would
 need a node `@N` that does not exist is no way. If that leaves none,
 `mk` fails, names the nodes and changes nothing; `ge -e` exits with 1.
 A side of a union that needs such a node is left out, and the other
-sides are created as if it were not written. A node inside `!{…}` need
-not exist: it only says where a step may not go.
+sides are created as if it were not written; a note names the side
+left out and the node, also when the path already holds, and also
+after the list of an ambiguous `mk` (it is not added to the
+`MissingNodes` error, which names the nodes itself). This is not so for
+a side that `mk` refuses for its shape: that refuses the whole path
+(4.8). A node inside `!{…}` need not exist: it only says where a step
+may not go.
 
 ```ge
 graph: 0
@@ -1209,11 +1310,17 @@ This path needs @7, @8, which do not exist, and a node with a written id is
 $ mk a/!{@7}
 created 1 new node and 1 new edge
 + 0 -a-> O8OhMSVtjevt
+$ mk b ; mk a/@7 + b
+created 1 new node and 1 new edge
+created 0 new nodes and 0 new edges
+Note: mk left out `a/@7`, which needs @7: that node does not exist, and a node
+    with a written id is never created.
++ 0 -b-> O8OhMSVtjevt
 ```
 
-`mk --allow-orphans p` does what `mk p` does. The option allows new
-nodes that no edge connects to an existing node, and no path creates
-such nodes: every walk starts at a node that exists.
+Since every walk starts at a node that exists, every node `mk` creates
+hangs by an edge from the graph. `mk` had an option `--allow-orphans`
+for nodes that would not; it is gone, and the parser says so:
 
 ```ge
 graph: 0
@@ -1228,15 +1335,17 @@ mk has no --allow-orphans any more: every node that mk creates is connected to
 
 ### 4.6 `tag`
 
-`tag p q` (or `t p q`) constructs `p` like `mk` (with `+` as `++`, and
-with the same error for a written node that does not exist), then
-links the end of every walk of one match of `p` to the one target of
-`q` with an edge labelled `""`. Which match: the alternatives of `p`
-that match are ordered by their first match, and matches by the nodes
-and labels along their walks; `tag` takes the first match of the first
-alternative. That order depends on the graph, not on how a union is
-written: `tag (b | a) t` below links the `a` end. Other matches are
-not linked. `q` must reach exactly one node (none or several is an
+`tag p q` (or `t p q`) constructs `p` like `mk` (with `+` as `++`,
+taking `--max-repairs N` before `p` as `mk` does, 5.2, and with the
+same refusals, 4.8, and the same error for a written node that does
+not exist, each saying `tag` where `mk`'s says `mk`), then links the
+end of every walk of one match of `p` to the one target of `q` with an
+edge labelled `""`. Which match: the matches of all the alternatives
+of `p` are put in one order, by the nodes and labels along their
+walks ([path-route-ir.md](path-route-ir.md#4-resolution), "Order"),
+and `tag` takes the first. That order depends on the graph, not on how
+a union is written: `tag (b | a) t` below links the `a` end. Other
+matches are not linked. `q` must reach exactly one node (none or several is an
 error, section 2). `#t` is `@<tags>/t`, so `tag #todo a/b` tags the
 target of `a/b` with `todo`, creating the tag node if needed. An
 ambiguous `p` is listed with `use: tag … @N` lines (4.3). `tag` does
@@ -1281,7 +1390,8 @@ This path needs @7, which does not exist, and a node with a written id is
 `mk p` and then `mk p/q` usually leaves what `mk p/q` alone leaves, but
 not always. It does when `q` begins with a step, both commands decide
 without asking, and the path writes no label twice and has no `*` or
-regex. Outside that, these break it:
+regex, with one known exception (the last example below). Outside
+that, these break it:
 
 ```ge
 graph: 0, 2
@@ -1352,13 +1462,193 @@ less, and nothing is put under the first command's node.
 
 ```ge
 graph: 0 -c-> 0
-$ mk (*/a & */c)/b
-This path has more than one * or regex step in one alternative: `*` and `*`.
-    mk builds a path with at most one. Write the labels you mean; if steps
-    from one node are meant to be one step, write it once, with a join after
-    it for what continues from it, as in */@/(a & b) for */a & */b. Nothing
+$ mk (*/a & c/b)/d
+created 4 new nodes and 4 new edges
++ 0 -a-> O8OhMSVtjevt
++ 0 -b-> DQ1KCJgauHiV
++ DQ1KCJgauHiV -d-> sYumkceKpoAh
++ O8OhMSVtjevt -d-> Pqf7kGOdKJIr
+$ mk */a & c/b ; mk (*/a & c/b)/d
+created 2 new nodes and 2 new edges
+This path can be created in 3 ways; nothing was changed. To choose one, write
+    @N after a step for the node it should go to, or !{@N} for nodes it should
+    not, or keep one side of a +.
+  1. @0 -"c"-> @0 -"a"-> @O8OhMSVtjevt -"d"-> new1 & @0 -"c"-> @0 -"b"->
+    @Pqf7kGOdKJIr -"d"-> new2
+    creates: @O8OhMSVtjevt -"d"-> new1, @Pqf7kGOdKJIr -"d"-> new2
+    use: mk (*/@0/a & c/b)/d
+  2. @0 -"a"-> @O8OhMSVtjevt -"a"-> new1 -"d"-> new2 & @0 -"c"-> @0 -"b"->
+    @Pqf7kGOdKJIr -"d"-> new3
+    creates: @O8OhMSVtjevt -"a"-> new1, @Pqf7kGOdKJIr -"d"-> new3, new1 -"d"->
+    new2
+    use: mk (*/@O8OhMSVtjevt/a & c/b)/d
+  3. @0 -"b"-> @Pqf7kGOdKJIr -"a"-> new1 -"d"-> new2 & @0 -"c"-> @0 -"b"->
+    @Pqf7kGOdKJIr -"d"-> new3
+    creates: @Pqf7kGOdKJIr -"a"-> new1, @Pqf7kGOdKJIr -"d"-> new3, new1 -"d"->
+    new2
+    use: mk (*/@Pqf7kGOdKJIr/a & c/b)/d
+Note: the command before this one in the line had already run; what it did
+    stays.
++ 0 -a-> O8OhMSVtjevt
++ 0 -b-> Pqf7kGOdKJIr
+```
+
+Alone, the `*` has one edge to follow, the loop: the `b` edge is
+created further from the start. The first command creates `0 -a-> new`
+and `0 -b-> new`, and after it the `*` has three.
+
+One more case is inside the class, and is a known exception to it:
+both commands decide alone, `q` is the step `b`, no label is written
+twice, and there is no `*`. Yet after `mk p` the second command asks:
+
+```ge
+graph: 0 -x-> 0, 0 -x-> 5
+$ mk (x & @)/i/(l & @)/@/b
+created 2 new nodes and 3 new edges
++ 0 -i-> O8OhMSVtjevt
++ O8OhMSVtjevt -b-> Pqf7kGOdKJIr
++ O8OhMSVtjevt -l-> O8OhMSVtjevt
+$ mk (x & @)/i/(l & @)/@ ; mk (x & @)/i/(l & @)/@/b
+created 1 new node and 2 new edges
+This path can be created in 2 ways; nothing was changed. To choose one, write
+    @N after a step for the node it should go to, or !{@N} for nodes it should
+    not, or keep one side of a +.
+  1. @0 -"x"-> @0 -"i"-> @O8OhMSVtjevt -"l"-> @O8OhMSVtjevt -"b"-> new1 & @0
+    -"x"-> @0 -"i"-> @O8OhMSVtjevt -"b"-> new1 & @0 -"i"-> @O8OhMSVtjevt
+    -"l"-> @O8OhMSVtjevt -"b"-> new1 & @0 -"i"-> @O8OhMSVtjevt -"b"-> new1
+    creates: @O8OhMSVtjevt -"b"-> new1
+    use: mk (x/@0 & @)/i/(l & @)/@/b
+  2. @0 -"x"-> @5 -"i"-> new1 -"l"-> new1 -"b"-> new2 & @0 -"x"-> @5 -"i"->
+    new1 -"b"-> new2 & @0 -"i"-> @O8OhMSVtjevt -"l"-> new1 -"b"-> new2 & @0
+    -"i"-> new1 -"b"-> new2
+    creates: @0 -"i"-> new1, @5 -"i"-> new1, @O8OhMSVtjevt -"l"-> new1, new1
+    -"b"-> new2, new1 -"l"-> new1
+    (no command was found that creates just this)
+Note: the command before this one in the line had already run; what it did
+    stays.
++ 0 -i-> O8OhMSVtjevt
++ O8OhMSVtjevt -l-> O8OhMSVtjevt
+```
+
+Alone, `mk p/q` also has a way in which the `x` goes to node 5, an `i`
+from there creates a node, and the join goes to that node; it creates
+everything the way that is kept creates and more, up to the naming of
+new nodes, and is dropped (4.2, "What is listed"). After the first
+command the node of the kept way exists, and an existing node is never
+renamed, so the larger way no longer contains the other and both are
+listed. What that takes is a step that the product copies so that one
+copy goes into a join and the other past it (`i/(l & @)/@`), a
+conjunct `@` (or the current node) beside it, and something that has
+several edges to follow or a union. Of about ten million cuts of
+generated paths in the class, one failed this way.
+
+### 4.8 Paths that `mk` refuses for their shape
+
+`mk` refuses five shapes of path. It finds them in the path as written
+(the first) or in what the path compiles to (the other four), before it
+reads the graph: a refused path is refused whatever the graph holds,
+also where it already holds, nothing is changed, and `ge -e` exits
+with 1. `tag` refuses the same paths with the same messages, which say
+`tag`. Where several shapes are found, the message is about the first
+of them in the order below, in the first alternative that has one.
+Every message says what to write instead.
+
+1. **Too large** (`ExpansionTooLarge`). An estimate, from the path as
+   written, of how many steps its walks have over all its alternatives
+   is more than 256. The estimate counts high: it counts a union that
+   a fork copies as if each copy took a side of its own, also a `+` or
+   `++`, whose copies all take the same side. So
+   `(a ++ b)/(c & d & e & f & g)` is refused, and
+   `a/(c & d & e & f & g) ++ b/(c & d & e & f & g)`, which means the
+   same, is not. Write the union outside, keep one side of it, or
+   create the path with several commands.
+2. **Back to a node** (`ReturnsToMeetingPoint`). A walk leaves a node
+   that is not written and comes back to it: in `a/@/(@ & a)/@` the
+   walk `a/a` ends where it began, at the `a` target. Write the node,
+   if it exists (`a/@2/(@ & a)/@2`), or create it first and write its
+   id in a second command.
+3. **`*` into a join** (`WildcardJoin`). A `*` or regex step is one of
+   several steps into a node that is not written, as in `(* & a)/@`.
+   Write its label, or the node (`(* & a)/@2`), or leave the `*` out if
+   it means the same edge as another of the steps.
+4. **Several `*`** (`SeveralWildcards`). An alternative has more than
+   one `*` or regex step, counting each copy that a fork makes:
+   `*/a & */c`, and also `*/(a & b)`, which is `*/a & */b`. Write the
+   labels, or, where the walks are to go on from one edge, a join
+   after the `*`: `*/@/(a & b)`.
+5. **A circle** (`CircularSuppliers`). Steps might each create an edge
+   that another of them could follow (4.1, rule 7), so there is no
+   order to take them in. Write the node a step goes to (`/@N` after
+   it); where a step means the same edge as a step into a join, leave
+   it out and write what follows it after the join; or create the
+   steps with separate commands.
+
+```ge
+graph: 0, 2
+$ mk a/@/(@ & a)/@
+This path leaves an unnamed node and comes back to it: `a/a` returns to the
+    node that `a` reaches, and mk does not build a route that visits an
+    unnamed node twice. Write a node that exists there both times, as in
+    a/@N/a/@N, or create the node first and use its id in a second command.
+    Nothing was changed. (ReturnsToMeetingPoint)
+$ mk a/@2/(@ & a)/@2
+created 0 new nodes and 2 new edges
++ 0 -a-> 2
++ 2 -a-> 2
+$ mk (* & a)/@
+The step `*` has no label and meets `a` at a node that is not written, and mk
+    does not use a step without a label to choose such a node. If it means the
+    same edge as another step into the node, leave it out; otherwise write its
+    label, or write the node where the steps meet (/@N). Nothing was changed.
+    (WildcardJoin)
+$ mk (* & a)/@2
+created 0 new nodes and 1 new edge
++ 0 -a-> 2
+$ mk (a & b)/@ & a
+These steps could each follow an edge that another of them creates, so mk has
+    no order to take them in: the node where `a` and `b` meet and `a`. If a
+    step means the same edge as a step into a node where steps meet, leave it
+    out and write what follows it after that node, as in (a & c)/@/b for a/b &
+    (a & c)/@; otherwise write the node a step should go to (/@N after it), or
+    create them with separate commands. Nothing was changed.
+    (CircularSuppliers)
+$ mk (a & b)/@
+created 1 new node and 2 new edges
++ 0 -a-> O8OhMSVtjevt
++ 0 -b-> O8OhMSVtjevt
+$ mk (a ++ b)/(c & d & e & f & g)
+This path is too large for mk: its size, estimated from the path as written,
+    is more than the limit of 256 route steps over all its alternatives. The
+    estimate counts a + or ++ union that the product rule copies as if each
+    copy took a side of its own, though the copies all take the same side.
+    Written with its + and ++ unions outside the rest of the path, as in a/(c
+    & d) ++ b/(c & d) for (a ++ b)/(c & d), the path means the same and its
+    estimate is within the limit. Write it so, keep one side of each union, or
+    create the path with several commands. Nothing was changed.
+    (ExpansionTooLarge)
+$ tag (a & b)/@ & a @2
+These steps could each follow an edge that another of them creates, so tag has
+    no order to take them in: the node where `a` and `b` meet and `a`. If a
+    step means the same edge as a step into a node where steps meet, leave it
+    out and write what follows it after that node, as in (a & c)/@/b for a/b &
+    (a & c)/@; otherwise write the node a step should go to (/@N after it), or
+    create them with separate commands. Nothing was changed.
+    (CircularSuppliers)
+```
+
+```ge
+graph: 0 -x-> 1
+$ mk */(a & b)
+The step `*` is written once, but the product rule copies it into 2 walks, so
+    one alternative of this path has 2 * or regex steps, and mk builds a path
+    with at most one. If the walks are to go on from one edge of it, write a
+    join after it: */@/(a & b). Otherwise write the labels you mean. Nothing
     was changed. (SeveralWildcards)
-$ mk */a & */c ; mk (*/a & */c)/b
+$ mk */@/(a & b)
+created 2 new nodes and 2 new edges
++ 1 -a-> O8OhMSVtjevt
++ 1 -b-> Pqf7kGOdKJIr
+$ mk */a & */c
 This path has more than one * or regex step in one alternative: `*` and `*`.
     mk builds a path with at most one. Write the labels you mean; if steps
     from one node are meant to be one step, write it once, with a join after
@@ -1366,26 +1656,113 @@ This path has more than one * or regex step in one alternative: `*` and `*`.
     was changed. (SeveralWildcards)
 ```
 
-The first command creates `0 -a-> new`, and after it each `*` has two
-edges to follow, the loop and the new edge.
+Some refusals of a circle may surprise; the designer has accepted
+them. Each is shown with what to write instead:
 
-## 5. Settings and the one limit
+- A step and its reverse from one node: `mk a & ~a` (`a` could follow
+  the edge that `~a` creates, and the other way round). Write
+  `mk a/!{@0} & ~a/!{@0}`, if neither is to be a loop, or create them
+  with two commands, `mk a ; mk ~a`.
+- A join and another conjunct with one of its labels:
+  `mk a/b & (a & c)/@`. If the `a` of `a/b` is meant to be the join's,
+  write `mk (a & c)/@/b`; otherwise create them with two commands.
+- A step that a fork copies, where one copy has a test:
+  `mk i/(!{@1} & f)` is `i/!{@1} & i/f`, two `i` steps that might
+  each follow the other's edge. Write the join after the step,
+  `mk i/@/(!{@1} & f)`, for one `i` edge.
+- The current node written by its id: at node 0,
+  `mk (a & b)/@ & @0/a` is refused as `mk (a & b)/@ & a` is, while
+  run at another node it is built. Write the node the `a` goes to
+  (`mk (a & b)/@ & @0/a/@2`).
+
+```ge
+graph: 0, 2
+$ mk a & ~a
+These steps could each follow an edge that another of them creates, so mk has
+    no order to take them in: `a` and `~a`. Write the node a step should go to
+    (/@N after it), or create them with separate commands. Nothing was
+    changed. (CircularSuppliers)
+$ mk a/!{@0} & ~a/!{@0}
+created 2 new nodes and 2 new edges
++ 0 -a-> O8OhMSVtjevt
++ Pqf7kGOdKJIr -a-> 0
+$ mk a/b & (a & c)/@
+These steps could each follow an edge that another of them creates, so mk has
+    no order to take them in: `a` and the node where `a` and `c` meet. If a
+    step means the same edge as a step into a node where steps meet, leave it
+    out and write what follows it after that node, as in (a & c)/@/b for a/b &
+    (a & c)/@; otherwise write the node a step should go to (/@N after it), or
+    create them with separate commands. Nothing was changed.
+    (CircularSuppliers)
+$ mk (a & c)/@/b
+created 2 new nodes and 3 new edges
++ 0 -a-> O8OhMSVtjevt
++ 0 -c-> O8OhMSVtjevt
++ O8OhMSVtjevt -b-> Pqf7kGOdKJIr
+$ mk i/(!{@1} & f)
+The step `i` is written once, but the product rule copies it into 2 walks, and
+    its copies `i/!{@1}` and `i` could each follow an edge that another of
+    them creates, so mk has no order to take them in. If the walks are to go
+    on from one edge of it, write a join after it: i/@/(!{@1} & f). Otherwise
+    write the node it should go to after it (/@N), or create the walks with
+    separate commands. Nothing was changed. (CircularSuppliers)
+$ mk i/@/(!{@1} & f)
+created 2 new nodes and 2 new edges
++ 0 -i-> O8OhMSVtjevt
++ O8OhMSVtjevt -f-> Pqf7kGOdKJIr
+$ mk (a & b)/@ & @0/a
+These steps could each follow an edge that another of them creates, so mk has
+    no order to take them in: the node where `a` and `b` meet and `@0/a`. If a
+    step means the same edge as a step into a node where steps meet, leave it
+    out and write what follows it after that node, as in (a & c)/@/b for a/b &
+    (a & c)/@; otherwise write the node a step should go to (/@N after it), or
+    create them with separate commands. Nothing was changed.
+    (CircularSuppliers)
+$ at @2 mk (a & b)/@ & @0/a
+created 2 new nodes and 3 new edges
++ 0 -a-> Pqf7kGOdKJIr
++ 2 -a-> O8OhMSVtjevt
++ 2 -b-> O8OhMSVtjevt
+```
+
+A side of a union that has one of these shapes refuses the whole
+path, though the other sides could be built: `mk (c ++ b) & ~b` is
+refused for the side `b`, where `mk c & ~b` is built. (A side that
+needs a written node that does not exist is left out instead, 4.5.)
+Delete the side.
+
+```ge
+graph: 0
+$ mk (c ++ b) & ~b
+These steps could each follow an edge that another of them creates, so mk has
+    no order to take them in: `b` and `~b`. Write the node a step should go to
+    (/@N after it), or create them with separate commands. Nothing was
+    changed. (CircularSuppliers)
+$ mk c & ~b
+created 2 new nodes and 2 new edges
++ 0 -c-> O8OhMSVtjevt
++ Pqf7kGOdKJIr -b-> 0
+```
+
+## 5. Settings and limits
 
 `%override({key = value, …}, p)` changes a setting for the part `p` of
-a path. There are two settings: `plus` (5.3), which says how `+` is
-read, and `max-repairs` (5.2), the limit on the walks `mk` makes. That
-limit is the only one there is: nothing limits what a path compiles to
-(5.1).
+a path. There is one setting, `plus` (5.3), which says how `+` is
+read. The limits are `mk`'s and `tag`'s: they refuse a path whose size
+they estimate at more than 256 route steps (4.8), and they have a limit
+on the walks they make, which the option `--max-repairs` changes
+(5.2). Nothing limits what a query compiles to (5.1).
 
-### 5.1 Nothing limits what a path compiles to
+### 5.1 What a path compiles to
 
-No command refuses a path for what it compiles to. (`mk` alone has a
-limit, on the walks it makes, 5.2.) Each copy of a `|` union
-chooses on its own, so a `k`-way `|` that a fork copies into `n` walks
-has up to `k^n` alternatives, and groups written one after the other
-multiply their walks; a command compiles its path however much that
-comes to, and matches it, for as long as that takes. The only paths a
-command does not run are those that would copy a meeting point
+No query refuses a path for what it compiles to. (`mk` and `tag` do,
+over their estimate, 4.8, and have a limit on their walks, 5.2.) Each
+copy of a `|` union chooses on its own, so a `k`-way `|` that a fork
+copies into `n` walks has up to `k^n` alternatives, and groups written
+one after the other multiply their walks; a query compiles its path
+however much that comes to, and matches it, for as long as that takes.
+The only paths a query does not run are those that would copy a
+meeting point
 ([path-language.md](path-language.md#31-a-product-may-not-copy-a-meeting-point)),
 which is found by reading the path.
 
@@ -1408,52 +1785,114 @@ command that runs long:
 
 - **In the REPL, Ctrl-C stops the command** and gives the prompt back,
   every time, whether the command is working out its path or reading
-  node files. It prints `^C` and nothing else, and the next command
-  works. A command works its paths out before it writes, so one that is
-  stopped while doing that has changed nothing; the commands before it
-  on a `;` line have run and stay.
+  node files, and the next command works. It prints `^C`, and nothing
+  else unless the line had changed the graph by then. A command works
+  its paths out before it writes, so one that is stopped while doing
+  that has changed nothing; but the commands before it on a `;` line,
+  the targets of an `at` that it had done, a command stopped after it
+  began to write, and `fix` may have changed it. Then a note follows,
+  one for each part of the line that wrote, as after a failure
+  (section 6):
+  - `Note: the 2 commands before this one in the line had already run;
+    what they did stays.`
+  - `Note: at had already changed the graph at @1; what it did there
+    stays.`, naming every target at which the command wrote, and none
+    that an `at` inside it has named already;
+  - `Note: the command that was interrupted had already changed the
+    graph; what it did stays.`, also for an `ls` or `at` of a URL,
+    which imports it (2.7);
+  - `fix stopped part way: it was interrupted. What was written before
+    it stays; run fix again for the rest.`
+
+  Nothing is said when nothing was written, whatever had run (`at *
+  ls`, an `mk` of a path that holds). The data file that the editor of
+  `vi` changed counts as written; one that the editor left as it was
+  does not.
+- **A change being written is finished first.** The node files of one
+  change are written whole before the interrupt takes effect, never
+  half, so the prompt can take a moment to come back, and an
+  interrupted command may have been applied. A command that waits for a
+  node file that another program holds, or that is not downloaded, is
+  stopped only once it has the file (section 8).
+- `at` leaves the REPL at the node it was at, also when it is
+  interrupted.
+- A Ctrl-C at a half-typed line, or while TAB completion works, gives a
+  new prompt, and a line typed after it runs; one right after Enter
+  stops that line's command. Only a program types fast enough to meet
+  what is left: a line that arrives within 0.05 ms after a Ctrl-C can be
+  cancelled by it and not run (11 to 28 times in 150 in the runs that
+  measured it; within 1 ms, once in 150 on a loaded machine), and a
+  Ctrl-C within 0.6 ms after Enter gave no prompt until a line was
+  typed in about 8 of 300 runs (that line was then answered).
 - **`ge -e` ends at an interrupt**, by the signal, as an interrupted
   program does (a shell shows exit status 130), and prints nothing of
-  its own.
+  its own but the notes above, on stderr.
+- **SIGTERM, and SIGHUP (the terminal closed)** end `ge` as an
+  interrupt does: a change being written is finished and none starts
+  after it, the notes and the damage warning go to stderr, nothing is
+  said of the signal, and `ge` ends by it. It ends at once where the
+  terminal takes its output, and otherwise within about half a second,
+  losing what it had not written by then (the history too, if it was
+  held up writing). Rarely it ends only when that half second is over,
+  with the terminal's modes not restored (3 times in 1,600 runs). A
+  second signal ends it without those waits, though not in the middle
+  of a change. A signal that `ge` was started ignoring (SIGHUP under
+  `nohup`) stays ignored. Where `ge` leads its session (a terminal or a
+  program started it directly, not through a shell) and the terminal
+  takes no output, what is queued for it is discarded, and the
+  terminal is left discarding output (its `FLUSHO` flag set).
 - Either way, damage that the line had read past by then is still
   warned of (section 7).
 - **TAB completion gives up by itself** after about half a second
   (section 1), so a prefix that would take long never holds the prompt.
 
 In `mk`, a `+` is `++`, so many alternatives arise only for a `|`
-written there; `mk` then lists as many ways of creating the path
-(`mk (a | b | c)/(d & e & f & g & h & i & j)` on an empty graph has
-2187), or stops at its own limit (5.2).
+written there. `mk` refuses a path with many before it builds anything
+(4.8): `mk (a | b | c)/(d & e & f & g & h & i & j)`, which `ls` runs,
+is too large for it. Below its estimate, `mk` lists as many ways of
+creating the path as it has (`mk (a | b)/(c & d & e & f)` on an empty
+graph has 16), or stops at its limit on walks (5.2).
+
+```ge
+graph: 0
+$ mk (a | b | c)/(d & e & f & g & h & i & j)
+This path is too large for mk: its size, estimated from the path as written,
+    is more than the limit of 256 route steps over all its alternatives. Keep
+    one side of each union or create the path with several commands. Nothing
+    was changed. (ExpansionTooLarge)
+```
 
 [path-cost-limits.md](path-cost-limits.md) records what was tried as a
 limit on alternatives, why a count of alternatives does not predict how
 long a command takes, where the time of a path command goes, and what a
 check would look like if one is wanted.
 
-### 5.2 Walks: `max-repairs`
+### 5.2 Walks: `--max-repairs`
 
-A step with edges to several nodes multiplies the ways `mk` has to
-walk the path: `n` edges at each of `k` steps are `n^k` walks, and
-every one is walked before any is dropped (4.2). `mk` counts the walks
-it makes and stops with an error, nothing changed, as soon as there are
-more than the limit: 5000 (`defaultMaxRepairs`) unless
-`%override({max-repairs = N}, p)` (or `unlimited`) says otherwise. The
-largest limit among the parts of the path applies to all of it, since
-a walk is of the whole path; an override on a part never lowers the
-limit. A path that already holds is found to hold whatever the limit.
-Writing `@N` after a step leaves it one node to go to and divides the
-count. Steps that have one edge to follow, or none, do not multiply
-anything: ten existing conjuncts and a new one are one walk.
+Here a *walk* is one way of walking the whole path (every walk of it,
+in the sense of the introduction, at once), with one node taken
+wherever a step had edges to several. A step with edges to several
+nodes multiplies them: `n` edges at each of `k` steps are `n^k` walks,
+and every one is walked before any is dropped (4.2). `mk` counts the
+walks it makes, over all the alternatives of the path, and stops with
+an error, nothing changed, as soon as there are more than the limit:
+5000 (`defaultMaxRepairs`), unless the option `--max-repairs N`, given
+before the path, says otherwise (`N` a positive number, or
+`unlimited`). It is an option of `mk` and `tag` alone, since it limits
+what they do with the whole path; another command reads it as a path
+and fails to parse (`ls --max-repairs 1 x`), and an `%override` that
+sets it is a parse error
+([path-language.md](path-language.md#33-parse-errors)). A path that
+already holds is found to hold whatever the limit. Writing `@N` after
+a step leaves it one node to go to and divides the count. Steps that
+have one edge to follow, or none, do not multiply anything: ten
+existing conjuncts and a new one are one walk.
 
-The count is of walks made, not of ways listed. Ways that create more
-than another are walked and then dropped. And when `mk` finds that a
-step was taken before an edge that counts for it was created (4.1,
-rule 6: this happens between steps at the same distance, and with a
-join one of whose steps is nearer the start than another), it walks
-the path again with that step waiting, and those walks count too. In
-the example the second `a` is taken first and goes to node 1; then the
-first `a` creates a node that the second could have gone to as well.
-That is one walk, and two more when the path is walked again.
+The count is of walks made, not of ways listed: ways that create more
+than another are walked and then dropped. Each walk is made once;
+nothing is walked again. The `use:` lines of an ambiguous `mk` are
+confirmed within the command's limit, and repeat the option when it
+was given (4.3).
 
 ```ge
 graph: 0 -a-> 1, 0 -a-> 2, 0 -a-> 3, 0 -a-> 4, 0 -a-> 5, 0 -a-> 6
@@ -1469,32 +1908,45 @@ Working out what this path creates takes too long: its steps have several
 ```
 
 ```ge
-graph: 0 -a-> 1
-$ mk --max-repairs 2 a/!{@1}/b & a/c
-These steps could each follow an edge that another of them creates, so mk has
-    no order to take them in: `a/!{@1}` and `a`. Write the node a step should
-    go to (/@N after it), or create them with separate commands. Nothing was
-    changed. (CircularSuppliers)
-$ mk --max-repairs 3 a/!{@1}/b & a/c
-These steps could each follow an edge that another of them creates, so mk has
-    no order to take them in: `a/!{@1}` and `a`. Write the node a step should
-    go to (/@N after it), or create them with separate commands. Nothing was
-    changed. (CircularSuppliers)
+graph: 0 -x-> 1, 0 -x-> 2, 0 -x-> 3
+$ mk --max-repairs 2 x/c & d
+Working out what this path creates takes too long: its steps have several
+    edges to follow, and every combination of the edges followed has to be
+    worked out, over all alternatives of the path; there are more combinations
+    than the limit of 2. This does not mean that the path cannot be created.
+    Nothing was changed. Write @N after a step for the node it should go to,
+    or !{@N} for nodes it should not, so that fewer edges can be followed, or
+    raise the limit by giving mk the option --max-repairs N before the path,
+    with N a larger number or unlimited. (TooManyRepairs)
+$ mk --max-repairs 3 x/c & d
+This path can be created in 3 ways; nothing was changed. To choose one, write
+    @N after a step for the node it should go to, or !{@N} for nodes it should
+    not, or keep one side of a +.
+  1. @0 -"x"-> @1 -"c"-> new1 & @0 -"d"-> new2
+    creates: @0 -"d"-> new2, @1 -"c"-> new1
+    use: mk --max-repairs 3 x/@1/c & d
+  2. @0 -"x"-> @2 -"c"-> new1 & @0 -"d"-> new2
+    creates: @0 -"d"-> new2, @2 -"c"-> new1
+    use: mk --max-repairs 3 x/@2/c & d
+  3. @0 -"x"-> @3 -"c"-> new1 & @0 -"d"-> new2
+    creates: @0 -"d"-> new2, @3 -"c"-> new1
+    use: mk --max-repairs 3 x/@3/c & d
+$ ls --max-repairs 1 x
+<interactive>:1:18:
+  |
+1 | ls --max-repairs 1 x
+  |                  ^
+unexpected '1'
+expecting "++", '&', '+', '/', ';', '|', or end of input
 ```
-
-The setting combines with `plus` (`{plus = shared, max-repairs = 5000}`).
-Queries accept the setting and ignore it. The `use:` lines of an
-ambiguous `mk` are confirmed within the default limit, not the
-override's.
 
 ### 5.3 `%override({plus = …}, p)`
 
 `plus = shared` reads every `+` in `p` as `++`, `plus = relational` as
 `|`, in any command; the innermost override wins, `|` and `++` written
 in `p` are unaffected, and a `+` inside a `%targets(…)` in `p` is not
-reached (2.6). Settings combine:
-`%override({plus = shared, max-repairs = 50000}, p)`. An unknown
-key or value, or a key given twice, is a parse error
+reached (2.6). An unknown key or value (`max-repairs` among them,
+5.2), or a key given twice, is a parse error
 (`InvalidOverrideSetting`,
 [path-language.md](path-language.md#33-parse-errors)).
 
@@ -1526,13 +1978,28 @@ failures, nor is an `ls` that finds no targets.
   instead of writing them, as `would write: …` and
   `would delete at path: …` lines that name the node files (and a
   `delete data for …` line for the data of a node that would be
-  deleted), and leaves the node files as they were. (One command
-  does write in a dry run, which is a bug: `vi`, section 8.) Since
-  nothing is written, a later command of the line sees the graph as it
-  was and not as the earlier ones would have
-  left it, so a line in which one command builds on what another wrote
-  can end differently in a dry run
+  deleted), and leaves the node files as they were. A command prints
+  the `would delete at path` lines of a change first, then its
+  `would write` lines, then its `delete data for` lines; `mk` then says
+  `would create N new nodes and M new edges` where it would say
+  `created …`. `fix --dry-run`, and `fix` under `ge --dry-run`, list
+  the repairs and then `Would write node: …` lines, which name the
+  node and not its file. (One command does write in a dry run, which
+  is a bug: `vi`, section 8.) Since the node files are not written, a
+  later command of the line sees the graph as it was and not as the
+  earlier ones would have left it, so a line in which one command
+  builds on what another wrote can end differently in a dry run
   ([damaged-graphs.md](damaged-graphs.md#in-a-dry-run)).
+- **Output that cannot be written.** `ge` writes its standard output a
+  line at a time, also into a pipe or a file. When a line cannot be
+  written, `ge` fails with `ge: could not write the output
+  (output-failed): …` and exit status 1, and runs nothing more of the
+  line (`ge -e 'mk q1 ; ls * ; mk zz' >&-` makes no `zz`); with
+  standard error closed as well it exits with 1 and says nothing. When
+  the reader of its output has gone (`ge -e '…' | head`), `ge` ends by
+  SIGPIPE (exit status 141 to a shell), as such a program does. A
+  standard input that is closed is the end of the input: the REPL says
+  `Goodbye!` and ends.
 
 ```ge
 graph: 0 -a-> 1, 0 -c-> 3, 0 -c-> 4
@@ -1541,7 +2008,8 @@ $ cd zz ↵ nid ↵ rn zz y ↵ ls a
 a @1
 cd needs a path that resolves to a single node
 but it resolved to: []
-rn needs one selected source route, but found 0.
+rn needs its first path to select one edge, but the path matched nothing;
+    nothing was changed. (NoSourceEdge)
 $ ge -e 'cd zz'
 cd needs a path that resolves to a single node
 but it resolved to: []
@@ -1554,7 +2022,7 @@ option -e: <interactive>:1:6:
 1 | ls a b
   |      ^
 unexpected 'b'
-expecting "++", '&', '+', '/', '|', or end of input
+expecting "++", '&', '+', '/', ';', '|', or end of input
 Usage: ge <graph directory> [-e|--expression <command>] [--new] [--dry-run]
   Manipulate information graphs.
 [exit code 1]
@@ -1593,7 +2061,8 @@ Note: the 2 commands before this one in the line had already run; what they
 + 0 -r-> w4VxcgSm0Js6
 $ ge --dry-run -e 'ls a; rn zz y'
 a @1
-rn needs one selected source route, but found 0.
+rn needs its first path to select one edge, but the path matched nothing;
+    nothing was changed. (NoSourceEdge)
 Note: the command before this one in the line had already run; what it did
     stays.
 [exit code 1]
@@ -1612,7 +2081,8 @@ would write: @1{out=[]} -> "GRAPH/1.json"
 ```
 
 In the first example the two errors come after the output because
-errors are printed on stderr, which these examples show last. In the
+errors are printed on stderr, which these examples show last (in the
+REPL a parse error, and the failure of `:i`, are printed on stdout). In the
 fifth and sixth, `q` was created and `r` was not. In the seventh, `at`
 stopped at its first target, `3`, where `q` stays, and did nothing at
 `4`. In the tenth, `at` failed at its second target, `3`, after the
@@ -1663,23 +2133,42 @@ Each item says what the build does and what is pending or undecided.
   prints "Note: the command before this one in the line had already
   run; what it did stays." twice, once for the block and once for the
   line.
-- An ambiguous `mk` can list a way of creating the path without a
-  `use:` line because its alternative has no spelling as a path (4.3),
-  besides the reasons that no path can express.
-- When steps could follow each other's edges, `mk` lists every way
-  that holds together, among them one in which each step ignores the
-  other's edge and one more node is created than in another way
-  listed (4.2).
-- `mk --allow-orphans` does nothing that `mk` does not (4.5).
-- Nothing bounds the cost of compiling or matching a large path (5.1),
-  and `max-repairs` bounds a count of walks, not time (5.2).
+- An ambiguous `mk` can list a way of creating the path with no `use:`
+  line ("no command was found that creates just this") because its
+  alternative has no spelling as a path (4.3), besides the reasons that
+  no path can express.
+- `mk` refuses some paths that it could build (4.8), and the designer
+  has accepted that: a step and its reverse from one node
+  (`mk a & ~a`), a join beside another conjunct with one of its labels
+  (`mk a/b & (a & c)/@`), a step that a fork copies with a test on one
+  copy (`mk i/(!{@1} & f)`), and, run at node 0,
+  `mk (a & b)/@ & @0/a`, which is built at another node. A side of a
+  union with such a shape refuses the whole path. The estimate of size
+  counts high, so a path can be refused where the same path written
+  out is built, and a conjunct that has nothing to do with the rest can
+  tip a path over the limit.
+- `mk p` and then `mk p/q` can leave something else than `mk p/q`
+  alone for a path inside the class of 4.7 (its last example). Whether
+  the class, or `mk`, is to change is not decided.
+- Nothing bounds the cost of compiling or matching a large path in a
+  query (5.1). In `mk` and `tag` the estimate (4.8) bounds what a path
+  compiles to, and `--max-repairs` bounds a count of walks, not time
+  (5.2).
 - The rough edges of the language itself are in
   [path-language.md](path-language.md#5-known-rough-edges-and-what-may-change).
 
 ### Known bugs
 
 These are bugs. They are known, and they are not being fixed now.
+(That `text`, `desc` and `:i` take the rest of the line, a `;` too,
+section 1, is meant, and no bug.)
 
+- **A dry run of `mk` with a URL in its path fails.** The import of
+  the URL is a change of its own, which a dry run lists and does not
+  write, so the `mk` after it finds no node for the URL:
+  `ge --dry-run -e 'mk x/http://…'` ends with `MissingNodes` where the
+  real run succeeds. A dry run after the URL's content is already in the
+  graph works.
 - **`ls` through a node with many children is slow, and gets slower
   with the square of their number.** At a node with `N` children under
   `n`, each with a `c` edge to one and the same node, `ls n/c` took
@@ -1696,7 +2185,8 @@ These are bugs. They are known, and they are not being fixed now.
   that does not tell upper from lower case in file names, which is the
   usual kind on a Mac. There, in a graph with a node `aBcDeFgHiJkL`,
   `mk b/@AbCdEfGhIjKl` is refused as an edit next to damage
-  ("AbCdEfGhIjKl.json says it is the node @aBcDeFgHiJkL"); and a graph
+  ("AbCdEfGhIjKl.json says it is the node @aBcDeFgHiJkL"), while `ls`
+  reads such a file without a warning (`fsck` reports it); and a graph
   that has two such nodes, brought from a volume that tells them apart,
   reads as damaged (not run: it takes such a volume).
 - **Several `ge` processes that write to one graph at the same time
@@ -1709,3 +2199,18 @@ These are bugs. They are known, and they are not being fixed now.
   2026-10-11; `fsck` lists them). After several programs wrote to a
   graph at the same time, run `fsck`
   ([damaged-graphs.md](damaged-graphs.md#several-programs-writing-at-once)).
+- **An interrupted `rmnf` or `text` can be half done.** The data file
+  of a node is written or deleted after its node files, as a change of
+  its own, and an interrupt (or SIGTERM or SIGHUP, 5.1) can come
+  between the two: `rmnf` of nodes with data can leave their data files
+  without the nodes, and `text` a text node without its text. `fsck`
+  reports neither, since a data file without a node and a node without
+  data are no damage.
+- **A REPL fed from a named pipe (a FIFO) does not see the end of the
+  input.** `ge GRAPH < fifo` answers the lines written into the pipe and
+  then waits at the prompt after the writer has closed it, where a
+  plain pipe (`printf 'nid\n' | ge GRAPH`) ends with `Goodbye!`.
+- **Ctrl-C does not stop a command that waits for a node file** that
+  another program holds, or that is not downloaded: the interrupt
+  takes effect once the system gives the file (5.1). SIGTERM and SIGHUP
+  end `ge` within about half a second there too.

@@ -4,8 +4,10 @@ A graph is a directory of node files. `<id>.json` holds one node: its id
 and its edges, the outgoing ones and the incoming ones. Every edge is
 therefore recorded twice, among the outgoing edges of its source and among
 the incoming edges of its sink. `ge` writes both records, but a write that
-was interrupted, a sync that has delivered only some of the files, two
-programs that write at the same time, or an edit by hand can leave files
+was cut short (by a kill, a crash or a loss of power: an interrupt,
+SIGTERM and SIGHUP wait for the files of a change to be written), a sync
+that has delivered only some of the files, two programs that write at the
+same time, or an edit by hand can leave files
 that contradict each other or that can't be used. That is damage. `ge`
 detects it where it reads, refuses to edit next to it, and has two commands
 for it: `fsck` lists it and `fix` repairs it.
@@ -13,6 +15,10 @@ for it: `fsck` lists it and `fix` repairs it.
 The graph is what the node files say. A file that is not a node file, such
 as `<id>.data` for a node that has no `<id>.json`, is no part of the graph:
 it is not damage, `fsck` doesn't report it, and `fix` leaves it where it is.
+Nor is a node without data. The data of a node is written or deleted after
+its node files, as a change of its own, so an interrupted `rmnf` can leave
+data files without their nodes, and an interrupted `text` a text node
+without its text (a known bug, `commands.md` section 8).
 
 ## What counts as damage
 
@@ -52,8 +58,9 @@ ones that it is about to write, with each other:
   editor starts. A dry run (`--dry-run`) is refused in the same way.
 - A command that only **reads** goes on, and the command line warns once
   for each finding when it is done, however it ends (also if a later
-  command of the line fails, an editor exits with an error, or the line is
-  interrupted): `warning: the graph is damaged where this command read it
+  command of the line fails, an editor exits with an error, the line is
+  interrupted, or `ge` is ended by SIGTERM or SIGHUP): `warning: the graph
+  is damaged where this command read it
   (damaged-graph)`. If the line is refused for a finding, only the refusal
   names it.
 - A file that can't be used as a node is read as a node **without edges**.
@@ -111,7 +118,8 @@ rmnf %targets(h + b/c)
 What a command runs is part of it: the command that `at` runs at each of
 its targets, also if that is several commands in braces. Each command of a
 `;` line is a decision of its own, and what failed in one of them is not
-written while what the commands before it did stays. In `ge -e`, a refused
+written (unless its error says that it was written in part, below) while
+what the commands before it did stays. In `ge -e`, a refused
 or failed command makes the exit code 1. A command that only reads warns
 and carries on, as before.
 
@@ -170,6 +178,13 @@ reads `6.json`, to take `m` out of it, and `mk z` reads `7.json`. (The real
 run has deleted `@5` by then, and says so; the dry run has said what it
 would delete and write.) `at @1 {rmnf @5 ; ls @7}` warns of `k` in both.
 
+What a dry run says it would do comes in the order the real run does
+it: for each change, the node files it would delete (`would delete at
+path: …`), then those it would write (`would write: …`), then the data
+it would delete (`delete data for …`). `fix` lists its repairs and then
+the nodes it would write (`Would write node: …`), by node and not by
+file.
+
 A dry run doesn't make the writes of a command's earlier steps, though, so a
 later step of the same command, or a later command of the line, sees the
 graph as it was and not as those steps would have left it. A dry run can
@@ -204,8 +219,9 @@ since no undamaged graph gets damaged this way:
    read records an edge with. The node that was lost then looks as if it
    were there: `fsck` reports a one-sided edge where it would have reported
    a missing file, and `fix` adds the record instead of saying that the
-   node's other edges and its data are lost. Only the program's own nodes
-   are created at an id that is fixed beforehand. `mk` and `tag` give every
+   node's other edges and its data are lost. Apart from `fix`, which
+   rebuilds a lost node file at its id, only the program's own nodes are
+   created at an id that is fixed beforehand. `mk` and `tag` give every
    node they create a new id, and fail for a path that writes a node `@N`
    which has no file: with `2 -d-> 1` recorded in `1.json` and no `2.json`,
    `mk x/@2` and `tag x/@2 @1` write nothing and say that `@2` does not
@@ -229,6 +245,20 @@ record, which is right for an edge that is being added and wrong for one
 whose **deletion** has half arrived (it comes back). Wait for the sync to
 finish and run `fsck` first.
 
+### A change that can't be written
+
+Before it writes anything, a change checks that every node file it
+replaces can be written, and, where it creates or deletes a file, that
+the graph's directory can be. If not, it is refused and nothing of it is
+written; the message names each file and why (`unwritable-graph-file`).
+If a write fails anyway (a full disk, say), the message says which files
+were written and which were not (`change-written-in-part`, with the
+advice to run `fsck` and `fix`, since the graph may be damaged where the
+change applies), or that none was (`change-not-written`). The data of
+nodes is written after the node files; if that fails, the change of the
+nodes stays, and the message says whose data could not be changed
+(`data-not-written`).
+
 ### Several programs writing at once
 
 A change is written file by file, and `ge` has no lock on the graph as a
@@ -243,12 +273,17 @@ hundred such one-sided edges, and three loops of sixty `ge -e` commands
 each, which start a new `ge` for every command, left dozens: it takes
 nothing that a REPL carries from one command to the next. A change that
 finds a node file other than it was when the change read it is refused
-(`The following nodes were changed before trying to write the diff`), which
-catches some of it, not all. Two programs that write one node file at the
+("this change was not written: 1.json is no longer as the change read it:
+something else, another program or a sync, changed it meanwhile
+(changed-meanwhile)"), which catches some of it, not all. Two programs that write one node file at the
 same time can also leave a file that can't be parsed: one run of three
 REPLs left the node of the current day cut off (`… cannot be read as a
 node: … endOfInput`) and no one-sided edge. After several programs wrote to
-a graph at the same time, run `fsck`.
+a graph at the same time, run `fsck`. Such runs also had commands fail
+when the system did not give them a node file in time:
+`the system did not give access to a file of the graph
+(file-coordination-error): …`, the same line whether the command was
+reading or about to write.
 
 A command of several steps compares what an earlier step read with what a
 later one reads, and reads no file again for it. So an edge that another
@@ -404,15 +439,20 @@ from `5`, and exits with 0. The next `fix` adds it. After a `fix` during
 which other programs wrote to the graph, run `fsck`.
 
 `ge -e fix` exits with 1 if damage is left or nothing was done, and with 0
-otherwise. Like `fsck` it needs no open graph, and neither stops a `;`
+otherwise: also on a graph without damage, where it says `nothing to
+repair`. An interrupted `fix` keeps what it wrote and says so: `fix
+stopped part way: it was interrupted. What was written before it stays;
+run fix again for the rest.` Like `fsck` it needs no open graph, and neither stops a `;`
 line when it finds or leaves damage: `ge -e 'fsck ; fix'` lists the damage,
 repairs it, and exits with 1 because `fsck` found some; `ge -e 'fix ; ls'`
 repairs a graph that can't be opened and then lists it.
 
-In a dry run of `ge` (`ge --dry-run -e fix`), `fix` lists its repairs, makes
-its checks, and says what it would do: `fix would write nothing: …`. Nothing
-is repaired then, so what comes after `fix` still meets the damage (see "In
-a dry run" above).
+In a dry run of `ge` (`ge --dry-run -e fix`), `fix` lists its repairs
+(`repairs (only listed, nothing is written):`), makes its checks, and
+says what it would do: the nodes it would write (`Would write node: …`),
+or, when a check fails, `fix would write nothing: …`. Nothing is
+repaired then, so what comes after `fix` still meets the damage (see
+"In a dry run" above).
 
 ## Opening the graph
 
@@ -429,12 +469,16 @@ before the first command that needs it:
   That is said: `warning: created the system nodes that had no file: …`,
   `warning: added the system edges that no node recorded: …`. A graph that
   has nodes and none of the system nodes (made by an old `ge`) gets all of
-  them this way, with that warning; only a new graph, which has no node file
-  but perhaps the origin's, gets them silently. In a dry run nothing is
+  them this way, with that warning; only a new graph gets them silently:
+  one made with `--new`, or a directory that has the origin's file and no
+  other node file. (A directory with no node file at all is not opened
+  without `--new`: it has no file for the origin.) In a dry run nothing is
   added and the warnings say `would create …` and `would add …`.
 - If the graph is damaged where they go, they are not added and the graph is
   not opened (`a system node or an edge to one is missing and was not
-  added: …`).
+  added: …`). A system node whose file was lost while another node still
+  records its edge is such damage: until `fix` rebuilds it, only `fsck`
+  and `fix` run.
 - An origin or a system node whose file can't be used as a node (also one
   that is a directory, or a symbolic link to a file that isn't there) is a
   node without edges like any other such file: the graph opens, with the

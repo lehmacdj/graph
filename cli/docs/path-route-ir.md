@@ -2,11 +2,11 @@
 
 Surface `Path`s compile to **route patterns**. A route pattern is the
 normal form of a path and the single intermediate representation used for
-resolution, residuation (`mk`), and edge selection (`rn`, `mv`, `cp`, `cl`,
-preview, tags). This document is for people who change the compiler or
-the engine: the representation, how a path is lowered to it, how commands
-select from it, how it is resolved against the graph, how `mk` residuates
-it, and how all of that is tested.
+resolution, construction (`mk`, `tag`), and edge selection (`rn`, `mv`,
+`cp`, `cl`, preview, tags). This document is for people who change the
+compiler or the engine: the representation, how a path is lowered to it,
+how commands select from it, how it is resolved against the graph, how
+`mk` builds what is missing, and how all of that is tested.
 
 What a path means (the operators, the product rule, joins, unions, the
 paths that are refused or warned about, the laws) is in
@@ -74,8 +74,8 @@ newtype PathQuery = PathQuery { alternatives :: Set PatternPath }
   `Graph' PVertex PEdge PAug` with
   `PEdge { edgeId :: EdgeId, matcher :: Matcher }` (so parallel pattern
   edges stay distinct) and `PAug { test :: NodeTest }`. Nothing outside
-  `Models.PathPattern` and its tests uses it: matching and residuation
-  go by the routes, which are authoritative.
+  `Models.PathPattern` and its tests uses it: matching and `mk` go by
+  the routes, which are authoritative.
 - **Canonical form.** Renumber `VarId`s and `EdgeId`s in order of first
   appearance along the routes. Canonical `PatternPath`s compare as
   syntactic equality.
@@ -357,9 +357,7 @@ conjuncts of the group that is copied.
 Measured on 2026-10-09 with the compiler of the commit 6e962c22600e
 ("Refuse a path in which a product would copy a meeting point"), by
 scratch tools and path sets that are not part of the repository, so
-these figures cannot be taken again from it (the tools were
-`runall.sh`, `runev.sh` and `measured.py` under `cli/tmp/impl-mp2/h/`
-of the working tree they were made in):
+these figures cannot be taken again from it:
 
 - The verdict is the same for a path and its reverse on all 292,129
   paths it was tried on.
@@ -623,7 +621,7 @@ be routes of one alternative, `sharing` puts that together):
    at resolution, by their smallest witness, and is stated once, in §4
    (*Order*): it depends on the graph, and has nothing to do with how
    the sides are written. (`compileAlternatives`, which `mk` uses to find a path
-   that spells the alternative of a given possibility, lists them as they are made, and an
+   that spells the alternative of a given possibility (§5), lists them as they are made, and an
    alternative may be listed more than once there; it is searched for
    the alternative wanted, not read from the front.)
    The routes of one alternative are listed by the conjuncts they
@@ -660,8 +658,9 @@ be routes of one alternative, `sharing` puts that together):
    one whose crossing routes are left out. `compileAlternatives` gives a
    path for an alternative when it finds one that compiles to it,
    routes in order (it writes the routes out and compiles the result);
-   an ambiguous `mk` lists the possibilities of the others without a
-   `use:` line (§5). It finds one for 132 of the 152 alternatives of
+   an ambiguous `mk` lists the possibilities of the others with "(no
+   command was found that creates just this)" in place of a `use:` line
+   (§5). It finds one for 132 of the 152 alternatives of
    `(c & d)/(x/@ | y)/(w/@ | z)/(a & b)` (4), for 6 of the 8 of
    `(x/@ | s)/((c & y)/@/e & d)`, and for all four of
    `(c & d)/@/(w/@ | z)/(a & b)`. How many of the rest are some path
@@ -930,42 +929,34 @@ chooses in every copy of the conjunct (*Relational unions in detail*,
 5): `((x | y)/@ & z)/(c1 & … & c9)` has 512 alternatives, where
 `(x | y)/@/(c1 & … & c10)`, or the same with `++`, has 2.
 
-**No limit on what a path compiles to.** Nothing refuses a path for
-being large. A command compiles its path however many alternatives it
+**No limit on what a query compiles to.** No query refuses a path for
+being large. A query compiles its path however many alternatives it
 has and however many routes they have, for as long as that takes, and
 some paths that are short to write do not finish:
 `(x | y)/(a & b & c)/…` with seven such groups has one union that 2187
-routes choose on their own. The only paths a command does not run are
+routes choose on their own. The only paths a query does not run are
 those that would copy a meeting point. What the user can do about a
 command that runs long (Ctrl-C, and TAB completion giving up after
 `Executable.GraphEditor.Completion.completionAllowance`, half a second)
 is in
-[commands.md](commands.md#51-nothing-limits-what-a-path-compiles-to);
+[commands.md](commands.md#51-what-a-path-compiles-to);
 what was tried as a limit on alternatives, why it went, and the
 measurements are in [path-cost-limits.md](path-cost-limits.md).
 
-What `mk` makes is limited: its work is in the walks of each
-alternative (§5), which depend on the graph, and they have a limit,
-`max-repairs`, the one limit there is. Measured with `ge` in an
-unoptimized (`--fast`) build, each including about 0.1s of startup: on
-a graph with none of the path's edges, where each alternative has one
-walk, `mk (a | b)/(c & … & j)` (256 possibilities) takes 0.4 to 0.5s,
-`mk (a | b)/(c & … & k)` (512) 0.8 to 0.9s and
-`mk (a | b | c)/(d & … & i)` (729) 0.8s; each lists its possibilities.
-On a graph that already has an `a` and a `b` edge the copies of the
-prefix follow those edges, each alternative still has one walk, and
-`mk (a | b)/(c & … & j)` lists its 256 possibilities in 0.3s. In `mk`
-a `+` is `++`, so this only arises for a `|` written there. (These
-figures and those of §5 are approximate, from two runs each on a
-machine that was not idle.)
-
-`%override({max-repairs = N}, p)` is a directive, expanded before
-compilation, so the setting is carried explicitly: expansion leaves a
-`WithLimits limits p` node around the expanded `p` (a constructor that
-only exists in the `Prenormal` phase), which `mk` reads
-(`pathMaxRepairs`, §5). It does not otherwise change what the path
-means: wherever such nodes are, and however many are nested, the path
-compiles to what it compiles to without them (`withoutLimits`).
+What `mk` and `tag` make is limited twice (§5). Before compiling,
+`Models.PathPattern.Admit.checkExpansion` refuses a path whose size,
+estimated in one pass over the path as written (`expansionEstimate`),
+is more than `expansionLimit`, 256 route steps over all alternatives
+(`ExpansionTooLarge`). The estimate counts every union as if each copy
+of it chose a side of its own, `++` and `+` included, so it counts
+high, often far above what the path compiles to (no path was found
+for which it counts low): `mk (a | b)/(c & … & j)`, with 256
+possibilities, is refused by it. And the
+walks of each alternative, which depend on the graph, are limited by
+the option `--max-repairs` of `mk` and `tag`. Measured with `ge` in an
+unoptimized (`--fast`) build, on a machine that was not idle, two runs
+each: `ge -e nid` takes 0.05 s, and `mk (a | b)/(c & d & e & f)` on a
+graph with none of its edges, which lists 16 possibilities, 0.06 s.
 
 Implementation (`Models.PathPattern.Compile`): `structures`
 writes the path as chains, one for each choice of its shared unions, in
@@ -1001,9 +992,12 @@ expands each one (`Graph.Command.expandDirectives` for a query,
 anything else; expanding also lowers `+` (*Unions* above), and the
 expanded path is then checked (`checkPath`).
 
-- `%override({plus = …}, p)` expands `p` with `+` lowered accordingly,
-  and `%override({max-repairs = N}, p)` leaves a `WithLimits` node
-  (below).
+- `%override({plus = …}, p)` expands `p` with `+` lowered accordingly.
+  It has no other setting: `max-repairs`, which it once had, is an
+  option of `mk` and `tag` (`Make MaxRepairs ParsedPath` and
+  `Tag MaxRepairs ParsedPath ParsedPath` in `Models.Command`), parsed
+  before the path, and an `%override` that sets it is refused when it
+  is parsed (`InvalidOverrideSetting`).
 - `%history(n)` and `%last` become `@N` for the location in the history
   at that moment.
 - `%targets(p)` becomes `%never + @N1 + @N2 + …` for the current targets
@@ -1142,13 +1136,18 @@ witnesses      :: Resolution -> [Witness]                -- lazy product
   components some has no solution. A `Resolution` without a component is
   a match: it is that of a path without a step, such as `ls @`.
 
-## 5. Residuation: what `mk` creates
+## 5. Construction: what `mk` creates
 
-`mk p` makes `p` resolve by creating nodes and edges
-(`Models.PathPattern.Residuate`). It compiles `p` as every command does
-and walks the routes of each alternative from left to right. Nothing is
-decided from the far end of a step: a step looks at the node it stands
-on and at nothing else.
+`mk p` makes `p` resolve by creating nodes and edges, in three modules:
+`Models.PathPattern.Admit` refuses the paths it does not build and puts
+the steps of each other path in order, `Models.PathPattern.Residuate`
+walks the path in that order and chooses among the walks, and
+`Graph.PathPattern.Execution` (`planConstruction`) runs these steps and
+applies or reports the result. Nothing is decided from the far end of a
+step: a step looks at the node it stands on and at nothing else. No
+step waits for another or is taken twice. (The module and function names still say
+"residuate" and "repair", from a search that this replaced; nothing in
+them searches.)
 
 A **walk** takes every step of every route of one alternative, with one
 node chosen wherever steps had edges to several nodes to follow. What a
@@ -1170,57 +1169,120 @@ data Branch = Branch { vertex :: PVertex, taken :: Binding, others :: [Binding] 
 The nodes of a patch are all `Fresh`: no node is created at an id that
 is given (*Written nodes* below).
 
-**The rules.** Each alternative (each choice of union sides) is walked
-on its own. Every route is walked from its start node, one step at a
-time. The **distance** of a step is its position on its route, counted
-from 1; a step that several routes share has the greatest of its
-positions.
+**Refused shapes** (`Admit`). Before anything else, and before the
+graph is read, a path is refused for its shape
+([commands.md](commands.md#48-paths-that-mk-refuses-for-their-shape)
+has them for the user, with what to write instead). A refused path is
+refused whatever the graph holds, also where it already resolves.
+
+- **X**, `ExpansionTooLarge` (`checkExpansion`, on the path as written,
+  before it is compiled): `expansionEstimate`, one pass over the path,
+  is more than `expansionLimit`, 256 route steps over all
+  alternatives. The estimate is deliberately high: every union is
+  counted as if each conjunct next to it had a copy of its own, also a
+  `++`, whose copies the compiler shares, so `(a ++ b)/(c & d & e & f &
+  g)` is refused and `a/(c & d & e & f & g) ++ b/(c & d & e & f & g)`,
+  which compiles to the same, is not. `shrinking` works out which
+  rewrites the message may offer (moving the `+` and `++` unions out,
+  keeping one side of each).
+- The other four are found in the compiled routes of each alternative
+  (`refusals`), in this order, and the first alternative that has one
+  refuses the whole path, even where other alternatives could be
+  built:
+  - **R**, `ReturnsToMeetingPoint`: a route comes back to an unnamed
+    `Var` it has visited (`mk a/@/(@ & a)/@`).
+  - **M**, `WildcardJoin`: a `*` or regex step is one of several steps
+    that place one unnamed node (`mk (* & a)/@`).
+  - **V**, `SeveralWildcards`: an alternative has more than one `*` or
+    regex step (`mk */a & */c`, and `mk */(a & b)`, whose `*` the
+    product copies).
+  - **C**, `CircularSuppliers`: the operations of the plan (below) that
+    must each come after another of them form a circle
+    (`mk (a & b)/@ & a`, `mk a/!{@1}/b & a/c`, `mk a & ~a`).
+
+  R takes one pass over the hops of each route, M one over the
+  operations and V one over the steps; C is the plan, at most
+  O(m (m + L)) time and O(m²) space for m steps and L hops. The
+  current node counts as a written node, so whether C refuses
+  `mk (a & b)/@ & @5/a` depends on whether it runs at node 5. The
+  messages (`renderRefusal` in `Graph.PathPattern.Execution`) name the
+  written steps, a step that the product copies once with the number
+  of its copies (`writtenSteps` in `Models.PathPattern.Suggest`), and
+  suggest a join after such a step only where that is the user's whole
+  path and is itself admitted.
+
+**The plan** (`planOf`). An **operation** places an unnamed node, by
+all the steps into it at once, or connects two known nodes (written,
+or placed before) by one step. Its **distance** is how far its steps
+are from the start of their routes, counted from 1, the furthest
+counting: of the routes that share a step, and of the steps into one
+node. An operation comes after the steps before its own on their
+routes, after the placing of the node it starts from, and after every
+possible **supplier**: an operation one of whose steps has a literal
+label that a step of the first accepts, is no further from its route's
+start than the first (same pace, rule 4 below), and could, as far as
+anything written says, create an edge from where the first's step
+stands to where it may go. A connection with a literal label follows
+nothing and has no suppliers. Operations that are the same ordinary
+request (one step each, into an unnamed node, with the same literal
+label, direction, test and distance) may be each other's suppliers and
+are done together (`mk a & a` creates one edge). The strongly
+connected components of "comes after" are put in **batches**, each
+after those it comes after; a component that is a circle, and not one
+such request, is refused (C).
+
+**The rules** (`walksOf`). Each alternative (each choice of union
+sides) is walked on its own, its batches in order, each batch once for
+each walk, all its operations looking at the same state: the graph and
+what earlier batches created.
 
 1. **A step.** Standing on a node, a step with a label and a direction
    looks at the edges with that label and direction at that node whose
    other end passes the step's test (`!{…}`): the edges of the graph,
-   and the edges this command creates that count for it (rule 4). If
-   there is none, the step creates a new node and the edge to it. If
-   they all lead to one node, it goes there. If they lead to several
-   nodes, each is tried in a walk of its own; an edge created in one
-   walk is not seen in another. No edge is preferred, neither an
+   and the edges this command created in earlier batches that count
+   for it (rule 4). If there is none, the step creates a new node and
+   the edge to it. If they all lead to one node, it goes there. If they
+   lead to several nodes, each is tried in a walk of its own, and the
+   choices of the operations of a batch multiply; an edge created in
+   one walk is not seen in another. No edge is preferred, neither an
    existing one over a created one nor the other way round.
-2. **A step to a written node.** A step followed by `@N`, and a step
-   into a join that is already placed, goes along an edge to that node
-   that counts for it if there is one, and creates one otherwise.
-3. **A join.** The steps into a join (`/@`, `/!{…}`) are taken
-   together, once the routes into it have all arrived. The nodes that
-   any of the steps could follow an edge to are the choices; with none,
-   one node is created, with an edge for each step. A step with no edge
-   to the node taken that counts for the join creates one. The edge of
-   one step of a join never counts for another step of the same join,
-   so `mk (* & a)/@` needs a label for the `*`, though `mk * & a` does
-   not.
-4. **Which created edges count: the same pace.** An edge that a step
-   creates counts for another step if the creating step is no further
-   from the start of its route than the other: its distance is at most
-   the other's. The steps into a join are taken as one, at the distance
-   of the furthest of them. There are two exceptions.
-   - (a) An edge never counts for a step if it exists only because of
-     where that step went: an edge created further along the same
-     route, or from or into a node that is placed from there.
-   - (b) Steps that wait for each other's edges in a circle get nothing
-     from each other: they are taken together, each as if the others'
-     edges were not there.
-5. **One node per place.** Steps that create from the same node with
-   the same label and direction create the same node.
-6. **`*` and regex.** Such a step is a step like any other: it follows
-   every edge whose label matches and that counts for it, existing or
-   created, also between two written nodes. If it has to create an
-   edge, the label comes from the caller; `mk` gives none (*Labels*
-   below).
+2. **A step to a known node.** A step between two known nodes (followed
+   by `@N`, or into a join already placed) with a literal label creates
+   its edge unless that edge was there when its batch began. A `*` or
+   regex step goes along an edge between its two nodes if one counts
+   for it, also one its own batch created, and needs a label otherwise
+   (*Labels* below).
+3. **A join.** The steps into a join (`/@`, `/!{…}`) are one operation.
+   The nodes that any of them could follow an edge to are the choices;
+   with none, one node is created, with an edge for each step. A step
+   with no edge to the node taken creates one. The edge of one step of
+   a join is never followed by another step of the same join, so
+   `mk (* & a)/@` would need a label for the `*` (it is refused, M).
+4. **Which created edges count: the same pace.** The steps that found
+   an edge missing in one batch and created it are its creators. An
+   edge that this command created counts for an operation if one of its
+   creators is no further from the start of its route than the
+   operation's distance (the furthest of its steps): the steps into a
+   join follow edges created that far or nearer, and an edge that one
+   of them creates counts for another operation at the distance of
+   that step. A step that goes along an edge created in an earlier
+   batch is not one of its creators. So in `mk a & b/~b/a/@2` the first
+   `a` (distance 1) does not see the `0 -a-> 2` that the last creates
+   (distance 3), and in `mk x/~x/a & a/@2` the `a` at distance 3 sees
+   the one created at distance 1.
+5. **One node per place.** Operations of one batch that create from the
+   same node with the same label and direction create the same node.
+6. **`*` and regex.** Such a step follows every edge whose label
+   matches and that counts for it, existing or created. If it has to
+   create an edge, the label comes from the caller; `mk` gives none
+   (*Labels* below).
 
 Examples, with node 0 current and node 2 existing
 (`spec_walkExamples` in `Models.PathPattern.ResiduateSpec`):
 
 | command | graph | creates |
 |---|---|---|
-| `mk a & a` | | `0 -a-> new1` (5) |
+| `mk a & a` | | `0 -a-> new1` (one request) |
 | `mk a/b & a/c` | | one `a` node with `b` and `c` under it (5) |
 | `mk a/a` | | `0 -a-> new1 -a-> new2`: the second `a` stands on `new1` |
 | `mk a & a/@2` | | `0 -a-> 2` only: both steps are at distance 1 (4) |
@@ -1236,102 +1298,50 @@ Examples, with node 0 current and node 2 existing
 | `mk a & b/~b/a/@2` | | `0 -a-> new1`, `0 -b-> new2`, `0 -a-> 2`: the `a` at distance 1 does not see the edge created at distance 3 (4) |
 | `mk a & x/@0/a/@2` | | `0 -a-> new1`, `0 -x-> 0`, `0 -a-> 2`: the distance is counted along the route, also past a written node (4) |
 | `mk (x/y & a)/@ & a/@2` | | `0 -a-> 2`, `0 -x-> new1`, `new1 -y-> 2`: the join is at distance 2 and follows the edge created at distance 1 (4) |
-| `mk (x/y/z & w)/@ & w` | | one `w` edge, into the join's node: each step of a join creates at its own distance (4) |
-| `mk a/~a/a/@2` | | `0 -a-> new1` and `0 -a-> 2` (4, 4a) |
-| `mk (a/x & a)/!{@5}` | `0 -a-> 5` | `5 -x-> new1`, `0 -a-> new1`: the first `a` goes along `0 -a-> 5`, not along the edge into the join, which is placed from where it goes (4a) |
+| `mk (x/y/z & w)/@ & w` | | refused (C): the join's `w` and the other `w` might each follow the other's edge |
+| `mk a/~a/a/@2` | | `0 -a-> new1` and `0 -a-> 2`: the first `a` does not see the edge the last creates at distance 3 (4) |
+| `mk (a/x & a)/!{@5}` | `0 -a-> 5` | `5 -x-> new1`, `0 -a-> new1`: the first `a` goes along `0 -a-> 5`, since the join, whose `x` starts where that `a` goes, comes after it |
 | `mk * & a` | | `0 -a-> new1` only (6) |
 | `mk a/~*` | | `0 -a-> new1` only (6) |
 | `mk */@2 & a/@2` | | `0 -a-> 2` only (6) |
-| `mk */@2/~b/@0` | | needs a label: the `b` edge is created one step further along (6) |
+| `mk */@2/~b/@0` | | needs a label: the `b` edge is created one step further along (2, 6) |
 | `mk a/!{@1}` | `0 -a-> 1` | `0 -a-> new1`: the edge to an excluded node does not count |
 | `mk ~a/@2` | | `2 -a-> 0` (2) |
 
-**The order of steps.** Which edges count (rule 4) does not depend on
-the order in which steps are taken, but a step can only follow an edge
-that is there when it is taken. So the order is chosen to take a step
-after the steps whose edges count for it, and a step that was taken too
-early is taken again later.
-
-- Steps are taken in rounds. A step can be taken when the node it
-  starts from is known. Of the steps that can be taken, those at the
-  least distance are taken in a round (the steps into a join at the
-  distance of the furthest of them).
-- In a round the steps between two known nodes (rule 2) come first, one
-  after the other.
-- Then the steps and joins that have an edge to follow follow it, all
-  on the same state of the walk. Several nodes to go to give a walk
-  for each, and several such places in one round every combination.
-- Only in a round in which no step is between two known nodes and none
-  has an edge to follow do the steps and joins that have none create,
-  all at once.
-- **Waiting.** That order does not always suffice: two steps at the
-  same distance are taken in one round, and a join is taken at the
-  distance of its furthest step though a nearer step of it creates an
-  edge that counts for steps taken before. A step that turns out to
-  have been taken without an edge that counts for it is **late**. It is
-  made to wait for the steps that create the edge: the alternative is
-  walked again from the start (a **pass**), and the step is not taken
-  before those steps are.
-- **Whose waits apply to which walk.** A walk in which no step was late
-  is a possibility as it stands, whatever other walks of the pass show.
-  The walks of the next pass all have the waits found so far. A wait
-  that a walk has no use for delays a step there, which then sees what
-  it would have seen anyway. Passes go on until no walk shows a step
-  that is late and does not wait already.
-- **A circle.** When no step can be taken, steps hold each other up in
-  a circle: a step is held up by the steps it waits for, by the steps
-  that place the node it starts from, and by the other steps into the
-  join it goes into. The steps of a circle are the steps of a group
-  that are held up by each other and by nothing outside the group.
-  Those of them whose start is known are taken together in one round,
-  on the edges created so far: the ones that have an edge to follow
-  follow it, the others create (rule 5 gives those that create from the
-  same place one node). A step that waits for a step of a circle
-  without holding it up in turn is not part of the circle and goes on
-  waiting. A circle counts in a walk only if each of its waits is real
-  there, that is, if the step waited for did create an edge the waiting
-  step could have followed: a walk that let go of a circle with a wait
-  that is not real is no possibility, and the alternative is also
-  walked without that wait.
-
-With nodes 1 and 2, `mk c/!{@2}/a & (a & c)/@ & a/@1 & c/@2` has four
-possibilities. The `c` of the first route may not go to node 2, and the
-join can go to node 1 (along `a`) or to node 2 (along `c`). If the join
-is taken first and goes to node 1, it creates `0 -c-> 1` and the `c`
-follows it: no step is late. If the `c` is taken first it creates
-`0 -c-> new1`, and the join goes to node 2, to `new1`, or to node 1; in
-the last case the `c` was late, the two wait for each other, and in the
-walk in which they are taken together the `c` creates `new1` and the
-join goes to node 1.
-
 **Written nodes.** No node is created at an id that is given. An
 alternative that stands on a node which does not exist (a `Fixed`
-vertex, or the current node) is not walked. If no alternative leaves a
-possibility and some were left out for that, the result is
-`MissingNodes` with those nodes; `mk` and `tag` then fail and change
-nothing. A node inside a test (`!{…}`) is no vertex and need not
-exist. So a patch never needs a node file at a chosen id, and every
-created node hangs by an edge from a node that exists: no patch has
-orphans (`patchOrphans` is empty for every walk, and
-`mk --allow-orphans` allows nothing that `mk` does not do).
+vertex, or the current node) is not walked: it is left out (`LeftOut`).
+If no alternative is left and some were left out for that, the result
+is `MissingNodes` with those nodes; `mk` and `tag` then fail and change
+nothing. Otherwise `mk` goes on with the others, and says which it left
+out ("Note: mk left out `a/@7`, which needs @7: …", `leftOutNotes` in
+`Graph.PathPattern.Execution`), after what it created, also when the
+path already resolves, and after the list of an ambiguous `mk` or a
+label error; not with `MissingNodes`, `TooManyRepairs` or a refused
+shape. A node inside a test (`!{…}`) is no vertex and need not exist.
+So a patch never needs a node file at a chosen id, and every created
+node hangs by an edge from a node that exists (`mk` once had an option
+`--allow-orphans` for nodes that would not; it is gone, and the parser
+says so).
 
-**The result.**
+**Selection** (`select`).
 
 - If some walk creates nothing, the path already resolves and nothing
   is done. A walk follows every edge that exists, so every way the path
   resolves is a walk.
 - Otherwise a walk that creates everything another walk creates and
-  more (up to the names of new nodes) is dropped, and walks that create
-  the same count once (`select`; `selectReference` states this over
-  every two walks and the tests compare the two). The walks of
-  different alternatives and of different passes are compared like
-  those of one.
-- One possibility left: it is created.
+  more (up to the names of new nodes; an existing node is never
+  renamed, `patchSubsumes`) is dropped, and walks that create the same
+  count once (`selectReference` states this over every two walks and
+  the tests compare the two). The walks of different alternatives are
+  compared like those of one.
+- One possibility left: it is created (`chooseRepair` gives `Apply`).
 - Several: nothing is created; they are listed, the one that creates
   least first (then in a fixed order of their text).
 - None: `MissingNodes` if an alternative was left out for a node that
-  does not exist, and otherwise "This path cannot be constructed."
-  (every alternative has a test that its start node fails).
+  does not exist, and otherwise "This path cannot be constructed: each
+  of its alternatives has a test that a node already there fails …"
+  (`Unsatisfiable`).
 
 With `0 -a-> 1`, `0 -a-> 2`, `1 -b-> 3`: `mk a/b` does nothing;
 `mk a/b/c` lists two (c under 3, or b and c under 2); `mk a/b & a/c`
@@ -1340,70 +1350,66 @@ also create a `b` under 2 create more).
 
 **Labels.** A `*` or regex step that has to create an edge gets its
 label from the caller's callback, which is asked once for each matcher;
-there is no graph-wide reuse. `mk` supplies no labels. A label the
-chooser does not give (or gives but the matcher rejects) is
+there is no graph-wide reuse. `mk` supplies no labels (`noLabels`). A
+label the chooser does not give (or gives but the matcher rejects) is
 **missing**. The walk goes on with a stand-in, `Missing matcher`,
 distinct from every real label and equal for every edge with the same
 matcher; a step with the same matcher follows an edge with that label,
 and so does `*`. If the path already resolves, the result is the no-op
 as usual. Otherwise, if a possibility that is left uses a missing
-label, it is an error and nothing is changed: `mk` does not fall back
-to the other possibilities. The error names the matcher and lists the
-possibilities (at most five) with the missing label shown as its
-matcher (`-*->`), and says which need it. So `mk a + *` and `mk * + a`
-are errors, and `mk a/*/@5` with `0 -a-> 2` is one too (`2 -*-> 5`). A
-possibility that needs a label and is dropped anyway does not matter:
-`mk a + a/*` creates `a`. Over the test corpus `mk` without labels does
-exactly what it does with a label that no other step has, or fails
-where that label would be used.
+label, it is an error (`UnsupportedLabel`) and nothing is changed:
+`mk` does not fall back to the other possibilities. The error names
+the matcher and lists the possibilities (at most five) with the
+missing label shown as its matcher (`-*->`), and says which need it.
+So `mk a + *` and `mk * + a` are errors, and `mk a/*/@5` with
+`0 -a-> 2` is one too (`2 -*-> 5`). A possibility that needs a label
+and is dropped anyway does not matter: `mk a + a/*` creates `a`. Over
+the test corpus `mk` without labels does exactly what it does with a
+label that no other step has, or fails where that label would be used.
+A `*` step given a label by a chooser is no supplier in the plan; the
+command line never gives one.
 
 **Limit on walks.** A step with edges to several nodes multiplies the
 walks, and every walk is made before any is dropped: `n` edges at each
 of `k` independent steps are `n^k` walks. `mk` counts the walks of
-every alternative and of every pass, under way and finished, and stops
-as soon as there are more than the path's limit, 5000 by default
-(`Models.PathPattern.Residuate.defaultMaxRepairs`):
-"Working out what this path creates would take too long: its steps
-have several edges to follow, in more combinations than the limit of
-5000, and each has to be walked. Nothing was changed. Write @N after a
-step for the node it should go to, or !{@N} for nodes it should not, so
-that fewer edges can be followed, or raise the limit with
-%override({max-repairs = …}, …). (TooManyRepairs)". So a path whose
-alternative is walked twice can be refused with a limit that is the
-number of ways it ends with: with `0 -a-> 1`, `mk a/!{@1}/b & a/c` is
-one walk, then two with the second `a` waiting for the first, and is
-refused with a limit of 2. A path that already resolves is the no-op
-whatever the limit: when the limit is passed, each alternative is
-matched instead, as a query matches it (`loadPattern`,
-`matchPatternWithin`), requiring that every matched node exists.
+every alternative, under way and finished, and stops as soon as there
+are more than the command's limit, 5000 by default
+(`Models.PathPattern.Residuate.defaultMaxRepairs`), or what the option
+`--max-repairs N` of `mk` and `tag` says (`unlimited` for none; the
+command carries it as `MaxRepairs`, `Nothing` for the default):
+"Working out what this path creates takes too long: … there are more
+combinations than the limit of 5000. This does not mean that the path
+cannot be created. … (TooManyRepairs)". Each walk is made once, so a
+limit equal to the number of walks is always enough. A path that
+already resolves is the no-op whatever the limit: when the limit is
+passed, each alternative is matched instead, as a query matches it
+(`loadPattern`, `matchPatternWithin`), requiring that every matched
+node exists.
 
-`%override({max-repairs = N}, p)` (or `unlimited`) changes the limit:
-`N` is a positive number; the innermost override around a part of the
-path is that part's limit; and since the walks are those of the whole
-path, the largest limit among the path's steps and nodes applies to all
-of it (`pathMaxRepairs`). Commands that construct nothing accept the
-setting and ignore it.
-
-**Laws.** Tested over the corpus, random paths and graphs, paths built
-so that steps wait for each other, and paths built so that they wait in
-a circle (`Models.PathPattern.WalkSpec`):
+**Laws.** Tested over the corpus, random paths and graphs, and paths
+built so that steps follow each other's edges
+(`Models.PathPattern.WalkSpec`), with the refusals as the filter:
 
 - After `mk p` creates a possibility (the one it creates, or any it
   lists), `p` resolves.
 - `mk p` again then does nothing.
 - A path that resolves, and only such a path, does nothing.
-- The result does not depend on the order of conjuncts or of union
-  sides.
+- Neither the result nor whether the path is refused depends on the
+  order of conjuncts or of union sides, and a conjunct that has nothing
+  to do with the rest changes nothing (but for X, whose estimate it can
+  tip).
 - `mk` fails with `MissingNodes` only for nodes that the path writes
   and that do not exist, and never when they all exist; and it creates
-  only new nodes.
+  only new nodes. A path with literal labels, existing written nodes
+  and tests that agree is never answered "cannot be constructed".
 
 *Staging is not a law.* "`mk p` and then `mk p/q` leaves what `mk p/q`
 alone leaves" holds when `q` begins with a step (not with `@`, `@N` or
 `!{…}`), `mk p` and `mk p/q` alone both decide without asking, and the
 path writes no label twice (`a` and `~a` are the same label) and has no
-`*` or regex (1,808 of 1,808 cuts of 4,992 generated paths). Outside
-that class it fails in these ways:
+`*` or regex (`spec_walkStaging`; one failing cut is known inside that
+class, the fifth case below). Outside that class it fails in these
+ways:
 
 - *A cut just before `@`, `@N` or `!{…}`.* What follows the cut says
   where the part before it ends. With node 2 and no edges,
@@ -1421,59 +1427,65 @@ that class it fails in these ways:
   `new1` and one under node 4; after the first command its first `b`
   has two edges to follow, the way along `0 -b-> 4` creates less, and
   nothing is put under `new1`.
-- *`*` or regex.* With `0 -c-> 0`, `mk */a & */c` creates
-  `0 -a-> new1`, and then each `*` of `mk (*/a & */c)/b` has two edges
-  to follow; alone it decides.
+- *`*` or regex.* With `0 -c-> 0`, `mk */a & c/b` creates `0 -a-> new1`
+  and `0 -b-> new2`, and then the `*` of `mk (*/a & c/b)/d` has three
+  edges to follow; alone it has one, the loop, and decides.
 
-**Costs.** As plainly as the benefits:
+And one case inside the class, a documented exception to it: with
+`0 -x-> 0` and `0 -x-> 5`, `mk (x & @)/i/(l & @)/@` creates
+`0 -i-> new1` and `new1 -l-> new1`, and `mk (x & @)/i/(l & @)/@/b`
+alone creates those and `new1 -b-> new2`; but after the first command
+it asks between `N -b-> new1` (N the node the first created) and a way
+in which the `x` goes to 5, the `i` from there creates a node and the
+join goes there. Alone, that larger way contains the smaller one up to
+the naming of new nodes and is dropped; after the first command the
+smaller way's node exists, `patchSubsumes` never renames an existing
+node, and both stay. It takes a step that the product copies so that
+one copy goes into a join and the other past it (`i/(l & @)/@`), a
+conjunct `@` beside it, and a step with several edges or a union. Over
+seeds 1 to 30,000,000 of the staging property's generator, 1 of
+10,198,031 cuts failed this way; whether the class or `mk` should
+change has not been decided.
+
+**Costs.** As plainly as the benefits, counted (`WalkCost` is
+`{walks, batches}`; `spec_walkCostCounted`):
 
 - A step with edges to several nodes multiplies the walks, and a path
   that resolves in many ways is walked in every way until the limit
   hands it to the matcher. Writing `@N` after a step leaves it one node
-  and divides the count.
+  and divides the count. `k` independent choices of two take `2^k`
+  walks.
+- No plan has more batches than operations, and the batches done are
+  at most the walks times the operations. A relay of steps that follow
+  each other's created edges takes one walk and three batches at every
+  length tried, from 2 to 64 (at 128 it is refused, X).
 - `*` and regex steps see every created edge that matches and counts.
   Beside two steps that create from the same node, a `*` step has two
   more edges to follow: `mk a & b & */c` asks. `mk c & */b` with
   `0 -a-> 1` asks too (b under 1, or under the new `c` node).
-- A step that is found late makes `mk` walk the alternative again from
-  the start. With steps taken in order of distance that happens for
-  steps at the same distance and for joins with a nearer and a further
-  step. Of 18,000 generated paths of one alternative each, none took
-  more than four passes and 1,199 took more than one. The number of passes is bounded only by the
-  number of sets of waits, which is not a useful bound; every pass
-  counts against the limit on walks.
-- A walk takes a number of rounds that grows with the length of the
-  routes, not with their number, and each round looks at every step
-  that can be taken. With four times the steps, walking allocates under
-  8 times as much when nothing waits and under 24 times as much in the
-  families of `Models.PathPattern.WalkSpec` in which steps follow
-  created edges, wait at the same distance, stand in a ring of joins,
-  or relay (by allocation, not by the clock; `spec_walkCostCounted`
-  counts passes, walks and rounds). In an unoptimized build, 640
-  routes of three steps (1,920 steps) take 0.03 s; the relay at the
-  same pace with 60 routes (1,950 steps) takes 0.02 s, in one pass; 12
-  steps with two edges each (4,096 walks) take 0.7 to 1.1 s.
-- Paths in which steps wait in a circle are where `mk` is least
-  predictable: it lists every walk that holds together, and that can
-  include one in which a step creates a node beside an edge it could
-  have followed (the second possibility of the example above).
 - Each `use:` line of an ambiguous `mk` costs one more walk, of a path
   in which every choice is written.
 
-**`mk`.**
+**`mk`** (`Graph.PathPattern.Execution`, `constructPath`; `tag` is
+`constructTag`, which does the same for its first path and then links
+each end of the first match to the target with the label `""`).
 
+- A refused shape: the refusal (`renderRefusal`), and nothing changes.
 - The path already resolves: nothing is done, and `mk` says
   `created 0 new nodes and 0 new edges`.
-- One possibility: it is created, and `mk` says how many nodes and
-  edges, e.g. `created 1 new node and 2 new edges`. With `ge --dry-run`
-  it says `would create …`.
+- One possibility: it is created (`applyResidual`: a `freshNID` for
+  each `Fresh` binding, then the edges), and `mk` says how many nodes
+  and edges, e.g. `created 1 new node and 2 new edges`. With
+  `ge --dry-run` it says `would create …`.
 - Several: an error that changes nothing. It lists the possibilities,
   each as its routes with every vertex resolved (existing nodes as
   `@N`, created ones as `newK`) and what it creates. Only the first
-  five are listed, followed by how many more there are.
-- **Suggested lines.** Each listed possibility is followed by
+  five are listed (`shownPossibilities`), followed by how many more
+  there are.
+- **Suggested paths.** Each listed possibility is followed by
   `use: mk <path>` (or the `tag` command) when a path can be written
-  that creates exactly it (`Models.PathPattern.Suggest`). The line is
+  that creates exactly it (`Models.PathPattern.Suggest`), and by "(no
+  command was found that creates just this)" otherwise. The line is
   constructed, not searched for: the path keeps only the `+`
   alternative the possibility came from (`compileAlternatives` gives a
   path without unions for an alternative, where there is one); after
@@ -1485,23 +1497,25 @@ that class it fails in these ways:
   (`mk a/(b & c)` with two `a` edges: what is written after the one
   `a` applies to both copies), when the alternative has no path
   without unions, or when the line cannot be typed or is a path that
-  no command runs. A constructed line is then walked once, within the
-  default limit, and shown only if it creates exactly the possibility.
-  That check is what makes a shown line right, and it is needed: what
-  is written after a step changes which edges other steps have to
-  follow (with `0 -a-> 0` and `0 -a-> 2`, the line
-  `(a/@0 & b)/a/@0` for a possibility of `mk (a & b)/(@ + a)` would
-  create less than the possibility it is for), and where steps waited
-  in a circle, the written nodes leave nothing to wait for. Sequences
-  are written left-associated, labels unquoted where possible,
-  `@<tags>/t` as `#t`, and NIDs in full. When the command ran at
-  another node than the prompt's (inside `at`), the line is prefixed
-  with `at @N`.
+  no command runs. A constructed line must pass X and the refusals
+  itself, and is then walked once, within the command's limit, and
+  shown only if it creates exactly the possibility; with
+  `--max-repairs N` given, the line gives it too. That check is what
+  makes a shown line right, and it is needed: what is written after a
+  step changes which edges other steps have to follow (with `0 -a-> 0`
+  and `0 -a-> 2`, the line `(a/@0 & b)/a/@0` for a possibility of
+  `mk (a & b)/(@ + a)` would create less than the possibility it is
+  for). Sequences are written left-associated, labels unquoted where
+  possible, `@<tags>/t` as `#t`, and NIDs in full. When the command ran
+  at another node than the prompt's (inside `at`), the line is
+  prefixed with `at @N`.
 - More walks than the limit: the `TooManyRepairs` error above.
 - A written node that does not exist: the `MissingNodes` error ("This
   path needs @7, which does not exist, and a node with a written id is
   never created: mk gives every new node a new id. Nothing was
-  changed.").
+  changed."); `tag`'s says `tag`. When it is the current node that no
+  longer exists (deleted after it became the current node), the message
+  calls it "the current node @1", not a written node.
 - The walk reads nodes through the command's transaction, each once
   for the command: on a damaged graph, reading past damage and then
   writing is refused for the whole command, as for every command. A
@@ -1531,19 +1545,25 @@ that class it fails in these ways:
   `Models.PathPattern.WalkSpec`). For every possibility: creating it
   makes the path resolve, and `mk` again does nothing; `mk` does
   nothing iff the path already resolves; it asks iff at least two
-  possibilities are left; the result does not depend on the order of
-  conjuncts or union sides; `MissingNodes` only for written nodes that
-  do not exist; the class of paths for which staging holds; what
-  walking takes, in counted passes, walks and rounds; the examples of
-  §5 (`spec_walkExamples`). `select` is compared with `selectReference`
+  possibilities are left; neither the result nor whether the path is
+  refused depends on the order of conjuncts or union sides;
+  `MissingNodes` only for written nodes that do not exist; the class
+  of paths for which staging holds (`spec_walkStaging`); what walking
+  takes, in counted walks and batches (`spec_walkCostCounted`); the
+  examples of §5 (`spec_walkExamples`), and the designer's table of
+  paths built and refused (`spec_designExamples`); that the steps are
+  walked at the same pace. `select` is compared with `selectReference`
   (`spec_selectMatchesReference`), and every shown `use:` line creates
-  exactly its possibility (`Models.PathPattern.SuggestSpec`).
+  exactly its possibility (`Models.PathPattern.SuggestSpec`). The
+  messages of the refusals are a golden,
+  `test/Graph/PathPattern/ExecutionSpec/refusal-messages`.
 - **Goldens.** `test/golden/ge/path/` runs `ge` on small inline graphs
   ([Testing.md](Testing.md#cli-golden-tests) has the format):
   `chain-scoped-*.golden` for the product rule and joins,
   `copied-meeting-point.golden` and `join-does-nothing.golden` for the
   refusal and the warning, `union-*.golden` for unions, `spec-*.golden`
-  for the command examples; `test/golden/ge/no-match/` and
+  for the command examples, `mk-*.golden` and `walk-*.golden` for
+  `mk`; `test/golden/ge/no-match/` and
   `test/golden/ge/directives/` for those.
 - Tests that guard against a search that does not end
   (`spec_compileContradictions` and others) have an allowance of a
@@ -1564,6 +1584,10 @@ that class it fails in these ways:
   and the projections of §3 and §4.
 - `Graph.PathPattern.Resolve`: loading the neighbourhood of a pattern
   from the graph, then matching.
+- `Models.PathPattern.Admit`: the shapes `mk` refuses (the size
+  estimate and `checkExpansion`, and `refusals`) and the order of the
+  operations of an alternative (`planOf`), from the path and its
+  routes alone (§5).
 - `Models.PathPattern.Residuate`: the walk, selection and the limit on
   walks (§5), generic over the node lookup monad; `chooseRepair`
   gives the command-level choice.
@@ -1576,15 +1600,53 @@ that class it fails in these ways:
 - `Models.LegacyPartialPath`: the parser for TAB completion. It is not
   an engine.
 
+What stops a command, for whoever changes how commands write (what the
+user sees is in [commands.md](commands.md#51-what-a-path-compiles-to)):
+
+- Every change of a file of the graph goes through `DAL.RawGraph`: a
+  node file written or deleted, a data file, what `fix` copies and
+  removes. `changingGraphFiles` writes the files of one change under a
+  lock with exceptions from outside masked, and `changingGraphFile`
+  counts each change in `GraphWrites` as it is made;
+  `changingGraphFileOutside` counts the data file that the editor of
+  `vi` changed. A new place that changes graph files must go through
+  these, or an interrupt can cut it in half and the notes of an
+  interrupted line will not know of it.
+- The notes of an interrupted line (`notingWhatInterruptLeaves` in
+  `Error.Warn`) come from the count: `untoldGraphChanges`, and
+  `unnamedAtTargetChanges` for the targets of `at`.
+- `Executable.GraphEditor`: `installHandlerUnheld` installs the
+  handlers of the interrupt signal, SIGTERM and SIGHUP so that the
+  runtime does not hold them during a garbage collection (one that fell
+  into a collection while a line was read used to be handled only at
+  the next line); `endingBySignal` ends `ge` at SIGTERM and SIGHUP,
+  within `endingAllowance` (`--test-only-ending-allowance` for the
+  tests), after `noMoreGraphChanges` has waited for the change in
+  progress; `startedIgnoring` asks, without changing anything, whether
+  a signal was ignored when `ge` started (`nohup`); `OutputFailed` and
+  `sayingThatOutputFailed` report output that cannot be written, and
+  `SessionEnded` a session of the line editor that has ended.
+- `System.ControllingTerminal` (`awaitTerminalOutput`,
+  `discardTerminalOutput`): what `ge` does when it leads its session
+  and ends.
+- `runToEnd` in `Effect.IOWrapper.Editor` runs the editor so that an
+  interrupt that stops it comes out as itself, also when stopping the
+  editor's process fails.
+- `app/ge/standard-descriptors.c` opens a standard input, output or
+  error that is closed when `ge` starts on `/dev/null`, before the
+  runtime starts.
+
 ## 8. Deferred and out of scope
 
-- **`%unanchored`.** What it would take: a `Var` root, root candidates from
-  `nodeManifest`, the no-bound-neighbour case in candidate generation, and
-  an isolated vertex binding to any node that passes its test. `%float`
-  and `%unanchored` are not supported now.
-- **Positive node predicates** (for example, "tagged `#foo`") on variables
-  would make right evidence necessary for completeness. Revisit evidence
-  rules if they are added.
+- **`%unanchored`.** What it would take: a `Var` root, root candidates
+  from `nodeManifest` for the matcher, and for `mk` a first step that
+  has no node to stand on until its root is chosen, and an isolated
+  vertex binding to any node that passes its test. `%float` and
+  `%unanchored` are not supported now.
+- **Positive node predicates** (for example, "tagged `#foo`") on
+  variables: `mk` would have to choose or create a node that passes
+  them, which it never does now (a new node passes every test but that
+  of being a given node).
 - **Picking among the possibilities of an ambiguous `mk`** (`mk --choose N`).
 - **A label → edges index** for performance.
 - **Warning about every `@` that does nothing**, and relaxing the

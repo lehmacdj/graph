@@ -15,10 +15,12 @@ For setup instructions (installing Stack, running tests), see [docs/claude-code-
   including `mk`, the settings, and what happens when a command fails.
 
 - **[Route patterns](docs/path-route-ir.md)** - For changing the compiler:
-  how paths compile to route patterns, how resolution, residuation (`mk`)
-  and edge selection work, and which test pins which law.
+  how paths compile to route patterns, how resolution, construction
+  (`mk`: the shapes it refuses and the one walk it makes) and edge
+  selection work, and which test pins which law.
   **[Limits on what a path costs](docs/path-cost-limits.md)** - Why nothing
-  limits what a path compiles to, what was tried, and what is still bounded.
+  limits what a query compiles to, what was tried, and what is still
+  bounded (`mk`'s size estimate and its limit on walks).
 
 - **[Damaged graphs](docs/damaged-graphs.md)** - What counts as damage to a
   graph's node files, how commands refuse to edit and warn when reading next

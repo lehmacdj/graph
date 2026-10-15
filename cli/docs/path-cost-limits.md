@@ -1,4 +1,4 @@
-# Limits on what a path costs: what was tried, and why there is none
+# Limits on what a path costs: what was tried, and why queries have none
 
 A path command (`ls`, `mk`, `rm` and the others) compiles its path and
 then matches what it compiled against the graph
@@ -10,11 +10,13 @@ groups are multiplied out. A path that is short to write can
 compile to a great deal, and then the command takes long.
 
 For a while `ge` refused such paths before running them. That check, the
-alternatives limit, has been removed, and nothing replaces it: a path
-compiles for as long as it takes. This note records what the check was,
-why it was removed, where the time of a path command actually goes, the
-best design known for a check if one is wanted again, what is still
-limited, and what removing the limit costs.
+alternatives limit, has been removed, and nothing replaces it for
+queries: a query compiles its path for as long as it takes. (`mk` and
+`tag` have limits of their own, which came later and serve `mk`'s walk:
+section 5.) This note records what the check was, why it was removed,
+where the time of a path command actually goes, the best design known
+for a check if one is wanted again, what is still limited, and what
+removing the limit costs.
 
 The decision is the language designer's:
 
@@ -129,14 +131,15 @@ in `p` to a positive number `N`, or to `unlimited`. The innermost
 override around a union was that union's limit, and since alternatives
 multiply across unions and cannot be attributed to one of them, the
 largest limit among the `|` unions of a path applied to the whole path.
-The setting was carried by the same `WithLimits` node of the expanded
-path that still carries `max-repairs`.
+The setting was carried by a `WithLimits` node of the expanded path,
+which also carried `max-repairs` until that became an option of `mk`
+and `tag`; the node is gone.
 
 It is no setting any more. Writing it gets the error that any unknown
 setting gets:
 
 ```
-Unknown setting max-alternatives in %override; the settings are plus and max-repairs at line 1, columns 15-37. (InvalidOverrideSetting)
+Unknown setting max-alternatives in %override; the only setting is plus at line 1, columns 15-34. (InvalidOverrideSetting)
 ```
 
 ### Tests
@@ -330,8 +333,9 @@ so; the one column that was measured again with them says that too.
 `ge` end to end, one-node graph with the labels `a`, `b`, `c`, `x`,
 processor seconds, measured by the investigation (the fix here is the
 first commit's two changes). The routes are the `3^n` of the groups and
-the one of `x`; the source of these figures gives the first two
-without that one, as 729 and 2,187.
+the one of `x`; the table these figures come from gives them without
+that one, as 729, 2,187 and 6,561, and the same source has 6,562 in the
+message it quotes and in its tests.
 
 | `ls x & (a & b & c)/…` | routes | steps | unoptimized, before | unoptimized, fixed | optimized, before | optimized, fixed |
 |---|---|---|---|---|---|---|
@@ -629,30 +633,41 @@ Stated as plainly as the benefits:
 
 ## 5. What remains bounded today
 
-One thing: the walks `mk` makes.
+Two things, both in `mk` and `tag`, and neither in a query.
 
-`mk` works out what to create by walking the routes of the path from
-left to right (`cli/docs/path-route-ir.md`, section 5). A step with
-edges to several nodes to follow is walked once for each, so the walks
-multiply with such steps. `Models.PathPattern.Residuate` stops after
-5000 walks by default (`defaultMaxRepairs`), counted over all
-alternatives of the path and over every time an alternative is walked
-again, and the command fails without changing anything:
+`mk` works out what to create by walking the routes of the path once,
+from left to right (`cli/docs/path-route-ir.md`, section 5). Before it
+compiles a path, it refuses one whose size, estimated from the path as
+written in one pass, is more than 256 route steps over all its
+alternatives (`ExpansionTooLarge`; `Models.PathPattern.Admit`,
+`expansionLimit`). The estimate counts high on purpose, since it counts
+every union as if each copy of it took a side of its own:
+`(a | b | c)/(d & e & f & g & h & i & j)`, which `ls` runs, is refused
+by `mk` and `tag`. That is a bound on what such a path compiles to, not
+on its cost, and it came with the walk, whose other four refusals are
+for shapes, not for size
+(`cli/docs/commands.md`, 4.8).
+
+And a step with edges to several nodes to follow is walked once for
+each, so the walks multiply with such steps.
+`Models.PathPattern.Residuate` stops after 5000 walks by default
+(`defaultMaxRepairs`), counted over all alternatives of the path, each
+walk once, and the command fails without changing anything:
 
 ```
-Working out what this path creates would take too long: its steps have several edges to follow, in more combinations than the limit of 5000, and each has to be walked. Nothing was changed. Write @N after a step for the node it should go to, or !{@N} for nodes it should not, so that fewer edges can be followed, or raise the limit with %override({max-repairs = …}, …). (TooManyRepairs)
+Working out what this path creates takes too long: its steps have several edges to follow, and every combination of the edges followed has to be worked out, over all alternatives of the path; there are more combinations than the limit of 5000. This does not mean that the path cannot be created. Nothing was changed. Write @N after a step for the node it should go to, or !{@N} for nodes it should not, so that fewer edges can be followed, or raise the limit by giving mk the option --max-repairs N before the path, with N a larger number or unlimited. (TooManyRepairs)
 ```
 
-`%override({max-repairs = N}, p)`, with `N` a positive number or
-`unlimited`, changes it; the largest limit among the parts of a path
-applies to the whole path. A path that already resolves is a no-op
-whatever the limit. When a path can be created in several ways, `mk`
-lists five of them and changes nothing.
+The option `--max-repairs N` of `mk` and `tag`, with `N` a positive
+number or `unlimited`, changes the limit for the command. A path that
+already resolves is a no-op whatever the limit. When a path can be
+created in several ways, `mk` lists five of them and changes nothing.
 
 It bounds a count, not time: what one walk costs grows with the
-pattern (`cli/docs/path-route-ir.md`, section 5, has the
-measurements). And it bounds only what `mk` works out. Compiling the
-path, for `mk` as for every other command, is not bounded by anything.
+pattern (`cli/docs/path-route-ir.md`, section 5, has the counts). And
+it bounds only what `mk` works out. Compiling the path is bounded for
+`mk` and `tag` by the estimate above, and for every other command by
+nothing.
 
 The `mk` timings of sections 3 and 6 are of an `mk` that listed, for
 every step, the nodes it could be matched to or left to be created at,
@@ -796,9 +811,10 @@ finished before take 0.2 to 0.8 s where they took 0.4 to 1.9 s (the
 load on the machine differed between the two measurements).
 The limit did not protect against slow paths in general, though. The
 path with the dead end (written out in section 2), which the limit
-accepted, takes
-17 s of processor time to compile to nothing with this build, and a
-path without unions was never checked.
+accepted, took
+17 s of processor time to compile to nothing with the build of
+2026-10-09 (31.9 s in one run on a later build, on a loaded machine),
+and a path without unions was never checked.
 
 ### What the user can do about a command that runs long
 
@@ -811,11 +827,16 @@ busy reading node files (`ls n/c` at a node with 3,000 children under
 - **At the prompt of the REPL, Ctrl-C stops the command**, every time
   in a session: four commands of each kind in a row were stopped. `^C`
   is echoed, the prompt is back at once and the next command works.
-  Nothing was changed: a command compiles its paths before it writes
-  anything.
+  Nothing was changed by these two, since a command compiles its paths
+  before it writes anything; but where a line had changed the graph
+  before the interrupt (the commands before it on a `;` line, the
+  targets of an `at` it had done, `fix`), a note says so after the
+  `^C`, and a change being written is finished first
+  (`cli/docs/commands.md`, 5.1).
 - **`ge -e 'COMMAND'` ends at an interrupt.** The process is gone at
-  once, killed by the signal, with nothing printed, also when the
-  interrupt lands while node files are being read.
+  once, killed by the signal, with nothing printed but those notes,
+  also when the interrupt lands while node files are being read.
+  SIGTERM and SIGHUP end it the same way.
 - Either way, damage to the graph that the command line had read past
   by then is still warned of.
 - **TAB completion gives up by itself.** TAB after that path and a `/`

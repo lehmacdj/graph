@@ -70,8 +70,8 @@ the history at that moment:
 
 | form | expands to |
 |---|---|
-| `%targets(p)` | the nodes `ls p` finds, as a `+` union of `@N` (`%never` when there are none; the command's error then says so). `p` is a query of its own: a `+` in it is `\|` unless an `%override` written inside `p` says otherwise (2.9) |
-| `%override({key = value, …}, p)` | `p` with these settings changed inside it: `plus = shared` or `plus = relational` (how `+` is read), and `max-repairs = N` or `unlimited` (the limit on the walks `mk` makes); both are in [commands.md](commands.md#5-settings-and-the-one-limit). `%override({}, p)` is `p` |
+| `%targets(p)` | the nodes `ls p` finds, as a `+` union of `@N` (`%never` when there are none; if the command then fails, its error says so). `p` is a query of its own: a `+` in it is `\|` unless an `%override` written inside `p` says otherwise (2.9) |
+| `%override({key = value, …}, p)` | `p` with these settings changed inside it; the one setting is `plus = shared` or `plus = relational`, how `+` is read ([commands.md](commands.md#5-settings-and-limits)). `%override({}, p)` is `p` |
 | `%history(n)` | `@N` for the node `n` steps back in the history; `%history(0)` is the current node, a negative `n` goes forward (after `back`), and an `n` beyond either end of the history gives the node at that end |
 | `%last` | `%history(1)` |
 | `https://…`, `http://…` | imports the resource and becomes its node; a URL extends to the next space ([commands.md](commands.md#27-history-and-urls)) |
@@ -89,7 +89,12 @@ empty label, which `tag` uses. A regex is written `regex:"…"` or
 as written for the regex, and the regex cannot contain its own
 delimiter. It is a Perl-compatible regex (PCRE) and it is searched for
 in the label: `regex:"a"` matches every label with an `a` in it, and
-`regex:"^a$"` the label `a` alone. The parser's message for a regex that does not compile is
+`regex:"^a$"` the label `a` alone. `^` is the start of the label and
+`$` its very end, also when the label ends in a newline (`(?m)` in the
+regex makes them the start and end of each line). The regex is matched
+against the bytes of the label in UTF-8, so `.` is one byte and does
+not match an `é`, which is two; `(*UTF8)` at the start of the regex
+makes it match characters. The parser's message for a regex that does not compile is
 unhelpful (`regex:"["` fails with "unexpected ':'"), as is the one for
 an `@` followed by more than twelve base62 characters (the last example
 below has thirteen).
@@ -121,14 +126,27 @@ $ ls regex:"["
 1 | ls regex:"["
   |         ^
 unexpected ':'
-expecting "++", '&', '+', '/', '|', alphanumeric character, or end of input
+expecting "++", '&', '+', '/', ';', '|', alphanumeric character, or end of
+    input
 $ ls @abcdefghijklm
 <interactive>:1:5:
   |
 1 | ls @abcdefghijklm
   |     ^
 unexpected 'a'
-expecting "++", '&', '+', '/', '|', or end of input
+expecting "++", '&', '+', '/', ';', '|', or end of input
+```
+
+```ge
+graph: 0 -é-> 1, 0 -ab-> 2, 0 -a-> 3
+$ ls regex:"^.$"
+a @3
+$ ls regex:"^..$"
+ab @2
+é @1
+$ ls regex:"(*UTF8)^.$"
+a @3
+é @1
 ```
 
 ## 2. Meaning
@@ -453,9 +471,10 @@ at node `N`, so they are at one node. It differs from `@` in one
 respect for the rule of 3.1: copies of it are all the same node.
 
 `#t` is the node of the tag `t`: `@<tags>/t`, a fixed node and one step
-from it. `tag #t p` links that node to the targets of `p` with an edge
-whose label is empty ([commands.md](commands.md#46-tag)), so the nodes
-tagged `t` are `#t/""`:
+from it. `tag #t p` links that node to the target of `p`, which must
+be one node, with an edge whose label is empty
+([commands.md](commands.md#46-tag)), so the nodes tagged `t` are
+`#t/""`:
 
 ```ge
 graph: 0 -a-> 1
@@ -546,7 +565,7 @@ Every way for the copies to pick is an *alternative* of the path:
 `(a | b)/(c & d)` has four, `a/(c & d)`, `a/c & b/d`, `b/c & a/d` and
 `b/(c & d)`, and a query finds what any alternative finds. Alternatives
 multiply: a `|` of `k` sides that a fork copies into `n` walks has up
-to `k^n` of them. Nothing limits that number (3.4).
+to `k^n` of them. Nothing limits that number in a query (3.4).
 
 **`++` chooses once for the whole path.** `(a ++ b)/(c & d)` is
 `a/(c & d) ++ b/(c & d)`: both copies take the same side, so it found
@@ -777,11 +796,15 @@ Warning: the @ that ends `a/@` does nothing here: `(d & e & f)` copies `a/@`
 
 *Nothing copies* a union when no fork stands in its stretch (no group,
 and no union with an `&` in a side), and no other fork stands in the
-stretch of a group or union that it is written inside. So in
-`q/((x | y)/k & z)` nothing copies `(x | y)`, and in
-`((x | y)/k & z)/(c & d)` the group `(c & d)` does, since it stands in
-the stretch of the group the union is written in. Such a union is gone
-through once. It
+stretch of a group or union that it is written inside. A join in a side
+of a union ends that union's stretch for the walks that take the side
+(section 4), so a union written in such a side after its join is past
+the forks before the join. So in `q/((x | y)/k & z)` nothing copies
+`(x | y)`, nor in `(g & h)/(s/@/(x | y) | o)`, whose walks come to
+`(x | y)` through the `@` of the side `s/@/(x | y)`; and in
+`((x | y)/k & z)/(c & d)` the group `(c & d)` does copy it, since it
+stands in the stretch of the group the union is written in. Such a
+union is gone through once. It
 then makes no difference whether it is written `|`, `++` or `+` (4.9),
 nor whether a side of it is written twice (4.2).
 
@@ -847,7 +870,7 @@ $ mk a & b
 created 0 new nodes and 0 new edges
 ```
 
-(`mk` printed nothing and created nothing: the path already holds.) For
+(`mk` created nothing, and said so: the path already holds.) For
 a path that is not relative, writing `@/` in front is not the same
 thing: it turns an `@N` that starts a walk from a root into a test
 (2.6), where a query leaves it a root:
@@ -981,11 +1004,16 @@ The error names the conjunct, the join and the group that would copy
 it, and says what one can write instead: a join between the two groups,
 if the walks of the first should meet before the second, or the copies
 written out, each conjunct for each conjunct of the other group. It
-spells the first out when the two groups stand in one chain and no
-union is read between them, and the second only when the path has no
-union and few walks; otherwise it says "(/@)" and "write the copies
-out". What it spells out is the part of that chain from the one group
-to the other, not the whole path: for
+spells the first out when no union is read between the two groups and
+the path with that join is not refused: the join goes into the chain
+in which the other group stands next to the group of the meeting
+point, or next to a group that holds that one in a conjunct (for
+`(b & c)/(a/((c & y)/@/e & b) & w)` it is
+`(b & c)/@/(a/((c & y)/@/e & b) & w)`). It spells the second out only
+when the path has no union and the two groups have at most nine pairs
+of conjuncts (three by three); otherwise it says "(/@)" and "write the
+copies out". What it spells out is the part of that chain from the one
+group to the other, not the whole path: for
 `z/(a & b)/((c & y)/@/e & d)/q` it says to write
 `(a & b)/@/((c & y)/@/e & d)`, which belongs where the two groups
 stood, between `z/` and `/q` (section 5). Here `(a & b)` would copy
@@ -1218,7 +1246,10 @@ path is written, so a union is read in every way it can be taken:
   puts a join of the chain between the groups.
 - A `+` is read as what the command makes of it: as `|` in a query,
   where it is refused exactly when the path with `|` is, and as `++` in
-  `mk`. Nothing falls back from the one to the other. The error shows
+  `mk` (which may still refuse a path for its size, as it does
+  `mk (a & b)/(x/@ + w/@)/((c & y)/@/e & d)`,
+  [commands.md](commands.md#48-paths-that-mk-refuses-for-their-shape)).
+  Nothing falls back from the one to the other. The error shows
   the union as the command reads it, and says so where the union it
   names was written with `+`; where that `+` stands inside an
   `%override({plus = relational}, …)`, it says that the override makes
@@ -1578,15 +1609,15 @@ Incomplete NID '@asdf' at line 1, columns 4-8: a NID needs all 12 base62
     characters. (IncompleteFullNID)
 ```
 
-### 3.4 No limit on what a path comes to
+### 3.4 No limit on what a query comes to
 
-Nothing refuses a path for being large. A `|` union of `k` sides that a
-fork copies into `n` walks has up to `k^n` alternatives, groups written
-one after the other multiply their walks, and a command compiles and
-matches whatever its path comes to, for as long as that takes. Most
+No query refuses a path for being large. A `|` union of `k` sides that
+a fork copies into `n` walks has up to `k^n` alternatives, groups
+written one after the other multiply their walks, and a query compiles
+and matches whatever its path comes to, for as long as that takes. Most
 such paths run; some that are short to write do not finish, and a
 command that runs too long is stopped with Ctrl-C
-([commands.md](commands.md#51-nothing-limits-what-a-path-compiles-to)).
+([commands.md](commands.md#51-what-a-path-compiles-to)).
 
 ```ge
 graph: 0
@@ -1594,12 +1625,15 @@ $ ls (a | b | c)/(d & e & f & g & h & i & j)
 no targets
 ```
 
-That path has `3^7 = 2187` alternatives. The one limit there is belongs
-to `mk`, which stops when it would have to walk the path in more than
-5000 ways (`TooManyRepairs`,
-[commands.md](commands.md#52-walks-max-repairs)).
+That path has `3^7 = 2187` alternatives. The limits there are belong
+to `mk` and `tag`: they refuse a path whose size, estimated from the
+path as written, is more than 256 route steps (`ExpansionTooLarge`; this
+one is), and they stop when they would have to walk the path in more
+than 5000 ways, unless their option `--max-repairs` says otherwise
+(`TooManyRepairs`; [commands.md](commands.md#48-paths-that-mk-refuses-for-their-shape)
+and [5.2](commands.md#52-walks---max-repairs)).
 [path-cost-limits.md](path-cost-limits.md) records what was tried as a
-limit on the cost of a path, and why there is none.
+limit on the cost of a query, and why there is none.
 
 ## 4. Laws
 
@@ -1652,7 +1686,10 @@ holds for `++`.
 path, and either choice is `p`. (Only a warning tells the two apart:
 where `p` has an `@` that is warned about, 3.2, the warning of
 `p ++ p` adds "The same holds for one more @ in this path", counting
-the `@` of each side.)
+the `@` of each side; and since the group of the conjunct then stands
+in a side of the union, not in one chain with the group that copies
+it, the warning says only that an `@` pins in its own chain, where
+that of `p` says what to write, 3.2.)
 
 `p | p` is not `p` in general, since every written side is a side of
 its own (2.9). `p | p` finds everything `p` finds (4.4) and may find
@@ -1832,8 +1869,10 @@ is `A/s/C & A/s/D & B/s/C & B/s/D`, anywhere in a path, for conjuncts
 with joins and `|` unions in them. It is stated after the normal form
 of 2.4, which matters in three ways:
 
-- A conjunct that forks without a join of its own is multiplied out
-  first, and `&` is flattened. `(x/@/w & b)/(c/(e & f) & d)` is
+- A conjunct that forks is copied whole only when every fork in it is
+  held together by a join (which join does that is said below the
+  examples); otherwise it is multiplied out first, and `&` is
+  flattened. `(x/@/w & b)/(c/(e & f) & d)` is
   `(x/@/w & b)/(c/e & c/f & d)`, six walks, with an `x` of its own for
   each of `c/e`, `c/f` and `d`. It is not
   `x/@/w/c/(e & f) & x/@/w/d & b/c/(e & f) & b/d`, in which `e` and `f`
@@ -1871,13 +1910,38 @@ $ ls (a ++ b)/c & (a ++ b)/d
 a/c @9
 ```
 
+**Which join holds a fork.** The forks of a conjunct that count are
+those written in its own chain or in a side of a union there, however
+deep in sides; a fork inside a conjunct of such a group does not
+count, it is multiplied out inside that conjunct. A join holds a fork
+together when it is written, before the fork or after it, in the chain
+the fork is written in or in a chain around it: for a fork in a side
+of a union, the side itself, the chain that union is written in, and,
+where that chain is again a side, the chain of its union, and so on
+out to the conjunct's own chain. A join in a side of a union holds no
+fork outside that side: in `(x/@ & b)/(c & (e & f | @))` the `@` of
+the second side does not hold the `(e & f)` of the first, and the
+path is not its product written out (below). Nor does a join in every
+side of a union that stands before or after the fork in its chain,
+with or without steps between: `(x/@ & b)/(c & (g/@ | h/@)/(e & f))`
+and `(x/@ & b)/(c & (e & f)/k/(g/@ | h/@))` are not their products
+either.
+
+```ge
+graph: 0 -x-> 1, 0 -x-> 2, 1 -c-> 9, 1 -e-> 9, 2 -f-> 9, 0 -b-> 3, 3 -c-> 9, 3 -e-> 9, 3 -f-> 9
+$ ls (x/@ & b)/(c & (e & f | @))
+x/c @9
+$ ls x/@/c & x/@/(e & f | @) & b/c & b/(e & f | @)
+no targets
+```
+
 **Across a `|` union.** With a `|` union between the two groups the
-identity holds when no side of that union has a join of its own chain
-or an `&`: `(A & B)/(x | y)/(C & D)` is
+identity holds when no side of that union has a join of its own chain,
+an `&` or a `++` union: `(A & B)/(x | y)/(C & D)` is
 `A/(x | y)/C & A/(x | y)/D & B/(x | y)/C & B/(x | y)/D`, four unions
 that choose apart, as the four copies of the one union do. (Not
 proved: no counterexample is known, and searching found none.) It
-fails in two ways.
+fails in three ways.
 
 With a join in a side: the copies of the one union that take the
 joined side share its join (2.9), and four unions written apart share
@@ -1921,6 +1985,25 @@ $ ls x/@/((c & d) | z)/e & x/@/((c & d) | z)/f & b/((c & d) | z)/e & b/((c & d) 
 x/c/e @8
 ```
 
+With a `++` union in a side: it is one union, chosen once for the whole
+path, on the left, and four unions that are chosen apart on the right.
+In the block below, `(a & b)/((x ++ y) | z)/(c & d)` finds nothing,
+since every copy that takes the first side goes through the one choice
+of `x ++ y`, and the walks through `a` need `x` while those through
+`b` need `y`; written out, each of the four copies chooses its own.
+`(a & b)/(x | y)/(c & d)` finds `9`: the `++` is what makes the
+difference.
+
+```ge
+graph: 0 -a-> 1, 0 -b-> 2, 1 -x-> 3, 2 -y-> 4, 3 -c-> 9, 3 -d-> 9, 4 -c-> 9, 4 -d-> 9
+$ ls (a & b)/((x ++ y) | z)/(c & d)
+no targets
+$ ls a/((x ++ y) | z)/c & a/((x ++ y) | z)/d & b/((x ++ y) | z)/c & b/((x ++ y) | z)/d
+a/x/c @9
+$ ls (a & b)/(x | y)/(c & d)
+a/x/c @9
+```
+
 ### 4.7 Left distribution: holds without joins and `++`
 
 `(A & B)/C = A/C & B/C` holds when `A` and `B` have no join of their own
@@ -1961,10 +2044,14 @@ $ ls (a & b)/@/c
 no targets
 $ ls a/@/c & b/@/c
 a/c @9
+```
+
+```ge
+graph: 0 -a-> 1, 0 -b-> 2, 1 -c-> 3, 2 -c-> 4, 3 -d-> 9, 4 -d-> 9
 $ ls (a & b)/c/@/d
 no targets
 $ ls a/c/@/d & b/c/@/d
-no targets
+a/c/d @9
 ```
 
 ```ge
@@ -2237,10 +2324,14 @@ walk, has not.
 After `mk p` succeeds, `p` holds from the node it ran at: `mk p` run
 again at that node changes nothing, and a query of `p` finds a node
 when the walks of `p` end at one node. This holds for every path `mk`
-accepts: a path with `%never` in a walk cannot be constructed, and a
-path that writes a node `@N` that does not exist is an error, since
-`mk` creates no node with a written id
-([commands.md](commands.md#4-mk)). What `mk` creates does not depend on
+accepts: a path with `%never` in a walk cannot be constructed; a path
+that writes a node `@N` that does not exist is an error, since `mk`
+creates no node with a written id ([commands.md](commands.md#4-mk));
+and `mk` refuses paths of five shapes, before it reads the graph
+(`ExpansionTooLarge`, `ReturnsToMeetingPoint`, `WildcardJoin`,
+`SeveralWildcards` and `CircularSuppliers`,
+[commands.md](commands.md#48-paths-that-mk-refuses-for-their-shape)).
+What `mk` creates, and whether it refuses the path, does not depend on
 the order in which the conjuncts of a group or the sides of a union
 are written.
 
@@ -2466,10 +2557,13 @@ decided, that.
 - **A `cd` inside an `at` block** changes the history but not the node
   the following commands of the block run at
   ([commands.md](commands.md#24-at)); not decided whether intended.
-- **Nothing bounds what a path costs** (3.4). A path that compiles to
+- **Nothing bounds what a query costs** (3.4). A path that compiles to
   very much, or whose steps match very many edges, runs until it is
   done or stopped with Ctrl-C;
-  [path-cost-limits.md](path-cost-limits.md) has what is known.
+  [path-cost-limits.md](path-cost-limits.md) has what is known. `mk`
+  and `tag` refuse a path by an estimate of its size that counts high,
+  so they refuse some paths that they could build
+  ([commands.md](commands.md#8-known-rough-edges)).
 - The parser's messages for a regex that does not compile and for an
   `@` followed by more than twelve characters are unhelpful (1.1).
 - The rough edges of the commands are in
