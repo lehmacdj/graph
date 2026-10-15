@@ -105,7 +105,6 @@ literalOnly = \case
   l P.:& r -> literalOnly l && literalOnly r
   P.Union _ l r -> literalOnly l && literalOnly r
   P.Backwards p -> literalOnly p
-  P.WithLimits _ _ p -> literalOnly p
   _ -> True
 
 -- | Whether some alternative of a path can be built in a graph as far as
@@ -149,7 +148,6 @@ mirror ands unions' = go
       P.Union k l r -> if unions' then P.Union k (go r) (go l) else P.Union k (go l) (go r)
       l P.:/ r -> go l P.:/ go r
       P.Backwards p -> P.Backwards (go p)
-      P.WithLimits a l p -> P.WithLimits a l (go p)
       p -> p
 
 -- | The laws of a path that @mk@ builds. After @mk@ the path resolves,
@@ -303,7 +301,6 @@ startsWithJoin = \case
   P.Union _ l r -> startsWithJoin l || startsWithJoin r
   -- reversed, the path begins with what it ends with
   P.Backwards p -> endsWithJoin p
-  P.WithLimits _ _ p -> startsWithJoin p
   _ -> False
   where
     endsWithJoin = \case
@@ -314,7 +311,6 @@ startsWithJoin = \case
       l P.:& r -> endsWithJoin l || endsWithJoin r
       P.Union _ l r -> endsWithJoin l || endsWithJoin r
       P.Backwards p -> startsWithJoin p
-      P.WithLimits _ _ p -> endsWithJoin p
       _ -> False
 
 -- | A path that writes no label twice and has no @*@ or regex, over the

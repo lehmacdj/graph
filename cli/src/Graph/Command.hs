@@ -427,7 +427,6 @@ spec_asTyped =
         partAt place p = case (place, p) of
           ([], _) -> Just p
           (0 : rest, Simple.Backwards q) -> partAt rest q
-          (0 : rest, Simple.WithLimits _ _ q) -> partAt rest q
           (i : rest, l Simple.:/ r) -> partAt rest =<< [l, r] `index` i
           (i : rest, l Simple.:& r) -> partAt rest =<< [l, r] `index` i
           (i : rest, Simple.Union _ l r) -> partAt rest =<< [l, r] `index` i
@@ -443,9 +442,9 @@ spec_asTyped =
     for_
       [ ("(%targets(a/b) | @000000000001)/(c & d)", 1),
         ("(%never ++ @000000000001 ++ @000000000002)/c & %targets(a)", 1),
-        ("%override({max-repairs = 100}, %targets(a)/b)", 1),
+        ("%override({plus = relational}, %targets(a)/b)", 1),
         ("%override({plus = shared}, x/%targets(a) & ~(%targets(b)/c))", 2),
-        ("%override({max-repairs = 100}, %override({plus = relational}, ~(%targets(a)) + b) & %targets(c))", 2),
+        ("%override({}, %override({plus = relational}, ~(%targets(a)) + b) & %targets(c))", 2),
         ("%targets(%targets(a))/b", 1),
         ("(a ++ b)/c", 0)
       ]
@@ -1046,12 +1045,12 @@ runCommand' open = \case
     changeLocation nid'
   NodeId -> currentLocation >>= echo . show
   Dualize -> dualize
-  Make p0 -> do
+  Make maxRepairs p0 -> do
     p <- expandConstruction p0
     nid <- currentLocation
     prompt <- gets @History (view #now)
     made <- editing do
-      made <- Paths.constructPath prompt nid (asTyped p0) p
+      made <- Paths.constructPath maxRepairs prompt nid (asTyped p0) p
       made <$ subsumeUserError @Missing (tagNodesWithTime made.nodes)
     reportConstructed made
   Merge args -> do
@@ -1088,7 +1087,7 @@ runCommand' open = \case
               ++ intercalate ", " (map tshow (systemNodesAmong (toList nids)))
           )
       forM_ nids $ deleteNode @Text
-  Tag p0 q0 -> do
+  Tag maxRepairs p0 q0 -> do
     p <- expandConstruction p0
     q <- expandDirectives q0
     nid <- currentLocation
@@ -1096,7 +1095,8 @@ runCommand' open = \case
     prompt <- gets @History (view #now)
     editing do
       target <- the' err =<< Paths.queryTargets nid q
-      newNodes <- Paths.constructTag prompt nid (asTyped p0) p target
+      newNodes <-
+        Paths.constructTag maxRepairs prompt nid (asTyped p0) p target
       -- the target and the prefix's created nodes share one timestamp
       subsumeUserError @Missing $ tagNodesWithTime (insertSet target newNodes)
   Text t s -> do

@@ -1457,24 +1457,25 @@ That is one walk, and two more when the path is walked again.
 
 ```ge
 graph: 0 -a-> 1, 0 -a-> 2, 0 -a-> 3, 0 -a-> 4, 0 -a-> 5, 0 -a-> 6
-$ mk %override({max-repairs = 5}, a/b)
+$ mk --max-repairs 5 a/b
 Working out what this path creates takes too long: its steps have several
     edges to follow, and every combination of the edges followed has to be
     worked out, over all alternatives of the path; there are more combinations
     than the limit of 5. This does not mean that the path cannot be created.
     Nothing was changed. Write @N after a step for the node it should go to,
     or !{@N} for nodes it should not, so that fewer edges can be followed, or
-    raise the limit with %override({max-repairs = …}, …). (TooManyRepairs)
+    raise the limit by giving mk the option --max-repairs N before the path,
+    with N a larger number or unlimited. (TooManyRepairs)
 ```
 
 ```ge
 graph: 0 -a-> 1
-$ mk %override({max-repairs = 2}, a/!{@1}/b & a/c)
+$ mk --max-repairs 2 a/!{@1}/b & a/c
 These steps could each follow an edge that another of them creates, so mk has
     no order to take them in: `a/!{@1}` and `a`. Write the node a step should
     go to (/@N after it), or create them with separate commands. Nothing was
     changed. (CircularSuppliers)
-$ mk %override({max-repairs = 3}, a/!{@1}/b & a/c)
+$ mk --max-repairs 3 a/!{@1}/b & a/c
 These steps could each follow an edge that another of them creates, so mk has
     no order to take them in: `a/!{@1}` and `a`. Write the node a step should
     go to (/@N after it), or create them with separate commands. Nothing was

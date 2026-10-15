@@ -1538,20 +1538,23 @@ $ ls %override({plus = both}, a)
   |               ^
 Unknown value both for plus; it accepts shared or relational at line 1,
     columns 15-25. (InvalidOverrideSetting)
-$ ls %override({max-repairs = 0}, a)
+$ ls %override({max-repairs = 5}, a)
 <interactive>:1:15:
   |
-1 | ls %override({max-repairs = 0}, a)
+1 | ls %override({max-repairs = 5}, a)
   |               ^
-Unknown value 0 for max-repairs; it accepts a positive number or unlimited at
-    line 1, columns 15-29. (InvalidOverrideSetting)
+max-repairs is not a setting of %override any more: it is an option of mk and
+    tag, written before the path (mk --max-repairs N <path>, with N a positive
+    number or unlimited), since it limits the walks of the whole path; remove
+    the setting max-repairs = 5 at line 1, columns 15-29.
+    (InvalidOverrideSetting)
 $ ls %override({minus = shared}, a)
 <interactive>:1:15:
   |
 1 | ls %override({minus = shared}, a)
   |               ^
-Unknown setting minus in %override; the settings are plus and max-repairs at
-    line 1, columns 15-28. (InvalidOverrideSetting)
+Unknown setting minus in %override; the only setting is plus at line 1,
+    columns 15-28. (InvalidOverrideSetting)
 $ ls %override({plus = shared, plus = relational}, a)
 <interactive>:1:30:
   |

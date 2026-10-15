@@ -3,7 +3,6 @@
 module Models.Path.Parse where
 
 import Control.Monad.Combinators.Expr
-import Data.Char (isDigit)
 import Data.Functor
 import Graph.SystemNodes (tagsNID)
 import Models.NID
@@ -72,7 +71,7 @@ pOverride :: Parser (Directive 'Partial)
 pOverride = do
   settings <-
     between (symbol "{") (symbol "}") (pSetting `sepBy` symbol ",")
-  settings' <- foldM addSetting (OverrideSettings Nothing Nothing) settings
+  settings' <- foldM addSetting (OverrideSettings Nothing) settings
   _ <- symbol ","
   Override settings' <$> pPartialPath
   where
@@ -95,44 +94,20 @@ pOverride = do
               "Unknown value "
                 <> value
                 <> " for plus; it accepts shared or relational"
-      "max-repairs" -> case s.maxRepairs of
-        Just _ -> invalid range "The setting max-repairs is given twice"
-        Nothing ->
-          limit range key value <&> \l ->
-            OverrideSettings
-              { plus = s.plus,
-                maxRepairs = Just (maybe UnlimitedRepairs AtMostRepairs l)
-              }
+      -- it was a setting once; it limits the walks of the whole path
+      "max-repairs" ->
+        invalid range $
+          "max-repairs is not a setting of %override any more: it is an "
+            <> "option of mk and tag, written before the path "
+            <> "(mk --max-repairs N <path>, with N a positive number or "
+            <> "unlimited), since it limits the walks of the whole path; "
+            <> "remove the setting max-repairs = "
+            <> value
       _ ->
         invalid range $
           "Unknown setting "
             <> key
-            <> " in %override; the settings are plus and max-repairs"
-    -- A limit: @unlimited@ ('Nothing'), or a positive number written in
-    -- decimal digits that is not too large to count to.
-    limit range key value
-      | value == "unlimited" = pure Nothing
-      | not (null value) && all isDigit value =
-          case readMay value :: Maybe Integer of
-            Just n
-              | n > toInteger (maxBound :: Int) ->
-                  invalid range $
-                    "The value "
-                      <> value
-                      <> " for "
-                      <> key
-                      <> " is too large; write unlimited for no limit"
-              | n > 0 -> pure (Just (fromInteger n))
-            _ -> unknown
-      | otherwise = unknown
-      where
-        unknown =
-          invalid range $
-            "Unknown value "
-              <> value
-              <> " for "
-              <> key
-              <> "; it accepts a positive number or unlimited"
+            <> " in %override; the only setting is plus"
     invalid (offset, range) = failAt offset . InvalidOverrideSetting range
 
 pHttpURI :: Parser URI
@@ -346,23 +321,15 @@ test_pDirective =
       -- parse anything here
       "%override({plus = shared}, a + b)"
         `parsesTo` Override
-          (OverrideSettings (Just Shared) Nothing)
+          (OverrideSettings (Just Shared))
           (Literal "a" :+ Literal "b"),
       "%override({ plus=relational }, %targets(a) + b)"
         `parsesTo` Override
-          (OverrideSettings (Just Relational) Nothing)
+          (OverrideSettings (Just Relational))
           (Directive testRange (Targets (Literal "a")) :+ Literal "b"),
       "%override({}, a)"
         `parsesTo` Override
-          (OverrideSettings Nothing Nothing)
-          (Literal "a"),
-      "%override({max-repairs = 5000}, a)"
-        `parsesTo` Override
-          (OverrideSettings Nothing (Just (AtMostRepairs 5000)))
-          (Literal "a"),
-      "%override({plus = shared, max-repairs = unlimited}, a)"
-        `parsesTo` Override
-          (OverrideSettings (Just Shared) (Just UnlimitedRepairs))
+          (OverrideSettings Nothing)
           (Literal "a"),
       "%{some text here}" `parsesTo` Splice "some text here",
       "%{Absolute nid}" `parsesTo` Splice "Absolute nid",
@@ -382,20 +349,16 @@ test_pDirective =
       -- max-alternatives was a setting once; it is unknown like any other
       parseFails "%override({max-alternatives = 100000}, a)",
       parseFails "%override({max-alternatives = unlimited}, a)",
-      parseFails "%override({max-repairs = unlimited, max-alternatives = 7}, a)",
-      parseFails "%override({max-repairs = many}, a)",
-      parseFails "%override({max-repairs = 1, max-repairs = 2}, a)",
-      parseFails "%override({max-repairs = 0x10}, a)",
-      parseFails "%override({max-repairs = 99999999999999999999999}, a)",
-      parseFails "%override({max-repairs = 1e3}, a)",
-      "%override({max-repairs = 007}, a)"
-        `parsesTo` Override
-          (OverrideSettings Nothing (Just (AtMostRepairs 7)))
-          (Literal "a"),
-      parseFails "%override({max-repairs = 0}, a)",
-      parseFails "%override({max-repairs = -3}, a)",
-      parseFails "%override({max-repairs = many}, a)",
-      parseFails "%override({max-repairs = 1, max-repairs = 2}, a)",
+      -- so was max-repairs; it is an option of mk and tag now, and the
+      -- error says so whatever its value
+      "%override({max-repairs = 5000}, a)"
+        `failsWith` "an option of mk and tag",
+      "%override({max-repairs = unlimited}, a)"
+        `failsWith` "mk --max-repairs N <path>",
+      "%override({plus = shared, max-repairs = many}, a)"
+        `failsWith` "remove the setting max-repairs = many",
+      "%override({minus = shared}, a)"
+        `failsWith` "the only setting is plus",
       -- these were old regex syntax
       parseFails "re\"asdf\"",
       parseFails "re'asdf'",
@@ -414,5 +377,15 @@ test_pDirective =
     parseFails input =
       testCase ("parse fails: " ++ show input) $
         testParserFails (pDirective <* eof) input
+    failsWith :: Text -> String -> TestTree
+    failsWith input expected =
+      testCase ("parse fails saying " ++ show expected ++ ": " ++ show input) $
+        case runParserTest (pDirective <* eof) input of
+          Right x -> assertFailure ("parsed to " ++ show x)
+          Left err ->
+            let shown = errorBundlePretty err
+             in expected
+                  `isInfixOf` shown
+                  @? ("expected " ++ show expected ++ " in:\n" ++ shown)
     mkAbsolute :: NID -> PartialPath
     mkAbsolute nid = Absolute (Right nid)

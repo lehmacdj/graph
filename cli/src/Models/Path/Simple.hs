@@ -50,7 +50,6 @@ infixl 6 :&
   Backwards,
   (:/),
   Union,
-  WithLimits,
   (:&)
   #-}
 
@@ -66,6 +65,5 @@ infixl 6 :&
   (:/),
   (:||),
   (:++),
-  WithLimits,
   (:&)
   #-}

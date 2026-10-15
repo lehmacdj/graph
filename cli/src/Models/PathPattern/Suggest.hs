@@ -60,7 +60,9 @@ data Rewrite = Pin NID | Exclude (Set NID)
 -- @+@ sides that gives it ('compileAlternatives'), until those of the
 -- given possibilities are found: at most about the compilation the walk
 -- already had. Each line then costs two compilations of a path without
--- @+@ and one walk of it, within the default limit.
+-- @+@ and one walk of it, within the given limit: the one of the command
+-- the line is shown for, which is the limit of the line when it is typed
+-- as the command with its path replaced.
 --
 -- The walk is what makes a shown line right. What is written after a
 -- step does more than choose: a step with @/\@N@ creates its edge to @N@
@@ -70,17 +72,18 @@ data Rewrite = Pin NID | Exclude (Set NID)
 -- path with it may be one whose shape @mk@ refuses, which has no line.
 suggestPaths ::
   (Monad m) =>
+  RepairsLimit ->
   NodeLookup m ->
   LabelChooser m ->
   NID ->
   Path ->
   [Residual] ->
   m [Maybe Path]
-suggestPaths lookupNode chooser cur surface wanted =
+suggestPaths limit lookupNode chooser cur surface wanted =
   for wanted \r -> case lookup r.patternPath bases >>= lineFor r of
     Nothing -> pure Nothing
     Just line ->
-      residuate lookupNode chooser cur (compilePath line) <&> \case
+      residuateWithin limit lookupNode chooser cur (compilePath line) <&> \case
         Right (Repairs (r' :| []))
           | patchSubsumes r'.patch r.patch && patchSubsumes r.patch r'.patch ->
               Just line
@@ -178,8 +181,8 @@ lineUp p written = case toList (compilePath tagged).alternatives of
 
 -- | The steps of one alternative of a path as they were written: the path
 -- with only the sides of its unions that give the alternative (as
--- 'alternativeChoices' finds it, without its limits and with @~@ pushed
--- down to the steps), its steps in that path's order ('traverseSteps'),
+-- 'alternativeChoices' finds it, with @~@ pushed down to the steps), its
+-- steps in that path's order ('traverseSteps'),
 -- and for each step of the alternative the written step it is a copy of,
 -- by its place in that order. Several steps of the alternative are copies
 -- of one written step where the product rule copies it. For each of those
@@ -255,8 +258,8 @@ typedTimes w i = case headMay (drop i w.typedAt) of
 
 -- | The path with each step made the literal 'stepTag' of its place among
 -- the steps as typed: in the order typed, a @~@ around several steps
--- taken apart (a step written @~a@, or @~(~a)@, is one step), and inside
--- the limits. With each step, the step without its direction and how it
+-- taken apart (a step written @~a@, or @~(~a)@, is one step). With each
+-- step, the step without its direction and how it
 -- is typed.
 tagTyped :: Path -> (Path, [(Path, Text)])
 tagTyped p0 = second reverse (S.runState (go False p0) [])
@@ -271,7 +274,6 @@ tagTyped p0 = second reverse (S.runState (go False p0) [])
       l :/ r -> (:/) <$> go afterTags l <*> go (endsWithTags l) r
       l :& r -> (:&) <$> go False l <*> go False r
       Union k l r -> Union k <$> go False l <*> go False r
-      WithLimits a l p -> WithLimits a l <$> go afterTags p
       p -> pure p
     found forward s shown = S.state \steps' ->
       let tagged = Literal (stepTag (length steps'))
@@ -366,12 +368,6 @@ renderSurfacePath = go 0
       l :& r -> parens (d > 6) (go 6 l <> " & " <> go 7 r)
       Union k l r ->
         parens (d > 5) (go (leftPrec k l) l <> symbol k <> go 6 r)
-      WithLimits _ l p ->
-        "%override({"
-          <> intercalate ", " (map pack (showLimits l))
-          <> "}, "
-          <> go 0 p
-          <> ")"
     -- a chain of one union associates to the left; a different one inside
     -- needs parentheses
     leftPrec k = \case
@@ -411,9 +407,14 @@ possibilitiesIn g p =
 
 -- | The line for each possibility of an ambiguous @mk p@.
 suggestionsIn :: Graph Text () -> Path -> [Maybe Text]
-suggestionsIn g p =
+suggestionsIn = suggestionsWithin (AtMostRepairs defaultMaxRepairs)
+
+-- | 'suggestionsIn', walking each line within this limit.
+suggestionsWithin :: RepairsLimit -> Graph Text () -> Path -> [Maybe Text]
+suggestionsWithin limit g p =
   map (fmap renderSurfacePath) . runIdentity $
     suggestPaths
+      limit
       (pure . (corpusNode g))
       noLabels
       corpusCurrent
@@ -425,6 +426,17 @@ spec_suggestPath = describe "suggestPaths" do
   let n = tshow . smallNID
   it "writes the node a step took: mk a/b with two a children" $
     suggestionsIn (graphWithEdges [edge' 1 "a" 2, edge' 1 "a" 3]) [path| a/b |]
+      `shouldBe` [Just ("a/" <> n 2 <> "/b"), Just ("a/" <> n 3 <> "/b")]
+  it "walks each line within the command's limit" do
+    -- each line (a/@2/b, a/@3/b) has one walk; with none allowed it is
+    -- not walked and not shown. (No command has a limit of 0: this only
+    -- shows that a line is walked within the limit given.)
+    let g = graphWithEdges [edge' 1 "a" 2, edge' 1 "a" 3]
+    suggestionsWithin (AtMostRepairs 1) g [path| a/b |]
+      `shouldBe` [Just ("a/" <> n 2 <> "/b"), Just ("a/" <> n 3 <> "/b")]
+    suggestionsWithin (AtMostRepairs 0) g [path| a/b |]
+      `shouldBe` [Nothing, Nothing]
+    suggestionsWithin UnlimitedRepairs g [path| a/b |]
       `shouldBe` [Just ("a/" <> n 2 <> "/b"), Just ("a/" <> n 3 <> "/b")]
   it "keeps the alternative: mk a + b" $
     suggestionsIn (graphWithEdges []) [path| a ++ b |]
@@ -494,6 +506,7 @@ spec_suggestPath = describe "suggestPaths" do
             (r, line) <-
               zip (toList rs) . runIdentity $
                 suggestPaths
+                  (AtMostRepairs defaultMaxRepairs)
                   (pure . (corpusNode g))
                   noLabels
                   corpusCurrent

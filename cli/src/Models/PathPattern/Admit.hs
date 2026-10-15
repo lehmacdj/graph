@@ -135,7 +135,6 @@ estimate oneOf p0 =
       P.Literal _ -> (1, 1, 1)
       P.RegexMatch _ -> (1, 1, 1)
       P.Backwards p -> go (P.operand 0 place) p
-      P.WithLimits _ _ p -> go (P.operand 0 place) p
       l P.:/ r ->
         let (r1, a1, s1) = go (P.operand 0 place) l
             (r2, a2, s2) = go (P.operand 1 place) r
@@ -190,7 +189,6 @@ shrinking written p = Shrinking {movedOut, oneSide}
     unionsIn place = \case
       P.Union _ l r -> place : unionsIn (P.operand 0 place) l <> unionsIn (P.operand 1 place) r
       P.Backwards q -> unionsIn (P.operand 0 place) q
-      P.WithLimits _ _ q -> unionsIn (P.operand 0 place) q
       l P.:/ r -> unionsIn (P.operand 0 place) l <> unionsIn (P.operand 1 place) r
       l P.:& r -> unionsIn (P.operand 0 place) l <> unionsIn (P.operand 1 place) r
       _ -> []
@@ -204,7 +202,6 @@ shrinking written p = Shrinking {movedOut, oneSide}
       l P.:/ r -> (P.:/) <$> sidesChosen chosen (P.operand 0 place) l <*> sidesChosen chosen (P.operand 1 place) r
       l P.:& r -> (P.:&) <$> sidesChosen chosen (P.operand 0 place) l <*> sidesChosen chosen (P.operand 1 place) r
       P.Backwards q -> P.Backwards <$> sidesChosen chosen (P.operand 0 place) q
-      P.WithLimits a b q -> P.WithLimits a b <$> sidesChosen chosen (P.operand 0 place) q
       q -> [q]
 
 -- * The order of operations

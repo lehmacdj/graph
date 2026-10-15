@@ -1,8 +1,8 @@
 ==========graph==========
 0 -a-> 1
 ==========input==========
-mk %override({max-repairs = 2}, a/!{@000000000001}/b & a/c)
-mk %override({max-repairs = 3}, a/!{@000000000001}/b & a/c)
+mk --max-repairs 2 a/!{@000000000001}/b & a/c
+mk --max-repairs 3 a/!{@000000000001}/b & a/c
 ==========stdout==========
 g> g> g> Goodbye!
 ==========stderr==========

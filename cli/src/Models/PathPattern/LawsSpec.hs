@@ -532,7 +532,6 @@ plug x = go
       l P.:& r -> go l P.:& go r
       P.Union k l r -> P.Union k (go l) (go r)
       P.Backwards p -> P.Backwards (go p)
-      P.WithLimits v l p -> P.WithLimits v l (go p)
       p -> p
 
 -- | Both paths of a pair in a context.
@@ -582,7 +581,6 @@ writtenWith reversed = go . (if reversed then pushBackwards else id)
       P.ExcludingNIDs _ -> [Join]
       P.Absolute _ -> [Root]
       P.Zero -> [Never]
-      P.WithLimits _ _ p -> go p
       P.Backwards p | not reversed -> go p
       _ -> [Step]
     conjunctsOf = \case
@@ -1070,7 +1068,6 @@ labelled kind = \case
   l P.:& r -> labelled kind l P.:& labelled kind r
   P.Union k l r -> P.Union k (labelled kind l) (labelled kind r)
   P.Backwards p -> P.Backwards (labelled kind p)
-  P.WithLimits v l p -> P.WithLimits v l (labelled kind p)
   p -> p
 
 -- | Paths with a @*@ in a random context, some with more of them.

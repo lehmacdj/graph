@@ -1,0 +1,70 @@
+==========graph==========
+0 -x-> 1
+0 -x-> 2
+0 -x-> 3
+==========input==========
+mk --max-repairs 2 x/c & d
+mk %override({max-repairs = 2}, x/c) & d
+tag --max-repairs 2 x/c & d @
+mk --max-repairs 3 x/c & d
+tag --max-repairs 3 x/c & d @
+mk --max-repairs unlimited x/c & d
+==========stdout==========
+g> g> <interactive>:1:15:
+  |
+1 | mk %override({max-repairs = 2}, x/c) & d
+  |               ^
+max-repairs is not a setting of %override any more: it is an option of mk and tag, written before the path (mk --max-repairs N <path>, with N a positive number or unlimited), since it limits the walks of the whole path; remove the setting max-repairs = 2 at line 1, columns 15-29. (InvalidOverrideSetting)
+
+g> g> g> g> g> Goodbye!
+==========stderr==========
+Working out what this path creates takes too long: its steps have several edges to follow, and every combination of the edges followed has to be worked out, over all alternatives of the path; there are more combinations than the limit of 2. This does not mean that the path cannot be created. Nothing was changed. Write @N after a step for the node it should go to, or !{@N} for nodes it should not, so that fewer edges can be followed, or raise the limit by giving mk the option --max-repairs N before the path, with N a larger number or unlimited. (TooManyRepairs)
+Working out what this path creates takes too long: its steps have several edges to follow, and every combination of the edges followed has to be worked out, over all alternatives of the path; there are more combinations than the limit of 2. This does not mean that the path cannot be created. Nothing was changed. Write @N after a step for the node it should go to, or !{@N} for nodes it should not, so that fewer edges can be followed, or raise the limit by giving tag the option --max-repairs N before the path, with N a larger number or unlimited. (TooManyRepairs)
+This path can be created in 3 ways; nothing was changed. To choose one, write @N after a step for the node it should go to, or !{@N} for nodes it should not, or keep one side of a +.
+  1. @000000000000 -"x"-> @000000000001 -"c"-> new1 & @000000000000 -"d"-> new2
+    creates: @000000000000 -"d"-> new2, @000000000001 -"c"-> new1
+    use: mk --max-repairs 3 x/@000000000001/c & d
+  2. @000000000000 -"x"-> @000000000002 -"c"-> new1 & @000000000000 -"d"-> new2
+    creates: @000000000000 -"d"-> new2, @000000000002 -"c"-> new1
+    use: mk --max-repairs 3 x/@000000000002/c & d
+  3. @000000000000 -"x"-> @000000000003 -"c"-> new1 & @000000000000 -"d"-> new2
+    creates: @000000000000 -"d"-> new2, @000000000003 -"c"-> new1
+    use: mk --max-repairs 3 x/@000000000003/c & d
+
+This path can be created in 3 ways; nothing was changed. To choose one, write @N after a step for the node it should go to, or !{@N} for nodes it should not, or keep one side of a +.
+  1. @000000000000 -"x"-> @000000000001 -"c"-> new1 & @000000000000 -"d"-> new2
+    creates: @000000000000 -"d"-> new2, @000000000001 -"c"-> new1
+    use: tag --max-repairs 3 (x/@000000000001/c & d) @000000000000
+  2. @000000000000 -"x"-> @000000000002 -"c"-> new1 & @000000000000 -"d"-> new2
+    creates: @000000000000 -"d"-> new2, @000000000002 -"c"-> new1
+    use: tag --max-repairs 3 (x/@000000000002/c & d) @000000000000
+  3. @000000000000 -"x"-> @000000000003 -"c"-> new1 & @000000000000 -"d"-> new2
+    creates: @000000000000 -"d"-> new2, @000000000003 -"c"-> new1
+    use: tag --max-repairs 3 (x/@000000000003/c & d) @000000000000
+
+This path can be created in 3 ways; nothing was changed. To choose one, write @N after a step for the node it should go to, or !{@N} for nodes it should not, or keep one side of a +.
+  1. @000000000000 -"x"-> @000000000001 -"c"-> new1 & @000000000000 -"d"-> new2
+    creates: @000000000000 -"d"-> new2, @000000000001 -"c"-> new1
+    use: mk --max-repairs unlimited x/@000000000001/c & d
+  2. @000000000000 -"x"-> @000000000002 -"c"-> new1 & @000000000000 -"d"-> new2
+    creates: @000000000000 -"d"-> new2, @000000000002 -"c"-> new1
+    use: mk --max-repairs unlimited x/@000000000002/c & d
+  3. @000000000000 -"x"-> @000000000003 -"c"-> new1 & @000000000000 -"d"-> new2
+    creates: @000000000000 -"d"-> new2, @000000000003 -"c"-> new1
+    use: mk --max-repairs unlimited x/@000000000003/c & d
+
+==========graph-dump==========
+@000000000000{out=[@000000000001 via "x", @000000000002 via "x", @000000000003 via "x"], in=[@0daCJjMrQel8 via "origin"]}
+@000000000001{out=[], in=[@000000000000 via "x"]}
+@000000000002{out=[], in=[@000000000000 via "x"]}
+@000000000003{out=[], in=[@000000000000 via "x"]}
+@0daCJjMrQel8{out=[@zsBuPkn5mh8F via "file-extensions", @AhQufiPzgyRf via "file-hashes", @3JJvxFUHGAA1 via "historical-special-nodes", @S00KkOYoVpFu via "import-dates", @a0fVkm0kR7KE via "import-urls", @927u9Xyky2pC via "mime-types", @000000000000 via "origin", @pbYxBO6fzBQV via "tags"], in=[]}
+@3JJvxFUHGAA1{out=[@VEfLhuTgZ88Z via "sequence-ids"], in=[@0daCJjMrQel8 via "historical-special-nodes"]}
+@927u9Xyky2pC{out=[], in=[@0daCJjMrQel8 via "mime-types"]}
+@AhQufiPzgyRf{out=[], in=[@0daCJjMrQel8 via "file-hashes"]}
+@S00KkOYoVpFu{out=[], in=[@0daCJjMrQel8 via "import-dates"]}
+@VEfLhuTgZ88Z{out=[], in=[@3JJvxFUHGAA1 via "sequence-ids"]}
+@a0fVkm0kR7KE{out=[], in=[@0daCJjMrQel8 via "import-urls"]}
+@pbYxBO6fzBQV{out=[], in=[@0daCJjMrQel8 via "tags"]}
+@zsBuPkn5mh8F{out=[], in=[@0daCJjMrQel8 via "file-extensions"]}
+==========data==========

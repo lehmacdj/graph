@@ -2,27 +2,27 @@
 0 -a-> 1
 0 -a-> 2
 ==========input==========
-mk %override({max-repairs = 3}, a/x & a/y)
-mk %override({max-repairs = 4}, a/x & a/y)
-mk %override({max-repairs = 1}, a/@000000000001/x & a/@000000000001/y)
+mk --max-repairs 3 a/x & a/y
+mk --max-repairs 4 a/x & a/y
+mk --max-repairs 1 a/@000000000001/x & a/@000000000001/y
 ==========stdout==========
 g> g> g> created 2 new nodes and 2 new edges
 g> Goodbye!
 ==========stderr==========
-Working out what this path creates takes too long: its steps have several edges to follow, and every combination of the edges followed has to be worked out, over all alternatives of the path; there are more combinations than the limit of 3. This does not mean that the path cannot be created. Nothing was changed. Write @N after a step for the node it should go to, or !{@N} for nodes it should not, so that fewer edges can be followed, or raise the limit with %override({max-repairs = …}, …). (TooManyRepairs)
+Working out what this path creates takes too long: its steps have several edges to follow, and every combination of the edges followed has to be worked out, over all alternatives of the path; there are more combinations than the limit of 3. This does not mean that the path cannot be created. Nothing was changed. Write @N after a step for the node it should go to, or !{@N} for nodes it should not, so that fewer edges can be followed, or raise the limit by giving mk the option --max-repairs N before the path, with N a larger number or unlimited. (TooManyRepairs)
 This path can be created in 4 ways; nothing was changed. To choose one, write @N after a step for the node it should go to, or !{@N} for nodes it should not, or keep one side of a +.
   1. @000000000000 -"a"-> @000000000001 -"x"-> new1 & @000000000000 -"a"-> @000000000001 -"y"-> new2
     creates: @000000000001 -"x"-> new1, @000000000001 -"y"-> new2
-    use: mk a/@000000000001/x & a/@000000000001/y
+    use: mk --max-repairs 4 a/@000000000001/x & a/@000000000001/y
   2. @000000000000 -"a"-> @000000000001 -"x"-> new1 & @000000000000 -"a"-> @000000000002 -"y"-> new2
     creates: @000000000001 -"x"-> new1, @000000000002 -"y"-> new2
-    use: mk a/@000000000001/x & a/@000000000002/y
+    use: mk --max-repairs 4 a/@000000000001/x & a/@000000000002/y
   3. @000000000000 -"a"-> @000000000002 -"x"-> new1 & @000000000000 -"a"-> @000000000001 -"y"-> new2
     creates: @000000000001 -"y"-> new2, @000000000002 -"x"-> new1
-    use: mk a/@000000000002/x & a/@000000000001/y
+    use: mk --max-repairs 4 a/@000000000002/x & a/@000000000001/y
   4. @000000000000 -"a"-> @000000000002 -"x"-> new1 & @000000000000 -"a"-> @000000000002 -"y"-> new2
     creates: @000000000002 -"x"-> new1, @000000000002 -"y"-> new2
-    use: mk a/@000000000002/x & a/@000000000002/y
+    use: mk --max-repairs 4 a/@000000000002/x & a/@000000000002/y
 
 ==========graph-dump==========
 @000000000000{out=[@000000000001 via "a", @000000000002 via "a"], in=[@0daCJjMrQel8 via "origin"]}

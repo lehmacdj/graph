@@ -85,7 +85,6 @@ estimatedWays = ways 1
          in fromIntegral (length sides') ** m * product (map (ways m) sides')
       e@(P.Union P.Shared _ _) -> sum (map (ways m) (sides P.Shared e))
       P.Backwards e -> part m e
-      P.WithLimits _ _ e -> part m e
       _ -> 1
     routes :: P.Path -> Double
     routes = \case
@@ -93,13 +92,11 @@ estimatedWays = ways 1
       l P.:& r -> routes l + routes r
       P.Union _ l r -> max (routes l) (routes r)
       P.Backwards e -> routes e
-      P.WithLimits _ _ e -> routes e
       _ -> 1
     -- the parts of a chain, and the chain cut at its joins
     parts = \case
       l P.:/ r -> parts l <> parts r
       P.Backwards e -> parts e
-      P.WithLimits _ _ e -> parts e
       e -> [e]
     stretches xs = case break isJoin xs of
       (stretch, []) -> [stretch]
@@ -111,11 +108,9 @@ estimatedWays = ways 1
       _ -> False
     conjuncts = \case
       l P.:& r -> conjuncts l <> conjuncts r
-      P.WithLimits _ _ e -> conjuncts e
       e -> [e]
     sides kind = \case
       P.Union kind' l r | kind' == kind -> sides kind l <> sides kind r
-      P.WithLimits _ _ e -> sides kind e
       e -> [e]
 
 -- | Pairs of paths that must compile to the same canonical pattern.

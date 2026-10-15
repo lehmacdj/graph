@@ -990,10 +990,6 @@ spec_selectMatchesReference = describe "select keeps what its reference keeps" d
 
 -- * The limit on walks
 
--- | A path under @%override({max-repairs = …}, …)@.
-repairsLimited :: P.RepairsLimit -> P.Path -> P.Path
-repairsLimited l = P.WithLimits () (P.PathLimits (Just l))
-
 residuateUpTo ::
   P.RepairsLimit ->
   Graph Text () ->
@@ -1167,25 +1163,3 @@ spec_repairsLimit = describe "the limit on walks" do
                       -- as many as the walks is enough: none is made twice
                       residuateUpTo (P.AtMostRepairs made) g surface === unlimited
                     ]
-  describe "the limit of a path" do
-    let limitOf = pathMaxRepairs
-        upTo = repairsLimited . P.AtMostRepairs
-    it "is the default without an override" $
-      limitOf [path| a/b & c |] `shouldBe` P.AtMostRepairs defaultMaxRepairs
-    it "is the override's around the whole path" do
-      limitOf (upTo 5 [path| a/b & c |]) `shouldBe` P.AtMostRepairs 5
-      limitOf (repairsLimited P.UnlimitedRepairs [path| a/b & c |])
-        `shouldBe` P.UnlimitedRepairs
-    it "the innermost override wins" $
-      limitOf (upTo 5 (upTo 7000 [path| a/b |])) `shouldBe` P.AtMostRepairs 7000
-    it "the largest limit of any part applies" do
-      limitOf (upTo 5 [path| a |] P.:/ [path| b |])
-        `shouldBe` P.AtMostRepairs defaultMaxRepairs
-      limitOf (upTo 5 [path| a |] P.:& upTo 7000 [path| b |])
-        `shouldBe` P.AtMostRepairs 7000
-      limitOf
-        (upTo 5 ([path| a |] P.:/ repairsLimited P.UnlimitedRepairs [path| b |]))
-        `shouldBe` P.UnlimitedRepairs
-    it "a limit node that sets no limit keeps it" $
-      limitOf (upTo 5 (P.WithLimits () (P.PathLimits Nothing) [path| a | b |]))
-        `shouldBe` P.AtMostRepairs 5

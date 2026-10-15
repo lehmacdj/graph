@@ -49,7 +49,7 @@ constructing g p =
           . runErrorNoCallStack @UserError
           . ignoreWarnings @UserError
           . countingReads
-          $ constructPath (smallNID 1) (smallNID 1) plainlyTyped p
+          $ constructPath Nothing (smallNID 1) (smallNID 1) plainlyTyped p
    in (fmap (.nodes) result, g', reads)
 
 -- | Each node is read from the graph once while @mk@ works out what to
@@ -113,7 +113,7 @@ failure g command =
 
 mkFailure :: Graph Text () -> Text -> Text
 mkFailure g p =
-  failure g (void (constructPath (smallNID 0) (smallNID 0) plainlyTyped (typed p)))
+  failure g (void (constructPath Nothing (smallNID 0) (smallNID 0) plainlyTyped (typed p)))
 
 -- | What @mk@ says on a graph of nodes 0 to 3 and no edges.
 refusedWith :: Text -> Text
@@ -125,7 +125,7 @@ refusedAs :: AsTyped -> Text -> Text
 refusedAs asTyped p =
   failure
     (graphOf [1, 2, 3] [])
-    (void (constructPath (smallNID 0) (smallNID 0) asTyped (typed p)))
+    (void (constructPath Nothing (smallNID 0) (smallNID 0) asTyped (typed p)))
 
 -- | A path typed with @%targets(…)@ that became the unions of nodes at
 -- these places of the path.
@@ -406,7 +406,7 @@ test_refusalMessages =
              <> " @0\n"
              <> failure
                (graphOf [] [])
-               (void (constructTag (smallNID 0) (smallNID 0) plainlyTyped (typed p) (smallNID 0)))
+               (void (constructTag Nothing (smallNID 0) (smallNID 0) plainlyTyped (typed p) (smallNID 0)))
              <> "\n"
          | p <- ["(a & b)/@ & a", "b/@7", "(* & a)/@"]
          ]

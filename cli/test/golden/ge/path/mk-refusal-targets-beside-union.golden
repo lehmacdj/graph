@@ -8,10 +8,10 @@ mk %targets(q)/(c & d & e & f & g & h & i & j & k)
 mk (%targets(a/b) | @000000000001)/(c & d & e & f & g & h & i & j & k)
 mk (%targets(a/b) ++ @000000000001)/(c & d & e & f & g & h & i & j & k)
 mk (%never ++ @000000000001 ++ @000000000002)/(c & d & e & f & g & h & i & j & k) & %targets(a)
-mk %override({max-repairs = 100}, %targets(q)/(c & d & e & f & g & h & i & j & k))
+mk --max-repairs 100 %targets(q)/(c & d & e & f & g & h & i & j & k)
 mk %override({plus = shared}, %targets(q)/(c & d & e & f & g & h & i & j & k))
-mk %override({max-repairs = 100}, (%targets(a/b) | @000000000001)/(c & d & e & f & g & h & i & j & k))
-mk %override({max-repairs = 100}, (%targets(a/b) ++ @000000000001)/(c & d & e & f & g & h & i & j & k))
+mk --max-repairs 100 (%targets(a/b) | @000000000001)/(c & d & e & f & g & h & i & j & k)
+mk --max-repairs 100 (%targets(a/b) ++ @000000000001)/(c & d & e & f & g & h & i & j & k)
 tag (%targets(a/b) | @000000000001)/(c & d & e & f & g & h & i & j & k) @
 ==========stdout==========
 g> g> g> g> g> g> g> g> g> g> Goodbye!

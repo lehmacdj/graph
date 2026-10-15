@@ -30,7 +30,7 @@ import Error.Warn (Warn, warnText)
 import Graph.FreshNID
 import Graph.GraphMetadataEditing
 import Graph.PathPattern.Resolve (resolveQueryWith)
-import Models.Command (DestinationParents (..))
+import Models.Command (DestinationParents (..), MaxRepairs)
 import Models.Connect (Connect' (..))
 import Models.Edge
 import Models.NID
@@ -100,26 +100,32 @@ type Constructing r =
 -- that creates just it (from the second argument), where one can be
 -- written. The first argument is the command's name, for what is said.
 -- Also returns a note for each side of a union that was left out because
--- it needs a written node that does not exist.
+-- it needs a written node that does not exist. The path, and each line
+-- listed, is walked within the limit of the command's option
+-- @--max-repairs@ (the second argument): a listed command is the
+-- command with only its path replaced, so it keeps the option, and is
+-- walked as it would be when it is typed.
 planConstruction ::
   (PathReading r, Error UserError :> r) =>
   Text ->
+  MaxRepairs ->
   AsTyped ->
   (P.Path -> Text) ->
   NID ->
   P.Path ->
   Eff r (Maybe Residual, [Text])
-planConstruction name asTyped command cur p = do
+planConstruction name maxRepairs asTyped command cur p = do
   -- before the path is compiled, and before the graph is looked at
   for_ (checkExpansion p) (throwError . OtherError . renderRefusal name asTyped cur p)
   -- Nothing is written while the path and the listed lines are walked, so
   -- each node is read once.
   (leftOut, result, lines') <- flip S.evalStateT mempty do
     (leftOut, result) <-
-      residuateNoting (pathMaxRepairs p) readOnce noLabels cur (compilePath p)
+      residuateNoting limit readOnce noLabels cur (compilePath p)
     lines' <- case chooseRepair <$> result of
       Right (Ambiguous rs) ->
-        suggestPaths readOnce noLabels cur p (take shownPossibilities (toList rs))
+        suggestPaths limit readOnce noLabels cur p $
+          take shownPossibilities (toList rs)
       _ -> pure []
     pure (leftOut, result, lines')
   let notes = leftOutNotes name p leftOut
@@ -134,6 +140,16 @@ planConstruction name asTyped command cur p = do
     Ambiguous rs ->
       failing notes (renderChoiceError (map (fmap command) lines') rs)
     Apply r -> pure (Just r, notes)
+  where
+    limit = fromMaybe (P.AtMostRepairs defaultMaxRepairs) maxRepairs
+
+-- | The option @--max-repairs@ as it is typed, followed by a space, if it
+-- was given.
+renderMaxRepairs :: MaxRepairs -> Text
+renderMaxRepairs = \case
+  Nothing -> ""
+  Just (P.AtMostRepairs n) -> "--max-repairs " <> tshow n <> " "
+  Just P.UnlimitedRepairs -> "--max-repairs unlimited "
 
 -- | Fail with a message, and the notes after it.
 failing :: (Error UserError :> r) => [Text] -> Text -> Eff r a
@@ -196,8 +212,10 @@ renderResidualError name asTyped cur p = \case
       <> ". This does not mean that the path cannot be created. Nothing was "
       <> "changed. Write @N after a step for the node it should go to, or "
       <> "!{@N} for nodes it should not, so that fewer edges can be "
-      <> "followed, or raise the limit with %override({max-repairs = …}, …). "
-      <> "(TooManyRepairs)"
+      <> "followed, or raise the limit by giving "
+      <> name
+      <> " the option --max-repairs N before the path, with N a larger "
+      <> "number or unlimited. (TooManyRepairs)"
   UnsupportedLabel m _ _ (r :| []) ->
     "Cannot create the "
       <> renderMatcher m
@@ -689,13 +707,20 @@ atLocation prompt cur command
 -- | What a construction created: the new nodes, and how many edges.
 data Constructed = Constructed {nodes :: Set NID, edges :: Int}
 
--- | Create what the path creates, if that is decided. The first argument is
--- the prompt's location, for the commands listed when it is not; the third
--- what the path had as typed, for what a refusal suggests.
+-- | Create what the path creates, if that is decided. The arguments are the
+-- command's option @--max-repairs@; the prompt's location, for the
+-- commands listed when it is not; the node it builds from; and what the
+-- path had as typed, for what a refusal suggests.
 constructPath ::
-  (Constructing r) => NID -> NID -> AsTyped -> P.Path -> Eff r Constructed
-constructPath prompt cur asTyped p = do
-  (planned, notes) <- planConstruction "mk" asTyped command cur p
+  (Constructing r) =>
+  MaxRepairs ->
+  NID ->
+  NID ->
+  AsTyped ->
+  P.Path ->
+  Eff r Constructed
+constructPath maxRepairs prompt cur asTyped p = do
+  (planned, notes) <- planConstruction "mk" maxRepairs asTyped command cur p
   traverse_ warnText notes
   case planned of
     Nothing -> pure (Constructed mempty 0)
@@ -703,15 +728,25 @@ constructPath prompt cur asTyped p = do
       created <- applyResidual r
       pure (Constructed (setFromList (toList created)) (length r.patch.edges))
   where
-    command q = atLocation prompt cur ("mk " <> renderSurfacePath q)
+    command q =
+      atLocation prompt cur $
+        "mk " <> renderMaxRepairs maxRepairs <> renderSurfacePath q
 
 -- | Construct the prefix, then link each output of its first witness to the
--- target with an empty label. Returns the created nodes. The first argument
--- is the prompt's location, as for 'constructPath'.
+-- target with an empty label. Returns the created nodes. The arguments
+-- before the prefix are as for 'constructPath'.
 constructTag ::
-  (Constructing r) => NID -> NID -> AsTyped -> P.Path -> NID -> Eff r (Set NID)
-constructTag prompt cur asTyped prefix target = do
-  (planned, notes) <- planConstruction "tag" asTyped command cur prefix
+  (Constructing r) =>
+  MaxRepairs ->
+  NID ->
+  NID ->
+  AsTyped ->
+  P.Path ->
+  NID ->
+  Eff r (Set NID)
+constructTag maxRepairs prompt cur asTyped prefix target = do
+  (planned, notes) <-
+    planConstruction "tag" maxRepairs asTyped command cur prefix
   traverse_ warnText notes
   created <- maybe (pure mempty) applyResidual planned
   rs <- resolveQueryWith readNode cur (compilePath prefix)
@@ -725,7 +760,12 @@ constructTag prompt cur asTyped prefix target = do
     command q =
       let t = renderSurfacePath q
           grouped = if ' ' `elem` t then "(" <> t <> ")" else t
-       in atLocation prompt cur ("tag " <> grouped <> " " <> tshow target)
+       in atLocation prompt cur $
+            "tag "
+              <> renderMaxRepairs maxRepairs
+              <> grouped
+              <> " "
+              <> tshow target
 
 -- * Editing selected edges
 

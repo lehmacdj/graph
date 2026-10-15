@@ -10,53 +10,62 @@
 0 -i-> 9
 ==========input==========
 mk regex:"^[a-i]$"/w & regex:"^[a-i]$"/x & regex:"^[a-i]$"/y & regex:"^[a-i]$"/z
-mk %override({max-repairs = 624}, regex:"^[a-e]$"/w & regex:"^[a-e]$"/x & regex:"^[a-e]$"/y & regex:"^[a-e]$"/z)
-mk %override({max-repairs = unlimited}, regex:"^[a-e]$"/w & regex:"^[a-e]$"/x & regex:"^[a-e]$"/y & regex:"^[a-e]$"/z)
-mk %override({max-repairs = 1}, regex:"^[ab]$"/x)
-mk %override({max-repairs = 2}, regex:"^[ab]$"/x)
-mk %override({max-repairs = 1}, a & b & c & d & e)
-ls %override({max-repairs = 1}, regex:"^[a-e]$")
-mk %override({max-repairs = 0}, a/x)
-mk %override({max-repairs = 0x10}, a/x)
-mk %override({max-repairs = 99999999999999999999999}, a/x)
+mk --max-repairs 624 regex:"^[a-e]$"/w & regex:"^[a-e]$"/x & regex:"^[a-e]$"/y & regex:"^[a-e]$"/z
+mk --max-repairs unlimited regex:"^[a-e]$"/w & regex:"^[a-e]$"/x & regex:"^[a-e]$"/y & regex:"^[a-e]$"/z
+mk --max-repairs 1 regex:"^[ab]$"/x
+mk --max-repairs 2 regex:"^[ab]$"/x
+mk --max-repairs 1 a & b & c & d & e
+ls --max-repairs 1 regex:"^[a-e]$"
+mk %override({max-repairs = 1}, a/x)
+mk --max-repairs 0 a/x
+mk --max-repairs 0x10 a/x
+mk --max-repairs 99999999999999999999999 a/x
 ==========stdout==========
 g> g> g> g> g> g> created 0 new nodes and 0 new edges
-g> [0m[0;1ma[0m[0m [0;34m@000000000001[0m [0m[0m
-[0m[0;1mb[0m[0m [0;34m@000000000002[0m [0m[0m
-[0m[0;1mc[0m[0m [0;34m@000000000003[0m [0m[0m
-[0m[0;1md[0m[0m [0;34m@000000000004[0m [0m[0m
-[0m[0;1me[0m[0m [0;34m@000000000005[0m [0m[0m
-g> <interactive>:1:15:
+g> <interactive>:1:18:
   |
-1 | mk %override({max-repairs = 0}, a/x)
-  |               ^
-Unknown value 0 for max-repairs; it accepts a positive number or unlimited at line 1, columns 15-29. (InvalidOverrideSetting)
+1 | ls --max-repairs 1 regex:"^[a-e]$"
+  |                  ^
+unexpected '1'
+expecting "++", '&', '+', '/', '|', or end of input
 
 g> <interactive>:1:15:
   |
-1 | mk %override({max-repairs = 0x10}, a/x)
+1 | mk %override({max-repairs = 1}, a/x)
   |               ^
-Unknown value 0x10 for max-repairs; it accepts a positive number or unlimited at line 1, columns 15-32. (InvalidOverrideSetting)
+max-repairs is not a setting of %override any more: it is an option of mk and tag, written before the path (mk --max-repairs N <path>, with N a positive number or unlimited), since it limits the walks of the whole path; remove the setting max-repairs = 1 at line 1, columns 15-29. (InvalidOverrideSetting)
 
-g> <interactive>:1:15:
+g> <interactive>:1:18:
   |
-1 | mk %override({max-repairs = 99999999999999999999999}, a/x)
-  |               ^
-The value 99999999999999999999999 for max-repairs is too large; write unlimited for no limit at line 1, columns 15-51. (InvalidOverrideSetting)
+1 | mk --max-repairs 0 a/x
+  |                  ^
+Unknown value 0 for --max-repairs; it accepts a positive number or unlimited
+
+g> <interactive>:1:18:
+  |
+1 | mk --max-repairs 0x10 a/x
+  |                  ^
+Unknown value 0x10 for --max-repairs; it accepts a positive number or unlimited
+
+g> <interactive>:1:18:
+  |
+1 | mk --max-repairs 99999999999999999999999 a/x
+  |                  ^
+The value 99999999999999999999999 for --max-repairs is too large; write unlimited for no limit
 
 g> Goodbye!
 ==========stderr==========
 This path has more than one * or regex step in one alternative: `regex:"^[a-i]$"`, `regex:"^[a-i]$"`, `regex:"^[a-i]$"` and `regex:"^[a-i]$"`. mk builds a path with at most one. Write the labels you mean; if steps from one node are meant to be one step, write it once, with a join after it for what continues from it, as in */@/(a & b) for */a & */b. Nothing was changed. (SeveralWildcards)
 This path has more than one * or regex step in one alternative: `regex:"^[a-e]$"`, `regex:"^[a-e]$"`, `regex:"^[a-e]$"` and `regex:"^[a-e]$"`. mk builds a path with at most one. Write the labels you mean; if steps from one node are meant to be one step, write it once, with a join after it for what continues from it, as in */@/(a & b) for */a & */b. Nothing was changed. (SeveralWildcards)
 This path has more than one * or regex step in one alternative: `regex:"^[a-e]$"`, `regex:"^[a-e]$"`, `regex:"^[a-e]$"` and `regex:"^[a-e]$"`. mk builds a path with at most one. Write the labels you mean; if steps from one node are meant to be one step, write it once, with a join after it for what continues from it, as in */@/(a & b) for */a & */b. Nothing was changed. (SeveralWildcards)
-Working out what this path creates takes too long: its steps have several edges to follow, and every combination of the edges followed has to be worked out, over all alternatives of the path; there are more combinations than the limit of 1. This does not mean that the path cannot be created. Nothing was changed. Write @N after a step for the node it should go to, or !{@N} for nodes it should not, so that fewer edges can be followed, or raise the limit with %override({max-repairs = …}, …). (TooManyRepairs)
+Working out what this path creates takes too long: its steps have several edges to follow, and every combination of the edges followed has to be worked out, over all alternatives of the path; there are more combinations than the limit of 1. This does not mean that the path cannot be created. Nothing was changed. Write @N after a step for the node it should go to, or !{@N} for nodes it should not, so that fewer edges can be followed, or raise the limit by giving mk the option --max-repairs N before the path, with N a larger number or unlimited. (TooManyRepairs)
 This path can be created in 2 ways; nothing was changed. To choose one, write @N after a step for the node it should go to, or !{@N} for nodes it should not, or keep one side of a +.
   1. @000000000000 -"a"-> @000000000001 -"x"-> new1
     creates: @000000000001 -"x"-> new1
-    use: mk regex:"^[ab]$"/@000000000001/x
+    use: mk --max-repairs 2 regex:"^[ab]$"/@000000000001/x
   2. @000000000000 -"b"-> @000000000002 -"x"-> new1
     creates: @000000000002 -"x"-> new1
-    use: mk regex:"^[ab]$"/@000000000002/x
+    use: mk --max-repairs 2 regex:"^[ab]$"/@000000000002/x
 
 ==========graph-dump==========
 @000000000000{out=[@000000000001 via "a", @000000000002 via "b", @000000000003 via "c", @000000000004 via "d", @000000000005 via "e", @000000000006 via "f", @000000000007 via "g", @000000000008 via "h", @000000000009 via "i"], in=[@0daCJjMrQel8 via "origin"]}

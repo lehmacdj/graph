@@ -60,20 +60,6 @@ alternatives p =
     Just pattern' <- [glueRoutes routes]
   ]
 
--- | A path without the nodes that carry its limits. A limit says how often
--- @mk@ may walk the path (@max-repairs@), not what the path means,
--- so everything here compiles the path without them: wherever such a node
--- is, and however many are nested, the path compiles as if it were not
--- there.
-withoutLimits :: Path -> Path
-withoutLimits = \case
-  WithLimits _ _ p -> withoutLimits p
-  Backwards p -> Backwards (withoutLimits p)
-  p :/ q -> withoutLimits p :/ withoutLimits q
-  p :& q -> withoutLimits p :& withoutLimits q
-  Union k p q -> Union k (withoutLimits p) (withoutLimits q)
-  p -> p
-
 -- * Backwards
 
 -- | Push 'Backwards' down to the steps. @~(p/q) = ~q/~p@, and @~@
@@ -84,7 +70,6 @@ pushBackwards = \case
   p :/ q -> pushBackwards p :/ pushBackwards q
   p :& q -> pushBackwards p :& pushBackwards q
   Union k p q -> Union k (pushBackwards p) (pushBackwards q)
-  WithLimits v l p -> WithLimits v l (pushBackwards p)
   p -> p
   where
     invert = \case
@@ -95,7 +80,6 @@ pushBackwards = \case
       p :/ q -> invert q :/ invert p
       p :& q -> invert p :& invert q
       Union k p q -> Union k (invert p) (invert q)
-      WithLimits v l p -> WithLimits v l (invert p)
       p -> p
 
 -- * Chains
@@ -157,7 +141,6 @@ structures path = ordNub . mapMaybe normal . toList $ go 0 path
               | x <- toList a,
                 y <- toList b
               ]
-      WithLimits _ _ p -> go pos p
       p :/ q ->
         let a = go pos p
             b = go (pos + leaves p) q
@@ -179,14 +162,12 @@ leaves = \case
   p :/ q -> leaves p + leaves q
   p :& q -> leaves p + leaves q
   Union _ p q -> leaves p + leaves q
-  WithLimits _ _ p -> leaves p
   _ -> 1
 
 -- | The sides of a relational union, through nested ones.
 unionSides :: Path -> [Path]
 unionSides = \case
   p :|| q -> unionSides p ++ unionSides q
-  WithLimits _ _ p@(_ :|| _) -> unionSides p
   p -> [p]
 
 -- | The conjuncts a chain is in a group: nested groups are one group.
@@ -284,11 +265,10 @@ shape = map \case
   SGroup _ cs -> SGroup 0 (map shape cs)
   SUnion _ cs -> SUnion 0 (map shape cs)
 
--- | A path as it is compiled: without its limits, and @~@ pushed down to
--- the steps. Nothing else is done to it: every side of a union that is
+-- | A path as it is compiled: with @~@ pushed down to the steps. Nothing else is done to it: every side of a union that is
 -- written is a side of its own, whatever it is.
 prepared :: Path -> Path
-prepared = pushBackwards . withoutLimits
+prepared = pushBackwards
 
 -- | A chain with its segments named in the order they occur in it.
 renamed :: Chain -> Chain
@@ -1291,7 +1271,7 @@ data IdleJoin = IdleJoin
 -- written is a side of its own here as it is for the compiler, so the
 -- check and the compiler read the same unions.
 checkCopies :: Path -> Either CopiedMeetingPoint [IdleJoin]
-checkCopies p = case scopeChain (pushBackwards (withoutLimits p)) of
+checkCopies p = case scopeChain (pushBackwards p) of
   Nothing -> Right []
   Just chain -> case findings chain of
     (refusal : _, _) -> Left (refused placeOf chain refusal)
@@ -1307,9 +1287,8 @@ checkCopies p = case scopeChain (pushBackwards (withoutLimits p)) of
         (IntMap.lookup name places)
 
 -- | The place in a path of each of its unions, by the name 'scopeChain'
--- gives it in the path without limits and with @~@ pushed down: from
--- where its leaves start there and how many it has. @~@ reverses the
--- order of what it is around.
+-- gives it in the path with @~@ pushed down: from where its leaves start
+-- there and how many it has. @~@ reverses the order of what it is around.
 unionPlaces :: Path -> IntMap Place
 unionPlaces path = IntMap.fromList (go [] 0 False path)
   where
@@ -1321,7 +1300,6 @@ unionPlaces path = IntMap.fromList (go [] 0 False path)
          in (if kind == Relational then name else negate name - 1, place)
               : inOrder l r
       Backwards q -> go (operand 0 place) pos (not reversed) q
-      WithLimits _ _ q -> go (operand 0 place) pos reversed q
       l :/ r
         -- under ~ the second operand of a sequence comes first
         | reversed ->
@@ -1350,11 +1328,11 @@ reordersRoutes = any \case
   _ -> False
 
 -- | A path as the check reads it, and as 'CopiedMeetingPoint' and
--- 'IdleJoin' show its parts: without limits, @~@ pushed down to the
--- steps, nested groups as one group, node tests right after one another
--- as one. Nothing when the path has no chain.
+-- 'IdleJoin' show its parts: @~@ pushed down to the steps, nested groups
+-- as one group, node tests right after one another as one. Nothing when
+-- the path has no chain.
 asRead :: Path -> Maybe Path
-asRead = fmap chainAsPath . scopeChain . pushBackwards . withoutLimits
+asRead = fmap chainAsPath . scopeChain . pushBackwards
 
 -- | The chain of a path with no union chosen: a shared union is a union
 -- too, with a negative name. Nothing when the path has no chain
@@ -1387,14 +1365,12 @@ scopeChain path = go 0 path >>= settle
         a <- go pos p
         b <- go (pos + leaves p) q
         Just [SGroup (named pos (p :& q)) (conjuncts a <> conjuncts b)]
-      WithLimits _ _ p -> go pos p
       p :/ q -> do
         a <- go pos p
         b <- go (pos + leaves p) q
         sequenced a b
     sidesOfKind kind = \case
       Union kind' p q | kind' == kind -> sidesOfKind kind p <> sidesOfKind kind q
-      WithLimits _ _ p@(Union kind' _ _) | kind' == kind -> sidesOfKind kind p
       p -> [p]
     -- every side that is written is a side of its own, as for the
     -- compiler ('norm'): a union of two sides written the same is also
@@ -2009,7 +1985,7 @@ compileAlternatives p =
     Just choice <- [lookup pattern' uniform <|> spelled routes pattern']
   ]
   where
-    p' = pushBackwards (withoutLimits p)
+    p' = pushBackwards p
     uniform :: Map PatternPath Path
     uniform =
       mapFromList . reverse $
@@ -2135,7 +2111,6 @@ uniformChoices = \case
   p@(ExcludingNIDs ns) -> one (SJoin 0 (Except ns) False) p
   -- left-biased, so the first choice written is kept
   Union _ p q -> uniformChoices p <> uniformChoices q
-  WithLimits _ _ p -> uniformChoices p
   p :& q ->
     combine
       (\a b -> Just [SGroup 0 (conjuncts a <> conjuncts b)])

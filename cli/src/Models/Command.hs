@@ -24,13 +24,13 @@ data Command
     ChangeNode ParsedPath
   | -- | d
     Dualize
-  | -- | mk
-    Make ParsedPath
+  | -- | mk [--max-repairs N]
+    Make MaxRepairs ParsedPath
   | -- | mg [--keep] p1 [--keep] p2 …: merge the nodes, one per argument,
     -- into one; at most one argument is marked @--keep@ (see 'MergeArgument')
     Merge (TwoElemList MergeArgument)
-  | -- | t
-    Tag ParsedPath ParsedPath
+  | -- | t, tag [--max-repairs N]
+    Tag MaxRepairs ParsedPath ParsedPath
   | Text Text Text
   | -- | desc
     Describe Text
@@ -76,6 +76,11 @@ data Command
   | -- | preview, ls
     Preview ParsedPath
   deriving (Eq, Show, Ord, Generic)
+
+-- | The option @--max-repairs N@ of @mk@ and @tag@, if it was given: how
+-- many walks the command may make of its path. Without it the limit is
+-- 'Models.PathPattern.Residuate.defaultMaxRepairs'.
+type MaxRepairs = Maybe RepairsLimit
 
 -- | An argument of @mg@: a path that must resolve to a single node. The
 -- 'Kept' node survives the merge, keeping its NID and data.

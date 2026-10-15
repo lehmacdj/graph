@@ -4,8 +4,6 @@ module Models.Path
   ( Path' (..),
     UnionKind (..),
     RepairsLimit (..),
-    PathLimits (..),
-    showLimits,
     OverrideSettings (..),
     PathPhase (..),
     SourceRange (..),
@@ -15,7 +13,6 @@ module Models.Path
     HoleVal,
     DirectiveVal,
     DefaultUnionVal,
-    WithLimitsVal,
     Path'Constraints,
     handleDirectivesWith,
     Place,
@@ -88,10 +85,6 @@ data Path' (p :: PathPhase)
     -- directive it is lowered by 'handleDirectivesWith', which is told the
     -- kind. It does not exist in the Prenormal phase.
     DefaultUnion (DefaultUnionVal p) (Path' p) (Path' p)
-  | -- | The path inside an @%override@ that sets a limit, after directives
-    -- are expanded: with @max-repairs@, @mk@ walks the path in at most
-    -- that many ways. It only exists in the Prenormal phase.
-    WithLimits (WithLimitsVal p) PathLimits (Path' p)
   | -- | intersection
     Path' p ::& Path' p
   | -- | Directives are command like things that may appear in paths.
@@ -116,40 +109,20 @@ data UnionKind
     Shared
   deriving (Eq, Ord, Show, Generic, Lift)
 
--- | How many walks @mk@ may make of a path (@max-repairs@).
+-- | How many walks @mk@ or @tag@ may make of its path: the value of the
+-- command's option @--max-repairs@. It is the command's, not the path's:
+-- the walks are those of the whole path.
 data RepairsLimit = AtMostRepairs Int | UnlimitedRepairs
   deriving (Eq, Ord, Show, Generic, Lift)
 
--- | The limits an @%override@ sets; 'Nothing' keeps the outer one.
-data PathLimits = PathLimits
-  { -- | how many walks @mk@ may make of the path
-    maxRepairs :: Maybe RepairsLimit
-  }
-  deriving (Eq, Ord, Show, Generic, Lift)
-
--- | Settings an @%override@ changes; 'Nothing' keeps the outer one.
+-- | Settings an @%override@ changes; 'Nothing' keeps the outer one. Each
+-- decides something about the part of the path it is written around, and
+-- is used up when directives are expanded.
 data OverrideSettings = OverrideSettings
   { -- | the union @+@ is lowered to
-    plus :: Maybe UnionKind,
-    -- | how many walks @mk@ may make of the path
-    maxRepairs :: Maybe RepairsLimit
+    plus :: Maybe UnionKind
   }
   deriving (Eq, Ord, Show, Generic, Lift)
-
--- | The limits of an override, if it sets one.
-overrideLimits :: OverrideSettings -> Maybe PathLimits
-overrideLimits settings
-  | isNothing settings.maxRepairs = Nothing
-  | otherwise = Just PathLimits {maxRepairs = settings.maxRepairs}
-
--- | The settings of an @%override@ as written: @key = value@ each.
-showLimits :: PathLimits -> [String]
-showLimits limits =
-  [ "max-repairs = " <> case l of
-      AtMostRepairs n -> show n
-      UnlimitedRepairs -> "unlimited"
-  | Just l <- [limits.maxRepairs]
-  ]
 
 -- * Trees that grow machinery
 
@@ -185,12 +158,6 @@ type family DefaultUnionVal (p :: PathPhase) :: Type where
   DefaultUnionVal 'Partial = ()
   DefaultUnionVal 'WithDirectives = ()
   DefaultUnionVal 'Prenormal = Void
-
--- | 'WithLimits' only exists after directives are expanded.
-type family WithLimitsVal (p :: PathPhase) :: Type where
-  WithLimitsVal 'Partial = Void
-  WithLimitsVal 'WithDirectives = Void
-  WithLimitsVal 'Prenormal = ()
 
 type family NIDVal (p :: PathPhase) :: Type where
   NIDVal 'Partial = Either IncompleteNID NID
@@ -258,7 +225,6 @@ showsDirective = \case
           Relational -> "relational"
       | Just k <- [settings.plus]
       ]
-        ++ foldMap showLimits (overrideLimits settings)
 
 instance
   (Path'Constraints Show p) =>
@@ -294,18 +260,14 @@ handleDirectivesWith plus interpretDirective = \case
   DefaultUnion () l r -> Union <$> plus <*> go l <*> go r
   l ::& r -> (::&) <$> go l <*> go r
   Directive _ (Override settings p) ->
-    maybe id (WithLimits ()) (overrideLimits settings)
-      <$> handleDirectivesWith
-        (maybe plus pure settings.plus)
-        interpretDirective
-        p
+    handleDirectivesWith (maybe plus pure settings.plus) interpretDirective p
   Directive ann directive -> go =<< interpretDirective ann directive
   where
     go = handleDirectivesWith plus interpretDirective
 
 -- | Where a part of a path is: the operand taken at each operator on the
 -- way down to it from the whole path, 0 for the first (or only) operand
--- and 1 for the second. The path inside a 'WithLimits' is its operand 0.
+-- and 1 for the second.
 type Place = [Int]
 
 -- | The place of an operand of what is at a place.
@@ -314,9 +276,9 @@ operand i place = place <> [i]
 
 -- | The places of what the directives for which the first argument holds
 -- expand to, in the path that 'handleDirectivesWith' makes of this one:
--- each is where the directive was, but that the path of an @%override@
--- that sets limits is inside a 'WithLimits'. What a directive expands to
--- is not looked inside, but the path of an @%override@ is.
+-- each is where the directive was. What a directive expands to is not
+-- looked inside, but the path of an @%override@ is (it takes the place of
+-- the override).
 directivePlaces ::
   (Directive 'WithDirectives -> Bool) ->
   Path' 'WithDirectives ->
@@ -328,10 +290,10 @@ directivePlaces wanted =
 
 -- | The places of the parts of a path for which the function gives
 -- something, in the path that 'handleDirectivesWith' makes of this one,
--- with what it gives: each is where the part was, but that the path of an
--- @%override@ that sets limits is inside a 'WithLimits'. The function is
--- also told whether an @%override@ around the part says what a @+@ is.
--- What a directive expands to is not looked inside, but the path of an
+-- with what it gives: each is where the part was (the path of an
+-- @%override@ takes the place of the override). The function is also
+-- told whether an @%override@ around the part says what a @+@ is. What a
+-- directive expands to is not looked inside, but the path of an
 -- @%override@ is.
 placesIn ::
   (Bool -> Path' 'WithDirectives -> Maybe a) ->
@@ -342,10 +304,7 @@ placesIn found = go [] False
     go place plusSet p =
       toList ((place,) <$> found plusSet p) <> case p of
         Directive _ (Override settings q) ->
-          go
-            (if isJust (overrideLimits settings) then operand 0 place else place)
-            (plusSet || isJust settings.plus)
-            q
+          go place (plusSet || isJust settings.plus) q
         Directive _ _ -> []
         Backwards' q -> go (operand 0 place) plusSet q
         l ::/ r -> both l r
@@ -379,14 +338,7 @@ handleDirectivesQ plus interpretDirective = \case
     [|Union k $(go l) $(go r)|]
   l ::& r -> [|$(go l) ::& $(go r)|]
   Directive _ (Override settings p) ->
-    let inner =
-          handleDirectivesQ
-            (maybe plus pure settings.plus)
-            interpretDirective
-            p
-     in case overrideLimits settings of
-          Nothing -> inner
-          Just l -> [|WithLimits () l $inner|]
+    handleDirectivesQ (maybe plus pure settings.plus) interpretDirective p
   Directive ann directive -> interpretDirective ann directive
   where
     go = handleDirectivesQ plus interpretDirective
@@ -438,8 +390,7 @@ type Path'Constraints c p =
   ( c (DirectiveVal p),
     c (HoleVal p),
     c (NIDVal p),
-    c (DefaultUnionVal p),
-    c (WithLimitsVal p)
+    c (DefaultUnionVal p)
   )
 
 -- * Instances
@@ -475,12 +426,6 @@ showsPath d (Union k l r) =
   where
     unionSymbol Relational = " | "
     unionSymbol Shared = " ++ "
-showsPath _ (WithLimits _ l p) =
-  showString "%override({"
-    . showString (intercalate ", " (showLimits l))
-    . showString "}, "
-    . shows p
-    . showString ")"
 showsPath d (DefaultUnion _ l r) =
   showParen (d > 5) $
     showsPrec 6 l . showString " + " . showsPrec 6 r

@@ -12,7 +12,8 @@
 -- and nothing waits. What a walk creates is a possibility. A possibility
 -- that creates everything another creates and more is dropped ('select');
 -- one left is what @mk@ creates, and several are listed. Building stops
--- with 'TooManyRepairs' once there are more walks than the path's limit.
+-- with 'TooManyRepairs' once there are more walks than the limit (the
+-- option @--max-repairs@ of @mk@ and @tag@).
 -- A node that the path writes as @\@N@ is never created: an alternative
 -- that needs one that does not exist is not built ('MissingNodes').
 module Models.PathPattern.Residuate
@@ -35,7 +36,6 @@ module Models.PathPattern.Residuate
     residuateWithin,
     residuateNoting,
     defaultMaxRepairs,
-    pathMaxRepairs,
     Choice (..),
     chooseRepair,
     residuatePure,
@@ -230,26 +230,11 @@ instance Semigroup WalkCost where
 instance Monoid WalkCost where
   mempty = WalkCost 0 0
 
--- | How many walks a path may have, unless an
--- @%override({max-repairs = …}, …)@ says otherwise. This bounds a count,
--- not time: what a walk costs grows with the pattern.
+-- | How many walks a path may have, unless the command's option
+-- @--max-repairs@ says otherwise. This bounds a count, not time: what a
+-- walk costs grows with the pattern.
 defaultMaxRepairs :: Int
 defaultMaxRepairs = 5000
-
--- | The largest limit in effect at a step or node of the path: the one of
--- the innermost @max-repairs@ override around it, or the default. The
--- walks are those of the whole path and cannot be attributed to a part of
--- it, so the most generous limit asked for applies to all of it.
-pathMaxRepairs :: P.Path -> P.RepairsLimit
-pathMaxRepairs = go (P.AtMostRepairs defaultMaxRepairs)
-  where
-    go l = \case
-      P.WithLimits _ l' p -> go (fromMaybe l l'.maxRepairs) p
-      P.Union _ p q -> go l p `max` go l q
-      p P.:/ q -> go l p `max` go l q
-      p P.:& q -> go l p `max` go l q
-      P.Backwards p -> go l p
-      _ -> l
 
 -- | 'residuateWithin' the default limit.
 residuate ::

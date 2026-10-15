@@ -48,7 +48,13 @@ shownLines ::
   Graph Text () -> P.Path -> NonEmpty Residual -> [(Residual, Maybe P.Path)]
 shownLines g p rs =
   zip shown . runIdentity $
-    suggestPaths (pure . (corpusNode g)) noLabels corpusCurrent p shown
+    suggestPaths
+      (P.AtMostRepairs defaultMaxRepairs)
+      (pure . (corpusNode g))
+      noLabels
+      corpusCurrent
+      p
+      shown
   where
     shown = take 5 (toList rs)
 

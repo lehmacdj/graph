@@ -32,8 +32,6 @@ import Models.Path.TH (path)
 import Models.PathPattern
 import Models.PathPattern.Compile
 import Models.PathPattern.Match
-import Models.PathPattern.ResiduateSpec (genRepairCase)
-import Models.PathPattern.Suggest (parseSurfacePath)
 import Models.PathPattern.TestCorpus
 import MyPrelude
 import Test.QuickCheck.Gen (unGen)
@@ -1298,7 +1296,6 @@ spec_compileUnionMonotoneRandom =
       l P.:/ r -> ownJoin l || ownJoin r
       P.Union _ l r -> ownJoin l || ownJoin r
       P.Backwards x -> ownJoin x
-      P.WithLimits _ _ x -> ownJoin x
       _ -> False
     hasShared = \case
       P.Union P.Shared _ _ -> True
@@ -1306,7 +1303,6 @@ spec_compileUnionMonotoneRandom =
       l P.:/ r -> hasShared l || hasShared r
       l P.:& r -> hasShared l || hasShared r
       P.Backwards x -> hasShared x
-      P.WithLimits _ _ x -> hasShared x
       _ -> False
     alternativesOf = alternativesUpToOrder
     plug :: Int -> P.Path -> P.Path -> P.Path -> P.Path
@@ -1536,60 +1532,6 @@ spec_compileExamples = describe "compile examples" do
   where
     hopLabels r = [l | Hop _ _ (MLiteral l) _ <- r.hops]
 
--- | The path with limit nodes put around random parts of it, up to three
--- deep at one place.
-genWithLimits :: P.Path -> Gen P.Path
-genWithLimits = \case
-  P.Backwards p -> wrapped (P.Backwards <$> genWithLimits p)
-  p P.:/ q -> wrapped ((P.:/) <$> genWithLimits p <*> genWithLimits q)
-  p P.:& q -> wrapped ((P.:&) <$> genWithLimits p <*> genWithLimits q)
-  P.Union k p q -> wrapped (P.Union k <$> genWithLimits p <*> genWithLimits q)
-  p -> wrapped (pure p)
-  where
-    wrapped inner = do
-      depth <- frequency [(3, pure 0), (2, pure 1), (1, choose (2, 3))]
-      limits <- vectorOf depth genLimits
-      flip (foldr (P.WithLimits ())) limits <$> inner
-    genLimits =
-      P.PathLimits
-        <$> elements
-          [Nothing, Just (P.AtMostRepairs 5), Just P.UnlimitedRepairs]
-
-spec_compileIgnoresLimits :: Spec
-spec_compileIgnoresLimits = describe "limit nodes do not change compilation" do
-  let override l = P.WithLimits () l
-      repairs = P.PathLimits (Just (P.AtMostRepairs 5000))
-      fewer = P.PathLimits (Just (P.AtMostRepairs 50))
-      plain = [path| (a & b)/(@ | d) |]
-  it "two nested around a union after a conjunction" $
-    compilePath
-      ([path| a & b |] P.:/ override repairs (override fewer [path| @ | d |]))
-      `shouldBe` compilePath plain
-  it "one around a join in a sequence" $
-    compilePath
-      ([path| a & b |] P.:/ override repairs P.One P.:/ [path| c |])
-      `shouldBe` compilePath [path| (a & b)/@/c |]
-  it "nested around shared sides and segments" do
-    compilePath
-      ( override repairs (override repairs [path| a ++ b |])
-          P.:++ [path| c |]
-          P.:/ [path| d & e |]
-      )
-      `shouldBe` compilePath [path| (a ++ b) ++ c/(d & e) |]
-    compilePath
-      ( [path| x & y |]
-          P.:/ override fewer (override repairs [path| a/@ |])
-          P.:/ [path| d & e |]
-      )
-      `shouldBe` compilePath [path| (x & y)/a/@/(d & e) |]
-  it "any number anywhere in random paths" . withMaxSuccess 2000 $
-    forAll (fst <$> genRepairCase) \p -> forAll (genWithLimits p) \limited ->
-      fewAlternatives 1000 p
-        ==> conjoin
-          [ compilePath limited === compilePath p,
-            compileAlternatives limited === compileAlternatives p
-          ]
-
 -- * The compiler before relational unions, as a reference
 
 -- | A term of the compiler as it was before relational unions (the tree
@@ -1640,7 +1582,6 @@ referenceExprs mode surface =
       P.Absolute nid -> pure (Join Stay (Exactly nid))
       P.ExcludingNIDs ns -> pure (Join Stay (Except ns))
       P.Union _ p q -> join (lift [fragment p, fragment q])
-      P.WithLimits _ _ p -> fragment p
       p P.:& q -> (\a b -> conjoinExprs (a : [b])) <$> fragment p <*> fragment q
       p P.:/ q -> do
         a <- atBoundary <$> fragment p
@@ -1740,7 +1681,6 @@ inChangedClass = any chain' . choices . pushBackwards
       P.Union _ l r -> choices l <> choices r
       l P.:/ r -> (P.:/) <$> choices l <*> choices r
       l P.:& r -> (P.:&) <$> choices l <*> choices r
-      P.WithLimits _ _ p -> choices p
       p -> [p]
     segments = \case
       l P.:/ r -> segments l <> segments r
@@ -3384,9 +3324,9 @@ spec_compileCopiedMeetingPoints = describe "a product may not copy a meeting poi
       `shouldBe` Just [AsOneStep [path| @/~x | @/~w |] [0, 0, 1]]
     readingsOf [path| ~(z/((c & y)/@/e & d)/(x/@ | w/@)/(p & q)) |]
       `shouldBe` Just [AsOneStep [path| @/~x | @/~w |] [0, 0, 1]]
-    -- inside an %override that sets limits
-    readingsOf [path| %override({max-repairs = 100}, (p & q)/(x/@ | w/@)/((c & y)/@/e & d)) |]
-      `shouldBe` Just [AsOneStep [path| x/@ | w/@ |] [0, 0, 1]]
+    -- inside an %override, whose path has the override's place
+    readingsOf [path| %override({plus = shared}, (p & q)/(x/@ | w/@)/((c & y)/@/e & d)) |]
+      `shouldBe` Just [AsOneStep [path| x/@ | w/@ |] [0, 1]]
     -- unions of one kind inside one another are one union, at the
     -- outermost one's place
     readingsOf [path| (p & q)/(x/@ | (w/@ | v/@))/((c & y)/@/e & d) |]
@@ -3857,7 +3797,6 @@ spec_compileCopiedMeetingPoints = describe "a product may not copy a meeting poi
       l P.:& r -> onceEach l P.:& onceEach r
       P.Union k l r -> P.Union k (onceEach l) (onceEach r)
       P.Backwards x -> P.Backwards (onceEach x)
-      P.WithLimits v lim x -> P.WithLimits v lim (onceEach x)
       p -> p
     sequenceOf = \case
       l P.:/ r -> sequenceOf l <> sequenceOf r
@@ -3874,7 +3813,6 @@ spec_compileCopiedMeetingPoints = describe "a product may not copy a meeting poi
       l P.:& r -> [l' P.:& r | l' <- removals l] <> [l P.:& r' | r' <- removals r]
       P.Union k l r -> [P.Union k l' r | l' <- removals l] <> [P.Union k l r' | r' <- removals r]
       P.Backwards x -> P.Backwards <$> removals x
-      P.WithLimits v lim x -> P.WithLimits v lim <$> removals x
       _ -> []
     universe' :: P.Path -> [P.Path]
     universe' p =
@@ -3883,7 +3821,6 @@ spec_compileCopiedMeetingPoints = describe "a product may not copy a meeting poi
         a P.:/ b -> universe' a <> universe' b
         a P.:& b -> universe' a <> universe' b
         P.Union _ a b -> universe' a <> universe' b
-        P.WithLimits _ _ q -> universe' q
         _ -> []
 
 -- | Random paths for the meeting-point rule: every step has a label of
@@ -4067,7 +4004,6 @@ genStretchy = frequency [(4, stretchy), (1, sequence' 0)] `suchThat` ((<= 16) . 
       l P.:& r -> leaves l + leaves r
       P.Union _ l r -> leaves l + leaves r
       P.Backwards p -> leaves p
-      P.WithLimits _ _ p -> leaves p
       _ -> 1
     chance :: Double -> Gen Bool
     chance p = (< p) <$> choose (0, 1)
@@ -4180,7 +4116,6 @@ marked p0 = S.evalState (go p0) (100 :: Int)
       a P.:/ b -> (P.:/) <$> go a <*> go b
       a P.:& b -> (P.:&) <$> go a <*> go b
       P.Union k a b -> P.Union k <$> go a <*> go b
-      P.WithLimits v l p -> P.WithLimits v l <$> go p
       p -> pure p
 
 -- | The marked joins ('marked') of an alternative that have two copies
@@ -4335,7 +4270,6 @@ handRule shortcut =
     written p = traverse part (sequenceOf p) >>= merged . concat
     sequenceOf = \case
       a P.:/ b -> sequenceOf a <> sequenceOf b
-      P.WithLimits _ _ p -> sequenceOf p
       p -> [p]
     part :: P.Path -> Maybe [Written]
     part = \case
@@ -4615,7 +4549,6 @@ spec_compileEverySide = describe "every written side of a union is its own side"
       l P.:/ r -> hasUnion l || hasUnion r
       l P.:& r -> hasUnion l || hasUnion r
       P.Backwards p -> hasUnion p
-      P.WithLimits _ _ p -> hasUnion p
       _ -> False
     sidesOf kind = \case
       P.Union kind' l r | kind' == kind -> sidesOf kind l <> sidesOf kind r
@@ -4627,7 +4560,6 @@ spec_compileEverySide = describe "every written side of a union is its own side"
       l P.:/ r -> rebuilt build l P.:/ rebuilt build r
       l P.:& r -> rebuilt build l P.:& rebuilt build r
       P.Backwards p -> P.Backwards (rebuilt build p)
-      P.WithLimits v l p -> P.WithLimits v l (rebuilt build p)
       p -> p
     reorder f = rebuilt \kind sides -> foldl1Ex' (P.Union kind) (f sides)
     rotate xs = drop 1 xs <> take 1 xs
@@ -4648,7 +4580,6 @@ spec_compileEverySide = describe "every written side of a union is its own side"
       l P.:/ r -> (P.:/) <$> orderings l <*> orderings r
       l P.:& r -> (P.:&) <$> orderings l <*> orderings r
       P.Backwards p -> P.Backwards <$> orderings p
-      P.WithLimits v l p -> P.WithLimits v l <$> orderings p
       p -> [p]
     -- every step with the same label
     oneLabel = \case
@@ -4657,5 +4588,4 @@ spec_compileEverySide = describe "every written side of a union is its own side"
       l P.:& r -> oneLabel l P.:& oneLabel r
       P.Union k l r -> P.Union k (oneLabel l) (oneLabel r)
       P.Backwards q -> P.Backwards (oneLabel q)
-      P.WithLimits v l q -> P.WithLimits v l (oneLabel q)
       q -> q

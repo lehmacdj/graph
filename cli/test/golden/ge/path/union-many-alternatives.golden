@@ -10,14 +10,14 @@
 ==========input==========
 ls (a | b | c)/(d & e & f & g & h & i & j)
 ls %override({max-alternatives = 3000}, (a | b)/d)
-ls %override({plus = shared, max-repairs = 10}, (a + b)/d)
+ls %override({plus = shared}, (a + b)/d)
 ==========stdout==========
 g> [0ma/[0;1md[0m[0m [0;34m@000000000002[0m [0m[0m
 g> <interactive>:1:15:
   |
 1 | ls %override({max-alternatives = 3000}, (a | b)/d)
   |               ^
-Unknown setting max-alternatives in %override; the settings are plus and max-repairs at line 1, columns 15-37. (InvalidOverrideSetting)
+Unknown setting max-alternatives in %override; the only setting is plus at line 1, columns 15-37. (InvalidOverrideSetting)
 
 g> [0ma/[0;1md[0m[0m [0;34m@000000000002[0m [0m[0m
 g> Goodbye!
