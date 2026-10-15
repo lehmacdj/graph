@@ -2011,7 +2011,11 @@ failures, nor is an `ls` that finds no targets.
   line (`ge -e 'mk q1 ; ls * ; mk zz' >&-` makes no `zz`); with
   standard error closed as well it exits with 1 and says nothing. When
   the reader of its output has gone (`ge -e '…' | head`), `ge` ends by
-  SIGPIPE (exit status 141 to a shell), as such a program does. A
+  SIGPIPE (exit status 141 to a shell), as such a program does, and says
+  nothing. The REPL does the same when its reader has gone (`printf
+  'nid\nnid\n' | ge GRAPH | head -c 5`); when a command's output cannot
+  be written otherwise, the REPL reports `could not write the output
+  (output-failed): …` as that command's error and reads the next line. A
   standard input that is closed is the end of the input: the REPL says
   `Goodbye!` and ends.
 

@@ -34,7 +34,10 @@ import Foreign.C.Error (throwErrnoIfMinus1_)
 import Foreign.C.Types (CInt (..), CULong (..))
 import Foreign.Ptr (FunPtr, castPtrToFunPtr, nullPtr, plusPtr)
 import GHC.Clock (getMonotonicTimeNSec)
-import GHC.IO.Exception (IOErrorType (ResourceVanished), IOException (..))
+import GHC.IO.Exception
+  ( IOErrorType (ResourceExhausted, ResourceVanished),
+    IOException (..),
+  )
 import Graph.AppInterpreters
 import Graph.Command
 import Graph.Dualizeable
@@ -84,6 +87,7 @@ import System.Posix.Terminal (openPseudoTerminal)
 import System.Posix.Types (Fd (..), ProcessID)
 import System.Process.Typed
   ( Process,
+    byteStringInput,
     byteStringOutput,
     closed,
     getExitCode,
@@ -135,9 +139,12 @@ withDefaultQuitParser p s
 -- * a 'UserError', whether the command threw it or an interpreter that the
 --   command uses did (those are installed outside of the REPL, so a handler
 --   installed around the command alone would not see their errors)
+-- * output that could not be written ('outputFailure'), as what it is
 -- * any other exception, such as an @error@ call
 --
--- An interrupt (Ctrl-C) is left to the REPL's own handler.
+-- An interrupt (Ctrl-C) is left to the REPL's own handler, and so is
+-- output that could not be written because its reader has gone: that ends
+-- the REPL as it ends @ge -e@ ('sayingThatOutputFailed').
 reportingFailure ::
   (Members [Error UserError, IOE] effs) =>
   (String -> Eff effs ()) ->
@@ -145,9 +152,12 @@ reportingFailure ::
   Eff effs ()
 reportingFailure report command =
   (command `catchError` \_ e -> report (show e))
-    `catchAny` \e -> case E.fromException e of
-      Just H.Interrupt -> throwIO e
-      Nothing ->
+    `catchAny` \e -> case (E.fromException e, outputFailure e) of
+      (Just H.Interrupt, _) -> throwIO e
+      (_, Just failed)
+        | readerHasGone failed -> throwIO e
+        | otherwise -> report (displayException (OutputFailed failed))
+      _ ->
         report $
           "the command failed unexpectedly (uncaught-exception): "
             <> displayException e
@@ -467,23 +477,34 @@ geWith options = do
 -- * Otherwise (its output is closed, say) it says so on standard error,
 --   with the error of the system as it is, and fails.
 --
--- (For the REPL that is when an output outside of a command fails; a
--- command's failure it reports itself.)
+-- (The REPL ends here as well when the reader has gone, whether a command
+-- or the REPL itself was writing; a command's output that fails otherwise
+-- it reports itself, as what it is, and goes on: 'reportingFailure'.)
 sayingThatOutputFailed :: IO ExitCode -> IO ExitCode
 sayingThatOutputFailed program =
-  program
-    `E.catches` [ E.Handler \(OutputFailed e) -> failed e,
-                  E.Handler \(e :: IOError) ->
-                    -- what is written to standard output directly
-                    if ioe_handle e == Just stdout then failed e else throwIO e
-                ]
+  program `E.catch` \e -> maybe (E.throwIO e) failed (outputFailure e)
   where
     failed e
-      | ioe_type e == ResourceVanished = endNowBy Signals.sigPIPE
+      | readerHasGone e = endNowBy Signals.sigPIPE
       | otherwise = do
           eputStr ("ge: " <> displayException (OutputFailed e))
             `E.catch` \(_ :: IOError) -> pure ()
           pure (ExitFailure 1)
+
+-- | The error of the system when this exception is the program's output
+-- failing to be written: through the line editor ('OutputFailed'), or to
+-- standard output directly (as @ls@ prints).
+outputFailure :: SomeException -> Maybe IOError
+outputFailure e
+  | Just (OutputFailed failed) <- E.fromException e = Just failed
+  | Just failed <- E.fromException e,
+    ioe_handle failed == Just stdout =
+      Just failed
+  | otherwise = Nothing
+
+-- | Whether output failed because whoever read it has gone (a broken pipe)
+readerHasGone :: IOError -> Bool
+readerHasGone e = ioe_type e == ResourceVanished
 
 -- | Print warnings and errors like 'printingErrorsAndWarnings'; an error
 -- makes the exit code 1, so that whoever ran @ge -e@ can tell that the
@@ -522,6 +543,29 @@ spec_reportingFailure = do
     message `shouldContain` "broken invariant"
   it "leaves an interrupt to the REPL" $
     reports (throwIO H.Interrupt) `shouldThrow` \H.Interrupt -> True
+  -- the error of the system when writing standard output fails so (the
+  -- runtime names the handle's file)
+  let failedWriting kind =
+        IOError
+          (Just stdout)
+          kind
+          "commitBuffer"
+          "the reason"
+          Nothing
+          (Just "<stdout>")
+  it "reports output that could not be written as what it is" do
+    let said =
+          "could not write the output (output-failed): <stdout>:"
+            <> " commitBuffer: resource exhausted (the reason)"
+    -- through the line editor, and straight to standard output (ls)
+    reports (throwIO (OutputFailed (failedWriting ResourceExhausted)))
+      `shouldReturn` [said]
+    reports (throwIO (failedWriting ResourceExhausted)) `shouldReturn` [said]
+  it "leaves output whose reader has gone to the program, which ends" do
+    reports (throwIO (OutputFailed (failedWriting ResourceVanished)))
+      `shouldThrow` \(OutputFailed _) -> True
+    reports (throwIO (failedWriting ResourceVanished))
+      `shouldThrow` \(e :: IOError) -> ioe_type e == ResourceVanished
 
 -- | What a prompt of 'spec_repl' is answered with.
 data Answer = Typed String | CtrlC
@@ -1289,8 +1333,9 @@ spec_interruptSignal = do
     -- The reader takes a little and leaves, as head does. The line prints
     -- more than a pipe holds, with a command that writes to standard output
     -- by itself (ls) and with one that goes through the line editor (nid),
-    -- and would go on to create a node.
-    for_ ["ls b", "nid" :: String] \command ->
+    -- and would go on to create a node. The REPL ends the same way, given
+    -- those commands a line each, and says nothing either.
+    for_ ["ls b", "nid" :: String] \command -> for_ [False, True] \inRepl ->
       withEmptyTempGraph \dir -> withSystemTempDirectory "ge-data" \dataHome -> do
         writeChainGraph False dir
         environment <- getEnvironment
@@ -1299,19 +1344,23 @@ spec_interruptSignal = do
         -- never be gone
         setFdOption readFd CloseOnExec True
         writeEnd <- fdToHandle writeFd
-        let line :: String
-            line =
-              intercalate " ; " (replicate 8000 command :: [String]) <> " ; mk zz"
+        let commands = replicate 8000 command <> ["mk zz"] :: [String]
             ge arguments =
               proc "ge" (dir : arguments)
                 & setEnv (geEnvironment dataHome environment)
                 & setStdin nullStream
                 & setStderr byteStringOutput
+            reading
+              | inRepl =
+                  ge []
+                    & setStdin
+                      (byteStringInput (fromString (unlines commands)))
+              | otherwise = ge ["-e", intercalate " ; " commands]
         -- the system nodes, which opening the graph would warn of creating
         withProcessTerm (ge ["-e", "nid"] & setStdout byteStringOutput) waitExitCode
           `shouldReturn` ExitSuccess
         outcome <-
-          withProcessTerm (ge ["-e", line] & setStdout (useHandleClose writeEnd)) \running -> do
+          withProcessTerm (reading & setStdout (useHandleClose writeEnd)) \running -> do
             _ <- fdRead readFd 100
             closeFd readFd
             ended <-
@@ -1321,7 +1370,8 @@ spec_interruptSignal = do
             when (isNothing ended) $
               getPid running >>= traverse_ (Signals.signalProcess Signals.sigKILL)
             pure ended
-        fmap (fmap text) outcome `shouldBe` Just (by Signals.sigPIPE, "")
+        (inRepl, fmap (fmap text) outcome)
+          `shouldBe` (inRepl, Just (by Signals.sigPIPE, ""))
         files <- listDirectory dir
         contents :: ByteString <- concat <$> traverse (readFile . (dir </>)) files
         ("\"zz\"" `isInfixOf` contents) `shouldBe` False
