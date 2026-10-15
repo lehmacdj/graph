@@ -1506,8 +1506,9 @@ each end of the first match to the target with the label `""`).
   (`mk a/(b & c)` with two `a` edges: what is written after the one
   `a` applies to both copies), when the alternative has no path
   without unions, or when the line cannot be typed or is a path that
-  no command runs. A constructed line must pass X and the refusals
-  itself, and is then walked once, within the command's limit, and
+  no command runs. A constructed line is walked once, within the
+  command's limit, which applies the refusals R, M, V and C to it (not
+  X: the size estimate is made only of the path the user wrote), and is
   shown only if it creates exactly the possibility; with
   `--max-repairs N` given, the line gives it too. That check is what
   makes a shown line right, and it is needed: what is written after a
@@ -1625,17 +1626,19 @@ user sees is in [commands.md](commands.md#51-what-a-path-compiles-to)):
 - The notes of an interrupted line (`notingWhatInterruptLeaves` in
   `Error.Warn`) come from the count: `untoldGraphChanges`, and
   `unnamedAtTargetChanges` for the targets of `at`.
-- `Executable.GraphEditor`: `installHandlerUnheld` installs the
-  handlers of the interrupt signal, SIGTERM and SIGHUP so that the
-  runtime does not hold them during a garbage collection (one that fell
-  into a collection while a line was read used to be handled only at
-  the next line); `endingBySignal` ends `ge` at SIGTERM and SIGHUP,
-  within `endingAllowance` (`--test-only-ending-allowance` for the
-  tests), after `noMoreGraphChanges` has waited for the change in
+- `Effectful.Readline` (in `effectful-readline/`):
+  `installHandlerUnheld` installs the handlers of the interrupt signal,
+  SIGTERM and SIGHUP so that the runtime does not hold them during a
+  garbage collection (one that fell into a collection while a line was
+  read used to be handled only at the next line); `OutputFailed` is
+  output of the line editor that cannot be written, and `SessionEnded`
+  a session of the line editor that has ended.
+- `Executable.GraphEditor`: `endingBySignal` ends `ge` at SIGTERM and
+  SIGHUP, within `endingAllowance` (`--test-only-ending-allowance` for
+  the tests), after `noMoreGraphChanges` has waited for the change in
   progress; `startedIgnoring` asks, without changing anything, whether
-  a signal was ignored when `ge` started (`nohup`); `OutputFailed` and
-  `sayingThatOutputFailed` report output that cannot be written, and
-  `SessionEnded` a session of the line editor that has ended.
+  a signal was ignored when `ge` started (`nohup`);
+  `sayingThatOutputFailed` reports output that cannot be written.
 - `System.ControllingTerminal` (`awaitTerminalOutput`,
   `discardTerminalOutput`): what `ge` does when it leads its session
   and ends.

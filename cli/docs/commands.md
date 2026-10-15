@@ -884,8 +884,10 @@ distance 3.
    follow, in a circle, there is no such order, and `mk` refuses the
    path (`CircularSuppliers`, 4.8): `mk a & ~a`, in which the `a` could
    follow the edge the `~a` creates and the other way round. Steps that
-   ask for the same edge (one step each, the same label, direction and
-   distance, into a node that is not written) are no circle: they are
+   ask for the same edge (one step each, the same label, direction,
+   distance and test, such as `!{…}`, into a node that is not written:
+   `mk a/!{@1} & a/!{@1}` is one request, `mk a/!{@1} & a` is refused)
+   are no circle: they are
    taken together, and `mk a & a` creates one `a` edge.
 8. A `*` or regex step follows any edge whose label matches and that
    counts by rule 6, existing or created (`mk * & a` creates only
@@ -1996,9 +1998,9 @@ failures, nor is an `ls` that finds no targets.
   the `would delete at path` lines of a change first, then its
   `would write` lines, then its `delete data for` lines; `mk` then says
   `would create N new nodes and M new edges` where it would say
-  `created …`. `fix --dry-run`, and `fix` under `ge --dry-run`, list
-  the repairs and then `Would write node: …` lines, which name the
-  node and not its file. (One command does write in a dry run, which
+  `created …`. `fix --dry-run` lists the repairs and nothing more;
+  `fix` under `ge --dry-run` lists them and then `Would write node: …`
+  lines, which name the node and not its file. (One command does write in a dry run, which
   is a bug: `vi`, section 8.) Since the node files are not written, a
   later command of the line sees the graph as it was and not as the
   earlier ones would have left it, so a line in which one command

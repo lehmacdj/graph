@@ -1690,11 +1690,9 @@ holds for `++`.
 `p ++ p` is `p`, whatever `p` is: the side is chosen once for the whole
 path, and either choice is `p`. (Only a warning tells the two apart:
 where `p` has an `@` that is warned about, 3.2, the warning of
-`p ++ p` adds "The same holds for one more @ in this path", counting
-the `@` of each side; and since the group of the conjunct then stands
-in a side of the union, not in one chain with the group that copies
-it, the warning says only that an `@` pins in its own chain, where
-that of `p` says what to write, 3.2.)
+`p ++ p` is the warning of `p`, with what to write, and adds "The
+same holds for one more @ in this path", counting the `@` of each
+side.)
 
 `p | p` is not `p` in general, since every written side is a side of
 its own (2.9). `p | p` finds everything `p` finds (4.4) and may find
