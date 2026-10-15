@@ -20,6 +20,8 @@ data History = History
   }
   deriving (Show, Eq, Ord, Generic)
 
+instance NFData History
+
 singletonHistory :: NID -> History
 singletonHistory node = History [] node []
 
@@ -30,19 +32,34 @@ pushHistory n (History past now (next : farFuture))
   | n == next = History (now : past) next farFuture
   | otherwise = History (now : past) n []
 
-goForward :: History -> History
-goForward (History past now []) = History past now []
-goForward (History past now (next : future)) = History (now : past) next future
+-- | Up to this many steps forward (towards the end of the future): each
+-- step moves one node, so the work is bounded by the length of the
+-- future, not by the count.
+goForward :: Int -> History -> History
+goForward k history@(History past now future)
+  | k <= 0 = history
+  | next : farFuture <- future =
+      goForward (k - 1) (History (now : past) next farFuture)
+  | otherwise = history
 
-goBack :: History -> History
-goBack (History [] now future) = History [] now future
-goBack (History (prev : past) now future) = History past prev (now : future)
+-- | Up to this many steps back (towards the start of the past), bounded
+-- like 'goForward'.
+goBack :: Int -> History -> History
+goBack k history@(History past now future)
+  | k <= 0 = history
+  | prev : farPast <- past =
+      goBack (k - 1) (History farPast prev (now : future))
+  | otherwise = history
 
 pickNow :: History -> (NID, History)
 pickNow history = (history ^. #now, history)
 
+-- | The history @howFar@ steps back (forward when negative), and the node
+-- it is then at. A count beyond either end stops at that end; the work is
+-- bounded by the history, whatever the count (also 'minBound', whose
+-- negation is itself).
 backInTime :: Int -> History -> (NID, History)
 backInTime howFar history
-  | howFar >= 0 = pickNow $ applyN howFar goBack history
-  | howFar < 0 = pickNow $ applyN (negate howFar) goForward history
-  | otherwise = error "unreachable: exhaustive guards"
+  | howFar >= 0 = pickNow $ goBack howFar history
+  -- one step, then the rest: negating 'minBound' would overflow
+  | otherwise = pickNow . goForward (negate (howFar + 1)) $ goForward 1 history
