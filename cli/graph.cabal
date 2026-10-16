@@ -301,7 +301,7 @@ library
     , xml-conduit
   default-language: Haskell2010
   if os(darwin)
-    ghc-options: -fobject-code
+    ghc-options: -fobject-code -framework Foundation
     extra-libraries:
         objc
     frameworks:
@@ -462,7 +462,7 @@ executable ge
     , xml-conduit
   default-language: Haskell2010
   if os(darwin)
-    ghc-options: -fobject-code
+    ghc-options: -fobject-code -framework Foundation
     extra-libraries:
         objc
     frameworks:
@@ -617,7 +617,7 @@ test-suite graph-test
     , xml-conduit
   default-language: Haskell2010
   if os(darwin)
-    ghc-options: -fobject-code
+    ghc-options: -fobject-code -framework Foundation
     extra-libraries:
         objc
     frameworks:
