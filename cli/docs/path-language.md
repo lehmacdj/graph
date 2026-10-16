@@ -2245,6 +2245,22 @@ refused where the other is not, below; and this says nothing about
 `mk`). A whole query is sealed already (2.10), so `ls (q & q)` finds
 what `ls q` finds for every `q`.
 
+`q` is relative here because, for a `q` that is not, the seal changes
+what `q` means: after `@/`, an `@N` that starts a walk of `q` is a test
+that the current node is `@N` (2.10). `@1/a & @2/b` starts its walks at
+`@1` and at `@2`; `@/(@1/a & @2/b)/@` asks for a current node that is
+both, and finds nothing wherever it is run. The sealed forms of such a
+`q` do find the same as each other (the law tests check that as well),
+but that says nothing about `q` itself.
+
+```ge
+graph: 1 -a-> 3, 2 -b-> 3
+$ ls @1/a & @2/b
+a @3
+$ ls @/(@1/a & @2/b)/@
+no targets
+```
+
 Without the seal the two can differ when `q` has a join of its own
 chain (an `@` or `!{…}` there, or in the top chain of a side of a
 union there) and a group stands next to it on either side:
