@@ -164,6 +164,7 @@ library
       Utils.Effectful
       Utils.Parsing
       Utils.Parsing.Common
+      Utils.Parsing.Problems
       Utils.Prettyprinter
       Utils.Singleton
       Utils.Testing
