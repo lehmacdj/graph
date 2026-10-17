@@ -7,9 +7,9 @@
 -- the graph it has open ("Executable.GraphEditor.Completion"), and
 -- 'withoutGraph' has none of them, for a caller that has no graph. What
 -- needs no graph is offered either way: the names of commands
--- ('commandNames'), the names after @%@ ('percentNames'), the @/@ that is all that can follow a term that is not
--- a label, and nothing for a path that no command runs or that has a
--- directive in it.
+-- ('commandNames'), the names after @%@ ('percentNames'), the @/@ that is
+-- all that can follow a term that is not a label, and nothing for a path
+-- that no command runs or that has a directive in it.
 module Models.Completion
   ( Completions (..),
     Candidate (..),
@@ -33,7 +33,6 @@ import Models.PathPattern.Compile (checkCopies)
 import MyPrelude
 import Text.Megaparsec (bundleErrors, errorOffset)
 import Utils.Base62 (isBase62Char)
-import Utils.Parsing (isIdentChar)
 import Utils.Testing
 
 -- | What can replace the word before the cursor.
@@ -159,17 +158,22 @@ commandNameBefore before =
     (reversedWord, reversedStart) = break endsWord (reverse (unpack before))
     endsWord c = isSpace c || c `elem` (";{}" :: String)
 
--- | The letters after a @%@ at the end of the text, when the @%@ can start
--- a term: it does not continue a label or a quote.
+-- | The letters after a @%@ at the end of the text, when the @%@ starts a
+-- term: where a label typed instead of it would be a label of its own, as
+-- path completion reads the text ('pathSiteBefore'). So not in a label, a
+-- quote, a regex or a URL, nor in a path with a directive (such as in a
+-- directive's arguments).
 percentNameBefore :: Text -> Maybe Text
 percentNameBefore before =
   case span isAlpha (reverse (unpack before)) of
-    (reversedName, '%' : rest)
-      | maybe True startsTerm (headMay rest) ->
+    (reversedName, '%' : reversedStart)
+      | startsTerm (pack (reverse reversedStart)) ->
           Just (pack (reverse reversedName))
     _ -> Nothing
   where
-    startsTerm c = not (isIdentChar c || c `elem` ("\"'%" :: String))
+    startsTerm start
+      | LabelAfter _ "x" <- pathSiteBefore (start <> "x") = True
+      | otherwise = False
 
 -- | What the end of the path before the cursor is, for completion.
 data PathSite
@@ -307,6 +311,14 @@ spec_complete = do
       let offered before = map (.text) (completeWithoutGraph before).candidates
       offered "ls a%l" `shouldBe` []
       offered "ls \"%l" `shouldBe` []
+      offered "ls \"foo %l" `shouldBe` []
+    it "offers no name in a regex or a URL" do
+      let offered before = map (.text) (completeWithoutGraph before).candidates
+      offered "ls !{regex %l" `shouldBe` []
+      offered "ls https://example.com/?q=%l" `shouldBe` []
+    it "offers names in a path after another argument" $
+      completeWithoutGraph "mv a %la"
+        `shouldBe` Completions 3 [Candidate "%last" False]
   describe "ids" do
     -- 000000000001, 000000000002 and 000000001000
     let n1 = smallNID 1

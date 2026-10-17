@@ -252,7 +252,10 @@ Completion (`Models.Completion`):
     table of each command's names and the parser of what follows them,
     which `pCommandTerm` is made of.
   - the names after a `%` that starts a term (`%last`, `%never`,
-    `%history(`, `%targets(`, `%override(`): `Models.Path.Parse.
+    `%history(`, `%targets(`, `%override(`): where a label typed instead
+    would be a label of its own, as path completion reads the text. So
+    none in a label, a quote, a regex, a URL or a path with a directive
+    (a directive's arguments included). The names are `Models.Path.Parse.
     percentNames`, from `namedDirectives`, the table that `pDirective`
     parses them with, and `%never`. A directive that takes arguments comes
     with its `(`. Not finished: a `/` or the arguments follow. `%{`
