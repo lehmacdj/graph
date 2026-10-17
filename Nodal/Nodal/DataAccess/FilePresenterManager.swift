@@ -49,6 +49,12 @@ actor FilePresenterManager {
     }
 }
 
+extension FilePresenterManager {
+    /// The app-wide manager. The environment default refers to this instance
+    /// so every access sees the same manager instead of a fresh one.
+    static let shared = FilePresenterManager()
+}
+
 extension EnvironmentValues {
-    @Entry var filePresenterManager = FilePresenterManager()
+    @Entry var filePresenterManager = FilePresenterManager.shared
 }
