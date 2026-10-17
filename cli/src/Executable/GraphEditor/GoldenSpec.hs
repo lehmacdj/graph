@@ -248,11 +248,14 @@ runGraphEditor test@GoldenTest {..} =
 
 -- | The environment that a test runs @ge@ in, given the one of the tests: a
 -- data directory of its own, and an editor that does nothing and succeeds
--- instead of whatever the user has (@vi@ would start it).
+-- instead of whatever the user has (@vi@ would start it; @VISUAL@, which
+-- comes first, is left out).
 geEnvironment :: FilePath -> [(String, String)] -> [(String, String)]
 geEnvironment dataHome environment =
   [("XDG_DATA_HOME", dataHome), ("EDITOR", "true")]
-    <> filter ((`notElem` ["XDG_DATA_HOME", "EDITOR"]) . fst) environment
+    <> filter ((`notElem` set) . fst) environment
+  where
+    set = ["XDG_DATA_HOME", "EDITOR", "VISUAL"]
 
 -- | 'readProcess' for a run of @ge@: its exit code, stdout and stderr. @ge@
 -- runs in a process group of its own, and when this is stopped from outside
@@ -1093,11 +1096,12 @@ spec_editor :: Spec
 spec_editor = do
   -- each run is given a minute: an editor that waits for input would
   -- otherwise hold the tests forever
-  let editing editor command = withTempGraph Nothing \directory -> do
+  let editing editor = editingWith [("EDITOR", editor)]
+      editingWith variables command = withTempGraph Nothing \directory -> do
         writeBaseGraph directory "0 -a-> 2\n"
         ran <-
           timeout 60000000 $
-            runGeWith [("EDITOR", editor)] directory ["-e", command] ""
+            runGeWith variables directory ["-e", command] ""
         dataFile <-
           (Just <$> B.readFile (directory </> "000000000002.data"))
             `catch` \(_ :: IOError) -> pure Nothing
@@ -1119,6 +1123,13 @@ spec_editor = do
             <> " (editor-failed: ExitFailure 1); what it saved to the node's"
             <> " data before that stays\n"
         )
+  it "runs VISUAL rather than EDITOR when both are set" do
+    (ran, dataFile) <-
+      editingWith
+        [("VISUAL", "sh -c 'echo visual > $0'"), ("EDITOR", "false")]
+        "at @000000000002 vi"
+    ran `shouldBe` Just (0, "", "")
+    dataFile `shouldBe` Just "visual\n"
   it "says readably that there is no such editor" do
     (ran, dataFile) <- editing "no-such-editor-for-ge" "at @000000000002 vi"
     fmap (\(code, _, err) -> (code, "could not be started" `isInfixOf` decodeUtf8 err)) ran

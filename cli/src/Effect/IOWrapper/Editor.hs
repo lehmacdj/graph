@@ -3,6 +3,7 @@
 module Effect.IOWrapper.Editor where
 
 import Control.Exception qualified as E
+import Control.Monad (mfilter)
 import Data.Char (isSpace)
 import Error.UserError
 import MyPrelude
@@ -20,27 +21,30 @@ makeEffect ''Editor
 -- | Makes the assumption that the graph is implemented using the filesystem
 -- structure with nid.json/nid.data for each node
 --
--- The editor is @EDITOR@ (@vim@ when it is not set, or empty), run as a
--- shell runs it ('editorProcess'). One that fails is a 'UserError' that
--- says so.
+-- The editor is @VISUAL@, or @EDITOR@ (@vim@ when neither is set, or both
+-- are empty), as for the line's Ctrl-G, run as a shell runs it
+-- ('editorProcess'). One that fails is a 'UserError' that says so.
 interpretEditorAsIOVim ::
   (Members [IOE, Error UserError] effs) =>
   -- | interprets effect
   Eff (Editor : effs) ~> Eff effs
 interpretEditorAsIOVim = interpret \_ -> \case
   InvokeEditor paths -> do
+    visual <- liftIO (lookupEnv "VISUAL")
     editor <- liftIO (lookupEnv "EDITOR")
-    let (command, source) = case editor of
-          Just e | not (all isSpace e) -> (e, "the variable EDITOR")
-          _ -> ("vim", "EDITOR is not set")
+    let set = mfilter (not . all isSpace)
+        (command, source) = case (set visual, set editor) of
+          (Just e, _) -> (e, "the variable VISUAL")
+          (Nothing, Just e) -> (e, "the variable EDITOR")
+          (Nothing, Nothing) -> ("vim", "neither VISUAL nor EDITOR is set")
     liftIO (E.try (runToEnd stopProcess (editorProcess command paths)))
       >>= either (throwError . OtherError . editorFailed command source) pure
 
--- | The editor command (a value of @EDITOR@) run on the files the way a shell
--- runs @$EDITOR file…@ in @git@ and others: by @sh@, with the files as its
--- arguments, so that the value can hold arguments, quotes and
--- redirections (@code --wait@, @sh -c 'echo hi > $0'@), and the names of
--- the files are not read by the shell.
+-- | The editor command (a value of @VISUAL@ or @EDITOR@) run on the files
+-- the way a shell runs @$EDITOR file…@ in @git@ and others: by @sh@, with
+-- the files as its arguments, so that the value can hold arguments, quotes
+-- and redirections (@code --wait@, @sh -c 'echo hi > $0'@), and the names
+-- of the files are not read by the shell.
 --
 -- Run as a single program it was looked for by the whole value, which with
 -- a space was never found, and then vim ran instead: a @ge -e@ whose input

@@ -73,9 +73,10 @@ not undone (section 6).
 `back n`, `vi`, `si` (`show-image`), `fsck`, `fix` and
 `fix --dry-run`, `:i dir` (`:import`), `:d` (`:debug`)) take no path.
 
-`vi` edits the current node's data with the editor that `$EDITOR` names,
-run the way a shell runs it, so `$EDITOR` may hold arguments and quotes
-(`EDITOR="code --wait"`). An editor that cannot be started, or that
+`vi` edits the current node's data with the editor that `$VISUAL`, or
+`$EDITOR`, names (`vim` when neither is set), as Ctrl-G at the prompt
+does, run the way a shell runs it, so the variable may hold arguments and
+quotes (`EDITOR="code --wait"`). An editor that cannot be started, or that
 fails, is reported with its exit status (`editor-failed`), and what it
 saved to the data before that stays. `vi` at a current node whose file
 is gone is refused, as `cd` and `text` are, and starts no editor.

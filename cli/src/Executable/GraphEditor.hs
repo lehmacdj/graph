@@ -1240,7 +1240,8 @@ spec_interruptSignal = do
           act own \(arguments, environment) ->
             ( "ge",
               arguments,
-              ("EDITOR", editor) : filter ((/= "EDITOR") . fst) environment
+              ("EDITOR", editor)
+                : filter ((`notElem` ["EDITOR", "VISUAL"]) . fst) environment
             )
   it "ends by the signal and prints nothing" do
     Just (exitCode, out, err) <-
