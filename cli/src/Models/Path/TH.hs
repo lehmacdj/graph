@@ -6,7 +6,6 @@ import Language.Haskell.TH.Quote
 import Models.Path.Parse
 import Models.Path.Simple
 import MyPrelude
-import Utils.Parsing (whitespace)
 import Utils.Parsing.Common
 
 path :: QuasiQuoter
@@ -19,7 +18,7 @@ path =
     }
 
 pathExp :: String -> Q Exp
-pathExp s = case runParser (whitespace *> pPath <* eof) "" (pack s) of
+pathExp s = case parsePath (pack s) of
   Left err ->
     fail $ "Parse error in path quasi-quoter: " ++ errorBundlePretty err
   Right result -> handleDirectivesQ rejectPlus interpretSplice result

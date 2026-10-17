@@ -183,6 +183,11 @@ pPath' pNID = parsedParserFromPartialParser (pPartialPath' (Right <$> pNID))
 pPath :: Parser ParsedPath
 pPath = parsedParserFromPartialParser pPartialPath
 
+-- | A whole path, with its directives and with space around it: what the
+-- path quasiquoter reads, and what a caller that only has a path parses.
+parsePath :: Text -> Either ParseErrorBundle' ParsedPath
+parsePath = runParser (whitespace *> pPath <* eof) ""
+
 test_pPath :: TestTree
 test_pPath =
   testGroup

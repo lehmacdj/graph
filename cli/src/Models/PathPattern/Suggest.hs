@@ -35,7 +35,7 @@ import Data.Map.Strict qualified as Map
 import Graph.SystemNodes (tagsNID)
 import Models.Graph (Graph)
 import Models.NID
-import Models.Path.Parse (pPath)
+import Models.Path.Parse (parsePath)
 import Models.Path.Simple
 import Models.Path.TH (path)
 import Models.PathPattern
@@ -43,8 +43,7 @@ import Models.PathPattern.Compile (checkCopies, compileAlternatives, compilePath
 import Models.PathPattern.Residuate
 import Models.PathPattern.TestCorpus
 import MyPrelude
-import Utils.Parsing (isIdentChar, whitespace)
-import Utils.Parsing.Common (eof, runParser)
+import Utils.Parsing (isIdentChar)
 import Utils.Testing
 
 -- | What to add after a step: @/\@N@ or @/!{…}@.
@@ -392,7 +391,7 @@ renderSurfacePath = go 0
 -- | Parse a path without directives or @+@ (whose meaning depends on the
 -- command).
 parseSurfacePath :: Text -> Maybe Path
-parseSurfacePath t = case runParser (whitespace *> pPath <* eof) "" t of
+parseSurfacePath t = case parsePath t of
   Left _ -> Nothing
   Right p -> handleDirectivesWith Nothing (\_ _ -> Nothing) p
 
