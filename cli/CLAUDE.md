@@ -33,22 +33,3 @@ the Command or Path languages.
 
 - **[Testing Best Practices](docs/Testing.md)** - Guidelines for writing tests, including in-file tests, test utilities, golden tests, and avoiding cyclic imports.
 
-## Quick Reference
-
-### Imports
-Always `import MyPrelude` in modules (never `Prelude` or `ClassyPrelude` directly).
-
-### Collections
-Prefer regular `Set`/`Map` over ordered `OSet`/`OMap` unless order is semantically important.
-
-### Testing
-- Prefer in-file tests placed directly alongside implementation
-- Use `Utils.Testing.External` in MyPrelude modules to avoid cyclic imports
-- Use `Utils.Testing` in application code
-- Create helper functions for readable tests (e.g., `parsesTo`, `formatsTo`)
-
-### Effects
-MyPrelude re-exports effectful with utilities for early returns and error
-handling. The `Input` effect lives in `Effect.Input` (not re-exported from
-MyPrelude); dynamically dispatched `State`/`Reader` come from
-`Effectful.State.Dynamic`/`Effectful.Reader.Dynamic`.
