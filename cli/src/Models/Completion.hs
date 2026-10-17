@@ -237,6 +237,16 @@ spec_complete = do
     offers "mv a q" 1 ["qux"]
     offers "mv a x" 1 []
     offers "ls x & ba" 2 ["bar", "baz"]
+    -- a space ends the argument before it: a new path starts
+    offers "mv a " 0 ["bar", "baz", "qux"]
+    offers "mv q " 0 ["bar", "baz", "qux"]
+    offers "mv a  " 0 ["bar", "baz", "qux"]
+    offers "mv a\t" 0 ["bar", "baz", "qux"]
+    offers "mv a b " 0 ["bar", "baz", "qux"]
+    offers "ls  " 0 ["bar", "baz", "qux"]
+    -- but space can follow a /: the path goes on
+    offers "mv a/ " 0 ["c"]
+    offers "mv a / c" 1 ["c"]
     it "looks up the path before the label" $
       snd (completing [] "ls a/c")
         `shouldBe` ["labels " <> tshow (Literal "a" :: Path)]

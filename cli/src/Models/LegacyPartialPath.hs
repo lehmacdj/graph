@@ -54,13 +54,14 @@ pLegacyPartialPath = do
 
 pLastLegacyPartialPath :: Parser LegacyPartialPath
 pLastLegacyPartialPath =
-  try (c *> pLegacyPartialPath <* eof)
-    <|> (c *> wholeArgument *> pLegacyPartialPath <* eof)
+  c *> many (try wholeArgument) *> pLegacyPartialPath <* eof
   where
     -- a path that is an argument before the one that is completed, which
-    -- a space ends; a path that the cursor is in is no such argument (with
-    -- a directive in it the path can't be completed, and is not read as an
-    -- argument followed by an empty one either)
+    -- a space ends, so that after @mv a @ a new path starts; a path that
+    -- the cursor is in is no such argument (with a directive in it the
+    -- path can't be completed, and is not read as an argument followed by
+    -- an empty one either). The path is read as far as it goes, so the
+    -- space after a @/@ (@mv a/ @) is in the path, as commands read it
     wholeArgument = do
       (text, _) <- match pPath
       guard (maybe False isSpace (lastMay text))
@@ -112,6 +113,14 @@ test_getLegacyPartialPath =
     [ "ls a/b" `reads'` Just (LegacyPartialPath [Literal "a"] "b"),
       "mv a b/c" `reads'` Just (LegacyPartialPath [Literal "b"] "c"),
       "mv %last/a b/c" `reads'` Just (LegacyPartialPath [Literal "b"] "c"),
+      -- a space after a whole path starts the next one
+      "mv a " `reads'` Just (LegacyPartialPath [] ""),
+      "mv a b " `reads'` Just (LegacyPartialPath [] ""),
+      "mv a\t\t" `reads'` Just (LegacyPartialPath [] ""),
+      "ls %last/a " `reads'` Just (LegacyPartialPath [] ""),
+      -- but not one after a /, which the path goes on after
+      "mv a/ " `reads'` Just (LegacyPartialPath [Literal "a"] ""),
+      "mv a / b" `reads'` Just (LegacyPartialPath [Literal "a"] "b"),
       -- a path with a directive gets nothing
       "ls %last/a" `reads'` Nothing,
       "ls %last/" `reads'` Nothing,
