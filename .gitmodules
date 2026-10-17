@@ -1,0 +1,8 @@
+[submodule "cli/haskeline"]
+	path = cli/haskeline
+	url = https://github.com/lehmacdj/haskeline.git
+	branch = graph
+[submodule "cli/prettyprinter"]
+	path = cli/prettyprinter
+	url = https://github.com/lehmacdj/prettyprinter.git
+	branch = master
