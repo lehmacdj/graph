@@ -42,6 +42,7 @@ import System.Posix.Signals (sigKILL, signalProcessGroup)
 import System.Process.Typed
 import Test.Tasty.Golden
 import Utils.Testing
+import Utils.Testing.TempGraph
 
 data GoldenTest = GoldenTest
   { -- | An inline base graph, written as lines @0 -a-> 1@ (edges between

@@ -38,6 +38,7 @@ import System.Directory
     setPermissions,
   )
 import Utils.Testing
+import Utils.Testing.TempGraph
 
 -- | The files of a graph with up to four pieces of damage of any kind, one
 -- done after the other

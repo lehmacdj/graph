@@ -1,7 +1,5 @@
 module Utils.Testing
   ( module X,
-    withTempGraph,
-    withEmptyTempGraph,
     representedByJson,
     runTests,
     runSpec,
@@ -22,7 +20,6 @@ module Utils.Testing
   )
 where
 
-import DAL.Serialization (initializeGraph)
 import Data.Aeson
 import GHC.Stack (CallStack, SrcLoc (..), callStack, getCallStack)
 import Models.Connect
@@ -32,39 +29,10 @@ import Models.NID
 import Models.NID as X (smallNID)
 import Models.Node (Node, emptyNode)
 import MyPrelude hiding (assert)
-import System.Directory (copyFile)
-import System.Directory.Tree (AnchoredDirTree ((:/)))
-import System.Directory.Tree qualified as DT
 import Test.Tasty.Golden (goldenVsStringDiff)
 import Test.Tasty.Hspec (testSpec)
 import Utils.Parsing.Common
 import Utils.Testing.External as X
-
--- | initializes a graph that is either empty, or based on a template graph
--- at the specified location
-withTempGraph ::
-  -- | Template graph (or Nothing for an empty graph)
-  Maybe FilePath ->
-  (FilePath -> IO a) ->
-  IO a
-withTempGraph m_template action = do
-  withSystemTempDirectory "test.g" $ \tmpDir -> do
-    case m_template of
-      Just template -> do
-        _ :/ readTree <- DT.build template
-        whenNonNull (DT.failures readTree) \failures ->
-          sayErr $ "reading template failed with: " <> tshow failures
-        -- we need to overwrite the basename to @.@ so that we don't have an
-        -- excess directory layer in the output
-        let treeToWrite = tmpDir :/ (readTree & DT._name .~ ".")
-        _ :/ writtenTree <- DT.writeDirectoryWith (flip copyFile) treeToWrite
-        whenNonNull (DT.failures writtenTree) \failures ->
-          sayErr $ "copying template failed with: " <> tshow failures
-      Nothing -> initializeGraph tmpDir
-    action tmpDir
-
-withEmptyTempGraph :: (FilePath -> IO a) -> IO a
-withEmptyTempGraph = withTempGraph Nothing
 
 representedByJson ::
   (ToJSON a, FromJSON a, Eq a, Show a) => a -> LByteString -> TestTree

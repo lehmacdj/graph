@@ -27,6 +27,7 @@ import System.Random (mkStdGen)
 import Utils.Base62 (isBase62Char)
 import Utils.Parsing
 import Utils.Testing
+import Utils.Testing.TempGraph
 
 commands :: [String]
 commands = []

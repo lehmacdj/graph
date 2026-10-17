@@ -24,6 +24,7 @@ import System.Directory
     setModificationTime,
   )
 import Utils.Testing
+import Utils.Testing.TempGraph
 
 -- | The files of an undamaged graph, in which the node 5 is left out so that
 -- there is a node without a node file that a data file can be for

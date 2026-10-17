@@ -39,6 +39,7 @@ import System.Directory
     setPermissions,
   )
 import Utils.Testing
+import Utils.Testing.TempGraph
 
 n1, n2 :: NID
 n1 = smallNID 1

@@ -106,6 +106,7 @@ import System.Process.Typed
   )
 import System.Random (initStdGen, mkStdGen)
 import Utils.Testing
+import Utils.Testing.TempGraph
 
 ioExceptionHandler :: IOError -> IO (Maybe a)
 ioExceptionHandler _ = pure Nothing

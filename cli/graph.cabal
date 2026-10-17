@@ -161,6 +161,7 @@ library
       Utils.Testing
       Utils.Testing.External
       Utils.Testing.GoldenSpec
+      Utils.Testing.TempGraph
   other-modules:
       Paths_graph
   hs-source-dirs:
