@@ -5,15 +5,15 @@
 
 packages:
 - completed:
-    commit: 6d52e116f5fc677b0146e5f8786310f7bef6a572
+    commit: e5ac6aee9dce1b6cac79532e5cefefecef182d16
     git: https://github.com/lehmacdj/haskeline.git
     name: haskeline
     pantry-tree:
-      sha256: 187e2964d5f21261f7d31ca53235b0c33cdd044144bb4a3e98e66e46d8a60834
-      size: 4384
+      sha256: d96ee95b9fe8a96f251f1c0c499d4ee715301e4523dc73d5d36ad08aa35d3e2a
+      size: 4575
     version: 0.8.2.1.1
   original:
-    commit: 6d52e116f5fc677b0146e5f8786310f7bef6a572
+    commit: e5ac6aee9dce1b6cac79532e5cefefecef182d16
     git: https://github.com/lehmacdj/haskeline.git
 - completed:
     hackage: inline-c-objc-0.1.0.0@sha256:b08f875fc26c6a676eaca1e7de8649c91631b683d7a74bfb0ed09b649358133c,1337
