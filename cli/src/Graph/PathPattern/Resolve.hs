@@ -46,7 +46,7 @@ resolveQuery ::
   Eff r ResolvedPath
 resolveQuery cur q =
   resolveQueryWith getNodeMetadata cur q
-    & cachingReadingInState
+    & cachingReadingInState @Text
     & runStateLocal emptyGraph
     & runStateLocal mempty
     & fmap \((resolutions, graph), nonexistentNodes) ->

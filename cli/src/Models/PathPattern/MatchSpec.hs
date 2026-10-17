@@ -62,7 +62,7 @@ bruteForce g cur p =
 resolveIn :: Graph Text () -> PathQuery -> ResolvedPath
 resolveIn g q =
   resolveQuery corpusCurrent q
-    & runInMemoryGraphMetadataEditing
+    & runInMemoryGraphMetadataEditing @Text
     & evalStateLocal g
     & runPureEff
 

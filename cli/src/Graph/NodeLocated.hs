@@ -28,7 +28,7 @@ changeLocation = send . ChangeLocation
 runLocableHistoryState ::
   (State History :> effs) =>
   Eff (GetLocation : SetLocation : effs) ~> Eff effs
-runLocableHistoryState = subsumeReaderState (view #now) >>> runSetLocationHistoryState
+runLocableHistoryState = subsumeReaderState @History (view #now) >>> runSetLocationHistoryState
 
 runSetLocationHistoryState ::
   (State History :> r) => Eff (SetLocation : r) ~> Eff r

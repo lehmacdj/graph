@@ -26,7 +26,7 @@ spec_cachingReadingInMemory = do
         _ -> error "the test only reads nodes"
       reading :: [NID] -> [Maybe (Node Text ())]
       reading order =
-        runPureEff . fromFiles . cachingReadingInMemory $
+        runPureEff . fromFiles . cachingReadingInMemory @Text $
           traverse getNodeMetadata order
   it "answers as the files say after reading the other node of a damaged edge" do
     -- storing the node 0 used to take the edge out of what had been read

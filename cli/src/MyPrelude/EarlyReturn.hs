@@ -1,3 +1,5 @@
+{-# LANGUAGE AllowAmbiguousTypes #-}
+
 module MyPrelude.EarlyReturn
   ( EarlyReturn (..),
     returnEarly,
@@ -45,18 +47,20 @@ unwrapReturningDefaultM ::
 unwrapReturningDefaultM def = unwrapDefaultingM (returnEarly def)
 
 unwrap ::
+  forall m r a.
   (Monoid m) =>
   (EarlyReturn m :> r) =>
   Maybe a ->
   Eff r a
-unwrap = unwrapReturningDefault mempty
+unwrap = unwrapReturningDefault @m mempty
 
 unwrapM ::
+  forall m r a.
   (Monoid m) =>
   (EarlyReturn m :> r) =>
   Eff r (Maybe a) ->
   Eff r a
-unwrapM = unwrapReturningDefaultM mempty
+unwrapM = unwrapReturningDefaultM @m mempty
 
 newtype EarlyReturnResult result = EarlyReturnResult {result :: result}
   deriving stock (Show, Eq, Ord, Generic)

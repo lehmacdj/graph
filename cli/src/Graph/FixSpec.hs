@@ -465,7 +465,7 @@ spec_fix = do
             . runErrorNoCallStack @UserError
             . runRawGraphWithPath dir
             . interpret (\_ (Echo _) -> pure ())
-            . interpret (\_ (Warn e) -> modifyIORef warned (show @UserError e :))
+            . interpret @(Warn UserError) (\_ (Warn e) -> modifyIORef warned (show @UserError e :))
             . runGraphMetadataFilesystemOperationsIO True
             . interpose @GraphMetadataFilesystemOperations
               ( \_ -> \case
@@ -910,7 +910,7 @@ spec_fix = do
       kept <- filter ("000000000003.json." `isPrefixOf`) . keys <$> directoryContents dir
       kept
         `shouldBe` ["000000000003.json.unparsable", "000000000003.json.unparsable-2"]
-      runOnDisk dir (deleteNode n3)
+      runOnDisk dir (deleteNode @Text n3)
       now <- directoryContents dir
       filter ("000000000003.json" `isPrefixOf`) (keys now) `shouldBe` []
       (printed, third) <- runFix False ApplyRepairs dir
@@ -926,7 +926,7 @@ spec_fix = do
       -- and these are no kept files
       B.writeFile (dir </> "000000000004.json.unparsable.txt") "notes"
       createDirectory (dir </> "000000000004.json.unparsable-old")
-      runOnDisk dir (deleteNode n4)
+      runOnDisk dir (deleteNode @Text n4)
       let leftOver =
             "000000000004.json.unparsable-3 is left over from a deleted node:"
               <> " there is no 000000000004.json any more, of which fix had"
@@ -963,7 +963,7 @@ spec_fix = do
       -- nor a file with a number that fix doesn't give
       B.writeFile (kept "-1") "of the user"
       -- deleting the node removes its copies up to what is none
-      runOnDisk dir (deleteNode n4)
+      runOnDisk dir (deleteNode @Text n4)
       doesFileExist (kept "") `shouldReturn` False
       scan <- scanned dir
       toList (scanDamage scan.files)

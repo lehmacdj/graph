@@ -138,7 +138,7 @@ filePathFromNSURL url = do
 
 peekNSError :: Ptr NSError -> IO (Maybe NSErrorException)
 peekNSError nsError = withEarlyReturnIO do
-  when (nsError == nullPtr) $ returnEarly Nothing
+  when (nsError == nullPtr) $ returnEarly @(Maybe NSErrorException) Nothing
   domain <- liftIO $ p_NSError_domain nsError >>= packNSString
   code <- liftIO $ p_NSError_code nsError
   description <- liftIO $ p_NSError_description nsError >>= packNSString

@@ -102,9 +102,9 @@ spec_runGraphEditingTransactionally = do
   it "writes metadata and data when the action finishes" do
     withEmptyTempGraph \dir -> do
       _ <- runOnDisk dir do
-        insertEdge (Edge n1 "x" n2)
+        insertEdge @Text (Edge n1 "x" n2)
         writeRawData n2 "hello"
-      result <- runOnDisk dir $ (,) <$> getNodeMetadata n1 <*> getRawData n2
+      result <- runOnDisk dir $ (,) <$> getNodeMetadata @Text n1 <*> getRawData n2
       fmap (.outgoing) (fst result)
         `shouldBe` Just (singletonSet (Connect "x" n2))
       snd result `shouldBe` Just "hello"
@@ -112,58 +112,58 @@ spec_runGraphEditingTransactionally = do
     withEmptyTempGraph \dir -> do
       result <- runOnDisk dir do
         writeRawData n1 "pending"
-        touchNode n2
-        (,) <$> getRawData n1 <*> listNodes
+        touchNode @Text n2
+        (,) <$> getRawData n1 <*> listNodes @Text
       result `shouldBe` (Just "pending", setFromList [nilNID, n2])
   it "deletes a node's data with the node" do
     withEmptyTempGraph \dir -> do
       _ <- runOnDisk dir do
-        touchNode n1
+        touchNode @Text n1
         writeRawData n1 "data"
-      _ <- runOnDisk dir $ deleteNode n1
+      _ <- runOnDisk dir $ deleteNode @Text n1
       doesFileExist (legacyNodeDataFile dir n1) `shouldReturn` False
-      runOnDisk dir listNodes `shouldReturn` singletonSet nilNID
+      runOnDisk dir (listNodes @Text) `shouldReturn` singletonSet nilNID
   it "removes a deleted node's edges from its neighbors" do
     withEmptyTempGraph \dir -> do
-      runOnDisk dir $ insertEdge (Edge n1 "x" n2)
-      runOnDisk dir $ deleteNode n2
+      runOnDisk dir $ insertEdge @Text (Edge n1 "x" n2)
+      runOnDisk dir $ deleteNode @Text n2
       fmap (.outgoing)
-        <$> runOnDisk dir (getNodeMetadata n1)
+        <$> runOnDisk dir (getNodeMetadata @Text n1)
           `shouldReturn` Just mempty
   it "creates a node again after deleting it" do
     withEmptyTempGraph \dir -> do
-      runOnDisk dir $ insertEdge (Edge n1 "x" n2)
+      runOnDisk dir $ insertEdge @Text (Edge n1 "x" n2)
       runOnDisk dir do
-        deleteNode n1
-        insertEdge (Edge n2 "y" n1)
-      node1 <- runOnDisk dir $ getNodeMetadata n1
+        deleteNode @Text n1
+        insertEdge @Text (Edge n2 "y" n1)
+      node1 <- runOnDisk dir $ getNodeMetadata @Text n1
       fmap (.incoming) node1 `shouldBe` Just (singletonSet (Connect "y" n2))
       fmap (.outgoing) node1 `shouldBe` Just mempty
   it "deletes an edge between nodes it hasn't read" do
     withEmptyTempGraph \dir -> do
-      runOnDisk dir $ insertEdge (Edge n1 "x" n2)
-      runOnDisk dir $ deleteEdge (Edge n1 "x" n2)
-      result <- runOnDisk dir $ traverse getNodeMetadata [n1, n2]
+      runOnDisk dir $ insertEdge @Text (Edge n1 "x" n2)
+      runOnDisk dir $ deleteEdge @Text (Edge n1 "x" n2)
+      result <- runOnDisk dir $ traverse (getNodeMetadata @Text) [n1, n2]
       map (fmap (\n -> (n.incoming, n.outgoing))) result
         `shouldBe` [Just (mempty, mempty), Just (mempty, mempty)]
   it "doesn't create a node by deleting one of its edges" do
     withEmptyTempGraph \dir -> do
       result <- runOnDisk dir do
-        deleteEdge (Edge n1 "x" n2)
-        (,) <$> listNodes <*> getNodeMetadata n1
+        deleteEdge @Text (Edge n1 "x" n2)
+        (,) <$> listNodes @Text <*> getNodeMetadata @Text n1
       result `shouldBe` (singletonSet nilNID, Nothing)
-      runOnDisk dir listNodes `shouldReturn` singletonSet nilNID
+      runOnDisk dir (listNodes @Text) `shouldReturn` singletonSet nilNID
   it "deletes an edge of a node that it read and found missing" do
     withEmptyTempGraph \dir -> do
       result <- runOnDisk dir do
-        missing <- getNodeMetadata n1
-        deleteEdge (Edge n1 "x" n2)
-        (missing,) <$> getNodeMetadata n1
+        missing <- getNodeMetadata @Text n1
+        deleteEdge @Text (Edge n1 "x" n2)
+        (missing,) <$> getNodeMetadata @Text n1
       result `shouldBe` (Nothing, Nothing)
-      runOnDisk dir listNodes `shouldReturn` singletonSet nilNID
+      runOnDisk dir (listNodes @Text) `shouldReturn` singletonSet nilNID
   it "doesn't take a node file that it can't read for a missing node" do
     withEmptyTempGraph \dir -> do
-      runOnDisk dir $ insertEdge (Edge nilNID "x" n1)
+      runOnDisk dir $ insertEdge @Text (Edge nilNID "x" n1)
       let file = metadataFile dir n1
       readable <- getPermissions file
       before <- B.readFile file
@@ -178,13 +178,13 @@ spec_runGraphEditingTransactionally = do
               nid == n1 && "there is no permission to read it (" `isPrefixOf` reason
             _ -> False
       -- it is read as a node that is there, of which no edge is known
-      unreadable (runOnDisk dir (getNodeMetadata n1))
+      unreadable (runOnDisk dir (getNodeMetadata @Text n1))
         `shouldReturn` Just (emptyNode n1)
       -- a change that read it is refused
-      unreadable (runOnDiskEither dir (getNodeMetadata n1 >> touchNode n2))
+      unreadable (runOnDiskEither dir (getNodeMetadata @Text n1 >> touchNode @Text n2))
         >>= (`shouldSatisfy` refusedForIt)
       -- and so is a change that writes it without having read it
-      unreadable (runOnDiskEither dir (insertEdge (Edge n2 "y" n1)))
+      unreadable (runOnDiskEither dir (insertEdge @Text (Edge n2 "y" n1)))
         >>= (`shouldSatisfy` refusedForIt)
       B.readFile file `shouldReturn` before
       doesFileExist (metadataFile dir n2) `shouldReturn` False
@@ -199,26 +199,26 @@ spec_runGraphEditingTransactionally = do
       createFileLink target file
       doesNodeExist dir n1 `shouldReturn` True
       -- it is read as a node that is there, of which no edge is known
-      runOnDisk dir (getNodeMetadata n1) `shouldReturn` Just (emptyNode n1)
+      runOnDisk dir (getNodeMetadata @Text n1) `shouldReturn` Just (emptyNode n1)
       -- nothing is written through it: neither by a change that read it
-      runOnDiskEither dir (getNodeMetadata n1 >> touchNode n1)
+      runOnDiskEither dir (getNodeMetadata @Text n1 >> touchNode @Text n1)
         >>= (`shouldSatisfy` refusedForIt)
       -- nor by one that writes it without having read it
-      runOnDiskEither dir (touchNode n1) >>= (`shouldSatisfy` refusedForIt)
-      runOnDiskEither dir (insertEdge (Edge nilNID "y" n1))
+      runOnDiskEither dir (touchNode @Text n1) >>= (`shouldSatisfy` refusedForIt)
+      runOnDiskEither dir (insertEdge @Text (Edge nilNID "y" n1))
         >>= (`shouldSatisfy` refusedForIt)
       doesPathExist target `shouldReturn` False
       pathIsSymbolicLink file `shouldReturn` True
-      runOnDisk dir (getNodeMetadata nilNID)
+      runOnDisk dir (getNodeMetadata @Text nilNID)
         `shouldReturn` Just (emptyNode nilNID)
   it "uses a symbolic link to a node file as that node file" do
     withEmptyTempGraph \dir -> do
       let target = dir </> "elsewhere"
-      runOnDisk dir $ insertEdge (Edge nilNID "x" n1)
+      runOnDisk dir $ insertEdge @Text (Edge nilNID "x" n1)
       renameFile (metadataFile dir n1) target
       createFileLink target (metadataFile dir n1)
-      runOnDisk dir $ insertEdge (Edge n1 "y" n2)
-      node1 <- runOnDisk dir (getNodeMetadata n1)
+      runOnDisk dir $ insertEdge @Text (Edge n1 "y" n2)
+      node1 <- runOnDisk dir (getNodeMetadata @Text n1)
       fmap (.outgoing) node1 `shouldBe` Just (singletonSet (Connect "y" n2))
       fmap (.incoming) node1 `shouldBe` Just (singletonSet (Connect "x" nilNID))
       pathIsSymbolicLink (metadataFile dir n1) `shouldReturn` True
@@ -227,8 +227,8 @@ spec_runGraphEditingTransactionally = do
       createDirectory (metadataFile dir n1)
       doesNodeExist dir n1 `shouldReturn` True
       doesNodeExist dir n2 `shouldReturn` False
-      runOnDisk dir (getNodeMetadata n1) `shouldReturn` Just (emptyNode n1)
-      runOnDiskEither dir (touchNode n1) >>= \case
+      runOnDisk dir (getNodeMetadata @Text n1) `shouldReturn` Just (emptyNode n1)
+      runOnDiskEither dir (touchNode @Text n1) >>= \case
         Left (DamagedGraph (UnparsableNodeFile nid reason :| [])) -> do
           nid `shouldBe` n1
           reason `shouldStartWith` "it is not a file but a directory ("
@@ -238,8 +238,8 @@ spec_runGraphEditingTransactionally = do
     let kept dir nid suffix = metadataFile dir nid <> ".unparsable" <> suffix
         hub dir = do
           runOnDisk dir do
-            insertEdge (Edge nilNID "x" n1)
-            insertEdge (Edge n1 "y" n2)
+            insertEdge @Text (Edge nilNID "x" n1)
+            insertEdge @Text (Edge n1 "y" n2)
             writeRawData n1 "data"
     it "are deleted with the node, and no file that is only named like one" $
       withEmptyTempGraph \dir -> do
@@ -248,7 +248,7 @@ spec_runGraphEditingTransactionally = do
           B.writeFile (kept dir n1 suffix) "{not json"
         createDirectory (kept dir n1 "-4")
         (result, warnings) <-
-          runCommandLine False dir (runGraphEditingTransactionally (deleteNode n1))
+          runCommandLine False dir (runGraphEditingTransactionally (deleteNode @Text n1))
         result `shouldSatisfy` isRight
         warnings `shouldBe` []
         -- their names are tried in order until one is no file, so the ones
@@ -264,7 +264,7 @@ spec_runGraphEditingTransactionally = do
         hub dir
         B.writeFile (kept dir n1 "") "{not json"
         B.writeFile (metadataFile dir n2) "{not json"
-        runOnDiskEither dir (deleteNode n1) >>= (`shouldSatisfy` isLeft)
+        runOnDiskEither dir (deleteNode @Text n1) >>= (`shouldSatisfy` isLeft)
         doesFileExist (kept dir n1 "") `shouldReturn` True
         doesFileExist (metadataFile dir n1) `shouldReturn` True
     it "don't undo the change if one of them can't be removed: it warns" $
@@ -273,7 +273,7 @@ spec_runGraphEditingTransactionally = do
         B.writeFile (kept dir n1 "") "{not json"
         B.writeFile (kept dir n1 "-2") "{nor this"
         warnings <- newIORef []
-        let collectWarnings = interpret \_ -> \case
+        let collectWarnings = interpret @(Warn UserError) \_ -> \case
               Warn e -> liftIO $ modifyIORef warnings (show (e :: UserError) :)
             -- the first one can't be removed
             removing file
@@ -290,7 +290,7 @@ spec_runGraphEditingTransactionally = do
             . runGraphDataFilesystemOperationsIO
             . writingGraphDiffsRemovingKeptWith removing
             . runGraphMetadataFilesystemOperationsIO True
-            $ runGraphEditingTransactionally (deleteNode n1)
+            $ runGraphEditingTransactionally (deleteNode @Text n1)
         result `shouldSatisfy` isRight
         -- the node, its data and its edges are gone
         (sort <$> listDirectory dir)
@@ -298,7 +298,7 @@ spec_runGraphEditingTransactionally = do
                            "000000000001.json.unparsable",
                            "000000000002.json"
                          ]
-        runOnDisk dir (traverse getNodeMetadata [nilNID, n2])
+        runOnDisk dir (traverse (getNodeMetadata @Text) [nilNID, n2])
           `shouldReturn` [Just (emptyNode nilNID), Just (emptyNode n2)]
         readIORef warnings
           `shouldReturn` [ "warning: the node was deleted, but"
@@ -312,15 +312,15 @@ spec_runGraphEditingTransactionally = do
   it "writes nothing if the action fails" do
     withEmptyTempGraph \dir -> do
       _ <- runOnDiskEither dir do
-        touchNode n1
+        touchNode @Text n1
         writeRawData n1 "data"
         throwText "failed"
       doesFileExist (legacyNodeDataFile dir n1) `shouldReturn` False
-      runOnDisk dir listNodes `shouldReturn` singletonSet nilNID
+      runOnDisk dir (listNodes @Text) `shouldReturn` singletonSet nilNID
   describe "a change that can't write all of its files" do
     let -- the origin -a-> n1
         withOriginToN1 test = withEmptyTempGraph \dir -> do
-          runOnDisk dir $ insertEdge (Edge nilNID "a" n1)
+          runOnDisk dir $ insertEdge @Text (Edge nilNID "a" n1)
           test dir
         -- the file or directory can't be written while the action runs
         readOnly :: FilePath -> IO a -> IO a
@@ -338,7 +338,7 @@ spec_runGraphEditingTransactionally = do
         before <- directoryContents dir
         -- n2 can be created; n1 can't be replaced
         for_ [runOnDiskEither, runDryEither] \run -> do
-          result <- run dir (insertEdge (Edge n1 "b" n2))
+          result <- run dir (insertEdge @Text (Edge n1 "b" n2))
           endsWith result \case
             UnwritableChange [(nid, e)] Nothing -> do
               nid `shouldBe` n1
@@ -356,11 +356,11 @@ spec_runGraphEditingTransactionally = do
                 isPermissionError e `shouldBe` True
                 ioeGetFileName e `shouldBe` Just dir
               e -> expectationFailure ("refused with " <> show e)
-        runOnDiskEither dir (insertEdge (Edge n1 "b" n2))
+        runOnDiskEither dir (insertEdge @Text (Edge n1 "b" n2))
           >>= refusedFor [(CreatingFile, n2)]
-        runOnDiskEither dir (deleteNode n1) >>= refusedFor [(DeletingFile, n1)]
+        runOnDiskEither dir (deleteNode @Text n1) >>= refusedFor [(DeletingFile, n1)]
         -- what replaces files only is written
-        runOnDisk dir (insertEdge (Edge n1 "b" nilNID))
+        runOnDisk dir (insertEdge @Text (Edge n1 "b" nilNID))
         directoryContents dir `shouldNotReturn` before
         keys <$> directoryContents dir `shouldReturn` keys before
     let -- a file that fails to be written although it can be (no space is
@@ -395,8 +395,8 @@ spec_runGraphEditingTransactionally = do
       withOriginToN1 \dir -> do
         -- n1 is replaced, n2 created and the origin replaced
         result <- runFailingFor [n2] dir do
-          insertEdge (Edge n1 "b" n2)
-          insertEdge (Edge nilNID "c" n1)
+          insertEdge @Text (Edge n1 "b" n2)
+          insertEdge @Text (Edge nilNID "c" n1)
         endsWith result \case
           e@(ChangeWrittenInPart written ((CreatingFile, nid, IOFail io) :| [])) -> do
             written `shouldBe` [(ReplacingFile, nilNID), (ReplacingFile, n1)]
@@ -417,13 +417,13 @@ spec_runGraphEditingTransactionally = do
                          ]
           e -> expectationFailure ("failed with " <> show e)
         fmap (.outgoing)
-          <$> runOnDisk dir (getNodeMetadata n1)
+          <$> runOnDisk dir (getNodeMetadata @Text n1)
             `shouldReturn` Just (singletonSet (Connect "b" n2))
         doesFileExist (metadataFile dir n2) `shouldReturn` False
     it "says that it wrote nothing when no file could be written" $
       withOriginToN1 \dir -> do
         before <- directoryContents dir
-        result <- runFailingFor [nilNID, n1] dir (deleteNode n1)
+        result <- runFailingFor [nilNID, n1] dir (deleteNode @Text n1)
         endsWith result \e -> case e of
           ChangeWrittenInPart [] failed -> do
             [(change, nid) | (change, nid, _) <- toList failed]
@@ -448,9 +448,9 @@ spec_runGraphEditingTransactionally = do
         createDirectory (legacyNodeDataFile dir n1)
         B.writeFile (legacyNodeDataFile dir n1 </> "inside") "kept"
         result <- runOnDiskEither dir do
-          touchNode n2
+          touchNode @Text n2
           writeRawData n2 "two"
-          deleteNode n1
+          deleteNode @Text n1
         endsWith result \e -> case e of
           DataNotWritten ((DeletingFile, nid, IOFail io) :| []) -> do
             nid `shouldBe` n1
@@ -471,12 +471,12 @@ spec_runGraphEditingTransactionally = do
         runOnDisk dir (getRawData n2) `shouldReturn` Just "two"
   it "is refused when a file that it read was changed meanwhile, naming it" do
     withEmptyTempGraph \dir -> do
-      runOnDisk dir $ insertEdge (Edge nilNID "a" n1)
+      runOnDisk dir $ insertEdge @Text (Edge nilNID "a" n1)
       result <- runOnDiskEither dir do
-        _ <- getNodeMetadata n1
+        _ <- getNodeMetadata @Text n1
         -- as another program does
-        liftIO . runOnDisk dir $ insertEdge (Edge n1 "z" n2)
-        touchNode (smallNID 3)
+        liftIO . runOnDisk dir $ insertEdge @Text (Edge n1 "z" n2)
+        touchNode @Text (smallNID 3)
       case result of
         Left e@(ChangedMeanwhile (nid :| [])) -> do
           nid `shouldBe` n1
@@ -544,12 +544,12 @@ spec_transactionOnDamagedGraph = do
         directoryContents dir `shouldReturn` before
       editAfterReadingBoth :: Eff OnDisk ()
       editAfterReadingBoth = do
-        _ <- getNodeMetadata n1
-        _ <- getNodeMetadata nilNID
-        insertEdge (Edge n2 "x" (smallNID 3))
+        _ <- getNodeMetadata @Text n1
+        _ <- getNodeMetadata @Text nilNID
+        insertEdge @Text (Edge n2 "x" (smallNID 3))
         writeRawData n2 "data"
       reading :: [NID] -> Eff OnDisk ()
-      reading = traverse_ getNodeMetadata
+      reading = traverse_ (getNodeMetadata @Text)
   describe "a change" do
     it "is refused when two nodes it read disagree about an edge" $
       refusedWithoutWriting
@@ -567,41 +567,41 @@ spec_transactionOnDamagedGraph = do
       refusedWithoutWriting
         withOneSidedEdge
         [oneSided]
-        (reading [nilNID, n1] >> touchNode n2)
+        (reading [nilNID, n1] >> touchNode @Text n2)
         runOnDiskEither
     it "is refused when the nodes it writes without reading them disagree" $
       refusedWithoutWriting
         withOneSidedEdge
         [oneSided]
-        (insertEdge (Edge nilNID "x" n1))
+        (insertEdge @Text (Edge nilNID "x" n1))
         runOnDiskEither
     it "is refused when a node it read has an edge to a node without a file" $
       refusedWithoutWriting
         withMissingFile
         [toMissing]
-        (reading [nilNID, n2] >> touchNode (smallNID 3))
+        (reading [nilNID, n2] >> touchNode @Text (smallNID 3))
         runOnDiskEither
     it "is refused when it removes the record of an edge to a node without a file" $
       refusedWithoutWriting
         withMissingFile
         [toMissing]
-        (reading [nilNID, n2] >> deleteEdge (Edge nilNID "c" n2))
+        (reading [nilNID, n2] >> deleteEdge @Text (Edge nilNID "c" n2))
         runOnDiskEither
     it "is refused when it would create a node that a node it read refers to" $
       refusedWithoutWriting
         withMissingFile
         [toMissing]
-        (reading [nilNID] >> insertEdge (Edge n2 "x" (smallNID 3)))
+        (reading [nilNID] >> insertEdge @Text (Edge n2 "x" (smallNID 3)))
         runOnDiskEither
     it "is refused when a file it read says it is another node" $
       refusedWithoutWriting
         withOtherId
         [FileSaysOtherId n1 n2]
-        (reading [n1] >> touchNode (smallNID 3))
+        (reading [n1] >> touchNode @Text (smallNID 3))
         runOnDiskEither
     it "is refused when it only deletes the data of a node without a file" do
       -- as rmnf does through an edge to such a node
-      let deleteMissing = reading [nilNID] >> deleteNode n2
+      let deleteMissing = reading [nilNID] >> deleteNode @Text n2
           withItsData test = withMissingFile \dir ->
             B.writeFile (legacyNodeDataFile dir n2) "kept" >> test dir
       refusedWithoutWriting withItsData [toMissing] deleteMissing runOnDiskEither
@@ -621,7 +621,7 @@ spec_transactionOnDamagedGraph = do
             test dir
       replicateM_ 5 $ withTwoUnparsable \dir -> do
         before <- directoryContents dir
-        result <- runOnDiskEither dir (insertEdge (Edge (smallNID 3) "x" n2))
+        result <- runOnDiskEither dir (insertEdge @Text (Edge (smallNID 3) "x" n2))
         case result of
           Left (DamagedGraph found) ->
             [nid | UnparsableNodeFile nid _ <- toList found]
@@ -631,7 +631,7 @@ spec_transactionOnDamagedGraph = do
     it "is refused when it read a file that can't be read as a node" do
       let withUnparsable test = withMissingFile \dir ->
             B.writeFile (metadataFile dir n2) "{not json" >> test dir
-          change = reading [nilNID, n2] >> touchNode (smallNID 3)
+          change = reading [nilNID, n2] >> touchNode @Text (smallNID 3)
       for_ [runOnDiskEither, runDryEither] \run ->
         withUnparsable \dir -> do
           before <- directoryContents dir
@@ -647,19 +647,19 @@ spec_transactionOnDamagedGraph = do
       refusedWithoutWriting withOneSidedEdge [oneSided] (outside n1) runDryEither
     it "writes nothing for data that is about to be edited outside" $
       withEmptyTempGraph \dir -> do
-        runOnDisk dir (touchNode n1)
+        runOnDisk dir (touchNode @Text n1)
         before <- directoryContents dir
         runOnDisk dir do
-          _ <- getNodeMetadata n1
+          _ <- getNodeMetadata @Text n1
           editingDataOutside n1
         directoryContents dir `shouldReturn` before
     it "is written when the other node of a damaged edge was not looked at" do
       withOneSidedEdge \dir -> do
         runOnDisk dir do
-          _ <- getNodeMetadata n1
-          insertEdge (Edge n1 "y" n2)
+          _ <- getNodeMetadata @Text n1
+          insertEdge @Text (Edge n1 "y" n2)
         fmap (.incoming)
-          <$> runOnDisk dir (getNodeMetadata n1)
+          <$> runOnDisk dir (getNodeMetadata @Text n1)
             `shouldReturn` Just
               (setFromList [Connect "a" nilNID, Connect "b" nilNID])
   describe "a transaction that changes nothing" do
@@ -668,7 +668,7 @@ spec_transactionOnDamagedGraph = do
       withOneSidedEdge \dir -> do
         (result, warnings) <-
           runCommandLine False dir . runGraphEditingTransactionally $
-            traverse getNodeMetadata [nilNID, n1]
+            traverse (getNodeMetadata @Text) [nilNID, n1]
         fmap (map (fmap (\n -> (n.incoming, n.outgoing)))) result
           `shouldSatisfy` \case
             Right [Just (_, out0), Just (in1, _)] ->
@@ -699,7 +699,7 @@ spec_transactionOnDamagedGraph = do
       withOtherId \dir -> do
         (result, warnings) <-
           runCommandLine False dir . runGraphEditingTransactionally $
-            getNodeMetadata n1
+            getNodeMetadata @Text n1
         fmap (fmap (.nid)) result `shouldSatisfy` (== Right (Just n1)) . first (const ())
         warnings `shouldBe` [warning (FileSaysOtherId n1 n2)]
     it "reads a file that can't be read as a node as a node without edges" do
@@ -708,7 +708,7 @@ spec_transactionOnDamagedGraph = do
         B.writeFile (metadataFile dir n2) "{not json"
         (result, warnings) <-
           runCommandLine False dir . runGraphEditingTransactionally $
-            traverse getNodeMetadata [nilNID, n2, n1]
+            traverse (getNodeMetadata @Text) [nilNID, n2, n1]
         fmap (map (fmap (\n -> (n.nid, n.incoming, n.outgoing)))) result
           `shouldSatisfy` \case
             Right [Just (_, _, out0), Just unusable, Just (_, in1, _)] ->
@@ -737,7 +737,7 @@ spec_transactionOnDamagedGraph = do
             (setPermissions file emptyPermissions)
             (setPermissions file readable)
             ( runCommandLine False dir . runGraphEditingTransactionally $
-                traverse getNodeMetadata [nilNID, n2, n1]
+                traverse (getNodeMetadata @Text) [nilNID, n2, n1]
             )
         -- the nodes around it are read as they are, and it as a node that
         -- is there and of which no edge is known
@@ -762,7 +762,7 @@ spec_transactionOnDamagedGraph = do
         (result, warnings) <-
           runCommandLine False dir . runGraphEditingTransactionally $ do
             reading [nilNID, n1]
-            touchNode n2
+            touchNode @Text n2
             throwText "(expected test output) failed"
         void result `shouldSatisfy` isLeft
         warnings `shouldBe` [warning oneSided]
@@ -792,7 +792,7 @@ spec_transactionOnDamagedGraph = do
       withOneSidedEdge \dir -> do
         (result, warnings) <- runCommandLine False dir do
           runGraphEditingTransactionally $ reading [nilNID, n1]
-          runGraphEditingTransactionally $ reading [nilNID, n1] >> touchNode n2
+          runGraphEditingTransactionally $ reading [nilNID, n1] >> touchNode @Text n2
         case result of
           Left (DamagedGraph found) -> toList found `shouldBe` [oneSided]
           _ -> expectationFailure "the change was not refused"
@@ -835,7 +835,7 @@ spec_transactionOnDamagedGraph = do
         readThenChange :: [NID] -> Eff OnDiskFiles ()
         readThenChange nids = do
           runGraphEditingTransactionally $ reading nids
-          runGraphEditingTransactionally $ touchNode n3
+          runGraphEditingTransactionally $ touchNode @Text n3
         refusedWithoutWarning withGraph damage dry line = withGraph \dir -> do
           before <- directoryContents dir
           (result, warnings) <- runCommandLine dry dir line
@@ -872,13 +872,13 @@ spec_transactionOnDamagedGraph = do
       -- as the command that at runs at each of its targets
       refusedWithoutWarning withOneSidedEdge [oneSided] False . asOneDecision $ do
         asOneDecision . runGraphEditingTransactionally $ reading [nilNID, n1]
-        asOneDecision . runGraphEditingTransactionally $ touchNode n3
+        asOneDecision . runGraphEditingTransactionally $ touchNode @Text n3
     it "decides nothing for the command after it" $
       -- as cd, which reads, and then a command that edits where it stands
       withOneSidedEdge \dir -> do
         (result, warnings) <- runCommandLine False dir do
           asOneDecision . runGraphEditingTransactionally $ reading [nilNID, n1]
-          asOneDecision . runGraphEditingTransactionally $ touchNode n3
+          asOneDecision . runGraphEditingTransactionally $ touchNode @Text n3
         result `shouldSatisfy` isRight
         warnings `shouldBe` [warning oneSided]
         doesFileExist (metadataFile dir n3) `shouldReturn` True
@@ -906,11 +906,11 @@ spec_transactionOnDamagedGraph = do
       it "and writes nothing once two steps have read the files of a lone record" $
         for_ [False, True] \dry ->
           refusedWithoutWarning withOneSidedEdge [oneSided] dry . asOneDecision $
-            steps [reading [nilNID], reading [n1] >> touchNode n3]
+            steps [reading [nilNID], reading [n1] >> touchNode @Text n3]
       it "nor if writing is what reads the other file" $
         -- the origin is changed without having been read
         refusedWithoutWarning withOneSidedEdge [oneSided] False . asOneDecision $
-          steps [reading [n1], insertEdge (Edge nilNID "y" n3)]
+          steps [reading [n1], insertEdge @Text (Edge nilNID "y" n3)]
       it "nor if writing is what read the first of them, in a dry run either" $
         -- The first step changes the origin without reading it, so only
         -- writing reads its file, which has no record of the edge that the
@@ -919,7 +919,7 @@ spec_transactionOnDamagedGraph = do
         for_ [False, True] \dry -> withOneSidedEdge \dir -> do
           (result, warnings) <-
             runCommandLine dry dir . asOneDecision . steps $
-              [insertEdge (Edge nilNID "y" n3), reading [n1] >> touchNode n2]
+              [insertEdge @Text (Edge nilNID "y" n3), reading [n1] >> touchNode @Text n2]
           case result of
             Left (DamagedGraph found) -> toList found `shouldBe` [oneSided]
             _ -> expectationFailure "the change was not refused"
@@ -938,14 +938,14 @@ spec_transactionOnDamagedGraph = do
         for_ [False, True] \dry -> withOneSidedEdge \dir -> do
           (result, warnings) <-
             runCommandLine dry dir . asOneDecision . steps $
-              [insertEdge (Edge nilNID "y" n3), reading [n1]]
+              [insertEdge @Text (Edge nilNID "y" n3), reading [n1]]
           result `shouldSatisfy` isRight
           warnings `shouldBe` [warning oneSided]
       it "and keeps none of them for the command after it" $
         withOneSidedEdge \dir -> do
           (result, warnings) <- runCommandLine False dir do
             asOneDecision (steps [reading [nilNID]])
-            asOneDecision (steps [reading [n1] >> touchNode n3])
+            asOneDecision (steps [reading [n1] >> touchNode @Text n3])
           result `shouldSatisfy` isRight
           warnings `shouldBe` []
           doesFileExist (metadataFile dir n3) `shouldReturn` True
@@ -953,7 +953,7 @@ spec_transactionOnDamagedGraph = do
         withOneSidedEdge \dir -> do
           (result, warnings) <- runCommandLine False dir do
             steps [reading [nilNID]]
-            asOneDecision (steps [reading [n1] >> touchNode n3])
+            asOneDecision (steps [reading [n1] >> touchNode @Text n3])
           result `shouldSatisfy` isRight
           warnings `shouldBe` []
           doesFileExist (metadataFile dir n3) `shouldReturn` True
@@ -964,14 +964,14 @@ spec_transactionOnDamagedGraph = do
           writing =
             [ reading [nilNID, n1],
               -- changes both files without reading them
-              insertEdge (Edge nilNID "a" n1),
-              reading [n1] >> insertEdge (Edge n1 "b" n2),
+              insertEdge @Text (Edge nilNID "a" n1),
+              reading [n1] >> insertEdge @Text (Edge n1 "b" n2),
               reading [nilNID],
               -- reads n1, and changes the origin and n2 without reading them
-              deleteNode n1,
-              reading [nilNID] >> touchNode n3,
-              reading [n2] >> insertEdge (Edge n2 "c" n1),
-              reading [n1, nilNID, n2, n3] >> touchNode n4
+              deleteNode @Text n1,
+              reading [nilNID] >> touchNode @Text n3,
+              reading [n2] >> insertEdge @Text (Edge n2 "c" n1),
+              reading [n1, nilNID, n2, n3] >> touchNode @Text n4
             ]
           allNodes = [nilNID, n1, n2, n3, n4]
       it "and is not refused for what its own steps wrote" $
@@ -982,7 +982,7 @@ spec_transactionOnDamagedGraph = do
           warnings `shouldBe` []
           (final, damage) <-
             runCommandLine False dir . runGraphEditingTransactionally $
-              traverse getNodeMetadata allNodes
+              traverse (getNodeMetadata @Text) allNodes
           damage `shouldBe` []
           fmap (map (fmap (\n -> (toList n.incoming, toList n.outgoing)))) final
             `shouldSatisfy` \case
@@ -997,17 +997,17 @@ spec_transactionOnDamagedGraph = do
               Left _ -> False
       it "nor in a dry run, which leaves every file as the steps read it" $
         withEmptyTempGraph \dir -> do
-          runOnDisk dir $ insertEdge (Edge nilNID "a" n1)
+          runOnDisk dir $ insertEdge @Text (Edge nilNID "a" n1)
           before <- directoryContents dir
           (result, warnings) <-
             runCommandLine True dir . asOneDecision . steps $
               [ reading [nilNID, n1],
-                deleteNode n1,
+                deleteNode @Text n1,
                 -- the origin still has the edge, and n1 is still there
-                reading [nilNID] >> touchNode n3,
-                insertEdge (Edge n1 "b" n2),
-                reading [n1] >> touchNode n3,
-                reading [n2] >> touchNode n4
+                reading [nilNID] >> touchNode @Text n3,
+                insertEdge @Text (Edge n1 "b" n2),
+                reading [n1] >> touchNode @Text n3,
+                reading [n2] >> touchNode @Text n4
               ]
           result `shouldSatisfy` isRight
           warnings `shouldBe` []
@@ -1020,11 +1020,11 @@ spec_transactionOnDamagedGraph = do
         withEmptyTempGraph \dir -> do
           let added = Edge nilNID "z" n1
               command =
-                asOneDecision $ steps [reading [nilNID], reading [n1] >> touchNode n3]
+                asOneDecision $ steps [reading [nilNID], reading [n1] >> touchNode @Text n3]
           (result, warnings) <- runCommandLine False dir . asOneDecision $ do
             steps [reading [nilNID]]
             liftIO . runOnDisk dir $ insertEdge added
-            steps [reading [n1] >> touchNode n3]
+            steps [reading [n1] >> touchNode @Text n3]
           case result of
             Left (DamagedGraph found) ->
               toList found `shouldBe` [OneSidedEdge IncomingRecord added]
@@ -1040,14 +1040,14 @@ spec_transactionOnDamagedGraph = do
         -- the origin again and not n1: the command has read both files of
         -- that edge, the origin's as it is now.
         withEmptyTempGraph \dir -> do
-          runOnDisk dir $ insertEdge (Edge nilNID "a" n1)
+          runOnDisk dir $ insertEdge @Text (Edge nilNID "a" n1)
           let lone = Edge nilNID "z" n1
           (result, warnings) <- runCommandLine False dir . asOneDecision $ do
             steps [reading [nilNID, n1]]
             liftIO . write dir $
               emptyNode nilNID
                 & #outgoing .~ setFromList [Connect "a" n1, Connect "z" n1]
-            steps [reading [nilNID] >> touchNode n3]
+            steps [reading [nilNID] >> touchNode @Text n3]
           case result of
             Left (DamagedGraph found) ->
               toList found `shouldBe` [OneSidedEdge OutgoingRecord lone]

@@ -22,22 +22,22 @@ spec_dualizingGraphMetadataEditing = do
         runPureEff
           . evalStateLocal dual
           . execStateLocal emptyGraph
-          . runInMemoryGraphMetadataEditing
+          . runInMemoryGraphMetadataEditing @Text
           . inject
           . dualizingGraphMetadataEditing @Text
   it "flips inserted edges while dualized" do
-    let g = runDualized (IsDual True) $ insertEdge (Edge n1 "x" n2)
+    let g = runDualized (IsDual True) $ insertEdge @Text (Edge n1 "x" n2)
     g ^? ix n2 . #outgoing `shouldBe` Just (singletonSet (Connect "x" n1))
   it "leaves edges alone while not dualized" do
-    let g = runDualized (IsDual False) $ insertEdge (Edge n1 "x" n2)
+    let g = runDualized (IsDual False) $ insertEdge @Text (Edge n1 "x" n2)
     g ^? ix n1 . #outgoing `shouldBe` Just (singletonSet (Connect "x" n2))
   it "reads nodes with their edges swapped while dualized" do
     let read1 = runPureEff
           . evalStateLocal (IsDual False)
-          . evalStateLocal emptyGraph
+          . evalStateLocal @(Graph Text ()) emptyGraph
           . runInMemoryGraphMetadataEditing @Text
           $ do
-            insertEdge (Edge n1 "x" n2)
+            insertEdge @Text (Edge n1 "x" n2)
             dualize
-            dualizingGraphMetadataEditing @Text $ getNodeMetadata n1
+            dualizingGraphMetadataEditing @Text $ getNodeMetadata @Text n1
     fmap (.incoming) read1 `shouldBe` Just (singletonSet (Connect "x" n2))

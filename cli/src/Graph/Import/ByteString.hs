@@ -63,7 +63,7 @@ test_importData =
     importing ds =
       runPureEff
         . evalStateLocal (mkStdGen 0)
-        . evalStateLocal (emptyGraph @Text @(Maybe ByteString))
+        . evalStateLocal (emptyGraph @Text @(Maybe ByteString) @NID)
         . runInMemoryGraphDataEditing @Text
         . runErrorNoCallStack @Missing
         . execStateLocal (emptyGraph @Text @())
@@ -71,5 +71,5 @@ test_importData =
         . runFreshNIDRandom
         . interpretTimeAsMonotonicIncreasingUnixTime
         $ do
-          traverse_ touchNode [fileHashesNID, importDatesNID]
+          traverse_ (touchNode @Text) [fileHashesNID, importDatesNID]
           traverse_ importData ds

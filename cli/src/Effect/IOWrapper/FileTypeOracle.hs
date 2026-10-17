@@ -74,7 +74,7 @@ getMimetypeIO source = liftIO . withEarlyReturnIO $ do
   let process = fileCommand ["--mime-type"] source
   output <-
     liftIO (try @_ @SomeException (readProcessStdout_ process))
-      `onLeftM_` returnEarly Nothing
+      `onLeftM_` returnEarly @(Maybe MimeType) Nothing
   pure $ parseMimeType (T.strip (decodeUtf8 (toStrict output)))
 
 -- Returns the first extension if multiple are available
@@ -83,11 +83,11 @@ getFileExtensionIO source = liftIO . withEarlyReturnIO $ do
   let process = fileCommand ["--extension"] source
   output <-
     liftIO (try @_ @SomeException (readProcessStdout_ process))
-      `onLeftM_` returnEarly Nothing
+      `onLeftM_` returnEarly @(Maybe Text) Nothing
   -- file can return more than one extension (e.g., "jpeg/jpg/jpe/jfif")
   case T.split (== '/') (decodeUtf8 (toStrict output)) of
     (ext : _) -> pure $ Just ext
-    [] -> returnEarly Nothing
+    [] -> returnEarly @(Maybe Text) Nothing
 
 -- | Get both mimetype and extension with fallback logic
 -- Ported from Python's get_mimetype_and_extension function

@@ -227,7 +227,7 @@ library
       TypeOperators
       TypeSynonymInstances
       ViewPatterns
-  ghc-options: -Wall -fplugin=Effectful.Plugin -flate-specialise -fspecialise-aggressively
+  ghc-options: -Wall -flate-specialise -fspecialise-aggressively
   cpp-options: -DDEBUG
   build-depends:
       Glob
@@ -252,7 +252,6 @@ library
     , directory-tree
     , effectful
     , effectful-core
-    , effectful-plugin
     , effectful-readline
     , effectful-th
     , exceptions
@@ -385,7 +384,7 @@ executable ge
       TypeOperators
       TypeSynonymInstances
       ViewPatterns
-  ghc-options: -Wall -fplugin=Effectful.Plugin -flate-specialise -fspecialise-aggressively -threaded -rtsopts -with-rtsopts=-N
+  ghc-options: -Wall -flate-specialise -fspecialise-aggressively -threaded -rtsopts -with-rtsopts=-N
   cpp-options: -DDEBUG
   c-sources:
       app/ge/standard-descriptors.c
@@ -412,7 +411,6 @@ executable ge
     , directory-tree
     , effectful
     , effectful-core
-    , effectful-plugin
     , effectful-readline
     , effectful-th
     , exceptions
@@ -542,7 +540,7 @@ test-suite graph-test
       TypeOperators
       TypeSynonymInstances
       ViewPatterns
-  ghc-options: -Wall -fplugin=Effectful.Plugin -flate-specialise -fspecialise-aggressively -threaded -rtsopts -with-rtsopts=-N
+  ghc-options: -Wall -flate-specialise -fspecialise-aggressively -threaded -rtsopts -with-rtsopts=-N
   cpp-options: -DDEBUG
   build-depends:
       Glob
@@ -567,7 +565,6 @@ test-suite graph-test
     , directory-tree
     , effectful
     , effectful-core
-    , effectful-plugin
     , effectful-readline
     , effectful-th
     , exceptions

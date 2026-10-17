@@ -137,7 +137,7 @@ cachingGraphMetadataEditingStoringIn ::
 cachingGraphMetadataEditingStoringIn (NodeSlot slot) = interpret \_ -> \case
   GetNodeMetadata nid -> withEarlyReturn do
     -- if a node is in the deleted set, we need to treat it as non-existing
-    whenM (gets @(Set NID) (member nid)) (returnEarly Nothing)
+    whenM (gets @(Set NID) (member nid)) (returnEarly @(Maybe (Node Text ())) Nothing)
     cached <- gets @GraphWithEdits (view (slot nid))
     -- if we've already fetched this node, we can trust it and return it
     let onlyFetched =
@@ -179,7 +179,7 @@ cachingGraphMetadataEditingStoringIn (NodeSlot slot) = interpret \_ -> \case
             node & #augmentation %~ updateA @(NodeEdits Text) (appendEdit Touch)
   DeleteNode nid -> do
     -- ensure node has been loaded if it exists so we know which edges to delete
-    n <- again (getNodeMetadata nid)
+    n <- again (getNodeMetadata @Text nid)
     -- delete the edges as edits so the neighbors lose them too
     forOf_ (_Just . #outgoing . folded) n $ \n' ->
       again (deleteEdge (nid `outgoingEdge` n'))

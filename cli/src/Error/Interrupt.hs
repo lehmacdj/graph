@@ -1,3 +1,5 @@
+{-# LANGUAGE AllowAmbiguousTypes #-}
+
 -- | What stops a command from outside, as opposed to failing in it: an
 -- asynchronous exception, the user's interrupt, or a signal that asks the
 -- program to end. And catching the exceptions of an action into the 'Error'

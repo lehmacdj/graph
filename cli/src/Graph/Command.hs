@@ -200,7 +200,7 @@ importUrlOnce uri = do
   ImportedUrls imported <- get
   (nid, imported') <-
     reuseOrImport
-      (fmap isJust . getNodeMetadata)
+      (fmap isJust . getNodeMetadata @Text)
       do
         guardDangerousDualizedOperation
         subsumeUserError @Missing (importUrl uri)
@@ -252,7 +252,7 @@ test_reuseOrImport =
       runPureEff . runStateLocal (0 :: Int) $
         reuseOrImport
           (pure . exists)
-          (modify (+ 1) $> fresh)
+          (modify @Int (+ 1) $> fresh)
           uri
           cache
 
@@ -1242,7 +1242,7 @@ runCommand' open = \case
     -- text always adds a fresh data node, even if the label already exists
     editing do
       vNid <-
-        (subsumeUserError . taggingFreshNodesWithTime)
+        (subsumeUserError @Missing . taggingFreshNodesWithTime)
           (transitionsFreshVia nid t)
       writeRawData vNid (encodeUtf8 s)
   Describe d -> runCommand' open (Text "description" d)
@@ -1331,7 +1331,7 @@ runCommand' open = \case
         (toList ambiguities)
         suffixes
   ShowImage -> do
-    n <- editing $ subsumeUserError (currentNode @Text)
+    n <- editing $ subsumeUserError @Missing (currentNode @Text)
     forM_ n.rawData $ subsumeUserError @Missing . displayImage . fromStrict
   -- it probably would make sense to factor these commands out into separate
   -- layers of commands that can be handled at different levels
@@ -1343,7 +1343,7 @@ runCommand' open = \case
   Debug -> do
     echo "current node:"
     currentLocation
-      >>= editing . subsumeUserError . getNodeSem @Text
+      >>= editing . subsumeUserError @Missing . getNodeSem @Text
       >>= echo . unpack . nshowWith (\x -> x {showAugmentation = Nothing})
     echo "history:"
     get @History >>= echo . show

@@ -66,7 +66,6 @@ dependencies:
 - pcre-light
 - effectful
 - effectful-core
-- effectful-plugin
 - effectful-readline
 - effectful-th
 - prettyprinter
@@ -155,7 +154,6 @@ default-extensions:
 
 ghc-options:
 - -Wall
-- -fplugin=Effectful.Plugin
 - -flate-specialise
 - -fspecialise-aggressively
 

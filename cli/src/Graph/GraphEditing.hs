@@ -32,8 +32,8 @@ deletingDataWithNodes ::
   Eff r a
 deletingDataWithNodes = interpose @GraphMetadataEditing \_ -> \case
   GetNodeMetadata nid -> getNodeMetadata nid
-  TouchNode nid -> touchNode nid
-  DeleteNode nid -> deleteNode nid >> deleteRawData nid
+  TouchNode nid -> touchNode @Text nid
+  DeleteNode nid -> deleteNode @Text nid >> deleteRawData nid
   InsertEdge e -> insertEdge e
   DeleteEdge e -> deleteEdge e
-  ListNodes -> listNodes
+  ListNodes -> listNodes @Text

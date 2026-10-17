@@ -1,3 +1,5 @@
+{-# LANGUAGE AllowAmbiguousTypes #-}
+
 -- | Viewing the graph with every edge reversed.
 module Graph.Dualizeable
   ( IsDual (..),

@@ -1,3 +1,4 @@
+{-# LANGUAGE AllowAmbiguousTypes #-}
 {-# LANGUAGE TemplateHaskell #-}
 
 -- | The effect of reading and changing the data of a graph's nodes, and the

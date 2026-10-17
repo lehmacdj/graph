@@ -42,7 +42,7 @@ constructing g p =
   let ((result, reads), g') =
         runPureEff
           . runStateLocal g
-          . runInMemoryGraphMetadataEditing
+          . runInMemoryGraphMetadataEditing @Text
           . runStateLocal @(Map NID Int) mempty
           . evalStateLocal @StdGen (mkStdGen 0)
           . runFreshNIDRandom
@@ -100,7 +100,7 @@ failure g command =
     . fst
     . runPureEff
     . runStateLocal g
-    . runInMemoryGraphMetadataEditing
+    . runInMemoryGraphMetadataEditing @Text
     . evalStateLocal @StdGen (mkStdGen 0)
     . runFreshNIDRandom
     . runErrorNoCallStack @UserError

@@ -63,7 +63,7 @@ readNodeMetadata_ shouldCoordinate nid path = withEarlyReturn do
             | otherwise -> pure (Left (Just e))
   serialized <- case result of
     Right bytes -> pure bytes
-    Left Nothing -> returnEarly Nothing
+    Left Nothing -> returnEarly @(Maybe (Node Text ())) Nothing
     -- What is there but can't be read (a file without the permission, a
     -- directory, a link that leads nowhere) is not a missing node: taking it
     -- for one would have the node created over it, or through the link.

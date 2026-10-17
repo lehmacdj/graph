@@ -153,7 +153,7 @@ reportingFailure ::
   Eff effs () ->
   Eff effs ()
 reportingFailure report command =
-  (command `catchError` \_ e -> report (show e))
+  (command `catchError` \_ (e :: UserError) -> report (show e))
     `catchAny` \e -> case (E.fromException e, outputFailure e) of
       (Just H.Interrupt, _) -> throwIO e
       (_, Just failed)

@@ -1,3 +1,4 @@
+{-# LANGUAGE AllowAmbiguousTypes #-}
 {-# LANGUAGE TemplateHaskell #-}
 
 -- | The effect of reading and changing the nodes and edges of a graph (its
@@ -65,7 +66,7 @@ cachingReadingInMemory ::
 cachingReadingInMemory =
   evalStateLocal @(Set NID) mempty
     . evalStateLocal @(Graph t IsThin) emptyGraph
-    . cachingReadingInState
+    . cachingReadingInState @t
     . inject
 
 cachingReadingInState ::
@@ -85,7 +86,7 @@ cachingReadingInState ::
   Eff r a
 cachingReadingInState = interpret \_ -> \case
   GetNodeMetadata nid -> withEarlyReturn do
-    whenM (gets @(Set NID) (member nid)) (returnEarly Nothing)
+    whenM (gets @(Set NID) (member nid)) (returnEarly @(Maybe (Node t ())) Nothing)
     cached <-
       gets @(Graph t IsThin) $
         preview (ix nid . asideMetadata (only Fetched))
@@ -93,7 +94,7 @@ cachingReadingInState = interpret \_ -> \case
     n <-
       getNodeMetadata nid `onNothingM` do
         modify @(Set NID) $ insertSet nid
-        returnEarly Nothing
+        returnEarly @(Maybe (Node t ())) Nothing
     -- stored as it was read: storing it with @at@ would rewrite the nodes
     -- read before it to agree with it about the edges between them
     modify @(Graph t IsThin) $ #nodeMap . at nid ?~ (Fetched <$ n)
@@ -117,8 +118,8 @@ runInMemoryGraphMetadataEditing = interpret \_ -> \case
       -- otherwise we will overwrite the node with an empty node
       at nid %~ Just . fromMaybe (emptyNode nid)
   DeleteNode nid -> modify @(Graph t ()) $ at nid .~ Nothing
-  InsertEdge edge -> modify $ Models.Graph.insertEdge edge
-  DeleteEdge edge -> modify $ Models.Graph.deleteEdge edge
+  InsertEdge edge -> modify @(Graph t ()) $ Models.Graph.insertEdge edge
+  DeleteEdge edge -> modify @(Graph t ()) $ Models.Graph.deleteEdge edge
   ListNodes -> gets @(Graph t ()) $ keysSet . view #nodeMap
 
 graphFromGraphMetadataEditing ::
@@ -131,5 +132,5 @@ graphFromGraphMetadataEditing ::
 graphFromGraphMetadataEditing =
   runPureEff
     . execStateLocal emptyGraph
-    . runInMemoryGraphMetadataEditing
+    . runInMemoryGraphMetadataEditing @t
     . inject

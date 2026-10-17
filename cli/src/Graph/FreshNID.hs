@@ -28,7 +28,7 @@ runFreshNIDRandom ::
   Eff (FreshNID : r) a ->
   Eff r a
 runFreshNIDRandom = interpret \_ -> \case
-  FreshNID -> state uniform
+  FreshNID -> state @StdGen uniform
 
 -- PickNID nids -> do
 --   i <- state $ uniformR (0, length nids - 1)

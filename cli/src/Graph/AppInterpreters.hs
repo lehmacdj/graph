@@ -189,10 +189,10 @@ runPermissiveDependencyEffectsEnv ::
   Eff (Concat PermissiveDependencyEffects r) ~> Eff r
 runPermissiveDependencyEffectsEnv =
   runEchoReadline
-    >>> runStateInputIORefOf #isDualized
-    >>> runStateInputIORefOf #randomGen
+    >>> runStateInputIORefOf @_ @Env #isDualized
+    >>> runStateInputIORefOf @_ @Env #randomGen
     >>> subsume
-    >>> runStateInputIORefOf @History #history
+    >>> runStateInputIORefOf @History @Env #history
     >>> runRawGraphFromEnv
     >>> evalStateLocal noDamageReadPast
 

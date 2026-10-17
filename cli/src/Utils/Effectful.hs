@@ -41,7 +41,7 @@ subsumeReaderState getter =
       modifier <- SR.ask @(i -> i)
       modifier . getter <$> get @x
     Local f m ->
-      localSeqUnlift env \unlift -> SR.local (f .) (unlift m)
+      localSeqUnlift env \unlift -> SR.local @(i -> i) (f .) (unlift m)
 
 -- | Run a 'State' effect backed by an 'IORef'.
 runStateIORef ::
@@ -76,7 +76,7 @@ runStateInputIORefOf l = applyInput2Of l runStateIORef
 -- should not be called multiple times
 unit_runInputConstM_alwaysSame :: Assertion
 unit_runInputConstM_alwaysSame =
-  (runPureEff . runStateLocal 0 . runInputConstM initAction) action
+  (runPureEff . runStateLocal @Int 0 . runInputConstM initAction) action
     @=? (0, 0)
   where
     initAction :: (State Int :> r) => Eff r Int

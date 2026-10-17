@@ -51,7 +51,7 @@ matchedBy g query' =
   where
     resolved =
       resolveQuery corpusCurrent query'
-        & runInMemoryGraphMetadataEditing
+        & runInMemoryGraphMetadataEditing @Text
         & evalStateLocal g
         & runPureEff
 
@@ -101,7 +101,7 @@ spec_compileAtAlternatives = describe "@ alternatives before @N" do
   where
     resolveIn g q =
       resolveQuery corpusCurrent q
-        & runInMemoryGraphMetadataEditing
+        & runInMemoryGraphMetadataEditing @Text
         & evalStateLocal g
         & runPureEff
 
@@ -1383,7 +1383,7 @@ graphOf ns es =
 resolveFrom :: NID -> Graph Text () -> PathQuery -> ResolvedPath
 resolveFrom cur g q =
   resolveQuery cur q
-    & runInMemoryGraphMetadataEditing
+    & runInMemoryGraphMetadataEditing @Text
     & evalStateLocal g
     & runPureEff
 
