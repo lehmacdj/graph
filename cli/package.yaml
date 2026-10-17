@@ -31,7 +31,6 @@ dependencies:
 - classy-prelude
 - comonad
 - conduit
-- conduit-extra
 - constraints
 - containers
 - deepseq
@@ -49,7 +48,6 @@ dependencies:
 - haskeline
 - hspec
 - hspec-expectations
-- html-conduit
 - http-conduit
 - http-types
 - indexed-traversable
@@ -98,7 +96,6 @@ dependencies:
 - witherable
 - wreq
 - xdg-basedir
-- xml-conduit
 
 default-extensions:
 - BangPatterns

@@ -244,7 +244,6 @@ library
     , classy-prelude
     , comonad
     , conduit
-    , conduit-extra
     , constraints
     , containers
     , deepseq
@@ -265,7 +264,6 @@ library
     , haskeline
     , hspec
     , hspec-expectations
-    , html-conduit
     , http-conduit
     , http-types
     , indexed-traversable
@@ -308,7 +306,6 @@ library
     , witherable
     , wreq
     , xdg-basedir
-    , xml-conduit
   default-language: Haskell2010
   if os(darwin)
     ghc-options: -fobject-code -framework Foundation
@@ -403,7 +400,6 @@ executable ge
     , classy-prelude
     , comonad
     , conduit
-    , conduit-extra
     , constraints
     , containers
     , deepseq
@@ -425,7 +421,6 @@ executable ge
     , haskeline
     , hspec
     , hspec-expectations
-    , html-conduit
     , http-conduit
     , http-types
     , indexed-traversable
@@ -468,7 +463,6 @@ executable ge
     , witherable
     , wreq
     , xdg-basedir
-    , xml-conduit
   default-language: Haskell2010
   if os(darwin)
     ghc-options: -fobject-code -framework Foundation
@@ -557,7 +551,6 @@ test-suite graph-test
     , classy-prelude
     , comonad
     , conduit
-    , conduit-extra
     , constraints
     , containers
     , deepseq
@@ -579,7 +572,6 @@ test-suite graph-test
     , haskeline
     , hspec
     , hspec-expectations
-    , html-conduit
     , http-conduit
     , http-types
     , indexed-traversable
@@ -622,7 +614,6 @@ test-suite graph-test
     , witherable
     , wreq
     , xdg-basedir
-    , xml-conduit
   default-language: Haskell2010
   if os(darwin)
     ghc-options: -fobject-code -framework Foundation
