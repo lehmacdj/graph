@@ -172,6 +172,7 @@ library
       Utils.Testing.External
       Utils.Testing.GoldenSpec
       Utils.Testing.TempGraph
+      Wasm.Api
   other-modules:
       Paths_graph
   hs-source-dirs:
