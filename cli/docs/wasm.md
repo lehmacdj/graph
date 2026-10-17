@@ -88,9 +88,9 @@ after items 1, 2 and 4; after items 1 and 2 in brackets):
   `Utils.Testing` (see "Decision: co-located tests") and `random`.
 - 24 non-Spec modules under `src/` import `Utils.Testing`; it reaches
   29 local modules and none of storage, `haskeline` or file coordination.
-- `Models.Completion`: 42 and `Utils.Parsing.Problems`: 36 (43 together,
-  with the command parser for the names of commands; item 5); the same:
-  only PCRE.
+- `Models.Completion`: 42 and `Utils.Parsing.Problems`: 38 (43 together,
+  with the command parser for the names of commands and for the errors of
+  a command line; item 5); the same: only PCRE.
 
 ## Decision: co-located tests
 
@@ -228,8 +228,11 @@ Parsing and syntax feedback:
   SyntaxProblem`, with `SyntaxProblem {start, end :: Int, message ::
   Text}`: where each problem is (offsets in code points, end exclusive;
   custom errors use their source range) and the parser's message for it,
-  as `errorBundlePretty` words it. It works for any of the parsers, the
-  command parser included.
+  as `errorBundlePretty` words it. It takes the errors of any parser that
+  returns a `ParseErrorBundle'`: `parsePath`, or
+  `Models.Command.Parse.parseCommandLine :: Text -> Either
+  ParseErrorBundle' Command` for a whole command line (what
+  `parseCommand` parses with, the REPL's and `ge -e`'s parser).
 
 Completion (`Models.Completion`):
 

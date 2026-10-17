@@ -1,5 +1,6 @@
 module Models.Command.Parse
   ( parseCommand,
+    parseCommandLine,
     commandNames,
     startsCommand,
     test_parseCommand,
@@ -283,9 +284,13 @@ startsCommand =
 -- | Parse a whole command line; trailing input is an error rather than
 -- silently ignored (@rm a b@ used to run @rm a@).
 parseCommand :: Text -> Either String Command
-parseCommand =
-  left errorBundlePretty
-    . runParser (pCommand <* eof >>= rejectSplices) "<interactive>"
+parseCommand = left errorBundlePretty . parseCommandLine
+
+-- | 'parseCommand' with its errors as megaparsec gives them, for a caller
+-- that shows where they are ('Utils.Parsing.Problems.syntaxProblems').
+parseCommandLine :: Text -> Either ParseErrorBundle' Command
+parseCommandLine =
+  runParser (pCommand <* eof >>= rejectSplices) "<interactive>"
 
 test_startsCommand :: TestTree
 test_startsCommand =

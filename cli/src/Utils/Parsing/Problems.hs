@@ -10,6 +10,7 @@ module Utils.Parsing.Problems
 where
 
 import Data.Text qualified as T
+import Models.Command.Parse (parseCommandLine)
 import Models.Path.Parse (parsePath)
 import MyPrelude
 import Utils.Parsing.Common
@@ -37,17 +38,21 @@ syntaxProblems bundle = problem <$> bundleErrors bundle
     input = pstateInput posState
     problem e =
       SyntaxProblem
-        { start = errorOffset e,
-          end = max (errorOffset e) (endOf e),
+        { start,
+          end = max start end,
           message = T.stripEnd (pack (parseErrorTextPretty e))
         }
-    endOf = \case
-      TrivialError o (Just (Tokens ts)) _ -> o + length ts
+      where
+        (start, end) = stretchOf e
+    -- a custom error's own range, not where the parser was: errors found
+    -- after the whole text is read are at its end
+    stretchOf = \case
+      TrivialError o (Just (Tokens ts)) _ -> (o, o + length ts)
       FancyError o errors ->
         case [r | ErrorCustom c <- toList errors, Just r <- [rangeOf c]] of
-          r : _ -> offsetOf r.endPos
-          [] -> o
-      e -> errorOffset e
+          r : _ -> (offsetOf r.startPos, offsetOf r.endPos)
+          [] -> (o, o)
+      e -> (errorOffset e, errorOffset e)
     -- the first offset at or after the position: positions count a tab
     -- to the next tab stop, so a column is not an offset
     inputEnd = pstateOffset posState + length input
@@ -89,3 +94,17 @@ spec_syntaxProblems = do
     stretches "a + b | c" `shouldBe` [(6, 7)]
   it "counts characters, not columns, after a tab" $
     stretches "\t@abc" `shouldBe` [(1, 5)]
+  describe "of the command parser" do
+    let commandProblems t =
+          either (toList . syntaxProblems) (const []) (parseCommandLine t)
+        commandStretches t = [(p.start, p.end) | p <- commandProblems t]
+    -- refused after the whole line is read, where the parser is at its end
+    it "gives the stretch of a splice" do
+      commandStretches "mk %{foo}" `shouldBe` [(3, 9)]
+      commandStretches "mk z; mk q/%{foo}" `shouldBe` [(11, 17)]
+      map (.message) (commandProblems "mk %{foo}")
+        `shouldSatisfy` all ("(SpliceInCommand)" `isSuffixOf`)
+    it "gives the stretch of a setting of %override" do
+      commandStretches "mk %override({foo = x}, a)" `shouldBe` [(14, 21)]
+      map (.message) (commandProblems "mk %override({foo = x}, a)")
+        `shouldSatisfy` all ("(InvalidOverrideSetting)" `isSuffixOf`)
