@@ -6,9 +6,10 @@
 -- 'CompletionLookups', which the caller gives: the REPL reads them from
 -- the graph it has open ("Executable.GraphEditor.Completion"), and
 -- 'withoutGraph' has none of them, for a caller that has no graph. What
--- needs no graph is offered either way: the @/@ that is all that can
--- follow a term that is not a label, and nothing for a path that no
--- command runs or that has a directive in it.
+-- needs no graph is offered either way: the names after @%@
+-- ('percentNames'), the @/@ that is all that can follow a term that is not
+-- a label, and nothing for a path that no command runs or that has a
+-- directive in it.
 module Models.Completion
   ( Completions (..),
     Candidate (..),
@@ -21,12 +22,16 @@ module Models.Completion
 where
 
 import Control.Monad.State.Strict qualified as S
+import Data.Char (isAlpha)
 import Models.LegacyPartialPath
 import Models.NID
+import Models.Path.Parse (parsePath, percentNames)
 import Models.Path.Simple
 import Models.PathPattern.Compile (checkCopies)
 import MyPrelude
+import Text.Megaparsec (bundleErrors, errorOffset)
 import Utils.Base62 (isBase62Char)
+import Utils.Parsing (isIdentChar)
 import Utils.Testing
 
 -- | What can replace the word before the cursor.
@@ -73,13 +78,26 @@ completeWithoutGraph = runIdentity . complete withoutGraph
 -- the cursor (on the command line, the command and its arguments before
 -- the path that is completed).
 --
--- A word that is @\@@ and the start of an id is completed to the nodes
+-- A word that is @%@ and the start of a name after it is completed to the
+-- names that begin with it ('percentNames'), each with the @(@ of its
+-- arguments if it takes any. A word that is @\@@ and the start of an id is completed to the nodes
 -- whose id begins with it, each written with its @\@@, which replaces the
 -- one that is typed; when there are none, or the word is not such a
 -- start, it is completed as the end of a path.
 complete :: (Monad m) => CompletionLookups m -> Text -> m Completions
 complete lookups before = case nidPrefixBefore before of
-  Nothing -> pathCompletions
+  Nothing
+    | Just name <- percentNameBefore before ->
+        pure
+          Completions
+            { replaced = length name + 1,
+              candidates =
+                [ Candidate ("%" <> n <> bool "" "(" arguments) False
+                | (n, arguments) <- percentNames,
+                  name `isPrefixOf` n
+                ]
+            }
+    | otherwise -> pathCompletions
   Just prefix ->
     lookups.nodesWithPrefix prefix >>= \case
       [] -> pathCompletions
@@ -114,6 +132,18 @@ nidPrefixBefore before =
   case span isBase62Char (take (nidDigits + 1) (reverse (unpack before))) of
     (reversedPrefix, '@' : _) -> Just (pack (reverse reversedPrefix))
     _ -> Nothing
+
+-- | The letters after a @%@ at the end of the text, when the @%@ can start
+-- a term: it does not continue a label or a quote.
+percentNameBefore :: Text -> Maybe Text
+percentNameBefore before =
+  case span isAlpha (reverse (unpack before)) of
+    (reversedName, '%' : rest)
+      | maybe True startsTerm (headMay rest) ->
+          Just (pack (reverse reversedName))
+    _ -> Nothing
+  where
+    startsTerm c = not (isIdentChar c || c `elem` ("\"'%" :: String))
 
 -- | What the end of the path before the cursor is, for completion.
 data PathSite
@@ -203,6 +233,34 @@ spec_complete = do
     nothing "ls \"a b"
     -- a prefix that no command runs: it would copy a meeting point
     nothing "ls (a & b)/(((c & y) | k)/@/e & d)/"
+  describe "names after %" do
+    it "offers the names that begin with what is typed" do
+      completeWithoutGraph "ls %"
+        `shouldBe` Completions
+          1
+          [ Candidate t False
+          | t <- ["%never", "%history(", "%last", "%targets(", "%override("]
+          ]
+      completeWithoutGraph "ls a/%ta"
+        `shouldBe` Completions 3 [Candidate "%targets(" False]
+      completeWithoutGraph "ls (b & %la"
+        `shouldBe` Completions 3 [Candidate "%last" False]
+      completeWithoutGraph "ls %x" `shouldBe` Completions 2 []
+    it "offers only names that the path parser takes after %" $
+      -- a bare name parses as a path; one with arguments is read up to
+      -- its end, where the arguments are missing
+      for_ (completeWithoutGraph "ls %").candidates \c ->
+        let accepted = case parsePath c.text of
+              Right _ -> True
+              Left e ->
+                "(" `isSuffixOf` c.text
+                  && map errorOffset (toList (bundleErrors e))
+                    == [length c.text]
+         in (c.text, accepted) `shouldBe` (c.text, True)
+    it "offers no name in a label or a quote" do
+      let offered before = map (.text) (completeWithoutGraph before).candidates
+      offered "ls a%l" `shouldBe` []
+      offered "ls \"%l" `shouldBe` []
   describe "ids" do
     -- 000000000001, 000000000002 and 000000001000
     let n1 = smallNID 1

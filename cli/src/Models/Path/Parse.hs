@@ -44,7 +44,7 @@ partialPathTerm' pNID =
     <|> try pTag
     <|> (symbol "@" $> One)
     <|> (symbol "*" $> Wild)
-    <|> (symbol "%never" $> Zero)
+    <|> (symbol ("%" <> neverName) $> Zero)
     <|> between
       (symbol "!{")
       (symbol "}")
@@ -59,12 +59,45 @@ partialPathTerm' pNID =
 
 pDirective :: Parser (Directive 'Partial)
 pDirective =
-  try (LocationFromHistory <$> pDirectiveNamed "history" number)
-    <|> try (HttpResource <$> pHttpURI)
-    <|> try (LocationFromHistory 1 <$ symbol "%last")
-    <|> (Targets <$> pDirectiveNamed "targets" pPartialPath)
-    <|> pDirectiveNamed "override" pOverride
+  try (HttpResource <$> pHttpURI)
+    <|> choice (map (uncurry pNamedDirective) namedDirectives)
     <|> (Splice <$> between (symbol "%{") (symbol "}") (many (noneOf ['}'])))
+
+-- | How a directive that is a name after @%@ is written after its name.
+data DirectiveForm
+  = -- | Nothing follows the name: it stands for this directive.
+    BareDirective (Directive 'Partial)
+  | -- | Arguments follow in parentheses, which this parses.
+    DirectiveArguments (Parser (Directive 'Partial))
+
+-- | The directives that are a name after @%@: what 'pDirective' parses
+-- besides URLs and splices, and what completion offers ('percentNames').
+namedDirectives :: [(Text, DirectiveForm)]
+namedDirectives =
+  [ ("history", DirectiveArguments (LocationFromHistory <$> number)),
+    ("last", BareDirective (LocationFromHistory 1)),
+    ("targets", DirectiveArguments (Targets <$> pPartialPath)),
+    ("override", DirectiveArguments pOverride)
+  ]
+
+pNamedDirective :: Text -> DirectiveForm -> Parser (Directive 'Partial)
+pNamedDirective name = \case
+  BareDirective d -> d <$ symbol ("%" <> name)
+  DirectiveArguments p -> pDirectiveNamed name p
+
+-- | The name after @%@ of the path that matches nothing.
+neverName :: Text
+neverName = "never"
+
+-- | Every name that a path can have after a @%@, with whether arguments in
+-- parentheses follow it: 'neverName' and 'namedDirectives'.
+percentNames :: [(Text, Bool)]
+percentNames =
+  (neverName, False) : [(n, takesArguments f) | (n, f) <- namedDirectives]
+  where
+    takesArguments = \case
+      BareDirective _ -> False
+      DirectiveArguments _ -> True
 
 -- | @{plus = shared}, p@: settings, then the path they apply to.
 pOverride :: Parser (Directive 'Partial)
