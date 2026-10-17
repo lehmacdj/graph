@@ -88,8 +88,9 @@ after items 1, 2 and 4; after items 1 and 2 in brackets):
   `Utils.Testing` (see "Decision: co-located tests") and `random`.
 - 24 non-Spec modules under `src/` import `Utils.Testing`; it reaches
   29 local modules and none of storage, `haskeline` or file coordination.
-- `Models.Completion`: 40 and `Utils.Parsing.Problems`: 36 (41 together;
-  item 5); the same: only PCRE.
+- `Models.Completion`: 42 and `Utils.Parsing.Problems`: 36 (43 together,
+  with the command parser for the names of commands; item 5); the same:
+  only PCRE.
 
 ## Decision: co-located tests
 
@@ -235,15 +236,34 @@ Completion (`Models.Completion`):
 - `complete :: Monad m => CompletionLookups m -> Text -> m Completions`:
   given the text before the cursor, `Completions {replaced :: Int,
   candidates :: [Candidate]}`, where each `Candidate {text :: Text,
-  finished :: Bool}` replaces the last `replaced` characters.
+  finished :: Bool}` replaces the last `replaced` characters (a caller may
+  add a space after the only candidate that is finished).
+  `completeCommandLine` takes the names of the commands as well, for a
+  command line with more of them (the REPL adds `:q` and `:quit`).
 - `CompletionLookups m {nodesWithPrefix :: Text -> m [NID], labelsAfter ::
   Path -> m [Text]}` is what completion needs from a graph; `withoutGraph`
   has none of it, and `completeWithoutGraph = runIdentity . complete
   withoutGraph`.
-- Without a graph it offers the `/` after a term that is not a label (`(a
-  & b)`, `@`), and nothing for a path with a directive, one that does not
-  parse or one that no command runs (`checkCopies`). It also says which
-  word a graph would complete (`replaced`).
+- Without a graph it offers:
+  - the names of commands where a command begins: at the start, after a
+    `;` or `{`, or after `at` and its path (`Models.Command.Parse.
+    startsCommand`, which reads the text with the command parser).
+    Finished. The names are `commandNames`, from `commandSyntaxes`, the
+    table of each command's names and the parser of what follows them,
+    which `pCommandTerm` is made of.
+  - the names after a `%` that starts a term (`%last`, `%never`,
+    `%history(`, `%targets(`, `%override(`): `Models.Path.Parse.
+    percentNames`, from `namedDirectives`, the table that `pDirective`
+    parses them with, and `%never`. A directive that takes arguments comes
+    with its `(`. Not finished: a `/` or the arguments follow. `%{`
+    (splices) is not offered: commands refuse it.
+  - the `/` after a term that is not a label (`(a & b)`, `@`), not
+    finished;
+  - nothing for a path with a directive, one that does not parse or one
+    that no command runs (`checkCopies`). It also says which word a graph
+    would complete (`replaced`).
+- An id is completed with its `@`, which replaces the typed one: `@0`
+  completes to `@000000000001`.
 
 A graph-aware layer plugs in by giving `CompletionLookups`: the REPL's
 (`graphLookups` in `Executable.GraphEditor.Completion`) globs the node
@@ -254,12 +274,8 @@ JS-backed `PathReading` interpreters, now that item 4 has separated the
 effects from the storage. The order of what is tried (an id after `@`, then the
 path) stays in the core either way.
 
-Found while doing it, kept as they were:
-
-- An id is completed after the `@`, which stays, to a candidate with its
-  own `@`: the REPL completes `@0` to `@@000000000001`.
-- The `/` candidate is finished, so haskeline adds a space after it when it
-  is the only one: `(a & b)` completes to `(a & b)/ `.
+The two bugs found while doing item 5 are fixed: the doubled `@` of a
+completed id, and the space that haskeline added after the `/` candidate.
 
 ## Toolchain
 
@@ -344,3 +360,4 @@ projects and logs are in `cli/tmp/wasm-feasibility/` (not committed).
 | 2026-10-17 | Item 5, rescoped to what needs no graph: `parsePath`, `Utils.Parsing.Problems` (syntax feedback as data) and `Models.Completion` (completion over `CompletionLookups`); the REPL's completion is an adapter over it. The core reaches 41 local modules, only PCRE of the blockers. |
 | 2026-10-17 | Toolchain tested: GHC 9.10.3 is enough (TH, async JS imports); no compiler plugins; test libraries build and their unused code is dropped; PCRE cross-compiles. Decided: PCRE (item 3), LTS 24.63 and no `effectful-plugin` (item 7). |
 | 2026-10-17 | Item 7: `effectful-plugin` dropped (168 type applications, 5 modules allow ambiguous types); unused conduit packages removed; LTS 24.63 (GHC 9.10.3). Parse errors of node files are now aeson 2.2's wording. |
+| 2026-10-17 | Completion follow-ups: an id completes with one `@`; no space after the `/`; directive names and command names completed without a graph, from the tables their parsers are made of (`namedDirectives`, `commandSyntaxes`); the REPL's `:q`/`:quit` too. The core reaches 43 local modules (`Models.Command`, `Models.Command.Parse` added), still only PCRE of the blockers. |
