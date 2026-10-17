@@ -3,7 +3,8 @@
 Design and progress tracking for compiling the path language, completion
 and graph APIs to WebAssembly, so the browser extension can call them.
 
-Started 2026-10-17. Status: planning, nothing built yet.
+Started 2026-10-17. Status: refactoring the native build (items 1 and 2
+done); nothing compiled for WebAssembly yet.
 
 ## Goal and scope
 
@@ -51,24 +52,29 @@ extension.
 ## Current blockers
 
 The target modules are mostly pure, but their imports reach storage,
-`haskeline`, HTTP and PCRE. Four entry points account for every chain.
-These come from tracing local imports on 2026-10-17; nothing has been
-compiled for WebAssembly yet.
+`haskeline`, HTTP and PCRE. Four entry points accounted for every chain
+when traced on 2026-10-17; the first two are fixed (items 1 and 2).
+Nothing has been compiled for WebAssembly yet.
 
 | Entry point | What it drags in | Example chain |
 | --- | --- | --- |
-| `Utils.Testing` (co-located tests) | storage layer, `Error.UserError` (HTTP, `haskeline`), macOS file coordination | `Models.Path.Parse` → `Utils.Testing` → `DAL.Serialization` → `DAL.DirectoryFormat` → `DAL.RawGraph` |
-| `MyPrelude` re-exports | `haskeline` via `MyPrelude.Effect` (only to detect its Ctrl-C exception); PCRE via `MyPrelude.Regex` | `Models.Path.Parse` → `MyPrelude` → `MyPrelude.Effect` |
+| ~~`Utils.Testing` (co-located tests)~~ fixed: item 1 | storage layer, `Error.UserError` (HTTP, `haskeline`), macOS file coordination | `Models.Path.Parse` → `Utils.Testing` → `DAL.Serialization` → `DAL.DirectoryFormat` → `DAL.RawGraph` |
+| `MyPrelude` re-exports | ~~`haskeline` via `MyPrelude.Effect` (only to detect its Ctrl-C exception)~~ fixed: item 2; PCRE via `MyPrelude.Regex` | `Models.Path.Parse` → `MyPrelude` → `MyPrelude.Effect` |
 | Effects defined beside their file-backed interpreter | `DAL.FileSystemOperations.*`, `DAL.Interpreters` | `Graph.PathPattern.Resolve` → `Graph.GraphMetadataEditing` → `MetadataWriteDiff` → `DAL.Interpreters` |
 | Completion tied to the REPL | `haskeline` completion type, `forkIO` / `threadDelay`, full app interpreters | `Executable.GraphEditor.Completion` (89 local modules) |
 
-Local modules reached from each entry point:
+Local modules reached from each entry point (2026-10-17, after items 1
+and 2; before them in brackets):
 
-- `Models.PathPattern.Match`: 29; only the `MyPrelude` problems.
-- `Models.Path.Parse`: 44; everything else comes through `Utils.Testing`.
-- `Graph.GraphEditing`: 50 and `Graph.PathPattern.Execution`: 65; both
-  reach the storage interpreters.
-- 24 non-Spec modules under `src/` import `Utils.Testing`.
+- `Models.PathPattern.Match`: 29 (29); reaches no `haskeline` or `DAL.*`,
+  only PCRE through `MyPrelude.Regex`.
+- `Models.Path.Parse`: 35 (44); the same: only PCRE.
+- `Graph.GraphEditing`: 51 (50) and `Graph.PathPattern.Execution`: 66
+  (65); both still reach the storage interpreters (item 4) and, through
+  `Error.Warn`, `Error.UserError` and `DAL.Interpreters`, `haskeline`. The
+  one more module is `Error.Interrupt`.
+- 24 non-Spec modules under `src/` import `Utils.Testing`; it now reaches
+  29 local modules and none of storage, `haskeline` or file coordination.
 
 ## Decision: co-located tests
 
@@ -76,9 +82,10 @@ Local modules reached from each entry point:
 with no conditional compilation. Add CPP only if the test libraries fail to
 build for WebAssembly.
 
-The storage chain comes from three of `Utils.Testing`'s exports:
-`withTempGraph`, `withEmptyTempGraph` (which use `initializeGraph`,
-`directory-tree` and `copyFile`) and `representedByJson`. Outside
+The storage chain came from two of `Utils.Testing`'s exports:
+`withTempGraph` and `withEmptyTempGraph` (which use `initializeGraph`,
+`directory-tree` and `copyFile`). `representedByJson`, once listed here,
+only needs aeson and stays in `Utils.Testing`. Outside
 `*Spec.hs` files, only `Executable.GraphEditor` and
 `Executable.GraphEditor.Completion` use them, and both stay native-only.
 Moving those helpers to a new `Utils.Testing.TempGraph` cuts the chain from
@@ -107,10 +114,16 @@ everything compiles.
 
 Ordered so each step lands independently and keeps native `ge` green.
 
-1. [ ] Split `Utils.Testing`: move `withTempGraph`, `withEmptyTempGraph`
-   and `representedByJson` to `Utils.Testing.TempGraph`.
-2. [ ] Move the `haskeline` interrupt check out of `MyPrelude.Effect` (into
-   the REPL code, or behind an exception predicate the REPL supplies).
+1. [x] Split `Utils.Testing`: move `withTempGraph` and
+   `withEmptyTempGraph` to `Utils.Testing.TempGraph`.
+2. [x] Move the `haskeline` interrupt check out of `MyPrelude.Effect`: it,
+   `isInterrupt`, `EndedBySignal` and `fromException`/`fromExceptionVia`
+   are now in `Error.Interrupt`, outside `MyPrelude`.
+   Only four native-side modules use them. A predicate supplied by the
+   REPL would have to reach `fromExceptionVia` in every interpreter that
+   catches exceptions, since haskeline throws Ctrl-C at the thread
+   wherever it is; the wasm interpreters will need their own catching
+   helper or a haskeline-free variant if they use these.
 3. [ ] Decide on regex for wasm: cross-compile PCRE with wasi-sdk, or put a
    pure-Haskell engine behind a flag. Document any behaviour differences.
 4. [ ] Separate effect definitions from interpreters: `GraphMetadataEditing`
@@ -157,3 +170,4 @@ Ordered so each step lands independently and keeps native `ge` green.
 | Date | Change |
 | --- | --- |
 | 2026-10-17 | Traced blockers; chose hybrid architecture; proposed splitting `Utils.Testing` over CPP-gated tests. |
+| 2026-10-17 | Items 1 and 2: `Utils.Testing.TempGraph` split off; interrupt predicates moved to `Error.Interrupt`. `Models.Path.Parse` and `Models.PathPattern.Match` now reach neither `haskeline` nor `DAL.*`; PCRE is what remains. |
