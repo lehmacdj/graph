@@ -92,7 +92,8 @@ complete lookups before = case nidPrefixBefore before of
   where
     pathCompletions = case pathSiteBefore before of
       NoPathSite -> pure noCompletions
-      AfterTerm -> pure (Completions 0 [Candidate "/" True])
+      -- not finished: a label follows it, not a space
+      AfterTerm -> pure (Completions 0 [Candidate "/" False])
       LabelAfter p partial -> do
         labels <- lookups.labelsAfter p
         pure
@@ -182,9 +183,9 @@ spec_complete = do
   describe "without a graph" do
     it "offers / after a term that is not a label" do
       completeWithoutGraph "ls (a & b)"
-        `shouldBe` Completions 0 [Candidate "/" True]
+        `shouldBe` Completions 0 [Candidate "/" False]
       completeWithoutGraph "ls @"
-        `shouldBe` Completions 0 [Candidate "/" True]
+        `shouldBe` Completions 0 [Candidate "/" False]
     it "offers no label" $
       completeWithoutGraph "ls a/b" `shouldBe` Completions 1 []
   describe "nothing to complete" do
@@ -224,7 +225,7 @@ spec_complete = do
         `shouldBe` (noCompletions, ["nodes 0000000000"])
     it "completes the @ of a path when there is no node" $
       completing [] "ls @"
-        `shouldBe` (Completions 0 [Candidate "/" True], ["nodes "])
+        `shouldBe` (Completions 0 [Candidate "/" False], ["nodes "])
     it "does not take more characters than an id has for one" $
       completing [n1] "ls @0000000000001"
         `shouldBe` (noCompletions, [])
