@@ -72,6 +72,9 @@ struct ZoomableView<Content: View>: View {
 
             let oldAngle = angle
             let oldScale = scale
+            // The user deliberately moved away from the zoom state, so a double
+            // tap should advance instead of restoring it.
+            currentZoomState = nil
             if let rotation = value.rotation, rotation.radians.isFinite {
                 angle += thresholdedRotation(rotation)
             }
@@ -223,26 +226,42 @@ struct ZoomableView<Content: View>: View {
         return min(max(scale, minimumScale), maximumScale)
     }
 
-    /// Applies a zoom state, returning whether it could be applied. It can't be
-    /// applied until the viewport and content have both been measured.
-    @discardableResult
-    private func applyZoomState(zoomState: ZoomState) -> Bool {
+    /// The scale a zoom state shows the content at, or nil until the viewport
+    /// and content have both been measured.
+    private func scale(for zoomState: ZoomState) -> CGFloat? {
         guard let viewportSize = viewportFrame?.size, let defaultContentSize, let fitScale else {
-            return false
+            return nil
         }
         switch zoomState {
         case .fit:
-            scale = clampedScale(fitScale)
+            return clampedScale(fitScale)
         case .fill:
-            scale = clampedScale(max(
+            return clampedScale(max(
                 viewportSize.width / defaultContentSize.width,
                 viewportSize.height / defaultContentSize.height
             ))
         case .actualSize:
-            scale = clampedScale(1.0)
+            return clampedScale(1.0)
         }
+    }
+
+    /// Applies a zoom state, returning whether it could be applied. It can't be
+    /// applied until the viewport and content have both been measured.
+    @discardableResult
+    private func applyZoomState(zoomState: ZoomState) -> Bool {
+        guard let newScale = scale(for: zoomState) else { return false }
+        scale = newScale
         angle = .zero
+        currentZoomState = zoomState
         return true
+    }
+
+    /// Whether the content is still shown the way a zoom state shows it. It
+    /// may not be after the viewport or content changes size.
+    private func isShowing(zoomState: ZoomState) -> Bool {
+        guard let expectedScale = scale(for: zoomState) else { return true }
+        return angle == .zero
+            && abs(scale - expectedScale) <= 1e-6 * max(1, expectedScale)
     }
 
     /// The anchor, relative to the content, that an in-progress gesture should
@@ -269,13 +288,21 @@ struct ZoomableView<Content: View>: View {
 
     private var doubleTapGesture: some Gesture {
         TapGesture(count: 2).onEnded {
-            applyZoomState(zoomState: nextZoomState)
-            nextZoomState = nextZoomState.next
+            // Restore the current zoom state if it has drifted, e.g. because
+            // the window resized, before cycling to the next one.
+            if let currentZoomState, !isShowing(zoomState: currentZoomState) {
+                applyZoomState(zoomState: currentZoomState)
+            } else if applyZoomState(zoomState: nextZoomState) {
+                nextZoomState = nextZoomState.next
+            }
         }
     }
 
     /// Next zoom state to use for double tap
     @State var nextZoomState: ZoomState = .fit
+    /// The zoom state last applied, or nil once a gesture has changed the
+    /// scale or rotation since.
+    @State var currentZoomState: ZoomState?
 
     @State var didInitialZoom: Bool = false
     @State var defaultContentSize: CGSize?
