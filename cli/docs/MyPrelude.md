@@ -105,7 +105,9 @@ Rich set of helpers for `Maybe` and `Either`:
   - `runError`: like effectful's `runErrorNoCallStack` (polysemy semantics)
   - `handleError`: Handle errors without error in result type
   - `errorToLeft`, `errorToNothing`: Convert errors to values
-  - `fromException`, `fromExceptionVia`: catch IO exceptions into `Error`
+  - `fromException`, `fromExceptionVia` (in `Error.Interrupt`, not
+    MyPrelude, so that MyPrelude doesn't import haskeline): catch IO
+    exceptions into `Error`, leaving interrupts alone
 
 **Note**: Specific effect patterns are TBD - update this section as conventions emerge.
 

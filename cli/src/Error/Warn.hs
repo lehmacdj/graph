@@ -4,6 +4,7 @@ module Error.Warn where
 
 import Data.List.NonEmpty qualified as NonEmpty
 import Effectful.State.Dynamic
+import Error.Interrupt (isInterrupt)
 import Error.UserError
 import Models.Damage
 import Models.NID

@@ -24,6 +24,7 @@ import Effect.IOWrapper.Web
 import Effectful.Provider.List
 import Effectful.Readline
 import Effectful.State.Dynamic
+import Error.Interrupt (EndedBySignal (..))
 import Error.UserError
 import Error.Warn
 import Executable.GraphEditor.Completion

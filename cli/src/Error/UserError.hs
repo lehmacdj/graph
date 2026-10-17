@@ -9,6 +9,7 @@ where
 import Control.Concurrent (myThreadId, threadDelay)
 import Control.Exception qualified as E
 import Control.Lens
+import Error.Interrupt
 import Models.Damage
 import Models.NID (NID)
 import MyPrelude
