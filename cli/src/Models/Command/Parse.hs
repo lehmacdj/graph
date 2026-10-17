@@ -46,8 +46,8 @@ commandPaths = \case
   Make _ p -> [p]
   Merge args -> map mergeArgumentPath (toList args)
   Tag _ p q -> [p, q]
-  Remove p -> [p]
-  RemoveNode p -> [p]
+  Remove _ p -> [p]
+  RemoveNode _ p -> [p]
   At p c -> p : commandPaths c
   Move p q -> [p, q]
   Rename _ p q -> [p, q]
@@ -152,11 +152,17 @@ pText = (commandFrom ["text", "mkt"] $> Text) <*> pTransition <*> (pack <$> some
 pDescribe :: Parser Command
 pDescribe = (commandFrom ["describe", "desc"] $> Describe) <*> (pack <$> some anySingle)
 
+-- | @--dry-run@ before the path of @rm@ or @rmnf@: list what would be
+-- deleted and delete nothing.
+pRemoveMode :: Parser RemoveMode
+pRemoveMode =
+  try (command "--dry-run" $> ListDeletions) <|> pure DeleteSelected
+
 pRemove :: Parser Command
-pRemove = (command "rm" $> Remove) <*> path
+pRemove = (command "rm" $> Remove) <*> pRemoveMode <*> path
 
 pRemoveNode :: Parser Command
-pRemoveNode = (command "rmnf" $> RemoveNode) <*> path
+pRemoveNode = (command "rmnf" $> RemoveNode) <*> pRemoveMode <*> path
 
 pAt :: Parser Command
 pAt = (command "at" $> At) <*> path <*> pCommandTerm
@@ -372,7 +378,7 @@ test_parseCommand =
           Nothing
           (directive (LocationFromHistory 1))
           (directive (LocationFromHistory 2)),
-      "rm %targets(a)" `parsesTo` Remove (directive (Targets (Literal "a"))),
+      "rm %targets(a)" `parsesTo` Remove DeleteSelected (directive (Targets (Literal "a"))),
       "cd %last" `parsesTo` ChangeNode (directive (LocationFromHistory 1)),
       "at %targets(a) mk b/%last"
         `parsesTo` At
@@ -440,7 +446,14 @@ test_parseCommand =
       parseFails "mg a --keep",
       "mg --keep a --keep b" `failsWith` "at most one",
       "mg --keep a b --keep c" `failsWith` "at most one",
-      "rmnf %last" `parsesTo` RemoveNode (directive (LocationFromHistory 1)),
+      "rmnf %last"
+        `parsesTo` RemoveNode DeleteSelected (directive (LocationFromHistory 1)),
+      "rm --dry-run a/b"
+        `parsesTo` Remove ListDeletions (Literal "a" :/ Literal "b"),
+      "rmnf --dry-run a" `parsesTo` RemoveNode ListDeletions (Literal "a"),
+      -- the option goes before the path; a quoted label is still a label
+      parseFails "rm a --dry-run",
+      "rm \"--dry-run\"" `parsesTo` Remove DeleteSelected (Literal "--dry-run"),
       "cp %last/x %targets(a)"
         `parsesTo` Copy
           (directive (LocationFromHistory 1) :/ Literal "x")

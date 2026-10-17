@@ -201,6 +201,13 @@ mergeNodesEx n1 n2 =
     msg =
       "mergeNodesEx: nodes don't match " ++ show n1.nid ++ " != " ++ show n2.nid
 
+-- | Every edge the node records, incoming and outgoing
+nodeEdges ::
+  (ValidTransition t, ValidNID n) => Node' n t t a -> Set (Edge' n t)
+nodeEdges n =
+  mapSet (`incomingEdge` n.nid) n.incoming
+    ++ mapSet (outgoingEdge n.nid) n.outgoing
+
 withoutEdges ::
   (ValidTransition t, ValidNID n) =>
   Set (Edge' n t) ->

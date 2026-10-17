@@ -451,12 +451,7 @@ edgeSet ::
   (ValidTransition t, ValidNID n) =>
   Graph' n t a ->
   Set (Edge' n t)
-edgeSet = foldMap getEdges . (.nodeMap)
-  where
-    getEdges :: Node' n t t a -> Set (Edge' n t)
-    getEdges n =
-      mapSet (`incomingEdge` n.nid) n.incoming
-        ++ mapSet (outgoingEdge n.nid) n.outgoing
+edgeSet = foldMap nodeEdges . (.nodeMap)
 
 compactGraphRepresentation ::
   (ValidTransition t, ValidNID n, CompactNIDShow n) =>

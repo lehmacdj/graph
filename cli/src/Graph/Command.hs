@@ -48,6 +48,7 @@ import Models.Damage
 import Models.Edge
 import Models.History
 import Models.NID
+import Models.Node (nodeEdges)
 import Models.Path.Parse (pPath)
 import Models.Path.ParsedPath
 import Models.Path.Simple (Path)
@@ -1052,6 +1053,10 @@ noticeNoMatch what p cur = do
       ++ (if cur == prompt then "" else " at " ++ tshow cur)
       ++ "; nothing was changed."
 
+-- | The line that @rm --dry-run@ and @rmnf --dry-run@ print for an edge
+wouldDeleteEdge :: Edge Text -> String
+wouldDeleteEdge e = "would delete edge " <> describeEdge e
+
 -- | Say how many nodes and edges @mk@ created; in a dry run, how many it
 -- would create.
 reportConstructed ::
@@ -1185,13 +1190,17 @@ runCommand' open = \case
       pure (arg, target)
     survivor <- editing (mergeTargets targets)
     changeLocation survivor
-  Remove p0 -> do
+  Remove mode p0 -> do
     p <- expandDirectives p0
     nid <- currentLocation
     editing do
-      selected <- Paths.removeSelectedEdges nid p
+      selected <- case mode of
+        DeleteSelected -> Paths.removeSelectedEdges nid p
+        ListDeletions -> do
+          edges <- Paths.edgesToRemove nid p
+          edges <$ traverse_ (echo . wouldDeleteEdge) edges
       when (null selected) $ noticeNoMatch "the path of rm" p0 nid
-  RemoveNode p0 -> do
+  RemoveNode mode p0 -> do
     p <- expandDirectives p0
     nid <- currentLocation
     editing do
@@ -1206,7 +1215,15 @@ runCommand' open = \case
               ++ ") resolves to "
               ++ intercalate ", " (map tshow (systemNodesAmong (toList nids)))
           )
-      forM_ nids $ deleteNode @Text
+      case mode of
+        DeleteSelected -> forM_ nids $ deleteNode @Text
+        ListDeletions -> do
+          -- a node's edges go with it; one between two deleted nodes, or
+          -- from a node to itself, is listed once
+          nodes <- catMaybes <$> traverse (getNodeMetadata @Text) (toList nids)
+          for_ nids \n -> echo ("would delete node " <> show n)
+          traverse_ (echo . wouldDeleteEdge) . setToList @(Set (Edge Text)) $
+            foldMap nodeEdges nodes
   Tag maxRepairs p0 q0 -> do
     p <- expandConstruction p0
     q <- expandDirectives q0

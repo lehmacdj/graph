@@ -34,10 +34,10 @@ data Command
   | Text Text Text
   | -- | desc
     Describe Text
-  | -- | rm
-    Remove ParsedPath
-  | -- | rmnf
-    RemoveNode ParsedPath
+  | -- | rm [--dry-run]
+    Remove RemoveMode ParsedPath
+  | -- | rmnf [--dry-run]
+    RemoveNode RemoveMode ParsedPath
   | -- | at
     At ParsedPath Command
   | -- | dd
@@ -109,6 +109,13 @@ data DestinationParents
 data FixMode
   = ApplyRepairs
   | ListRepairs
+  deriving (Eq, Show, Ord, Generic)
+
+-- | Whether @rm@/@rmnf@ delete what their path selects or only list what
+-- they would delete (@--dry-run@)
+data RemoveMode
+  = DeleteSelected
+  | ListDeletions
   deriving (Eq, Show, Ord, Generic)
 
 -- | Whether a command needs the graph opened: its origin and system nodes

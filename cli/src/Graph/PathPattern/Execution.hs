@@ -17,6 +17,7 @@ module Graph.PathPattern.Execution
     moveSelectedEdges,
     copySelectedEdges,
     removeSelectedEdges,
+    edgesToRemove,
     completionTransitions,
     renderChoiceError,
   )
@@ -993,6 +994,19 @@ copySelectedEdges ::
   NID -> NID -> P.Path -> Eff r [Edge Text]
 copySelectedEdges = relocateSelectedEdges False
 
+-- | The last edge of every selected route: what @rm@ deletes. None means
+-- the path matched nothing.
+edgesToRemove ::
+  (PathReading r, Error UserError :> r) =>
+  NID ->
+  P.Path ->
+  Eff r [Edge Text]
+edgesToRemove cur p = do
+  rs <- resolveCommandQuery cur p
+  for (selectedConcreteRoutes rs) \rt -> case lastEdgeOf rt of
+    Nothing -> throwError (OtherError (noEdgeSelected "rm" "deletes"))
+    Just (original, _) -> pure original
+
 -- | Delete the last edge of every selected route. Returns the selected
 -- edges: none means the path matched nothing, so nothing was done.
 removeSelectedEdges ::
@@ -1001,10 +1015,7 @@ removeSelectedEdges ::
   P.Path ->
   Eff r [Edge Text]
 removeSelectedEdges cur p = do
-  rs <- resolveCommandQuery cur p
-  edges <- for (selectedConcreteRoutes rs) \rt -> case lastEdgeOf rt of
-    Nothing -> throwError (OtherError (noEdgeSelected "rm" "deletes"))
-    Just (original, _) -> pure original
+  edges <- edgesToRemove cur p
   traverse_ (deleteEdge @Text) edges
   pure edges
 

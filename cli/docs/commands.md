@@ -59,8 +59,8 @@ not undone (section 6).
 | `ls [p]`, `preview [p]` | `p`, default `*` | `\|` | lists the targets (2.1) |
 | `cd p` | `p` | `\|` | moves to the one target (2.2) |
 | `mk [--max-repairs N] p` | `p` | `++` | creates what is missing for the path to hold (4) |
-| `rm p` | `p` | `\|` | deletes the last edge of the first walk of each match (3) |
-| `rmnf p` | `p` | `\|` | deletes the target nodes (2.3) |
+| `rm [--dry-run] p` | `p` | `\|` | deletes the last edge of the first walk of each match (3) |
+| `rmnf [--dry-run] p` | `p` | `\|` | deletes the target nodes (2.3) |
 | `mv p q`, `cp p q` | `p` an edge path, `q` one node | `\|` | moves or copies the selected edge under `q` (3) |
 | `rn [--all-parents] p q`, `cl`/`clone`/`alias [--all-parents] p q` | `p` an edge path, `q` a destination | `\|` | renames or clones the selected edge (3) |
 | `tag [--max-repairs N] p q`, `t …` | `p` constructed, `q` one node | `++` in `p`, `\|` in `q` | links every end of `p`'s first match to `q`'s target with an empty label (4.6) |
@@ -290,6 +290,18 @@ $ rmnf (a | @)
 rmnf cannot delete a system node (the origin and the special nodes such as
     tags must stay in the graph)
 the path of rmnf ("a" | @) resolves to @0
+```
+
+`rmnf --dry-run p` deletes nothing and lists what `rmnf p` would delete:
+each target node, then each of their edges once. It refuses what `rmnf`
+refuses.
+
+```ge
+graph: 0 -a-> 1, 1 -b-> 2, 0 -c-> 3, 0 -c-> 4
+$ rmnf --dry-run a
+would delete node @1
+would delete edge @0 -"a"-> @1
+would delete edge @1 -"b"-> @2
 ```
 
 ### 2.4 `at`
@@ -599,6 +611,19 @@ the path of rm ("a" & "c") matched nothing; nothing was changed.
 The last matched nothing: `a` and `c` end at different nodes, so the
 query had no target and nothing was deleted. The notice shows the path
 with its labels quoted.
+
+`rm --dry-run p` deletes nothing and lists the edges that `rm p` would
+delete; when the path matches nothing it gives the same notice.
+
+```ge
+graph: 0 -a-> 1, 1 -b-> 2, 0 -c-> 3, 0 -c-> 4
+$ rm --dry-run c
+would delete edge @0 -"c"-> @3
+would delete edge @0 -"c"-> @4
+```
+
+(`ge --dry-run` is different: it runs any command without writing,
+and lists the files that it would write or delete.)
 
 ### 3.2 `mv` and `cp`
 

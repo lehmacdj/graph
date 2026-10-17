@@ -827,6 +827,46 @@ spec_unusableNodeFiles = do
       (code, _, err) <- ge directory "at b mk x ; ls b/x"
       (code, err) `shouldBe` (0, "")
 
+spec_removeDryRun :: Spec
+spec_removeDryRun = do
+  let graph = "0 -a-> 1\n0 -b-> 2\n2 -c-> 1\n2 -d-> 2\n"
+      -- what a command prints, and that it wrote nothing
+      dryRun command = withTempGraph Nothing \directory -> do
+        writeBaseGraph directory graph
+        before <- directoryAsItIs directory
+        result <- runGe directory ["-e", command] ""
+        directoryAsItIs directory `shouldReturn` before
+        pure result
+      printed (code, out, err) = (code, lines (decodeUtf8 out), err)
+  it "lists the edges that rm would delete, and deletes nothing" $
+    (printed <$> dryRun "rm --dry-run (b/c + a)")
+      `shouldReturn` ( 0,
+                       [ "would delete edge @000000000000 -\"a\"-> @000000000001",
+                         "would delete edge @000000000002 -\"c\"-> @000000000001"
+                       ],
+                       ""
+                     )
+  it "lists the nodes that rmnf would delete with their edges, each once" $
+    -- the loop at 2 is one edge, recorded on both of its sides
+    (printed <$> dryRun "rmnf --dry-run b")
+      `shouldReturn` ( 0,
+                       [ "would delete node @000000000002",
+                         "would delete edge @000000000000 -\"b\"-> @000000000002",
+                         "would delete edge @000000000002 -\"c\"-> @000000000001",
+                         "would delete edge @000000000002 -\"d\"-> @000000000002"
+                       ],
+                       ""
+                     )
+  it "says rm --dry-run matched nothing as rm does" $ do
+    (_, out, err) <- dryRun "rm --dry-run zz"
+    out `shouldBe` ""
+    unpack (decodeUtf8 err)
+      `shouldContain` "the path of rm (\"zz\") matched nothing"
+  it "refuses rmnf --dry-run of a system node as rmnf does" $ do
+    (code, out, err) <- dryRun "rmnf --dry-run (a | @)"
+    (code, out) `shouldBe` (1, "")
+    unpack (decodeUtf8 err) `shouldContain` "rmnf cannot delete a system node"
+
 spec_keptFilesOfDeletedNode :: Spec
 spec_keptFilesOfDeletedNode =
   it "lists the kept files that a dry run would delete with a node, and deletes them" $
