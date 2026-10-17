@@ -91,6 +91,26 @@ completeWith lookups (i, _) =
   where
     completion x = Completion (unpack x.text) (unpack x.text) x.finished
 
+spec_completeWith :: Spec
+spec_completeWith = do
+  -- the line as haskeline leaves it after taking each candidate: what it
+  -- keeps of the line, then the candidate, then a space if it is finished
+  -- and the only one
+  let completedTo lookups line = do
+        (rest, cs) <- completeWith lookups (reverse line, "")
+        pure
+          [ reverse rest <> replacement c <> [' ' | isFinished c, [_] <- [cs]]
+          | c <- cs
+          ]
+      oneNode =
+        Core.withoutGraph
+          { nodesWithPrefix = \prefix ->
+              pure
+                [n | let n = smallNID 1, prefix `isPrefixOf` nidRepresentation n]
+          }
+  it "completes an id with one @" $
+    completedTo oneNode "ls @0" `shouldReturn` ["ls @000000000001"]
+
 -- | What completion reads from the graph that the REPL has open, with a
 -- choice of what becomes of the errors and warnings of reading labels.
 --

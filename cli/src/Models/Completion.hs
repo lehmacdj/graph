@@ -74,8 +74,9 @@ completeWithoutGraph = runIdentity . complete withoutGraph
 -- the path that is completed).
 --
 -- A word that is @\@@ and the start of an id is completed to the nodes
--- whose id begins with it; when there are none, or the word is not such
--- a start, it is completed as the end of a path.
+-- whose id begins with it, each written with its @\@@, which replaces the
+-- one that is typed; when there are none, or the word is not such a
+-- start, it is completed as the end of a path.
 complete :: (Monad m) => CompletionLookups m -> Text -> m Completions
 complete lookups before = case nidPrefixBefore before of
   Nothing -> pathCompletions
@@ -85,7 +86,7 @@ complete lookups before = case nidPrefixBefore before of
       nids ->
         pure
           Completions
-            { replaced = length prefix,
+            { replaced = length prefix + 1,
               candidates = [Candidate (tshow n) False | n <- nids]
             }
   where
@@ -159,6 +160,10 @@ spec_complete = do
               pure (labels p)
           }
       completing nids before = S.runState (complete (graph nids) before) []
+      -- the text before the cursor after taking each candidate
+      completedTo nids before =
+        let c = fst (completing nids before)
+         in [dropEnd c.replaced before <> x.text | x <- c.candidates]
       offers before replaced texts =
         it (show before) $
           fst (completing [] before)
@@ -202,16 +207,18 @@ spec_complete = do
     let n1 = smallNID 1
         n2 = smallNID 2
         far = smallNID (62 ^ (3 :: Int))
-    -- The candidates are whole ids with their @, and replace only what
-    -- is typed after the @, which stays: the REPL has always completed
-    -- @0 to @@000000000001.
+    -- the candidates are whole ids with their @, and replace the @ that
+    -- is typed too
     it "offers the nodes whose id begins with what is typed" do
       completing [n1, n2, far] "ls @000000000"
-        `shouldBe` ( Completions 9 [Candidate (tshow n) False | n <- [n1, n2]],
+        `shouldBe` ( Completions 10 [Candidate (tshow n) False | n <- [n1, n2]],
                      ["nodes 000000000"]
                    )
       fst (completing [n1] "ls @")
-        `shouldBe` Completions 0 [Candidate (tshow n1) False]
+        `shouldBe` Completions 1 [Candidate (tshow n1) False]
+    it "leaves one @ before the id it completes" do
+      completedTo [n1] "ls @0" `shouldBe` ["ls @000000000001"]
+      completedTo [n1] "ls a/@" `shouldBe` ["ls a/@000000000001"]
     it "completes a path when no node's id begins with it" $
       completing [far] "ls @0000000000"
         `shouldBe` (noCompletions, ["nodes 0000000000"])
