@@ -1130,6 +1130,24 @@ spec_editor = do
         "at @000000000002 vi"
     ran `shouldBe` Just (0, "", "")
     dataFile `shouldBe` Just "visual\n"
+  it "says when VISUAL and EDITOR are set but empty, and vim runs" do
+    ran <- withSystemTempDirectory "ge-vim" \bin -> do
+      -- a vim that fails, so that ge says which editor it ran and why
+      let vim = bin </> "vim"
+      writeFile vim "#!/bin/sh\nexit 1\n"
+      getPermissions vim >>= setPermissions vim . setOwnerExecutable True
+      path <- fromMaybe "" . lookup "PATH" <$> getEnvironment
+      fst
+        <$> editingWith
+          [("VISUAL", " "), ("EDITOR", ""), ("PATH", bin <> ":" <> path)]
+          "at @000000000002 vi"
+    fmap (\(code, _, err) -> (code, decodeUtf8 err)) ran
+      `shouldBe` Just
+        ( 1,
+          "the editor \"vim\" (VISUAL and EDITOR are unset or empty) exited"
+            <> " with an error (editor-failed: ExitFailure 1); what it saved"
+            <> " to the node's data before that stays\n"
+        )
   it "says readably that there is no such editor" do
     (ran, dataFile) <- editing "no-such-editor-for-ge" "at @000000000002 vi"
     fmap (\(code, _, err) -> (code, "could not be started" `isInfixOf` decodeUtf8 err)) ran

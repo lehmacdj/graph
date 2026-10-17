@@ -36,7 +36,10 @@ interpretEditorAsIOVim = interpret \_ -> \case
         (command, source) = case (set visual, set editor) of
           (Just e, _) -> (e, "the variable VISUAL")
           (Nothing, Just e) -> (e, "the variable EDITOR")
-          (Nothing, Nothing) -> ("vim", "neither VISUAL nor EDITOR is set")
+          (Nothing, Nothing) -> ("vim", unsetOrEmpty)
+        unsetOrEmpty = case (visual, editor) of
+          (Nothing, Nothing) -> "neither VISUAL nor EDITOR is set"
+          _ -> "VISUAL and EDITOR are unset or empty"
     liftIO (E.try (runToEnd stopProcess (editorProcess command paths)))
       >>= either (throwError . OtherError . editorFailed command source) pure
 
