@@ -110,24 +110,8 @@ graphLookups handling env =
             toList <$> provideList_ @GraphEditing (completionTransitions nid p)
     }
 
--- | Complete the path before the cursor, not a node id: tries to parse as
--- much of a path as possible, deduces the word being completed, and
--- completes it as a label that continues the path to a match.
-completePath :: Env -> (String, String) -> IO (String, [Completion])
-completePath = completePathHandling noCandidatesOnError
-
--- | 'completePath' with a choice of what becomes of the errors and warnings
--- of reading the graph ('graphLookups').
-completePathHandling ::
-  ErrorHandlingBehavior [Text] ->
-  Env ->
-  (String, String) ->
-  IO (String, [Completion])
-completePathHandling handling env =
-  completeWith (graphLookups handling env) {nodesWithPrefix = \_ -> pure []}
-
-spec_completePath :: Spec
-spec_completePath = do
+spec_graphLookups :: Spec
+spec_graphLookups = do
   it "offers nothing for a path with a directive" $
     withEmptyTempGraph \dir -> do
       -- the origin -a-> 1 and -b-> 2, each consistent
@@ -143,7 +127,9 @@ spec_completePath = do
       env <- initEnv dir (mkStdGen 0) defaultSettings
       let offered line =
             map replacement . snd
-              <$> completePath env (reverse line, "")
+              <$> completeWith
+                (graphLookups noCandidatesOnError env)
+                (reverse line, "")
       -- what is offered without a directive, for comparison
       offered "ls " `shouldReturn` ["a", "b"]
       for_ ["ls %last/a", "ls %history(0)/a", "ls a/%last/a", "ls %last/"] \line ->
@@ -167,7 +153,8 @@ spec_completePath = do
             interpret (\_ (Warn e) -> note e)
               >>> (`handleError` \e -> note e $> [])
       -- the input is given reversed, as haskeline gives it
-      (_, completions) <- completePathHandling recording env (reverse "ls b/", "")
+      (_, completions) <-
+        completeWith (graphLookups recording env) (reverse "ls b/", "")
       map replacement completions `shouldBe` ["d"]
       readIORef said `shouldReturn` []
 
@@ -296,7 +283,11 @@ spec_completionFunction = do
           -- stopped when it is called masked is for the cases below, whose
           -- work is harmless.
           stopping i =
-            timeout 10000000 (completePath env i >>= evaluate . evaluatedCompletions)
+            timeout
+              10000000
+              ( completeWith (graphLookups noCandidatesOnError env) i
+                  >>= evaluate . evaluatedCompletions
+              )
               >>= maybe (throwIO (userError "the work was not stopped")) pure
           complete = completingWithin completionAllowance stopping
       -- without the bound it is still at it after a second
