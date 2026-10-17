@@ -5,6 +5,7 @@ import Control.Exception qualified as E
 import DAL.DTO (nodeToDTO)
 import DAL.DirectoryFormat (metadataFile)
 import DAL.FileSystemOperations.Metadata
+import DAL.Interpreters.GraphEditingSpec (directoryContents, runOnDisk)
 import DAL.RawGraph
 import Data.Aeson qualified as Aeson
 import Data.ByteString qualified as B
@@ -15,7 +16,6 @@ import Error.Warn
 import Graph.Fix
 import Graph.Fsck
 import Graph.FsckSpec (allRecords, genPlant, genUndamaged, plant)
-import Graph.GraphEditingSpec (directoryContents, runOnDisk)
 import Graph.GraphMetadataEditing (deleteNode)
 import Models.Command (FixMode (..))
 import Models.Connect

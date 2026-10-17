@@ -9,6 +9,7 @@ import Control.Lens
 import DAL.FileSystemOperations.Data
 import DAL.FileSystemOperations.Metadata
 import DAL.FileSystemOperations.MetadataWriteDiff
+import DAL.Interpreters.GraphEditing
 import DAL.RawGraph
 import Effect.IOWrapper.DisplayImage
 import Effect.IOWrapper.Echo

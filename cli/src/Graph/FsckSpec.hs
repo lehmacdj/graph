@@ -2,6 +2,7 @@ module Graph.FsckSpec where
 
 import DAL.DTO (nodeToDTO)
 import DAL.DirectoryFormat (metadataFile)
+import DAL.Interpreters.GraphMetadataEditingSpec (genConsistentFiles, genNID)
 import DAL.RawGraph
 import Data.Aeson qualified as Aeson
 import Data.ByteString qualified as B
@@ -10,7 +11,6 @@ import Data.Time (addUTCTime, getCurrentTime)
 import Effect.IOWrapper.Echo
 import Error.UserError
 import Graph.Fsck
-import Graph.GraphMetadataEditingSpec (genConsistentFiles, genNID)
 import Models.Connect
 import Models.Damage
 import Models.Edge

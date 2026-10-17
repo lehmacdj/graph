@@ -1,10 +1,11 @@
-module Graph.GraphEditingSpec where
+module DAL.Interpreters.GraphEditingSpec where
 
 import DAL.DTO (nodeToDTO)
 import DAL.DirectoryFormat (legacyNodeDataFile, metadataFile)
 import DAL.FileSystemOperations.Data
 import DAL.FileSystemOperations.Metadata
 import DAL.FileSystemOperations.MetadataWriteDiff
+import DAL.Interpreters.GraphEditing
 import DAL.RawGraph
 import DAL.Serialization (doesNodeExist, serializeNodeEx)
 import Data.Aeson qualified as Aeson
@@ -12,14 +13,11 @@ import Data.ByteString qualified as B
 import Effectful.State.Dynamic
 import Error.UserError
 import Error.Warn
-import Graph.Dualizeable
 import Graph.GraphDataEditing
-import Graph.GraphEditing
 import Graph.GraphMetadataEditing
 import Models.Connect
 import Models.Damage
 import Models.Edge
-import Models.Graph (Graph, emptyGraph)
 import Models.NID
 import Models.Node
 import MyPrelude
@@ -1113,30 +1111,3 @@ spec_transactionOnDamagedGraph = do
                    "- the file of @000000000001 says it is the node"
                      <> " @000000000002"
                  ]
-
-spec_dualizingGraphMetadataEditing :: Spec
-spec_dualizingGraphMetadataEditing = do
-  let runDualized :: IsDual -> Eff [GraphMetadataEditing, Dualizeable] a -> Graph Text ()
-      runDualized dual =
-        runPureEff
-          . evalStateLocal dual
-          . execStateLocal emptyGraph
-          . runInMemoryGraphMetadataEditing
-          . inject
-          . dualizingGraphMetadataEditing @Text
-  it "flips inserted edges while dualized" do
-    let g = runDualized (IsDual True) $ insertEdge (Edge n1 "x" n2)
-    g ^? ix n2 . #outgoing `shouldBe` Just (singletonSet (Connect "x" n1))
-  it "leaves edges alone while not dualized" do
-    let g = runDualized (IsDual False) $ insertEdge (Edge n1 "x" n2)
-    g ^? ix n1 . #outgoing `shouldBe` Just (singletonSet (Connect "x" n2))
-  it "reads nodes with their edges swapped while dualized" do
-    let read1 = runPureEff
-          . evalStateLocal (IsDual False)
-          . evalStateLocal emptyGraph
-          . runInMemoryGraphMetadataEditing @Text
-          $ do
-            insertEdge (Edge n1 "x" n2)
-            dualize
-            dualizingGraphMetadataEditing @Text $ getNodeMetadata n1
-    fmap (.incoming) read1 `shouldBe` Just (singletonSet (Connect "x" n2))

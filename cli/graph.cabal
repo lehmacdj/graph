@@ -34,6 +34,11 @@ library
       DAL.FileSystemOperations.Metadata
       DAL.FileSystemOperations.MetadataWriteDiff
       DAL.Interpreters
+      DAL.Interpreters.GraphDataEditing
+      DAL.Interpreters.GraphEditing
+      DAL.Interpreters.GraphEditingSpec
+      DAL.Interpreters.GraphMetadataEditing
+      DAL.Interpreters.GraphMetadataEditingSpec
       DAL.RawGraph
       DAL.Serialization
       Effect.Input
@@ -58,6 +63,7 @@ library
       Graph.Augmentation
       Graph.Command
       Graph.Dualizeable
+      Graph.DualizeableSpec
       Graph.Export.FileSystem
       Graph.Fix
       Graph.FixSpec
@@ -66,7 +72,6 @@ library
       Graph.FsckSpec
       Graph.GraphDataEditing
       Graph.GraphEditing
-      Graph.GraphEditingSpec
       Graph.GraphMetadataEditing
       Graph.GraphMetadataEditingSpec
       Graph.Import.ByteString

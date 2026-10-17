@@ -1,9 +1,9 @@
 module Graph.SystemNodes.InitSpec where
 
+import DAL.Interpreters.GraphMetadataEditing (ownRecords)
+import DAL.Interpreters.GraphMetadataEditingSpec
 import Effectful.State.Dynamic
 import Error.UserError
-import Graph.GraphMetadataEditing
-import Graph.GraphMetadataEditingSpec
 import Graph.SystemNodes
 import Graph.SystemNodes.Init
 import Models.Connect
