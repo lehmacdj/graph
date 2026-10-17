@@ -6,8 +6,8 @@
 -- 'CompletionLookups', which the caller gives: the REPL reads them from
 -- the graph it has open ("Executable.GraphEditor.Completion"), and
 -- 'withoutGraph' has none of them, for a caller that has no graph. What
--- needs no graph is offered either way: the names after @%@
--- ('percentNames'), the @/@ that is all that can follow a term that is not
+-- needs no graph is offered either way: the names of commands
+-- ('commandNames'), the names after @%@ ('percentNames'), the @/@ that is all that can follow a term that is not
 -- a label, and nothing for a path that no command runs or that has a
 -- directive in it.
 module Models.Completion
@@ -15,6 +15,7 @@ module Models.Completion
     Candidate (..),
     CompletionLookups (..),
     complete,
+    completeCommandLine,
     withoutGraph,
     completeWithoutGraph,
     spec_complete,
@@ -22,7 +23,8 @@ module Models.Completion
 where
 
 import Control.Monad.State.Strict qualified as S
-import Data.Char (isAlpha)
+import Data.Char (isAlpha, isSpace)
+import Models.Command.Parse (commandNames, startsCommand)
 import Models.LegacyPartialPath
 import Models.NID
 import Models.Path.Parse (parsePath, percentNames)
@@ -75,38 +77,52 @@ completeWithoutGraph :: Text -> Completions
 completeWithoutGraph = runIdentity . complete withoutGraph
 
 -- | The completions of the word before the cursor, given the text before
--- the cursor (on the command line, the command and its arguments before
--- the path that is completed).
+-- the cursor: a command line up to the cursor.
 --
+-- A word where a command begins ('startsCommand') is completed to the
+-- names of commands that begin with it ('commandNames'), each finished.
 -- A word that is @%@ and the start of a name after it is completed to the
 -- names that begin with it ('percentNames'), each with the @(@ of its
--- arguments if it takes any. A word that is @\@@ and the start of an id is completed to the nodes
--- whose id begins with it, each written with its @\@@, which replaces the
--- one that is typed; when there are none, or the word is not such a
--- start, it is completed as the end of a path.
+-- arguments if it takes any. A word that is @\@@ and the start of an id
+-- is completed to the nodes whose id begins with it, each written with
+-- its @\@@, which replaces the one that is typed; when there are none, or
+-- the word is not such a start, it is completed as the end of a path.
 complete :: (Monad m) => CompletionLookups m -> Text -> m Completions
-complete lookups before = case nidPrefixBefore before of
-  Nothing
-    | Just name <- percentNameBefore before ->
-        pure
-          Completions
-            { replaced = length name + 1,
-              candidates =
-                [ Candidate ("%" <> n <> bool "" "(" arguments) False
-                | (n, arguments) <- percentNames,
-                  name `isPrefixOf` n
-                ]
-            }
-    | otherwise -> pathCompletions
-  Just prefix ->
-    lookups.nodesWithPrefix prefix >>= \case
-      [] -> pathCompletions
-      nids ->
-        pure
-          Completions
-            { replaced = length prefix + 1,
-              candidates = [Candidate (tshow n) False | n <- nids]
-            }
+complete = completeCommandLine commandNames
+
+-- | 'complete' for a command line whose commands have these names: the
+-- REPL's has @:q@ too.
+completeCommandLine ::
+  (Monad m) => [Text] -> CompletionLookups m -> Text -> m Completions
+completeCommandLine names lookups before
+  | Just word <- commandNameBefore before =
+      pure
+        Completions
+          { replaced = length word,
+            candidates = [Candidate n True | n <- names, word `isPrefixOf` n]
+          }
+  | otherwise = case nidPrefixBefore before of
+      Nothing
+        | Just name <- percentNameBefore before ->
+            pure
+              Completions
+                { replaced = length name + 1,
+                  candidates =
+                    [ Candidate ("%" <> n <> bool "" "(" arguments) False
+                    | (n, arguments) <- percentNames,
+                      name `isPrefixOf` n
+                    ]
+                }
+        | otherwise -> pathCompletions
+      Just prefix ->
+        lookups.nodesWithPrefix prefix >>= \case
+          [] -> pathCompletions
+          nids ->
+            pure
+              Completions
+                { replaced = length prefix + 1,
+                  candidates = [Candidate (tshow n) False | n <- nids]
+                }
   where
     pathCompletions = case pathSiteBefore before of
       NoPathSite -> pure noCompletions
@@ -132,6 +148,16 @@ nidPrefixBefore before =
   case span isBase62Char (take (nidDigits + 1) (reverse (unpack before))) of
     (reversedPrefix, '@' : _) -> Just (pack (reverse reversedPrefix))
     _ -> Nothing
+
+-- | The word at the end of the text, when a command begins where it
+-- does.
+commandNameBefore :: Text -> Maybe Text
+commandNameBefore before =
+  guard (startsCommand (pack (reverse reversedStart)))
+    $> pack (reverse reversedWord)
+  where
+    (reversedWord, reversedStart) = break endsWord (reverse (unpack before))
+    endsWord c = isSpace c || c `elem` (";{}" :: String)
 
 -- | The letters after a @%@ at the end of the text, when the @%@ can start
 -- a term: it does not continue a label or a quote.
@@ -233,6 +259,26 @@ spec_complete = do
     nothing "ls \"a b"
     -- a prefix that no command runs: it would copy a meeting point
     nothing "ls (a & b)/(((c & y) | k)/@/e & d)/"
+  describe "names of commands" do
+    let names before = map (.text) (completeWithoutGraph before).candidates
+    it "offers the names that begin with what is typed, finished" do
+      completeWithoutGraph "rm"
+        `shouldBe` Completions 2 [Candidate t True | t <- ["rm", "rmnf"]]
+      names ":" `shouldBe` [":debug", ":d", ":import", ":i"]
+      names "" `shouldBe` commandNames
+    it "offers them where a command begins" do
+      names "nid; n" `shouldBe` ["nid"]
+      names "{nid;n" `shouldBe` ["nid"]
+      names "at (a & b) n" `shouldBe` ["nid"]
+      names "at a {nid; fs" `shouldBe` ["fsck"]
+    it "offers none where a command does not begin" do
+      names "ls n" `shouldBe` []
+      names "ls %override({p" `shouldBe` []
+    it "offers no path where a command begins" $
+      fst (completing [] "x") `shouldBe` Completions 1 []
+    it "offers the names that it is given" $
+      runIdentity (completeCommandLine [":q", "nid"] withoutGraph ":")
+        `shouldBe` Completions 1 [Candidate ":q" True]
   describe "names after %" do
     it "offers the names that begin with what is typed" do
       completeWithoutGraph "ls %"

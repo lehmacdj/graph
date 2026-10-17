@@ -128,12 +128,20 @@ data C c
   | C c
   deriving (Show, Eq, Ord)
 
--- | Takes :q and :quit as quit and otherwise defers to the main parser
+-- | Takes :q and :quit as quit, spaces around them aside, and otherwise
+-- defers to the main parser
 withDefaultQuitParser ::
   (Text -> Either String c) -> Text -> Either String (C c)
 withDefaultQuitParser p s
-  | s == ":q" || s == ":quit" = Right Quit
+  | [w] <- words s, w `elem` quitCommands = Right Quit
   | otherwise = C <$> p s
+
+spec_withDefaultQuitParser :: Spec
+spec_withDefaultQuitParser =
+  -- with the space that completing a command's name leaves after it
+  it "quits at :q and :quit with spaces around" $
+    for_ [":q", ":quit ", " :q "] \line ->
+      withDefaultQuitParser parseCommand line `shouldBe` Right Quit
 
 -- | Run one command of the REPL. Whatever goes wrong in it is reported
 -- (with @report@) and the REPL goes on:

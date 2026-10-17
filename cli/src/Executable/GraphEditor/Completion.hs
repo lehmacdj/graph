@@ -15,6 +15,7 @@ import Graph.AppInterpreters
 import Graph.GraphEditing
 import Graph.NodeLocated
 import Graph.PathPattern.Execution (completionTransitions)
+import Models.Command.Parse (commandNames)
 import Models.Completion (Candidate (..), CompletionLookups (..), Completions (..))
 import Models.Completion qualified as Core
 import Models.Connect
@@ -27,23 +28,15 @@ import Utils.Parsing
 import Utils.Testing
 import Utils.Testing.TempGraph
 
-commands :: [String]
-commands = []
+-- | The commands that the REPL takes besides the command language's
+-- ('Models.Command.Parse.commandNames'): those that end it.
+quitCommands :: [Text]
+quitCommands = [":q", ":quit"]
 
 -- | takes a list of strings and a reversed input string, and produces
 -- words from the list that complete the previous thing
 mkCompleter :: [String] -> String -> [Completion]
 mkCompleter xs x = map simpleCompletion' $ filter (x `isPrefixOf`) xs
-
-getCommandCompletions :: String -> String -> IO [Completion]
-getCommandCompletions x y
-  -- unless the previous text is "" then we want to fail to provide any
-  -- completions so that we fall back to another completion provider
-  | y == "" = pure . mkCompleter commands . reverse $ x
-  | otherwise = pure []
-
-completeCommand :: (String, String) -> IO (String, [Completion])
-completeCommand = completeWordWithPrev Nothing " " getCommandCompletions
 
 quoteUnusualTransition :: String -> String
 quoteUnusualTransition x
@@ -81,13 +74,18 @@ noCandidatesOnError =
     >>> (`handleError` const (pure []))
 
 -- | Completion as haskeline does it, given the completions of the core
--- ("Models.Completion"): haskeline gives the text before the cursor
--- reversed, and takes it back without the word that is replaced.
+-- ("Models.Completion") for the REPL's commands: haskeline gives the text
+-- before the cursor reversed, and takes it back without the word that is
+-- replaced.
 completeWith ::
   CompletionLookups IO -> (String, String) -> IO (String, [Completion])
 completeWith lookups (i, _) =
-  Core.complete lookups (pack (reverse i)) <&> \c ->
-    (drop c.replaced i, map completion c.candidates)
+  Core.completeCommandLine
+    (commandNames <> quitCommands)
+    lookups
+    (pack (reverse i))
+    <&> \c ->
+      (drop c.replaced i, map completion c.candidates)
   where
     completion x = Completion (unpack x.text) (unpack x.text) x.finished
 
@@ -112,6 +110,10 @@ spec_completeWith = do
     completedTo oneNode "ls @0" `shouldReturn` ["ls @000000000001"]
   it "adds no space after the / that a term needs" $
     completedTo Core.withoutGraph "ls (a & b)" `shouldReturn` ["ls (a & b)/"]
+  it "completes the names of commands, the REPL's own too" do
+    completedTo Core.withoutGraph "nid; fs" `shouldReturn` ["nid; fsck "]
+    completedTo Core.withoutGraph ":q" `shouldReturn` [":q", ":quit"]
+    completedTo Core.withoutGraph ":qu" `shouldReturn` [":quit "]
 
 -- | What completion reads from the graph that the REPL has open, with a
 -- choice of what becomes of the errors and warnings of reading labels.
@@ -276,8 +278,7 @@ evaluatedCompletions result@(rest, completions) =
 completionFunction :: Env -> (String, String) -> IO (String, [Completion])
 completionFunction env =
   completingWithin completionAllowance $
-    completeCommand
-      `fallbackCompletion` completeWith (graphLookups noCandidatesOnError env)
+    completeWith (graphLookups noCandidatesOnError env)
 
 spec_completionFunction :: Spec
 spec_completionFunction = do

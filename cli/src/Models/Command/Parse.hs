@@ -1,6 +1,9 @@
 module Models.Command.Parse
   ( parseCommand,
+    commandNames,
+    startsCommand,
     test_parseCommand,
+    test_startsCommand,
   )
 where
 
@@ -69,14 +72,13 @@ commandPaths = \case
   Back _ -> []
 
 pChangeNode :: Parser Command
-pChangeNode = (command "cd" $> ChangeNode) <*> path
+pChangeNode = ChangeNode <$> path
 
 pDualize :: Parser Command
-pDualize = command "d" $> Dualize
+pDualize = pure Dualize
 
 pMake :: Parser Command
 pMake = do
-  _ <- command "mk"
   -- the option is gone; without this its name would be read as a label
   gone <- optional (try (command "--allow-orphans"))
   when (isJust gone) . fail $
@@ -129,12 +131,10 @@ pMaxRepairs name = do
 pMerge :: Parser Command
 pMerge = do
   args <-
-    command "mg"
-      *> ( twoElemList
-             <$> pMergeArgument
-             <*> pMergeArgument
-             <*> MyPrelude.many pMergeArgument
-         )
+    twoElemList
+      <$> pMergeArgument
+      <*> pMergeArgument
+      <*> MyPrelude.many pMergeArgument
   when (length (filter isKept (toList args)) > 1) $
     fail "mg takes --keep before at most one of its arguments"
   pure (Merge args)
@@ -143,14 +143,13 @@ pMerge = do
       (try (command "--keep" $> Kept) <*> path) <|> (Merged <$> path)
 
 pTag :: Parser Command
-pTag =
-  (commandFrom ["tag", "t"] $> Tag) <*> pMaxRepairs "tag" <*> path <*> path
+pTag = Tag <$> pMaxRepairs "tag" <*> path <*> path
 
 pText :: Parser Command
-pText = (commandFrom ["text", "mkt"] $> Text) <*> pTransition <*> (pack <$> some anySingle)
+pText = Text <$> pTransition <*> (pack <$> some anySingle)
 
 pDescribe :: Parser Command
-pDescribe = (commandFrom ["describe", "desc"] $> Describe) <*> (pack <$> some anySingle)
+pDescribe = Describe . pack <$> some anySingle
 
 -- | @--dry-run@ before the path of @rm@ or @rmnf@: list what would be
 -- deleted and delete nothing.
@@ -159,39 +158,38 @@ pRemoveMode =
   try (command "--dry-run" $> ListDeletions) <|> pure DeleteSelected
 
 pRemove :: Parser Command
-pRemove = (command "rm" $> Remove) <*> pRemoveMode <*> path
+pRemove = Remove <$> pRemoveMode <*> path
 
 pRemoveNode :: Parser Command
-pRemoveNode = (command "rmnf" $> RemoveNode) <*> pRemoveMode <*> path
+pRemoveNode = RemoveNode <$> pRemoveMode <*> path
 
 pAt :: Parser Command
-pAt = (command "at" $> At) <*> path <*> pCommandTerm
+pAt = At <$> path <*> pCommandTerm
 
 pNodeId :: Parser Command
-pNodeId = command "nid" $> NodeId
+pNodeId = pure NodeId
 
 pDebug :: Parser Command
-pDebug = commandFrom [":debug", ":d"] $> Debug
+pDebug = pure Debug
 
 pDedup :: Parser Command
-pDedup = (commandFrom ["dedup", "dd"] $> Dedup) <*> pTransition
+pDedup = Dedup <$> pTransition
 
 pShowImage :: Parser Command
-pShowImage = commandFrom ["show-image", "si"] $> ShowImage
+pShowImage = pure ShowImage
 
 pImport :: Parser Command
-pImport = (commandFrom [":import", ":i"] $> Import) <*> some anySingle
+pImport = Import <$> some anySingle
 
 pCheck :: Parser Command
-pCheck = command "fsck" $> Check
+pCheck = pure Check
 
 pFix :: Parser Command
 pFix =
-  command "fix"
-    *> (Fix <$> (try (command "--dry-run" $> ListRepairs) <|> pure ApplyRepairs))
+  Fix <$> (try (command "--dry-run" $> ListRepairs) <|> pure ApplyRepairs)
 
 pMove :: Parser Command
-pMove = (command "mv" $> Move) <*> path <*> path
+pMove = Move <$> path <*> path
 
 -- | @--all-parents@ lets @rn@/@cl@ create the edge under every parent the
 -- destination prefix resolves to.
@@ -200,53 +198,61 @@ pDestinationParents =
   try (command "--all-parents" $> AllParents) <|> pure OneParent
 
 pRename :: Parser Command
-pRename = (command "rn" $> Rename) <*> pDestinationParents <*> path <*> path
+pRename = Rename <$> pDestinationParents <*> path <*> path
 
 pCopy :: Parser Command
-pCopy = (command "cp" $> Copy) <*> path <*> path
+pCopy = Copy <$> path <*> path
 
 pAlias :: Parser Command
-pAlias =
-  (commandFrom ["alias", "clone", "cl"] $> Alias)
-    <*> pDestinationParents
-    <*> path
-    <*> path
+pAlias = Alias <$> pDestinationParents <*> path <*> path
 
 pEdit :: Parser Command
-pEdit = command "vi" $> Edit
+pEdit = pure Edit
 
 pBack :: Parser Command
-pBack = (command "back" $> Back) <*> number
+pBack = Back <$> number
 
 pPreview :: Parser Command
-pPreview = (commandFrom ["preview", "ls"] $> Preview) <*> option Wild path
+pPreview = Preview <$> option Wild path
+
+-- | Every command: the names it is written with, and the parser of what
+-- follows the name. 'pCommandTerm' tries them in this order; completion
+-- offers their names ('commandNames').
+commandSyntaxes :: [([Text], Parser Command)]
+commandSyntaxes =
+  [ (["cd"], pChangeNode),
+    (["preview", "ls"], pPreview),
+    (["d"], pDualize),
+    (["mk"], pMake),
+    (["mg"], pMerge),
+    (["tag", "t"], pTag),
+    (["text", "mkt"], pText),
+    (["describe", "desc"], pDescribe),
+    (["rm"], pRemove),
+    (["rmnf"], pRemoveNode),
+    (["at"], pAt),
+    (["dedup", "dd"], pDedup),
+    (["nid"], pNodeId),
+    ([":debug", ":d"], pDebug),
+    (["show-image", "si"], pShowImage),
+    ([":import", ":i"], pImport),
+    (["fsck"], pCheck),
+    (["fix"], pFix),
+    (["mv"], pMove),
+    (["rn"], pRename),
+    (["cp"], pCopy),
+    (["alias", "clone", "cl"], pAlias),
+    (["vi"], pEdit),
+    (["back"], pBack)
+  ]
+
+-- | The name of every command, in the order of 'commandSyntaxes'.
+commandNames :: [Text]
+commandNames = concatMap fst commandSyntaxes
 
 pCommandTerm :: Parser Command
 pCommandTerm =
-  try pChangeNode
-    <|> try pPreview
-    <|> try pDualize
-    <|> try pMake
-    <|> try pMerge
-    <|> try pTag
-    <|> try pText
-    <|> try pDescribe
-    <|> try pRemove
-    <|> try pRemoveNode
-    <|> try pAt
-    <|> try pDedup
-    <|> try pNodeId
-    <|> try pDebug
-    <|> try pShowImage
-    <|> try pImport
-    <|> try pCheck
-    <|> try pFix
-    <|> try pMove
-    <|> try pRename
-    <|> try pCopy
-    <|> try pAlias
-    <|> try pEdit
-    <|> try pBack
+  choice [try (commandFrom names *> rest) | (names, rest) <- commandSyntaxes]
     <|> try (braces pCommand)
 
 -- | One command, or several separated by @;@. A command that can't be
@@ -259,12 +265,53 @@ pCommand =
     c1 : c2 : cs -> Seq (twoElemList c1 c2 cs)
     [] -> error "pCommand: sepBy1 gave no command"
 
+-- | Whether a command can begin where this text ends: the text is empty,
+-- or it ends in a @;@ or @{@ that the whole commands before it allow, or
+-- in an @at@ and its path, as the command parser reads them (spaces
+-- aside).
+startsCommand :: Text -> Bool
+startsCommand =
+  isRight . runParser (s *> before) "<completion>"
+  where
+    before :: Parser ()
+    before =
+      eof
+        <|> try (pCommandTerm *> symbol ";" *> before)
+        <|> try (symbol "{" *> before)
+        <|> try (command "at" *> path *> before)
+
 -- | Parse a whole command line; trailing input is an error rather than
 -- silently ignored (@rm a b@ used to run @rm a@).
 parseCommand :: Text -> Either String Command
 parseCommand =
   left errorBundlePretty
     . runParser (pCommand <* eof >>= rejectSplices) "<interactive>"
+
+test_startsCommand :: TestTree
+test_startsCommand =
+  testGroup
+    "startsCommand"
+    [ starts "",
+      starts "  ",
+      starts "nid; ",
+      starts "nid;",
+      starts "{",
+      starts "{nid; ",
+      starts "at a ",
+      starts "at (a & b) at c {nid; ",
+      starts "{ls a}; ",
+      doesNotStart "ls ",
+      doesNotStart "nid ",
+      doesNotStart "at ",
+      doesNotStart "mk a; ls ",
+      doesNotStart "ls %override({",
+      doesNotStart "ls \"a; "
+    ]
+  where
+    starts t = testCase ("starts after " ++ show t) $ startsCommand t @? ""
+    doesNotStart t =
+      testCase ("does not start after " ++ show t) $
+        not (startsCommand t) @? ""
 
 test_parseCommand :: TestTree
 test_parseCommand =
