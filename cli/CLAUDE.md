@@ -26,6 +26,10 @@ For setup instructions (installing Stack, running tests), see [docs/claude-code-
   graph's node files, how commands refuse to edit and warn when reading next
   to it, what `fsck` reports and what `fix` repairs.
 
+- **[WebAssembly](docs/wasm.md)** - Design and progress tracking for
+  compiling the path language, completion and graph APIs to WebAssembly for
+  the browser extension.
+
 - **[Testing Best Practices](docs/Testing.md)** - Guidelines for writing tests, including in-file tests, test utilities, golden tests, and avoiding cyclic imports.
 
 ## Quick Reference
