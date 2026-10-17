@@ -93,7 +93,7 @@ after items 1, 2 and 4; after items 1 and 2 in brackets):
 
 ## Decision: co-located tests
 
-**Proposed:** keep tests co-located and split `Utils.Testing` by weight,
+**Decided:** keep tests co-located and split `Utils.Testing` by weight,
 with no conditional compilation. Add CPP only if the test libraries fail to
 build for WebAssembly.
 
@@ -121,9 +121,12 @@ that is needed. If tasty-golden or another test dependency won't compile
 for wasm32-wasi, one flag (`-DWASM`, from a cabal flag) gates the test
 code. Golden tests read files and wouldn't run under WebAssembly anyway.
 
-To verify: whether the wasm linker drops unused test code from the shipped
-binary. If it doesn't, binary size is a reason to gate tests even when
-everything compiles.
+Verified 2026-10-17: the test libraries (tasty, hspec, QuickCheck,
+tasty-golden, tasty-hunit) build and run under wasm, and the linker drops
+unused test code entirely (a reactor built from a module with co-located
+tests is the same size as one without them). No CPP is needed. Only the
+generated `src/Spec.hs` must stay out of the wasm build: tasty-discover runs
+as a native preprocessor.
 
 ## Work items
 
@@ -139,8 +142,11 @@ Ordered so each step lands independently and keeps native `ge` green.
    catches exceptions, since haskeline throws Ctrl-C at the thread
    wherever it is; the wasm interpreters will need their own catching
    helper or a haskeline-free variant if they use these.
-3. [ ] Decide on regex for wasm: cross-compile PCRE with wasi-sdk, or put a
-   pure-Haskell engine behind a flag. Document any behaviour differences.
+3. [x] Regex for wasm, decided 2026-10-17: cross-compile PCRE 8.45 for
+   wasm32-wasi and keep `pcre-light` / `lens-regex-pcre` and
+   `MyPrelude.Regex` unchanged. Behaviour is identical to native (13
+   checks, quasiquoters included). The build needs both `libpcre.a` and a
+   `libpcre.so` (see Toolchain), set up in item 8.
 4. [x] Separate effect definitions from interpreters. Also a prerequisite
    for the storage rewrite (a triple store replacing the node files),
    which is to interpret the same effects. Now:
@@ -174,7 +180,8 @@ Ordered so each step lands independently and keeps native `ge` green.
 6. [ ] Re-run the import trace (done for the graph effects and the path
    logic after item 4, see above); target modules should reach none of
    `haskeline`, `network`/`wreq`, `typed-process`, `System.Posix`, `DAL.*`.
-7. [ ] Toolchain: upgrade to GHC 9.12+ (see below).
+7. [ ] Toolchain: upgrade to LTS 24.63 (GHC 9.10.3, the same compiler as
+   the wasm 9.10 flavour) and drop `effectful-plugin` (see Toolchain).
 8. [ ] Add a wasm build (cabal project with ghc-wasm-meta); build the pure
    modules first.
 9. [ ] JS-backed interpreters for the graph effects + native messaging
@@ -234,18 +241,60 @@ Found while doing it, kept as they were:
 
 ## Toolchain
 
-- GHC 9.12 or newer is needed for Template Haskell under the wasm backend
-  (to confirm). The project is on LTS 22.44 (GHC 9.6) and uses TH in about
-  18 places (`effectful-th`, lens, `ghc-hs-meta`).
+Tested 2026-10-17 with ghc-wasm-meta (commit `8079eb96`, installed by its
+`setup.sh` into `~/.ghc-wasm`, no nix), by building, not from docs. The test
+projects and logs are in `cli/tmp/wasm-feasibility/` (not committed).
+
+- **GHC 9.10.3 is enough.** Template Haskell works under the wasm backend
+  on the 9.10, 9.12 and 9.14 flavours (9.10's is a backport in the
+  haskell-wasm fork; upstream has it from 9.12). The project's own TH works
+  on 9.10: `makeEffect`, `[re|…|]` (PCRE at compile time) and the
+  `[path|…|]` splices in `Models.PathPattern.Suggest`. On aarch64-darwin
+  only 9.10, 9.12 and 9.14 have bindists; 9.6/9.8 stopped updating in
+  2025-02.
+- **Native target: LTS 24.63 (GHC 9.10.3)**, so native and wasm builds
+  share package versions; importing Stackage's `cabal.config` as
+  constraints works in the wasm cabal project. No LTS ships 9.12 yet.
+  LTS 24's effectful 2.6 makes `throwError` need `Show e` (4 errors in
+  `MyPrelude.Effect` / `MyPrelude.EarlyReturn`); `effectful-th` needs
+  1.0.0.4 or newer.
+- **No compiler plugins.** Every wasm GHC fails with `Plugins require
+  -fno-external-interpreter`, and the cross compiler always uses the
+  external interpreter. `effectful-plugin` is dropped everywhere (item 7)
+  so native and wasm type-check the same code. Without it, 3 of 63 trial
+  modules needed type applications (`MyPrelude.EarlyReturn`,
+  `Graph.FreshNID`, `MyPrelude.Effect.fromException`).
+- **Dependencies:** everything the wasm modules need builds. Fail:
+  `terminal-size` (no `struct winsize`; used by `Graph.Command`),
+  `network` (no `getaddrinfo`) and what needs it (`http-conduit`, `wreq`):
+  all native-only. `conduit-extra`, `html-conduit` and `xml-conduit` are
+  unused by the project. `effectful-plugin` builds but can't be loaded.
+- **PCRE:** cross-compile 8.45 with
+  `configure --host=wasm32-wasi --disable-shared --enable-static
+  --disable-cpp --enable-utf --enable-unicode-properties CFLAGS="-O2
+  -mcpu=lime1 -fPIC"`, then link a `libpcre.so` from the `.a` with
+  `wasm32-wasi-clang -shared -fPIC -Wl,--experimental-pic
+  -Wl,--whole-archive`. Point `extra-include-dirs` / `extra-lib-dirs` for
+  `pcre-light` at it in `cabal.project`. Without the `.so`, the
+  compile-time loader fails (`loadArchive: unsupported on wasm`) and **GHC
+  hangs instead of exiting**. Build the `.so` before `pcre-light`.
+  Alternatives checked: `regex-pcre-builtin` (same engine, bundled C, but
+  `MyPrelude.Regex` rewritten), `pcre2` (fails: JIT, `mmap`),
+  `regex-tdfa` (no lookaround, backreferences, `(*UTF8)` or `(?m)`;
+  characters not bytes; multiline by default).
+- **Runtime:** single-threaded, one capability. `forkIO`, `timeout`,
+  `killThread` and `pooledForConcurrentlyN` work, concurrently but not in
+  parallel. `-threaded` / `-with-rtsopts=-N` must not reach wasm
+  executables (link failure).
+- **Async JavaScript imports work on 9.10:** an awaited import blocks only
+  the calling Haskell thread, `killThread` interrupts a thread waiting on a
+  promise, and exported Haskell functions return promises. With node's
+  WASI, `args: []` makes the runtime exit during initialisation (an opaque
+  `Symbol(kExitCode)`); pass `args: ["prog"]`.
+- **Build cost:** the full dependency set takes about 20 minutes the first
+  time; compile-time splices run in node.
 - ghc-wasm-meta builds with `wasm32-wasi-cabal`, not stack, so the wasm
   build needs its own cabal project and freeze file.
-- `effectful-plugin` is a compiler plugin; unknown whether plugins work
-  when cross-compiling. Fallback: drop it for wasm and add type
-  annotations where inference needs it.
-- The wasm runtime is single-threaded: `forkIO` and async exceptions work,
-  `pooledForConcurrentlyN` runs without parallelism.
-- `System.Directory.Clone` (`clonefile`) is macOS-only; already moot if
-  it stays out of the wasm module set.
 
 ## Open questions
 
@@ -260,6 +309,7 @@ Found while doing it, kept as they were:
     parsing, syntax feedback and the completion that needs no graph;
     completion from graph data waits for the native messaging host.
 - Do the test libraries compile for wasm32-wasi?
+  - yes, and they run (see "Decision: co-located tests").
 
 ## Progress log
 
@@ -269,3 +319,4 @@ Found while doing it, kept as they were:
 | 2026-10-17 | Items 1 and 2: `Utils.Testing.TempGraph` split off; interrupt predicates moved to `Error.Interrupt`. `Models.Path.Parse` and `Models.PathPattern.Match` now reach neither `haskeline` nor `DAL.*`; PCRE is what remains. |
 | 2026-10-17 | Item 4: node-file interpreters moved to `DAL.Interpreters.*`; `Error.UserError` and `Error.Warn` freed of HTTP, file coordination and `haskeline`. `Graph.PathPattern.Execution` reaches 54 modules (66), `Graph.GraphEditing` 31 (51), none of storage or the native libraries but PCRE. |
 | 2026-10-17 | Item 5, rescoped to what needs no graph: `parsePath`, `Utils.Parsing.Problems` (syntax feedback as data) and `Models.Completion` (completion over `CompletionLookups`); the REPL's completion is an adapter over it. The core reaches 41 local modules, only PCRE of the blockers. |
+| 2026-10-17 | Toolchain tested: GHC 9.10.3 is enough (TH, async JS imports); no compiler plugins; test libraries build and their unused code is dropped; PCRE cross-compiles. Decided: PCRE (item 3), LTS 24.63 and no `effectful-plugin` (item 7). |
