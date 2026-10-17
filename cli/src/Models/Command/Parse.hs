@@ -310,7 +310,10 @@ test_startsCommand =
       doesNotStart "at ",
       doesNotStart "mk a; ls ",
       doesNotStart "ls %override({",
-      doesNotStart "ls \"a; "
+      doesNotStart "ls \"a; ",
+      -- the text of these is the rest of the line, ; and all
+      doesNotStart "desc a; ",
+      doesNotStart "text a; "
     ]
   where
     starts t = testCase ("starts after " ++ show t) $ startsCommand t @? ""
