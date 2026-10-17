@@ -1,0 +1,5 @@
+-- Used only by build.sh --freeze: cabal.project with the constraints of
+-- the Stackage snapshot (and stack.yaml's Hackage extra-deps), which
+-- build.sh downloads to dist/stackage.config.
+import: cabal.project
+import: dist/stackage.config

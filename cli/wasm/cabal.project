@@ -1,0 +1,12 @@
+-- The wasm build: wasm32-wasi-cabal from ghc-wasm-meta. Run build.sh,
+-- which writes the files under dist/ that this imports.
+packages: .
+
+-- Where build.sh installed PCRE, built for wasm32-wasi (for pcre-light).
+import: dist/pcre.project
+
+-- The versions are Stackage's for stack.yaml's resolver, frozen in
+-- cabal.project.freeze by build.sh --freeze; like stack.yaml, allow
+-- dependencies newer than packages' upper bounds.
+allow-newer: all
+
