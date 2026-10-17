@@ -15,16 +15,14 @@ import Graph.AppInterpreters
 import Graph.GraphEditing
 import Graph.NodeLocated
 import Graph.PathPattern.Execution (completionTransitions)
+import Models.Completion (Candidate (..), CompletionLookups (..), Completions (..))
+import Models.Completion qualified as Core
 import Models.Connect
-import Models.LegacyPartialPath
 import Models.NID
 import Models.Node
-import Models.Path.Simple qualified as Simple
-import Models.PathPattern.Compile (checkCopies)
 import MyPrelude
 import System.Console.Haskeline
 import System.Random (mkStdGen)
-import Utils.Base62 (isBase62Char)
 import Utils.Parsing
 import Utils.Testing
 import Utils.Testing.TempGraph
@@ -75,73 +73,68 @@ mkTransitionCompleter xs x =
       | x `isPrefixOf` z = [z]
       | otherwise = [show z, z]
 
-failCompletionWithOriginalInputOnErrorOrWarning ::
-  (IOE :> effs) =>
-  -- | The original input
-  String ->
-  Eff (Warn UserError : Error UserError : effs) (String, [Completion]) ->
-  Eff effs (String, [Completion])
-failCompletionWithOriginalInputOnErrorOrWarning i =
+-- | Print the warnings of reading the graph, and offer nothing for its
+-- errors.
+noCandidatesOnError :: ErrorHandlingBehavior [a]
+noCandidatesOnError =
   printWarnings
-    >>> (`handleError` const (pure (i, [])))
+    >>> (`handleError` const (pure []))
 
--- this tries to parse as much of a path as possible, and then deduce what
--- the current word being completed is, it then tries to complete a
--- transition currently on as much as possible, then tries to complete from
--- that location
-completePath :: Env -> (String, String) -> IO (String, [Completion])
-completePath =
-  completePathHandling (\i -> failCompletionWithOriginalInputOnErrorOrWarning i)
+-- | Completion as haskeline does it, given the completions of the core
+-- ("Models.Completion"): haskeline gives the text before the cursor
+-- reversed, and takes it back without the word that is replaced.
+completeWith ::
+  CompletionLookups IO -> (String, String) -> IO (String, [Completion])
+completeWith lookups (i, _) =
+  Core.complete lookups (pack (reverse i)) <&> \c ->
+    (drop c.replaced i, map completion c.candidates)
+  where
+    completion x = Completion (unpack x.text) (unpack x.text) x.finished
 
--- | 'completePath' with a choice of what becomes of the errors and warnings
--- of reading the graph, given the original input.
+-- | What completion reads from the graph that the REPL has open, with a
+-- choice of what becomes of the errors and warnings of reading labels.
 --
 -- Damage that completing reads past is not among the warnings: only a
 -- command line warns of it ('warningOfDamageReadPast'), which is what the
 -- user runs next. A warning here would be written into the line that the
 -- user is editing.
+graphLookups :: ErrorHandlingBehavior [Text] -> Env -> CompletionLookups IO
+graphLookups handling env =
+  CompletionLookups
+    { nodesWithPrefix = \prefix -> do
+        base <- readIORef $ env ^. #filePath
+        nodesWithPrefix base (unpack prefix),
+      labelsAfter = \p ->
+        runAppEffects
+          runReadlineNonInteractive
+          handling
+          interpretTimeAsIO
+          filesystemBehaviorDryRun
+          env
+          do
+            nid <- currentLocation
+            -- an @ that does nothing is not warned about here. Nothing
+            -- here bounds how long a large prefix takes to compile
+            -- (docs/path-cost-limits.md): 'completionFunction' gives up
+            -- on one that isn't done in time ('completingWithin').
+            toList <$> provideList_ @GraphEditing (completionTransitions nid p)
+    }
+
+-- | Complete the path before the cursor, not a node id: tries to parse as
+-- much of a path as possible, deduces the word being completed, and
+-- completes it as a label that continues the path to a match.
+completePath :: Env -> (String, String) -> IO (String, [Completion])
+completePath = completePathHandling noCandidatesOnError
+
+-- | 'completePath' with a choice of what becomes of the errors and warnings
+-- of reading the graph ('graphLookups').
 completePathHandling ::
-  (String -> ErrorHandlingBehavior (String, [Completion])) ->
+  ErrorHandlingBehavior [Text] ->
   Env ->
   (String, String) ->
   IO (String, [Completion])
-completePathHandling handling env (i, _) =
-  case getLegacyPartialPath (pack $ takeRelevantFromEnd i) of
-    Nothing -> pure (i, [])
-    Just (MissingSlash _) -> pure (i, [simpleCompletion "/"])
-    Just (LegacyPartialPath pp end) ->
-      runAppEffects
-        runReadlineNonInteractive
-        (handling i)
-        interpretTimeAsIO
-        filesystemBehaviorDryRun
-        env
-        $ do
-          let p = case pp of
-                [] -> Simple.One
-                p0 : rest -> foldl' (Simple.:/) p0 rest
-          nid <- currentLocation
-          -- a prefix that no command runs completes to nothing; an @ that
-          -- does nothing is not warned about here. Nothing here bounds how
-          -- long a large prefix takes to compile
-          -- (docs/path-cost-limits.md): 'completionFunction' gives up on
-          -- one that isn't done in time ('completingWithin').
-          octs <- case checkCopies p of
-            Right _ ->
-              map unpack . toList
-                <$> provideList_ @GraphEditing (completionTransitions nid p)
-            Left _ -> pure []
-          pure (fromMaybe i (stripPrefix (reverse end) i), mkCompleter octs end)
-
-completeNID :: Env -> (String, String) -> IO (String, [Completion])
-completeNID env (i, _) = do
-  let (reversedNidPrefix, scraps) = span isBase62Char . take (nidDigits + 1) $ i
-  case scraps of
-    '@' : _ -> do
-      base <- readIORef $ env ^. #filePath
-      nids <- nodesWithPrefix base (reverse reversedNidPrefix)
-      pure (fromMaybe i (stripPrefix reversedNidPrefix i), map (simpleCompletion' . show) nids)
-    _ -> pure (i, [])
+completePathHandling handling env =
+  completeWith (graphLookups handling env) {nodesWithPrefix = \_ -> pure []}
 
 spec_completePath :: Spec
 spec_completePath = do
@@ -179,10 +172,10 @@ spec_completePath = do
       said <- newIORef []
       let note :: (IOE :> r) => UserError -> Eff r ()
           note e = liftIO (modifyIORef said (show e :))
-          recording :: String -> ErrorHandlingBehavior (String, [Completion])
-          recording _ =
+          recording :: ErrorHandlingBehavior [Text]
+          recording =
             interpret (\_ (Warn e) -> note e)
-              >>> (`handleError` \e -> note e $> ("", []))
+              >>> (`handleError` \e -> note e $> [])
       -- the input is given reversed, as haskeline gives it
       (_, completions) <- completePathHandling recording env (reverse "ls b/", "")
       map replacement completions `shouldBe` ["d"]
@@ -262,8 +255,7 @@ completionFunction :: Env -> (String, String) -> IO (String, [Completion])
 completionFunction env =
   completingWithin completionAllowance $
     completeCommand
-      `fallbackCompletion` completeNID env
-      `fallbackCompletion` completePath env
+      `fallbackCompletion` completeWith (graphLookups noCandidatesOnError env)
 
 spec_completionFunction :: Spec
 spec_completionFunction = do

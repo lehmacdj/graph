@@ -97,6 +97,7 @@ library
       Models.Command
       Models.Command.Parse
       Models.Common
+      Models.Completion
       Models.Connect
       Models.Damage
       Models.Edge
