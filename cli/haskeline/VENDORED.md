@@ -10,3 +10,13 @@ that added it are the patch; `jj diff` from that commit shows all of it.
 
 The files keep their upstream formatting: the repository's jj config
 excludes `cli/haskeline/**` from the ormolu fix tool.
+
+## The patch
+
+- Ctrl-G (Emacs mode, and both insert and command mode in Vi mode) opens
+  the line in `EDITOR` (`vim` when it is not set), run as a shell runs
+  `$EDITOR file`. What the editor saves becomes the line, with the cursor
+  at its end; trailing newlines are dropped and others become spaces. When
+  the editor fails, the line stays and the bell rings.
+  `System/Console/Haskeline/Command/Editor.hs`, bound in `Emacs.hs` and
+  `Vi.hs`.
