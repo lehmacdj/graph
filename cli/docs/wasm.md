@@ -3,8 +3,8 @@
 Design and progress tracking for compiling the path language, completion
 and graph APIs to WebAssembly, so the browser extension can call them.
 
-Started 2026-10-17. Status: refactoring the native build (items 1 and 2
-done); nothing compiled for WebAssembly yet.
+Started 2026-10-17. Status: refactoring the native build (items 1, 2 and
+4 done); nothing compiled for WebAssembly yet.
 
 ## Goal and scope
 
@@ -48,32 +48,44 @@ extension.
 - The planned SQLite + operation log storage could later replace the native
   host with an in-browser store (SQLite on OPFS) without changing the
   effect interfaces.
+- The same effect interfaces are the seam for the storage rewrite: the
+  node files are to be replaced by a database (a triple store with an
+  operation log), used through `Graph.GraphEditing`,
+  `Graph.GraphMetadataEditing` and their siblings, at least at first. So
+  the effects and the logic on them must not depend on `DAL.*`, the file
+  system or the node-file format (item 4).
 
 ## Current blockers
 
 The target modules are mostly pure, but their imports reach storage,
 `haskeline`, HTTP and PCRE. Four entry points accounted for every chain
-when traced on 2026-10-17; the first two are fixed (items 1 and 2).
-Nothing has been compiled for WebAssembly yet.
+when traced on 2026-10-17; three are fixed (items 1, 2 and 4), and PCRE
+(item 3) is what the graph logic still reaches. Nothing has been compiled
+for WebAssembly yet.
 
 | Entry point | What it drags in | Example chain |
 | --- | --- | --- |
 | ~~`Utils.Testing` (co-located tests)~~ fixed: item 1 | storage layer, `Error.UserError` (HTTP, `haskeline`), macOS file coordination | `Models.Path.Parse` → `Utils.Testing` → `DAL.Serialization` → `DAL.DirectoryFormat` → `DAL.RawGraph` |
 | `MyPrelude` re-exports | ~~`haskeline` via `MyPrelude.Effect` (only to detect its Ctrl-C exception)~~ fixed: item 2; PCRE via `MyPrelude.Regex` | `Models.Path.Parse` → `MyPrelude` → `MyPrelude.Effect` |
-| Effects defined beside their file-backed interpreter | `DAL.FileSystemOperations.*`, `DAL.Interpreters` | `Graph.PathPattern.Resolve` → `Graph.GraphMetadataEditing` → `MetadataWriteDiff` → `DAL.Interpreters` |
+| ~~Effects defined beside their file-backed interpreter~~ fixed: item 4 | `DAL.FileSystemOperations.*`, `DAL.Interpreters` | `Graph.PathPattern.Resolve` → `Graph.GraphMetadataEditing` → `MetadataWriteDiff` → `DAL.Interpreters` |
+| ~~`Error.UserError` carrying native types~~ fixed: item 4 | HTTP (`http-conduit`, `network`), macOS file coordination, `haskeline` via `Error.Interrupt` | `Graph.PathPattern.Execution` → `Error.UserError` → `Network.HTTP.Conduit` |
+| `Effect.IOWrapper.*` effects beside their IO interpreters (not on the path of the graph logic) | HTTP, `typed-process`, `System.Posix`, `directory-tree` | `Graph.Command` → `Effect.IOWrapper.Web` → `Network.Wreq`; `Graph.Import.ByteString` → `Effect.IOWrapper.Web` |
 | Completion tied to the REPL | `haskeline` completion type, `forkIO` / `threadDelay`, full app interpreters | `Executable.GraphEditor.Completion` (89 local modules) |
 
-Local modules reached from each entry point (2026-10-17, after items 1
-and 2; before them in brackets):
+Local modules reached from each entry point, counting itself (2026-10-17,
+after items 1, 2 and 4; after items 1 and 2 in brackets):
 
 - `Models.PathPattern.Match`: 29 (29); reaches no `haskeline` or `DAL.*`,
   only PCRE through `MyPrelude.Regex`.
-- `Models.Path.Parse`: 35 (44); the same: only PCRE.
-- `Graph.GraphEditing`: 51 (50) and `Graph.PathPattern.Execution`: 66
-  (65); both still reach the storage interpreters (item 4) and, through
-  `Error.Warn`, `Error.UserError` and `DAL.Interpreters`, `haskeline`. The
-  one more module is `Error.Interrupt`.
-- 24 non-Spec modules under `src/` import `Utils.Testing`; it now reaches
+- `Models.Path.Parse`: 35 (35); the same: only PCRE.
+- `Graph.GraphEditing`: 31 (51), `Graph.GraphMetadataEditing`: 29 (47),
+  `Graph.PathPattern.Resolve`: 36 (53) and `Graph.PathPattern.Execution`:
+  54 (66). None reaches `DAL.*`, `System.Directory`, `System.FilePath`,
+  file coordination, `haskeline`, `network`/`http-conduit`/`wreq`,
+  `typed-process` or `System.Posix`; what is left of the native libraries
+  is PCRE (item 3). They do reach the test libraries through
+  `Utils.Testing` (see "Decision: co-located tests") and `random`.
+- 24 non-Spec modules under `src/` import `Utils.Testing`; it reaches
   29 local modules and none of storage, `haskeline` or file coordination.
 
 ## Decision: co-located tests
@@ -126,12 +138,34 @@ Ordered so each step lands independently and keeps native `ge` green.
    helper or a haskeline-free variant if they use these.
 3. [ ] Decide on regex for wasm: cross-compile PCRE with wasi-sdk, or put a
    pure-Haskell engine behind a flag. Document any behaviour differences.
-4. [ ] Separate effect definitions from interpreters: `GraphMetadataEditing`
-   and siblings into their own modules; `DAL.FileSystemOperations.*`
-   imports them, not the reverse.
+4. [x] Separate effect definitions from interpreters. Also a prerequisite
+   for the storage rewrite (a triple store replacing the node files),
+   which is to interpret the same effects. Now:
+   - Effects, with only their in-memory interpreters:
+     `Graph.GraphMetadataEditing`, `Graph.GraphDataEditing`,
+     `Graph.GraphEditing` (and `Graph.Dualizeable`); the error and warning
+     types they use, `Error.UserError` and `Error.Warn`.
+   - Node-file interpreters, which import the effects:
+     `DAL.Interpreters.GraphMetadataEditing` (the transactional cache,
+     damage checks), `DAL.Interpreters.GraphDataEditing`,
+     `DAL.Interpreters.GraphEditing`, over the storage effects in
+     `DAL.FileSystemOperations.*` (moved unchanged; their specs with them).
+   - `Error.UserError` no longer imports HTTP, file coordination or
+     `haskeline`: `NSErrorException` moved to `Error.FileCoordination` (a
+     plain record, re-exported by `System.FileCoordination`); `WebError`
+     keeps the HTTP exception as a `SomeException` (shown the same); the
+     catching of IO exceptions (`embedCatchingErrors` and friends) moved to
+     `Error.Catching`; `notingWhatInterruptLeaves` moved from `Error.Warn`
+     to `Error.Interrupt`. Messages are unchanged.
+   - Not split: the `Effect.IOWrapper.*` effects (web, editor, file
+     system, image display, file types) still sit beside their IO
+     interpreters. The graph logic doesn't reach them; `Graph.Command` and
+     `Graph.Import.*` do, so they matter if the extension calls the command
+     language.
 5. [ ] Give completion a pure core: a function returning plain candidates;
    `Executable.GraphEditor.Completion` adapts it to `haskeline`.
-6. [ ] Re-run the import trace; target modules should reach none of
+6. [ ] Re-run the import trace (done for the graph effects and the path
+   logic after item 4, see above); target modules should reach none of
    `haskeline`, `network`/`wreq`, `typed-process`, `System.Posix`, `DAL.*`.
 7. [ ] Toolchain: upgrade to GHC 9.12+ (see below).
 8. [ ] Add a wasm build (cabal project with ghc-wasm-meta); build the pure
@@ -171,3 +205,4 @@ Ordered so each step lands independently and keeps native `ge` green.
 | --- | --- |
 | 2026-10-17 | Traced blockers; chose hybrid architecture; proposed splitting `Utils.Testing` over CPP-gated tests. |
 | 2026-10-17 | Items 1 and 2: `Utils.Testing.TempGraph` split off; interrupt predicates moved to `Error.Interrupt`. `Models.Path.Parse` and `Models.PathPattern.Match` now reach neither `haskeline` nor `DAL.*`; PCRE is what remains. |
+| 2026-10-17 | Item 4: node-file interpreters moved to `DAL.Interpreters.*`; `Error.UserError` and `Error.Warn` freed of HTTP, file coordination and `haskeline`. `Graph.PathPattern.Execution` reaches 54 modules (66), `Graph.GraphEditing` 31 (51), none of storage or the native libraries but PCRE. |

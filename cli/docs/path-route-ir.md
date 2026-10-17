@@ -1624,7 +1624,7 @@ user sees is in [commands.md](commands.md#51-what-a-path-compiles-to)):
   these, or an interrupt can cut it in half and the notes of an
   interrupted line will not know of it.
 - The notes of an interrupted line (`notingWhatInterruptLeaves` in
-  `Error.Warn`) come from the count: `untoldGraphChanges`, and
+  `Error.Interrupt`) come from the count: `untoldGraphChanges`, and
   `unnamedAtTargetChanges` for the targets of `at`.
 - `Effectful.Readline` (in `effectful-readline/`):
   `installHandlerUnheld` installs the handlers of the interrupt signal,
