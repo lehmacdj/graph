@@ -147,6 +147,7 @@ Ordered so each step lands independently and keeps native `ge` green.
 
 - Does the extension need to work without a native `ge` installed? If so,
   the in-browser store needs to come sooner.
+  - no: the native messenger can be assumed
 - Which API does the extension call: the command language, or a narrower
   typed API (resolve path, list children, suggest)?
 - Do the test libraries compile for wasm32-wasi?
