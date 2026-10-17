@@ -3,8 +3,8 @@
 Design and progress tracking for compiling the path language, completion
 and graph APIs to WebAssembly, so the browser extension can call them.
 
-Started 2026-10-17. Status: refactoring the native build (items 1, 2 and
-4 done); nothing compiled for WebAssembly yet.
+Started 2026-10-17. Status: refactoring the native build (items 1, 2, 4
+and 5 done); nothing compiled for WebAssembly yet.
 
 ## Goal and scope
 
@@ -13,7 +13,8 @@ higher-level graph APIs to WebAssembly, and call them from the browser
 extension.
 
 - **In scope:** `Models.Path.*`, `Models.PathPattern.*`, the completion
-  core (`completionTransitions`, `Models.PathPattern.Suggest`), and graph
+  core (`Models.Completion`; with a graph, `completionTransitions`), the
+  syntax feedback (`Utils.Parsing.Problems`), and graph
   reading and editing through the effect interfaces (`Graph.GraphEditing`,
   `Graph.GraphMetadataEditing`, `Graph.PathPattern.Resolve` / `Execution`).
 - **Out of scope:** the REPL (`haskeline`), HTTP fetching, image display,
@@ -59,9 +60,9 @@ extension.
 
 The target modules are mostly pure, but their imports reach storage,
 `haskeline`, HTTP and PCRE. Four entry points accounted for every chain
-when traced on 2026-10-17; three are fixed (items 1, 2 and 4), and PCRE
-(item 3) is what the graph logic still reaches. Nothing has been compiled
-for WebAssembly yet.
+when traced on 2026-10-17; three are fixed (items 1, 2 and 4), the fourth
+for what needs no graph (item 5), and PCRE (item 3) is what the graph logic
+still reaches. Nothing has been compiled for WebAssembly yet.
 
 | Entry point | What it drags in | Example chain |
 | --- | --- | --- |
@@ -70,7 +71,7 @@ for WebAssembly yet.
 | ~~Effects defined beside their file-backed interpreter~~ fixed: item 4 | `DAL.FileSystemOperations.*`, `DAL.Interpreters` | `Graph.PathPattern.Resolve` → `Graph.GraphMetadataEditing` → `MetadataWriteDiff` → `DAL.Interpreters` |
 | ~~`Error.UserError` carrying native types~~ fixed: item 4 | HTTP (`http-conduit`, `network`), macOS file coordination, `haskeline` via `Error.Interrupt` | `Graph.PathPattern.Execution` → `Error.UserError` → `Network.HTTP.Conduit` |
 | `Effect.IOWrapper.*` effects beside their IO interpreters (not on the path of the graph logic) | HTTP, `typed-process`, `System.Posix`, `directory-tree` | `Graph.Command` → `Effect.IOWrapper.Web` → `Network.Wreq`; `Graph.Import.ByteString` → `Effect.IOWrapper.Web` |
-| Completion tied to the REPL | `haskeline` completion type, `forkIO` / `threadDelay`, full app interpreters | `Executable.GraphEditor.Completion` (89 local modules) |
+| ~~Completion tied to the REPL~~ fixed for what needs no graph: item 5 | `haskeline` completion type, `forkIO` / `threadDelay`, full app interpreters | `Executable.GraphEditor.Completion` (89 local modules before; the adapter now) |
 
 Local modules reached from each entry point, counting itself (2026-10-17,
 after items 1, 2 and 4; after items 1 and 2 in brackets):
@@ -87,6 +88,8 @@ after items 1, 2 and 4; after items 1 and 2 in brackets):
   `Utils.Testing` (see "Decision: co-located tests") and `random`.
 - 24 non-Spec modules under `src/` import `Utils.Testing`; it reaches
   29 local modules and none of storage, `haskeline` or file coordination.
+- `Models.Completion`: 40 and `Utils.Parsing.Problems`: 36 (41 together;
+  item 5); the same: only PCRE.
 
 ## Decision: co-located tests
 
@@ -162,8 +165,12 @@ Ordered so each step lands independently and keeps native `ge` green.
      interpreters. The graph logic doesn't reach them; `Graph.Command` and
      `Graph.Import.*` do, so they matter if the extension calls the command
      language.
-5. [ ] Give completion a pure core: a function returning plain candidates;
-   `Executable.GraphEditor.Completion` adapts it to `haskeline`.
+5. [x] Give completion and syntax feedback a pure core, for what needs no
+   graph (rescoped 2026-10-17): `Models.Completion` and
+   `Utils.Parsing.Problems` (see [The typed API](#the-typed-api)).
+   `Executable.GraphEditor.Completion` is now an adapter: it gives the core
+   lookups that read the graph on disk and turns its completions into
+   haskeline's. REPL behaviour is unchanged.
 6. [ ] Re-run the import trace (done for the graph effects and the path
    logic after item 4, see above); target modules should reach none of
    `haskeline`, `network`/`wreq`, `typed-process`, `System.Posix`, `DAL.*`.
@@ -174,6 +181,56 @@ Ordered so each step lands independently and keeps native `ge` green.
    host.
 10. [ ] Extension integration: load the wasm module, expose parse /
     complete / query to the UI.
+
+## The typed API
+
+What the first proof of concept in the extension calls (item 5). All of
+it is pure and reaches none of `haskeline`, `DAL.*`, HTTP, processes,
+`System.Posix` or the macOS bindings; PCRE only through `MyPrelude.Regex`
+(item 3).
+
+Parsing and syntax feedback:
+
+- `Models.Path.Parse.parsePath :: Text -> Either ParseErrorBundle'
+  ParsedPath`: a whole path, directives kept, as commands take it. The path
+  quasiquoter and `Models.PathPattern.Suggest.parseSurfacePath` use it.
+- `Utils.Parsing.Problems.syntaxProblems :: ParseErrorBundle' -> NonEmpty
+  SyntaxProblem`, with `SyntaxProblem {start, end :: Int, message ::
+  Text}`: where each problem is (offsets in code points, end exclusive;
+  custom errors use their source range) and the parser's message for it,
+  as `errorBundlePretty` words it. It works for any of the parsers, the
+  command parser included.
+
+Completion (`Models.Completion`):
+
+- `complete :: Monad m => CompletionLookups m -> Text -> m Completions`:
+  given the text before the cursor, `Completions {replaced :: Int,
+  candidates :: [Candidate]}`, where each `Candidate {text :: Text,
+  finished :: Bool}` replaces the last `replaced` characters.
+- `CompletionLookups m {nodesWithPrefix :: Text -> m [NID], labelsAfter ::
+  Path -> m [Text]}` is what completion needs from a graph; `withoutGraph`
+  has none of it, and `completeWithoutGraph = runIdentity . complete
+  withoutGraph`.
+- Without a graph it offers the `/` after a term that is not a label (`(a
+  & b)`, `@`), and nothing for a path with a directive, one that does not
+  parse or one that no command runs (`checkCopies`). It also says which
+  word a graph would complete (`replaced`).
+
+A graph-aware layer plugs in by giving `CompletionLookups`: the REPL's
+(`graphLookups` in `Executable.GraphEditor.Completion`) globs the node
+files for ids and runs `Graph.PathPattern.Execution.completionTransitions`
+under the app interpreters for labels. A wasm build would give lookups
+that ask the native messaging host, or run `completionTransitions` over
+JS-backed `PathReading` interpreters, now that item 4 has separated the
+effects from the storage. The order of what is tried (an id after `@`, then the
+path) stays in the core either way.
+
+Found while doing it, kept as they were:
+
+- An id is completed after the `@`, which stays, to a candidate with its
+  own `@`: the REPL completes `@0` to `@@000000000001`.
+- The `/` candidate is finished, so haskeline adds a space after it when it
+  is the only one: `(a & b)` completes to `(a & b)/ `.
 
 ## Toolchain
 
@@ -197,6 +254,11 @@ Ordered so each step lands independently and keeps native `ge` green.
   - no: the native messenger can be assumed
 - Which API does the extension call: the command language, or a narrower
   typed API (resolve path, list children, suggest)?
+  - a narrow typed API, but made of generic helpers that the command
+    language (the REPL, its completion) uses too, not a second
+    implementation of parts of it. The first proof of concept does path
+    parsing, syntax feedback and the completion that needs no graph;
+    completion from graph data waits for the native messaging host.
 - Do the test libraries compile for wasm32-wasi?
 
 ## Progress log
@@ -206,3 +268,4 @@ Ordered so each step lands independently and keeps native `ge` green.
 | 2026-10-17 | Traced blockers; chose hybrid architecture; proposed splitting `Utils.Testing` over CPP-gated tests. |
 | 2026-10-17 | Items 1 and 2: `Utils.Testing.TempGraph` split off; interrupt predicates moved to `Error.Interrupt`. `Models.Path.Parse` and `Models.PathPattern.Match` now reach neither `haskeline` nor `DAL.*`; PCRE is what remains. |
 | 2026-10-17 | Item 4: node-file interpreters moved to `DAL.Interpreters.*`; `Error.UserError` and `Error.Warn` freed of HTTP, file coordination and `haskeline`. `Graph.PathPattern.Execution` reaches 54 modules (66), `Graph.GraphEditing` 31 (51), none of storage or the native libraries but PCRE. |
+| 2026-10-17 | Item 5, rescoped to what needs no graph: `parsePath`, `Utils.Parsing.Problems` (syntax feedback as data) and `Models.Completion` (completion over `CompletionLookups`); the REPL's completion is an adapter over it. The core reaches 41 local modules, only PCRE of the blockers. |
