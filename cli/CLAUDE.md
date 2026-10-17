@@ -2,7 +2,8 @@
 
 This directory contains the Haskell CLI implementation for the graph project.
 
-For setup instructions (installing Stack, running tests), see [docs/claude-code-web.md](docs/claude-code-web.md).
+Use the `language-design` skill when designing or changing the semantics of
+the Command or Path languages.
 
 ## Key Documentation
 

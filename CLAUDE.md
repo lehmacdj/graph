@@ -20,7 +20,3 @@ Example graphs and usage patterns.
 
 ### scripts/
 Utility scripts for working with the repository.
-
-## Setting Up Haskell Development Environment
-
-For instructions on setting up Stack and running tests in web/container environments, see [cli/docs/claude-code-web.md](cli/docs/claude-code-web.md).
