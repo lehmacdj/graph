@@ -283,6 +283,13 @@ path) stays in the core either way.
 The two bugs found while doing item 5 are fixed: the doubled `@` of a
 completed id, and the space that haskeline added after the `/` candidate.
 
+Open: a label that has to be quoted in a path (one with characters that
+an unquoted label can't have, such as a space or `!`) is offered as it
+is, unquoted, so taking it gives a path that doesn't parse or means
+something else; and nothing is completed inside an open quote (`ls "he`).
+Neither did the REPL's completion before item 5: its quoting helpers
+were never called (removed).
+
 ## Toolchain
 
 Tested 2026-10-17 with ghc-wasm-meta (commit `8079eb96`, installed by its

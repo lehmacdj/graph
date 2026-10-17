@@ -24,7 +24,6 @@ import Models.Node
 import MyPrelude
 import System.Console.Haskeline
 import System.Random (mkStdGen)
-import Utils.Parsing
 import Utils.Testing
 import Utils.Testing.TempGraph
 
@@ -32,39 +31,6 @@ import Utils.Testing.TempGraph
 -- ('Models.Command.Parse.commandNames'): those that end it.
 quitCommands :: [Text]
 quitCommands = [":q", ":quit"]
-
--- | takes a list of strings and a reversed input string, and produces
--- words from the list that complete the previous thing
-mkCompleter :: [String] -> String -> [Completion]
-mkCompleter xs x = map simpleCompletion' $ filter (x `isPrefixOf`) xs
-
-quoteUnusualTransition :: String -> String
-quoteUnusualTransition x
-  | isUnusualTransition x = show x
-  | otherwise = x
-
-isUnusualTransition :: String -> Bool
-isUnusualTransition = not . all isIdentChar
-
--- | simpleCompletion except the completion is not treated as finished,
--- thus no space is added after
-simpleCompletion' :: String -> Completion
-simpleCompletion' x = Completion x x False
-
--- TODO: fix this so that it is possible to complete transitions that use
--- special characters
--- currently, when completing something like @Hello/world/"!|@ (with the cursor
--- indicated by @|@, it isn't possible to complete a transition like @!!!@
--- because we don't appear to generate any options. Probably the partial
--- path parser needs to be improved to fix this.
-mkTransitionCompleter :: [String] -> String -> [Completion]
-mkTransitionCompleter xs x =
-  mkCompleter (xs >>= validCompletions) x
-  where
-    validCompletions z
-      | isUnusualTransition z = [show z]
-      | x `isPrefixOf` z = [z]
-      | otherwise = [show z, z]
 
 -- | Print the warnings of reading the graph, and offer nothing for its
 -- errors.
