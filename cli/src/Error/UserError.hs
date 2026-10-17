@@ -6,17 +6,11 @@ module Error.UserError
   )
 where
 
-import Control.Concurrent (myThreadId, threadDelay)
-import Control.Exception qualified as E
 import Control.Lens
-import Error.Interrupt
+import Error.FileCoordination (NSErrorException (..))
 import Models.Damage
 import Models.NID (NID)
 import MyPrelude
-import Network.HTTP.Conduit (HttpException)
-import System.Console.Haskeline qualified as Haskeline
-import System.FileCoordination (NSErrorException (..))
-import Utils.Testing.External
 
 -- | Blanket error type used by the app. This is called @UserError@ because
 -- generally we only want to intercept it when propagating errors to the user.
@@ -33,7 +27,10 @@ data UserError
     -- then in different ways, while generally UserErrors need to be propogated
     -- all the way up to the user.
     MissingNode NID (Maybe Text)
-  | WebError HttpException
+  | -- | An HTTP request failed: the exception of the HTTP library (see
+    -- 'Error.Catching.mapExceptionToUserError'), kept as any exception so
+    -- that this type doesn't depend on that library
+    WebError SomeException
   | FailedToDeserializeNode NID String
   | -- | The file of the node is there but could not be read
     UnreadableNodeFile NID IOError
@@ -386,58 +383,6 @@ throwLeft ::
 throwLeft (Right x) = pure x
 throwLeft (Left err) = throwError $ toUserError err
 
--- | capture errors and convert them to an error
---
--- Only what the action itself threw. An interrupt, the end of a 'timeout'
--- or the killing of the thread that arrives while the action runs passes
--- through as it is ('fromExceptionVia'): a command that is stopped while it
--- reads a file is stopped like any other, and is not reported as a command
--- that failed.
-embedCatchingErrors ::
-  (Members [Error UserError, IOE] r) => IO a -> Eff r a
-embedCatchingErrors = fromExceptionVia mapExceptionToUserError
-
--- | The user error that an exception stands for
-mapExceptionToUserError :: SomeException -> UserError
-mapExceptionToUserError = \case
-  (E.fromException @IOError -> Just e) -> IOFail e
-  (E.fromException @HttpException -> Just e) -> WebError e
-  (E.fromException @NSErrorException -> Just e) -> FileCoordinationError e
-  e -> OtherException e
-
--- | Like 'mapExceptionToUserError', for an exception that may be a user
--- error thrown as one (as an unlifted action throws it), which stays as it is
-exceptionAsUserError :: SomeException -> UserError
-exceptionAsUserError = \case
-  (E.fromException @UserError -> Just e) -> e
-  e -> mapExceptionToUserError e
-
-spec_embedCatchingErrors :: Spec
-spec_embedCatchingErrors = do
-  let embedded :: IO () -> IO (Either UserError ())
-      embedded = runEff . runErrorNoCallStack @UserError . embedCatchingErrors
-      -- as Ctrl-C, a signal or a time-out arrive: thrown at the thread
-      -- while it runs the action
-      arriving :: (Exception e) => e -> IO ()
-      arriving e = myThreadId >>= (`E.throwTo` e)
-  it "makes a user error of an exception of the action" do
-    Left (IOFail e) <- embedded (throwIO (userError "disk on fire"))
-    e `shouldBe` userError "disk on fire"
-  it "makes a user error of an error call" do
-    Left (OtherException e) <- embedded (error "broken invariant")
-    displayException e `shouldContain` "broken invariant"
-  it "passes on the Ctrl-C of the REPL" $
-    embedded (arriving Haskeline.Interrupt)
-      `shouldThrow` \Haskeline.Interrupt -> True
-  it "passes on an interrupt signal" $
-    embedded (arriving E.UserInterrupt) `shouldThrow` (== E.UserInterrupt)
-  it "passes on the killing of the thread" $
-    embedded (arriving E.ThreadKilled) `shouldThrow` (== E.ThreadKilled)
-  it "is ended by a time-out" do
-    -- the action would take a minute
-    result <- timeout 10000 (embedded (threadDelay 60000000))
-    isNothing result `shouldBe` True
-
 printErrors ::
   (IOE :> effs) =>
   Eff (Error UserError ': effs) () ->
@@ -462,9 +407,6 @@ instance ToUserError UserError where
 
 instance ToUserError SomeException where
   toUserError = OtherException
-
-instance ToUserError HttpException where
-  toUserError = WebError
 
 instance ToUserError Text where
   toUserError = OtherError

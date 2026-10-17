@@ -44,6 +44,8 @@ library
       Effect.IOWrapper.FileTypeOracle
       Effect.IOWrapper.GetTime
       Effect.IOWrapper.Web
+      Error.Catching
+      Error.FileCoordination
       Error.Interrupt
       Error.Missing
       Error.UserError

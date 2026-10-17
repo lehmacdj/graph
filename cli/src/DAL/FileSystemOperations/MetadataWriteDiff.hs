@@ -8,6 +8,7 @@ import DAL.Interpreters
 import DAL.RawGraph
 import Data.List.NonEmpty qualified as NonEmpty
 import Data.Map.Strict qualified as Map
+import Error.Catching
 import Error.UserError
 import Error.Warn
 import Foreign.C.Error (errnoToIOError, getErrno)

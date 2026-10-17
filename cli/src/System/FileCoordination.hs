@@ -45,6 +45,7 @@ module System.FileCoordination
   )
 where
 
+import Error.FileCoordination (NSErrorException (..))
 import MyPrelude
 import Utils.Testing.External
 
@@ -105,16 +106,6 @@ defaultWritingOptions =
 -- | This shouldn't be thrown unless something very fishy happens
 data NullResultException = NullResultException
   deriving (Show, Exception)
-
--- | An error that file coordination gave: its domain and code as they are,
--- and what it means in words
-data NSErrorException = NSErrorException
-  { domain :: Text,
-    code :: Int,
-    description :: Text
-  }
-  deriving stock (Show, Generic)
-  deriving anyclass (NFData, Exception)
 
 #ifdef darwin_HOST_OS
 

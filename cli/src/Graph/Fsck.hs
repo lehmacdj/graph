@@ -12,6 +12,7 @@ import DAL.RawGraph
 import Data.ByteString qualified as B
 import Data.Map.Strict qualified as Map
 import Effect.IOWrapper.Echo
+import Error.Catching
 import Error.UserError
 import Models.Damage
 import Models.NID

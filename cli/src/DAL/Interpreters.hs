@@ -3,6 +3,7 @@ module DAL.Interpreters where
 import Control.Concurrent (myThreadId, threadDelay)
 import Control.Exception qualified as E
 import DAL.RawGraph
+import Error.Catching
 import Error.Interrupt
 import Error.UserError
 import MyPrelude

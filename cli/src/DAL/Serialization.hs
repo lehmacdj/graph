@@ -30,6 +30,7 @@ import DAL.DirectoryFormat
 import Data.Aeson qualified as Aeson
 import Data.ByteString qualified as B
 import Data.ByteString.Lazy qualified as BL
+import Error.Catching
 import Error.UserError
 import Models.Connect
 import Models.Graph

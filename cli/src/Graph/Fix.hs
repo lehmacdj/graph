@@ -38,6 +38,8 @@ import DAL.RawGraph
 import Data.List.NonEmpty qualified as NonEmpty
 import Data.Map.Strict qualified as Map
 import Effect.IOWrapper.Echo
+import Error.Catching
+import Error.Interrupt (notingWhatInterruptLeaves)
 import Error.UserError
 import Error.Warn
 import GHC.IO.Exception (IOErrorType (InappropriateType), IOException (ioe_type))

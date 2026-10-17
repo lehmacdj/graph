@@ -4,6 +4,7 @@ module DAL.FileSystemOperations.Data where
 
 import DAL.DirectoryFormat
 import DAL.RawGraph
+import Error.Catching
 import Error.UserError
 import Models.NID
 import MyPrelude

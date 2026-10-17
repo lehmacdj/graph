@@ -7,6 +7,7 @@ import DAL.DirectoryFormat
 import DAL.RawGraph
 import DAL.Serialization (getAllNodeIds)
 import Data.Char (isDigit)
+import Error.Catching
 import Error.UserError
 import Models.NID
 import Models.Node

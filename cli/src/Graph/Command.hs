@@ -19,6 +19,7 @@ import Effect.IOWrapper.Web
 import Effectful.Provider.List
 import Effectful.Readline
 import Effectful.State.Dynamic
+import Error.Interrupt (notingWhatInterruptLeaves)
 import Error.Missing
 import Error.UserError
 import Error.Warn

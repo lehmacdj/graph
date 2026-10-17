@@ -1,7 +1,8 @@
 -- | What stops a command from outside, as opposed to failing in it: an
 -- asynchronous exception, the user's interrupt, or a signal that asks the
 -- program to end. And catching the exceptions of an action into the 'Error'
--- effect, which leaves those alone.
+-- effect, which leaves those alone, and warning of what an interrupted
+-- command left behind ('notingWhatInterruptLeaves').
 --
 -- This is apart from "MyPrelude.Effect" because Ctrl-C in the REPL is
 -- haskeline's 'Haskeline.Interrupt', which only this module knows of: so
@@ -12,10 +13,13 @@ module Error.Interrupt
     isAsyncOrInterrupt,
     EndedBySignal (..),
     isInterrupt,
+    notingWhatInterruptLeaves,
   )
 where
 
 import Control.Exception qualified as E
+import Error.UserError (UserError)
+import Error.Warn (Warn, warnText)
 import Foreign.C.Types (CInt)
 import MyPrelude
 import System.Console.Haskeline qualified as Haskeline
@@ -85,3 +89,19 @@ isInterrupt e =
   isJust (E.fromException @Haskeline.Interrupt e)
     || E.fromException e == Just E.UserInterrupt
     || isJust (E.fromException @EndedBySignal e)
+
+-- | Run what may change the graph in several steps, each a change of its
+-- own that stays once it is made. An interrupt (Ctrl-C, or a signal that
+-- ends the program: 'isInterrupt') is not an error of the command and is
+-- not reported as one, so nothing else would tell the user that it stopped
+-- such a command part way: if one does, this warns of what the first
+-- argument then says was left behind, if anything, and the interrupt goes
+-- on as it was.
+--
+-- What was left behind is what was written, where it was written: see
+-- 'DAL.RawGraph.untoldGraphChanges', which the first argument asks.
+notingWhatInterruptLeaves ::
+  (Members [Warn UserError, IOE] r) => Eff r [Text] -> Eff r a -> Eff r a
+notingWhatInterruptLeaves leftBehind action =
+  action `withException` \e ->
+    when (isInterrupt e) (leftBehind >>= traverse_ warnText)
