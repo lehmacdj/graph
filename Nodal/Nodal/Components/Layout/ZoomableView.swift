@@ -24,18 +24,21 @@ enum ZoomState: Sendable {
     }
 }
 
+/// Name of the coordinate space a `ZoomableView` viewport establishes. All
+/// geometry used for anchoring gestures and computing scroll positions is
+/// measured in this space so that it agrees with gesture locations, which are
+/// reported relative to the view the gesture is attached to.
+///
+/// File-level rather than a static member so the `Sendable` geometry closures
+/// can read it without touching the main-actor-isolated generic view type.
+private let zoomableViewportSpace = "ZoomableView-viewport"
+
 struct ZoomableView<Content: View>: View {
     private let content: Content
 
     init(content: () -> Content) {
         self.content = content()
     }
-
-    /// Name of the coordinate space the viewport establishes. All geometry
-    /// used for anchoring gestures and computing scroll positions is measured
-    /// in this space so that it agrees with gesture locations, which are
-    /// reported relative to the view the gesture is attached to.
-    private static var viewportSpace: String { "ZoomableView-viewport" }
 
     @State private var scale: CGFloat = 1.0
     @State private var angle: Angle = .zero
@@ -329,7 +332,7 @@ struct ZoomableView<Content: View>: View {
             )
             .onGeometryChange(
                 for: CGRect.self,
-                of: { proxy in proxy.frame(in: .named(Self.viewportSpace)) },
+                of: { proxy in proxy.frame(in: .named(zoomableViewportSpace)) },
                 action: { contentFrame = $0 }
             )
             // Always apply these effects, with identity values while no gesture
@@ -362,7 +365,7 @@ struct ZoomableView<Content: View>: View {
         }
         .onGeometryChange(
             for: CGRect.self,
-            of: { proxy in proxy.frame(in: .named(Self.viewportSpace)) },
+            of: { proxy in proxy.frame(in: .named(zoomableViewportSpace)) },
             action: {
                 viewportFrame = $0
                 applyInitialZoomStateIfPossible()
@@ -381,7 +384,7 @@ struct ZoomableView<Content: View>: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .simultaneousGesture(resizeRotateGesture)
         .gesture(doubleTapGesture)
-        .coordinateSpace(.named(Self.viewportSpace))
+        .coordinateSpace(.named(zoomableViewportSpace))
     }
 }
 
