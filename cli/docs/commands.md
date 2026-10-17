@@ -71,8 +71,7 @@ not undone (section 6).
 `dd l` (`dedup`) and `text l …` (`mkt`) take a label, not a path, and
 `desc …` (`describe`) takes free text. The other commands (`nid`, `d`,
 `back n`, `vi`, `si` (`show-image`), `fsck`, `fix` and
-`fix --dry-run`, `wget URL` (`:import-url`, `:iurl`), `:i dir`
-(`:import`), `:d` (`:debug`)) take no path.
+`fix --dry-run`, `:i dir` (`:import`), `:d` (`:debug`)) take no path.
 
 `vi` edits the current node's data with the editor that `$EDITOR` names,
 run the way a shell runs it, so `$EDITOR` may hold arguments and quotes
@@ -478,8 +477,8 @@ becomes the node made for it. The import happens while the path is
 expanded, before the path is checked and before the command runs, so it
 stays even if the path is then refused or the command fails. Each
 distinct URL is fetched at most once per command line, however often it
-is written or expanded (repeated across `;`, at each target of an `at`,
-or after a `wget` of it), and later uses take the node of the first
+is written or expanded (repeated across `;` or at each target of an
+`at`), and later uses take the node of the first
 import while that node exists (`mk x/URL ; rmnf x ; mk y/URL` fetches
 it again). A URL extends to the next space, so one followed by `;` or
 `)` needs a space before it: `mk x/URL ; ls`.

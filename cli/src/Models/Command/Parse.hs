@@ -63,7 +63,6 @@ commandPaths = \case
   Debug -> []
   ShowImage -> []
   Import _ -> []
-  ImportUrl _ -> []
   Check -> []
   Fix _ -> []
   Edit -> []
@@ -177,9 +176,6 @@ pShowImage = commandFrom ["show-image", "si"] $> ShowImage
 pImport :: Parser Command
 pImport = (commandFrom [":import", ":i"] $> Import) <*> some anySingle
 
-pImportUrl :: Parser Command
-pImportUrl = (commandFrom [":import-url", ":iurl", "wget"] $> ImportUrl) <*> pHttpURI
-
 pCheck :: Parser Command
 pCheck = command "fsck" $> Check
 
@@ -237,7 +233,6 @@ pCommandTerm =
     <|> try pDebug
     <|> try pShowImage
     <|> try pImport
-    <|> try pImportUrl
     <|> try pCheck
     <|> try pFix
     <|> try pMove

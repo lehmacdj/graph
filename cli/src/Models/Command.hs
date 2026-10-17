@@ -50,8 +50,6 @@ data Command
     ShowImage
   | -- | :i
     Import FilePath
-  | -- | wget
-    ImportUrl URI
   | -- | fsck
     Check
   | -- | fix [--dry-run]: repair the damage that fsck lists
