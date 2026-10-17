@@ -1,3 +1,0 @@
-#!/bin/sh
-# Stands in for vim, which runs when EDITOR is not set.
-printf ' (vim)' >> "$1"

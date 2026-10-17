@@ -1,3 +1,0 @@
-#!/bin/sh
-# A stand-in for EDITOR: adds a line to the file it is given.
-printf '\nadded\n' >> "$1"
