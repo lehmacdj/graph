@@ -177,7 +177,13 @@ Ordered so each step lands independently and keeps native `ge` green.
    `Utils.Parsing.Problems` (see [The typed API](#the-typed-api)).
    `Executable.GraphEditor.Completion` is now an adapter: it gives the core
    lookups that read the graph on disk and turns its completions into
-   haskeline's. REPL behaviour is unchanged.
+   haskeline's. The refactor itself left the REPL's behaviour unchanged;
+   the follow-ups after it changed it on purpose: an id completes with one
+   `@`, no space follows the `/` candidate, TAB where a command begins (an
+   empty line, a line's first word, after `;`, `{` or `at` and its path)
+   offers the names of commands instead of labels, a `%` that starts a
+   term offers the names of directives, and `:q`/`:quit` quit with spaces
+   around them (completing `:quit` leaves one after it).
 6. [ ] Re-run the import trace (done for the graph effects and the path
    logic after item 4, see above); target modules should reach none of
    `haskeline`, `network`/`wreq`, `typed-process`, `System.Posix`, `DAL.*`.
@@ -218,6 +224,11 @@ What the first proof of concept in the extension calls (item 5). All of
 it is pure and reaches none of `haskeline`, `DAL.*`, HTTP, processes,
 `System.Posix` or the macOS bindings; PCRE only through `MyPrelude.Regex`
 (item 3).
+
+Offsets (`Completions.replaced`, `SyntaxProblem.start` and `end`) count
+code points, as `Text` does. The wasm export layer (item 8) converts them
+to UTF-16 code units for JavaScript, whose strings are indexed by those
+(decided 2026-10-17).
 
 Parsing and syntax feedback:
 
@@ -374,3 +385,4 @@ projects and logs are in `cli/tmp/wasm-feasibility/` (not committed).
 | 2026-10-17 | Toolchain tested: GHC 9.10.3 is enough (TH, async JS imports); no compiler plugins; test libraries build and their unused code is dropped; PCRE cross-compiles. Decided: PCRE (item 3), LTS 24.63 and no `effectful-plugin` (item 7). |
 | 2026-10-17 | Item 7: `effectful-plugin` dropped (168 type applications, 5 modules allow ambiguous types); unused conduit packages removed; LTS 24.63 (GHC 9.10.3). Parse errors of node files are now aeson 2.2's wording. |
 | 2026-10-17 | Completion follow-ups: an id completes with one `@`; no space after the `/`; directive names and command names completed without a graph, from the tables their parsers are made of (`namedDirectives`, `commandSyntaxes`); the REPL's `:q`/`:quit` too. The core reaches 43 local modules (`Models.Command`, `Models.Command.Parse` added), still only PCRE of the blockers. |
+| 2026-10-17 | Review fixes: a `%` in a quote, regex or URL is offered no names; `syntaxProblems` takes both ends of a custom error from its range (`mk %{foo}` is (3,9), was (9,9)); `parseCommandLine` gives the command parser's errors as a bundle; the REPL completion's unused helpers and `completePath` removed; label quoting on completion noted as open; offsets documented as code points, UTF-16 at the wasm export. |
