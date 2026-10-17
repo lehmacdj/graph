@@ -30,10 +30,27 @@ private func markedImage(
     }
 }
 
+/// A window of the given size in the test host's window scene.
+@MainActor
+private func makeWindow(size: CGSize) throws -> UIWindow {
+    let scene = try #require(
+        UIApplication.shared.connectedScenes
+            .compactMap { $0 as? UIWindowScene }
+            .first,
+        "the test host has no window scene"
+    )
+    let window = UIWindow(windowScene: scene)
+    window.frame = CGRect(origin: .zero, size: size)
+    return window
+}
+
 @MainActor
 private func snapshot(of view: some View, size: CGSize) async throws -> UIImage {
     let host = UIHostingController(rootView: view)
-    let window = UIWindow(frame: CGRect(origin: .zero, size: size))
+    // The window belongs to the host app's scene, so it would inherit the
+    // status bar inset and shift the content off center.
+    host.safeAreaRegions = []
+    let window = try makeWindow(size: size)
     window.rootViewController = host
     window.makeKeyAndVisible()
     host.view.layoutIfNeeded()
@@ -123,7 +140,7 @@ private struct PreventSleepingHost: View {
     let host = UIHostingController(
         rootView: PreventSleepingHost(toggle: toggle, counter: counter)
     )
-    let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 100, height: 100))
+    let window = try makeWindow(size: CGSize(width: 100, height: 100))
     window.rootViewController = host
     window.makeKeyAndVisible()
     try await Task.sleep(for: .milliseconds(200))
