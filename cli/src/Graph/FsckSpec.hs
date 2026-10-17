@@ -201,7 +201,7 @@ spec_fsck = do
           FileSaysOtherId n4 n5,
           UnparsableNodeFile
             n3
-            "Error in $: object key > 34: Failed reading: satisfy"
+            "Unexpected \"not json\", expecting record key literal or }"
         ]
   it "says that an undamaged graph is undamaged" $
     withEmptyTempGraph \dir -> do
@@ -370,7 +370,10 @@ spec_fsck = do
         printed
           `shouldBe` [ changedLine,
                        describeDamage
-                         (UnparsableNodeFile n1 "Error in $: not enough input")
+                         ( UnparsableNodeFile
+                             n1
+                             "Unexpected end-of-input, expecting JSON value"
+                         )
                      ]
         void (first show result) `shouldSatisfy` isLeft
     it "reports what its last reading shows if the files never hold still" $

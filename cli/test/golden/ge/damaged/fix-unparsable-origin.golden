@@ -16,10 +16,10 @@ g> @000000000000
 g> Goodbye!
 ==========stderr==========
 warning: the graph is damaged where this command read it (damaged-graph)
-- 000000000000.json cannot be read as a node: Error in $: object key > 34: Failed reading: satisfy
+- 000000000000.json cannot be read as a node: Unexpected "not json", expecting record key literal or }
 fsck lists all such damage; fix repairs it, or says why it can't
 warning: the graph is damaged where this command read it (damaged-graph)
-- 000000000000.json cannot be read as a node: Error in $: object key > 34: Failed reading: satisfy
+- 000000000000.json cannot be read as a node: Unexpected "not json", expecting record key literal or }
 fsck lists all such damage; fix repairs it, or says why it can't
 ==========graph-dump==========
 @000000000000{out=[@000000000001 via "a"], in=[@0daCJjMrQel8 via "origin"]}

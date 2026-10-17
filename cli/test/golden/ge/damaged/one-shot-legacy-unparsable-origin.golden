@@ -7,12 +7,12 @@ ls
 ==========stdout==========
 ==========stderr==========
 a system node or an edge to one is missing and was not added: the graph is damaged where it goes (damaged-graph)
-- 000000000000.json cannot be read as a node: Error in $: object key > 34: Failed reading: satisfy
+- 000000000000.json cannot be read as a node: Unexpected "not json", expecting record key literal or }
 fsck lists all such damage; fix repairs it, or says why it can't
 the graph could not be opened (cannot-open-graph): only fsck and fix can run until this is repaired
 ==========exit-code==========
 1
 ==========graph-dump==========
-couldn't deserialize node @000000000000; failed with error Error in $: Failed reading: satisfy. Expecting object key at 'notjson'
+couldn't deserialize node @000000000000; failed with error Unexpected "not json", expecting record key literal or }
 @000000000001{out=[], in=[@000000000000 via "a"]}
 ==========data==========

@@ -10,7 +10,7 @@ ls
 fsck
 nid
 ==========stdout==========
-g> g> pbYxBO6fzBQV.json cannot be read as a node: Error in $: object key > 34: Failed reading: satisfy
+g> g> pbYxBO6fzBQV.json cannot be read as a node: Unexpected "not json", expecting record key literal or }
 g> repairs:
 - keep pbYxBO6fzBQV.json, which cannot be read as a node, as pbYxBO6fzBQV.json.unparsable
 - rebuild pbYxBO6fzBQV.json without edges, since no other node records an edge with @pbYxBO6fzBQV (any other edge it had is only in the file that is kept)
@@ -20,11 +20,11 @@ g> @000000000000
 g> Goodbye!
 ==========stderr==========
 a system node or an edge to one is missing and was not added: the graph is damaged where it goes (damaged-graph)
-- pbYxBO6fzBQV.json cannot be read as a node: Error in $: object key > 34: Failed reading: satisfy
+- pbYxBO6fzBQV.json cannot be read as a node: Unexpected "not json", expecting record key literal or }
 fsck lists all such damage; fix repairs it, or says why it can't
 the graph could not be opened (cannot-open-graph): only fsck and fix can run until this is repaired
 a system node or an edge to one is missing and was not added: the graph is damaged where it goes (damaged-graph)
-- pbYxBO6fzBQV.json cannot be read as a node: Error in $: object key > 34: Failed reading: satisfy
+- pbYxBO6fzBQV.json cannot be read as a node: Unexpected "not json", expecting record key literal or }
 fsck lists all such damage; fix repairs it, or says why it can't
 the graph could not be opened (cannot-open-graph): only fsck and fix can run until this is repaired
 the graph is damaged (damage-found): fsck found 1 problem, listed above; fix repairs what it can and says what it can't

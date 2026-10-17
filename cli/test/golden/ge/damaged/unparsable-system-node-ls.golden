@@ -17,10 +17,10 @@ g> @000000000000
 g> Goodbye!
 ==========stderr==========
 warning: the graph is damaged where this command read it (damaged-graph)
-- pbYxBO6fzBQV.json cannot be read as a node: Error in $: not enough input
+- pbYxBO6fzBQV.json cannot be read as a node: Unexpected end-of-input, expecting record key literal or }
 fsck lists all such damage; fix repairs it, or says why it can't
 warning: the graph is damaged where this command read it (damaged-graph)
-- pbYxBO6fzBQV.json cannot be read as a node: Error in $: not enough input
+- pbYxBO6fzBQV.json cannot be read as a node: Unexpected end-of-input, expecting record key literal or }
 fsck lists all such damage; fix repairs it, or says why it can't
 ==========graph-dump==========
 @000000000000{out=[@000000000001 via "a", @000000000002 via "b", @000000000003 via "c", @O8OhMSVtjevt via "x"], in=[@0daCJjMrQel8 via "origin"]}
@@ -37,7 +37,7 @@ fsck lists all such damage; fix repairs it, or says why it can't
 @S00KkOYoVpFu{out=[@Pqf7kGOdKJIr via "1970"], in=[@0daCJjMrQel8 via "import-dates"]}
 @VEfLhuTgZ88Z{out=[], in=[@3JJvxFUHGAA1 via "sequence-ids"]}
 @a0fVkm0kR7KE{out=[], in=[@0daCJjMrQel8 via "import-urls"]}
-couldn't deserialize node @pbYxBO6fzBQV; failed with error Error in $: not enough input
+couldn't deserialize node @pbYxBO6fzBQV; failed with error Unexpected end-of-input, expecting record key literal or }
 @sYumkceKpoAh{out=[@O8OhMSVtjevt via "00:00:01.000000000000"], in=[@DQ1KCJgauHiV via "01"]}
 @zsBuPkn5mh8F{out=[], in=[@0daCJjMrQel8 via "file-extensions"]}
 ==========data==========

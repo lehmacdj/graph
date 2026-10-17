@@ -162,7 +162,9 @@ reportingFailure report command =
       _ ->
         report $
           "the command failed unexpectedly (uncaught-exception): "
-            <> displayException e
+            -- the exception's own message: GHC 9.10's 'displayException'
+            -- of a 'SomeException' has a backtrace after it
+            <> case e of SomeException inner -> displayException inner
 
 -- | Make the graph ready for commands: its origin must be there, and its
 -- system nodes and the edges to them are added if they aren't. Every command

@@ -721,8 +721,9 @@ spec_transactionOnDamagedGraph = do
             lines message
               `shouldBe` [ "warning: the graph is damaged where this command"
                              <> " read it (damaged-graph)",
-                           "- 000000000002.json cannot be read as a node: Error"
-                             <> " in $: object key > 34: Failed reading: satisfy",
+                           "- 000000000002.json cannot be read as a node:"
+                             <> " Unexpected \"not json\", expecting record key"
+                             <> " literal or }",
                            "fsck lists all such damage; fix repairs it, or says"
                              <> " why it can't"
                          ]

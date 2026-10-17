@@ -15,7 +15,7 @@ where
 
 import Effectful
 import Effectful.Dispatch.Dynamic
-import Effectful.Error.Static (runErrorNoCallStack, throwError)
+import Effectful.Error.Static (runErrorNoCallStack, throwError_)
 import GHC.Generics
 import MyPrelude.MaybeEither
 import Prelude
@@ -79,4 +79,4 @@ withEarlyReturn ::
 withEarlyReturn =
   fmap (either id id)
     . reinterpret runErrorNoCallStack \_ -> \case
-      ReturnEarly x -> throwError x
+      ReturnEarly x -> throwError_ x

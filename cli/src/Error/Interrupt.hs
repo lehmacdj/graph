@@ -47,7 +47,7 @@ fromExceptionVia ::
   Eff effs a
 fromExceptionVia mapper action =
   liftIO (E.tryJust ofTheAction action) >>= \case
-    Left e -> throwError (mapper e)
+    Left e -> throwError_ (mapper e)
     Right x -> pure x
   where
     ofTheAction :: exc -> Maybe exc

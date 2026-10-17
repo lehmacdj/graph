@@ -22,7 +22,7 @@ g> the edge @000000000000 -"c"-> @000000000001 is among the incoming edges in 00
 the edge @000000000000 -"b"-> @000000000001 is among the outgoing edges in 000000000000.json but not among the incoming edges in 000000000001.json
 the edge @000000000000 -"gone"-> @000000000002 is among the outgoing edges in 000000000000.json but there is no 000000000002.json
 000000000004.json says it is the node @000000000005
-000000000003.json cannot be read as a node: Error in $: object key > 34: Failed reading: satisfy
+000000000003.json cannot be read as a node: Unexpected "not json", expecting record key literal or }
 g> repairs:
 - keep 000000000003.json, which cannot be read as a node, as 000000000003.json.unparsable
 - correct the id in 000000000004.json from @000000000005 to @000000000004

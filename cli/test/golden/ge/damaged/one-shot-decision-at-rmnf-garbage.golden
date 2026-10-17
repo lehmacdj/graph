@@ -16,14 +16,14 @@ at (b/c + h) rmnf @
 ==========stdout==========
 ==========stderr==========
 this change was not written: the graph is damaged where it applies (damaged-graph)
-- 000000000002.json cannot be read as a node: Error in $: object key > 34: Failed reading: satisfy
+- 000000000002.json cannot be read as a node: Unexpected "not json", expecting record key literal or }
 fsck lists all such damage; fix repairs it, or says why it can't
 ==========exit-code==========
 1
 ==========graph-dump==========
 @000000000000{out=[@000000000001 via "a", @000000000002 via "b", @000000000004 via "e", @000000000003 via "g", @000000000005 via "h", @000000000006 via "i"], in=[@0daCJjMrQel8 via "origin"]}
 @000000000001{out=[@000000000002 via "f"], in=[@000000000000 via "a"]}
-couldn't deserialize node @000000000002; failed with error Error in $: Failed reading: satisfy. Expecting object key at 'notjson'
+couldn't deserialize node @000000000002; failed with error Unexpected "not json", expecting record key literal or }
 @000000000003{out=[], in=[@000000000002 via "c", @000000000000 via "g"]}
 @000000000004{out=[@000000000002 via "d"], in=[@000000000000 via "e"]}
 @000000000005{out=[], in=[@000000000000 via "h"]}

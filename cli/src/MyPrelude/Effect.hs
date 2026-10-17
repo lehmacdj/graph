@@ -16,6 +16,7 @@ import Effectful.Error.Static as X
     catchError,
     runErrorNoCallStack,
     throwError,
+    throwError_,
     tryError,
   )
 import Effectful.State.Dynamic qualified as State
@@ -59,7 +60,7 @@ mapError ::
   (e1 -> e2) ->
   Eff (Error e1 : effs) a ->
   Eff effs a
-mapError f action = action `handleError` (throwError . f)
+mapError f action = action `handleError` (throwError_ . f)
 
 errorToLeft ::
   (Show e) => Eff (Error e : effs) a -> Eff effs (Either e a)
@@ -72,5 +73,5 @@ errorToNothing = (`handleError` const (pure Nothing)) . fmap Just
 untry :: Eff r (Either e a) -> Eff (Error e : r) a
 untry x =
   raise x >>= \case
-    Left e -> throwError e
+    Left e -> throwError_ e
     Right v -> pure v

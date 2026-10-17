@@ -3,8 +3,8 @@
 Design and progress tracking for compiling the path language, completion
 and graph APIs to WebAssembly, so the browser extension can call them.
 
-Started 2026-10-17. Status: refactoring the native build (items 1, 2, 4
-and 5 done); nothing compiled for WebAssembly yet.
+Started 2026-10-17. Status: refactoring the native build (items 1, 2, 4,
+5 and 7 done); nothing compiled for WebAssembly yet.
 
 ## Goal and scope
 
@@ -180,8 +180,30 @@ Ordered so each step lands independently and keeps native `ge` green.
 6. [ ] Re-run the import trace (done for the graph effects and the path
    logic after item 4, see above); target modules should reach none of
    `haskeline`, `network`/`wreq`, `typed-process`, `System.Posix`, `DAL.*`.
-7. [ ] Toolchain: upgrade to LTS 24.63 (GHC 9.10.3, the same compiler as
+7. [x] Toolchain: upgrade to LTS 24.63 (GHC 9.10.3, the same compiler as
    the wasm 9.10 flavour) and drop `effectful-plugin` (see Toolchain).
+   - Without the plugin, effect types it inferred are written out: 168
+     type applications in 21 modules (116 of them `@Text` on the
+     `GraphMetadataEditing'` operations in
+     `DAL.Interpreters.GraphEditingSpec`), and `AllowAmbiguousTypes` in
+     the 5 modules whose definitions mention a type only in a constraint
+     (`Graph.GraphMetadataEditing`, `Graph.GraphDataEditing`,
+     `Graph.Dualizeable`, `Error.Interrupt`, `MyPrelude.EarlyReturn`).
+   - `conduit-extra`, `html-conduit` and `xml-conduit` were removed: nothing
+     used them.
+   - The upgrade: the generic error helpers (`mapError`, `untry`,
+     `withEarlyReturn`, `fromExceptionVia`) throw with effectful 2.6's
+     `throwError_`, which needs no `Show` and behaves as `throwError` did;
+     `Utils.Testing` hides QuickCheck 2.15's new `Witness`, `witness` and
+     `witnesses`, which clashed with `Models.PathPattern.Match`'s; the
+     uncaught-exception message shows the exception without the backtrace
+     GHC 9.10 adds to `displayException`. aeson 2.2 words its parse errors
+     differently, and an unparsable node file is reported in its words
+     (`Unexpected "not json", expecting record key literal or }` where it
+     said `Error in $: object key > 34: Failed reading: satisfy`); the
+     golden files say so. `extra-deps`: `vary` and `megaparsec` are in the
+     snapshot now; `ixset-typed` is not, so it is pinned (0.5.1.1); the
+     haskeline and prettyprinter forks and `inline-c-objc` stay.
 8. [ ] Add a wasm build (cabal project with ghc-wasm-meta); build the pure
    modules first.
 9. [ ] JS-backed interpreters for the graph effects + native messaging
@@ -252,18 +274,19 @@ projects and logs are in `cli/tmp/wasm-feasibility/` (not committed).
   `[path|…|]` splices in `Models.PathPattern.Suggest`. On aarch64-darwin
   only 9.10, 9.12 and 9.14 have bindists; 9.6/9.8 stopped updating in
   2025-02.
-- **Native target: LTS 24.63 (GHC 9.10.3)**, so native and wasm builds
-  share package versions; importing Stackage's `cabal.config` as
-  constraints works in the wasm cabal project. No LTS ships 9.12 yet.
-  LTS 24's effectful 2.6 makes `throwError` need `Show e` (4 errors in
-  `MyPrelude.Effect` / `MyPrelude.EarlyReturn`); `effectful-th` needs
-  1.0.0.4 or newer.
+- **Native target: LTS 24.63 (GHC 9.10.3)**, in use since item 7, so
+  native and wasm builds share package versions; importing Stackage's
+  `cabal.config` as constraints works in the wasm cabal project. No LTS
+  ships 9.12 yet. LTS 24's effectful 2.6 makes `throwError` need `Show e`
+  (4 errors in `MyPrelude.Effect` / `MyPrelude.EarlyReturn`);
+  `effectful-th` needs 1.0.0.4 or newer (LTS 24.63 has it).
 - **No compiler plugins.** Every wasm GHC fails with `Plugins require
   -fno-external-interpreter`, and the cross compiler always uses the
   external interpreter. `effectful-plugin` is dropped everywhere (item 7)
   so native and wasm type-check the same code. Without it, 3 of 63 trial
   modules needed type applications (`MyPrelude.EarlyReturn`,
-  `Graph.FreshNID`, `MyPrelude.Effect.fromException`).
+  `Graph.FreshNID`, `MyPrelude.Effect.fromException`); the whole project
+  needed 168, most of them in one spec (see item 7).
 - **Dependencies:** everything the wasm modules need builds. Fail:
   `terminal-size` (no `struct winsize`; used by `Graph.Command`),
   `network` (no `getaddrinfo`) and what needs it (`http-conduit`, `wreq`):
@@ -320,3 +343,4 @@ projects and logs are in `cli/tmp/wasm-feasibility/` (not committed).
 | 2026-10-17 | Item 4: node-file interpreters moved to `DAL.Interpreters.*`; `Error.UserError` and `Error.Warn` freed of HTTP, file coordination and `haskeline`. `Graph.PathPattern.Execution` reaches 54 modules (66), `Graph.GraphEditing` 31 (51), none of storage or the native libraries but PCRE. |
 | 2026-10-17 | Item 5, rescoped to what needs no graph: `parsePath`, `Utils.Parsing.Problems` (syntax feedback as data) and `Models.Completion` (completion over `CompletionLookups`); the REPL's completion is an adapter over it. The core reaches 41 local modules, only PCRE of the blockers. |
 | 2026-10-17 | Toolchain tested: GHC 9.10.3 is enough (TH, async JS imports); no compiler plugins; test libraries build and their unused code is dropped; PCRE cross-compiles. Decided: PCRE (item 3), LTS 24.63 and no `effectful-plugin` (item 7). |
+| 2026-10-17 | Item 7: `effectful-plugin` dropped (168 type applications, 5 modules allow ambiguous types); unused conduit packages removed; LTS 24.63 (GHC 9.10.3). Parse errors of node files are now aeson 2.2's wording. |
