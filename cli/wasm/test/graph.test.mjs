@@ -87,6 +87,14 @@ test("the replaced label counts UTF-16 code units", () => {
   assert.deepEqual(result.candidates, []);
 });
 
+test("an open quote is replaced in UTF-16 code units", () => {
+  const before = `ls a/"${emoji}b`;
+  const result = graph.complete(before);
+  assert.equal(result.replaced, 4);
+  assert.equal(before.slice(before.length - result.replaced), `"${emoji}b`);
+  assert.deepEqual(result.candidates, []);
+});
+
 test("the / after a term completes", () => {
   assert.deepEqual(graph.complete("ls @"), {
     replaced: 0,

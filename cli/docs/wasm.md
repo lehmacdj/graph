@@ -283,6 +283,22 @@ Completion (`Models.Completion`):
     would complete (`replaced`).
 - An id is completed with its `@`, which replaces the typed one: `@0`
   completes to `@000000000001`.
+- A label is offered as a path writes it (`Models.Path.Parse.
+  renderLabel`, which `renderSurfacePath` and `ls` use too): as it is when
+  it is a plain word (`isPlainLabel`), otherwise between double quotes
+  with escapes that the parser reads back (`quoteLabel`: `"`, `\`,
+  newline, tab and carriage return escaped by name, other characters that
+  aren't printable by their decimal code; printable ones, an emoji
+  included, as they are). When a prefix is typed and one of the labels
+  that begin with it has to be quoted, all are, so that the candidates
+  share a prefix: haskeline puts what they share in place of the word, and
+  `ls hel` with `hello world` and `help` becomes `ls "hel`, not `ls `.
+- In a quote that is not closed, the label typed so far (read as the
+  parser reads a quoted label) is completed, quoted and closed: `ls "he`
+  offers `"hello world"`, and `replaced` covers the opening quote too.
+  Nothing for an escape that is not finished (`ls "a\`) or a quote that
+  does not start a label (`ls x"a`). A label whose quote is closed is
+  finished: `/` is offered after it.
 - In a group that is not closed: each side of it, after its last `&`,
   `|`, `+` or `++`, starts where the group does, so the label typed there
   continues the path that leads to the group (`ls a/(x | b` and `ls a/(b`
@@ -308,12 +324,8 @@ path) stays in the core either way.
 The two bugs found while doing item 5 are fixed: the doubled `@` of a
 completed id, and the space that haskeline added after the `/` candidate.
 
-Open: a label that has to be quoted in a path (one with characters that
-an unquoted label can't have, such as a space or `!`) is offered as it
-is, unquoted, so taking it gives a path that doesn't parse or means
-something else; and nothing is completed inside an open quote (`ls "he`).
-Neither did the REPL's completion before item 5: its quoting helpers
-were never called (removed).
+Labels that have to be quoted are offered quoted, and a label in an open
+quote is completed (see above).
 
 ## The wasm build
 
@@ -379,6 +391,9 @@ graph.complete("ls %la");
   stretch and `before.slice(0, before.length - replaced) + candidate.text`
   takes a candidate. An emoji is not a label character (a label with one
   is quoted); a letter outside the Basic Multilingual Plane is.
+  `completionsWith` takes lookups, for a graph-aware layer (item 9); its
+  tests cut the text as JavaScript does, by UTF-16 code units, for quoted
+  candidates with an emoji or such a letter in them.
 - The wasm exports are synchronous (`"parsePath sync"`), returning JSON
   text that `graph.mjs` parses. A synchronous export cannot pass on a
   Haskell exception, so `Main` returns `{"error": message}` and
@@ -481,3 +496,4 @@ projects and logs are in `cli/tmp/wasm-feasibility/` (not committed).
 | 2026-10-17 | Completion after a space: a whole path followed by a space (`mv a `, `mv a b `, a tab too) now starts the next path, which completes from the current node; it was read as the label being typed, so TAB took `mv x ` to `mv x xyz` (a bug older than the core: the REPL's `completePathHandling` read it the same way). Space after a `/` stays in the path (`mv a/ ` completes after `a`), as commands read it. |
 | 2026-10-17 | Item 8: `cli/wasm/` builds a reactor of path parsing, syntax feedback and completion without a graph, exported to JavaScript as JSON (`Wasm.Api`, `wasm/src/Main.hs`, `graph.mjs`), offsets in UTF-16 code units; modules and extensions generated from the imports and `package.yaml`, versions frozen from LTS 24.63, PCRE built by `build.sh`. 3.7 MB after `wasm-opt`, 0.92 MB gzipped. |
 | 2026-10-17 | Completion in an open group reads it as the path language does: its last side (after `&`, `\|`, `+` or `++`, all four now) continues the path to the group, and a space in it does not start a new path, so `ls (a ` offers `/` (it offered the labels of a new path, and before the fix for a space after a path the labels beginning with `a`). `takeRelevantFromEnd` replaced by `pathEndBefore`, which reads quotes, regexes and URLs whole: a `(`, `&` or `+` in them is no longer taken for an operator. |
+| 2026-10-17 | Completion quotes a label that is not a plain word, and all the candidates when one is quoted and a prefix is typed; completes a label in an open quote and closes it (`ls "he` to `ls "hello world"`); offers `/` after a closed quote (it offered labels after it). One rendering of labels, `renderLabel`/`quoteLabel` in `Models.Path.Parse`, for completion, `renderSurfacePath` and `ls`: printable characters as they are, escapes the parser reads back (`show` wrote `\&`, which it does not, and `ls` did not escape `"` or `\`). `Wasm.Api.completionsWith` takes lookups; its UTF-16 offsets checked for quoted candidates outside the BMP. |

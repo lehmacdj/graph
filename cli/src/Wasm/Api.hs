@@ -14,6 +14,7 @@ module Wasm.Api
     completeJson,
     pathProblems,
     completions,
+    completionsWith,
     utf16Length,
     utf16Offset,
     utf16SuffixLength,
@@ -25,8 +26,10 @@ module Wasm.Api
 where
 
 import Data.Aeson (Value, object, (.=))
+import Data.ByteString qualified as BS
 import Data.Char (ord)
 import Data.Text qualified as T
+import Data.Text.Encoding (decodeUtf16LE, encodeUtf16LE)
 import Models.Completion
 import Models.Path.Parse (parsePath)
 import MyPrelude
@@ -58,10 +61,15 @@ pathProblems t = case parsePath t of
 -- | The completions without a graph of the text before the cursor
 -- ('completeWithoutGraph'), with 'replaced' in UTF-16 code units.
 completions :: Text -> Completions
-completions before =
-  cs {replaced = utf16SuffixLength before cs.replaced}
-  where
-    cs = completeWithoutGraph before
+completions = runIdentity . completionsWith withoutGraph
+
+-- | The completions of the text before the cursor with these lookups
+-- ('complete'), with 'replaced' in UTF-16 code units.
+completionsWith ::
+  (Monad m) => CompletionLookups m -> Text -> m Completions
+completionsWith lookups before =
+  complete lookups before <&> \cs ->
+    cs {replaced = utf16SuffixLength before cs.replaced}
 
 -- | @{"ok": true}@ for a path that parses; otherwise @{"ok": false,
 -- "problems": [{"start", "end", "message"}]}@ ('pathProblems').
@@ -141,6 +149,41 @@ spec_completions = do
   it "replaces the word after an emoji, not counting it" $
     completions ("ls " <> quoted <> " & %la")
       `shouldBe` Completions 3 [Candidate "%last" False]
+  it "replaces a quote with an emoji in it, in UTF-16 units" $
+    completions ("ls a/\"" <> emoji <> "b") `shouldBe` Completions 4 []
+  describe "quoted candidates with characters outside the BMP" do
+    -- the origin has a label that starts with an emoji and one that
+    -- starts with a letter outside the BMP and has a space in it
+    let lookups =
+          withoutGraph
+            { labelsAfter = \_ ->
+                Identity [emoji <> " smile", letter <> " x", letter]
+            }
+        completing = runIdentity . completionsWith lookups
+        -- the text before the cursor after taking each candidate, cut
+        -- as JavaScript cuts it: by UTF-16 code units, two bytes each
+        taken before =
+          let cs = completing before
+              units = encodeUtf16LE before
+              kept = BS.take (BS.length units - 2 * cs.replaced) units
+           in [decodeUtf16LE kept <> c.text | c <- cs.candidates]
+    it "replaces a quote, counting its emoji twice" $
+      completing ("ls \"" <> emoji)
+        `shouldBe` Completions
+          3
+          [Candidate ("\"" <> emoji <> " smile\"") False]
+    it "replaces a plain word, counting its letter twice" $
+      completing ("ls " <> letter)
+        `shouldBe` Completions
+          2
+          [ Candidate ("\"" <> letter <> " x\"") False,
+            Candidate ("\"" <> letter <> "\"") False
+          ]
+    it "gives text that parses once a candidate is taken" do
+      taken ("ls \"" <> emoji)
+        `shouldBe` ["ls \"" <> emoji <> " smile\""]
+      for_ (taken ("ls " <> letter) <> taken ("ls \"" <> letter)) \t ->
+        (t, pathProblems (drop 3 t)) `shouldBe` (t, [])
 
 spec_json :: Spec
 spec_json = do

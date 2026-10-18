@@ -25,15 +25,23 @@ where
 import Control.Monad.State.Strict qualified as S
 import Data.Char (isAlpha, isSpace)
 import Data.Text qualified as T
+import Graph.SystemNodes (tagsNID)
 import Models.Command.Parse (commandNames, startsCommand)
 import Models.LegacyPartialPath
 import Models.NID
-import Models.Path.Parse (parsePath, percentNames)
+import Models.Path.Parse
+  ( isPlainLabel,
+    parsePath,
+    percentNames,
+    quoteLabel,
+    renderLabel,
+  )
 import Models.Path.Simple
 import Models.PathPattern.Compile (checkCopies)
 import MyPrelude
-import Text.Megaparsec (bundleErrors, errorOffset)
+import Text.Megaparsec (bundleErrors, errorBundlePretty, errorOffset)
 import Utils.Base62 (isBase62Char)
+import Utils.Parsing (openStringLiteral)
 import Utils.Testing
 
 -- | What can replace the word before the cursor.
@@ -128,14 +136,24 @@ completeCommandLine names lookups before
       NoPathSite -> pure noCompletions
       -- not finished: a label follows it, not a space
       AfterTerm -> pure (Completions 0 [Candidate "/" False])
-      LabelAfter p partial -> do
+      LabelAfter p typed -> do
         labels <- lookups.labelsAfter p
+        let (prefix, replaced) = case typed of
+              Unquoted partial -> (partial, length partial)
+              InQuote l written -> (l, written)
+            matching = filter (prefix `isPrefixOf`) labels
+            render = case typed of
+              -- all quoted when one is, so that they share the prefix
+              -- typed (haskeline puts what they share in place of it)
+              Unquoted partial
+                | not (null partial) && not (all isPlainLabel matching) ->
+                    quoteLabel
+                | otherwise -> renderLabel
+              InQuote {} -> quoteLabel
         pure
           Completions
-            { replaced =
-                if partial `isSuffixOf` before then length partial else 0,
-              candidates =
-                [Candidate l False | l <- labels, partial `isPrefixOf` l]
+            { replaced,
+              candidates = [Candidate (render l) False | l <- matching]
             }
 
 noCompletions :: Completions
@@ -173,7 +191,7 @@ percentNameBefore before =
     _ -> Nothing
   where
     startsTerm start
-      | LabelAfter _ "x" <- pathSiteBefore (start <> "x") = True
+      | LabelAfter _ (Unquoted "x") <- pathSiteBefore (start <> "x") = True
       | otherwise = False
 
 -- | What the end of the path before the cursor is, for completion.
@@ -182,12 +200,22 @@ data PathSite
     -- directive in it or is one that no command runs.
     NoPathSite
   | -- | A term that is finished, which only an operator can follow: one
-    -- that is not a label, or in a group a label followed by a space. Of
-    -- the operators @/@ is offered, which goes on along the path.
+    -- that is not a label, a quoted label once its quote is closed, or in
+    -- a group a label followed by a space. Of the operators @/@ is
+    -- offered, which goes on along the path.
     AfterTerm
   | -- | A label that is typed after a path: labels that continue the path
     -- and begin with it.
-    LabelAfter Path Text
+    LabelAfter Path LabelTyped
+  deriving stock (Eq, Show)
+
+-- | What is typed of a label.
+data LabelTyped
+  = -- | A plain word, or nothing.
+    Unquoted Text
+  | -- | In a quote that is not closed: what it says so far, and how many
+    -- characters it is written in, the opening quote included.
+    InQuote Text Int
   deriving stock (Eq, Show)
 
 -- | What is before the cursor, as 'pathEndBefore' reads it. Each side of
@@ -202,7 +230,7 @@ pathSiteBefore before = fromMaybe NoPathSite do
   case unsnoc end.groups of
     Nothing -> do
       partial <- getLegacyPartialPath end.outside
-      site end.quoted [] partial False
+      site end.quoted [] partial (finishedAt False end.outside)
     Just (opened, current) -> do
       guard (startsTerm end.outside)
       LegacyPartialPath leading "" <- getLegacyPartialPath end.outside
@@ -215,17 +243,20 @@ pathSiteBefore before = fromMaybe NoPathSite do
         end.quoted
         (leading <> concat inner)
         partial
-        (maybe False isSpace (lastMay current))
+        (finishedAt True current)
   where
     -- the path before the label or term, the label or term, and whether
-    -- a space in a group finishes a label there; nothing in a quote that
-    -- is not closed
+    -- a label there is finished
     site quoted leading partial finished = case partial of
-      _ | isJust quoted -> Nothing
-      MissingSlash _ -> Just AfterTerm
-      LegacyPartialPath segments label
-        | finished && not (null label) -> Just AfterTerm
-        | otherwise -> labelAfter segments (pack label)
+      MissingSlash _ -> guard (isNothing quoted) $> AfterTerm
+      LegacyPartialPath segments label -> case quoted of
+        Nothing
+          | finished && not (null label) -> Just AfterTerm
+          | otherwise -> labelAfter segments (Unquoted (pack label))
+        Just written -> do
+          guard (null label)
+          l <- openStringLiteral written
+          labelAfter segments (InQuote l (length written + 1))
       where
         labelAfter segments typed =
           let p = case leading <> segments of
@@ -235,6 +266,11 @@ pathSiteBefore before = fromMaybe NoPathSite do
               case checkCopies p of
                 Right _ -> Just (LabelAfter p typed)
                 Left _ -> Nothing
+    -- a label is finished by its closing quote, and in a group by a space
+    finishedAt inGroup t = case lastMay t of
+      Just '"' -> True
+      Just c -> inGroup && isSpace c
+      Nothing -> False
     -- an argument starts after a space, a term after a /
     startsTerm t = maybe True (\c -> isSpace c || c == '/') (lastMay t)
 
@@ -345,6 +381,129 @@ spec_complete = do
         `shouldBe` Completions 2 [Candidate t False | t <- ["bar", "baz"]]
       fst (completing [] "ls regex:\"a(\" & (q")
         `shouldBe` Completions 1 [Candidate "qux" False]
+  describe "quoting" do
+    -- labels from the origin and after "hello world" and after #
+    let quotingLabels = \case
+          One -> origin
+          Literal "hello world" -> ["c d", "cd"]
+          Absolute n | n == tagsNID -> ["to do", "todo"]
+          _ -> []
+        origin =
+          [ "hello world",
+            "help",
+            "a!b",
+            "a/b",
+            "plain",
+            "say \"hi\"",
+            "back\\slash",
+            "tab\there",
+            "\x1F600 smile",
+            "x\1\&5",
+            "(x & y)",
+            ""
+          ]
+        quoting =
+          withoutGraph {labelsAfter = pure . quotingLabels}
+        quotes before replaced texts =
+          it (show before) $
+            runIdentity (complete quoting before)
+              `shouldBe` Completions replaced [Candidate t False | t <- texts]
+    describe "quotes a label that is not a plain word" do
+      quotes "ls hello" 5 ["\"hello world\""]
+      quotes "ls pl" 2 ["plain"]
+      quotes "ls x" 1 ["\"x\\1\\53\""]
+      quotes "ls tab" 3 ["\"tab\\there\""]
+      quotes "ls \"hello world\"/" 0 ["\"c d\"", "cd"]
+      quotes "ls #to" 2 ["\"to do\"", "\"todo\""]
+    -- so that they share the prefix that is typed, which haskeline puts
+    -- in place of it
+    describe "quotes all when one is quoted and something is typed" do
+      quotes "ls hel" 3 ["\"hello world\"", "\"help\""]
+      quotes "ls a" 1 ["\"a!b\"", "\"a/b\""]
+      quotes "ls \"hello world\"/c" 1 ["\"c d\"", "\"cd\""]
+    describe "completes a label in a quote, closing it" do
+      -- the candidates replace the opening quote too
+      quotes "ls \"he" 3 ["\"hello world\"", "\"help\""]
+      quotes "ls \"" 1 (map quoteLabel origin)
+      quotes "ls \"pl" 3 ["\"plain\""]
+      quotes "ls \"a!" 3 ["\"a!b\""]
+      quotes "ls \"say \\\"" 7 ["\"say \\\"hi\\\"\""]
+      quotes "ls \"back\\\\" 7 ["\"back\\\\slash\""]
+      quotes "ls \"\\116ab" 7 ["\"tab\\there\""]
+      quotes "ls \"\x1F600" 2 ["\"\x1F600 smile\""]
+      quotes "ls \"(x &" 5 ["\"(x & y)\""]
+      quotes "ls \"hello world\"/\"c" 2 ["\"c d\"", "\"cd\""]
+      quotes "ls #\"to" 3 ["\"to do\"", "\"todo\""]
+      quotes "ls (\"he" 3 ["\"hello world\"", "\"help\""]
+      quotes "ls (a & \"he" 3 ["\"hello world\"", "\"help\""]
+      quotes "mv a \"he" 3 ["\"hello world\"", "\"help\""]
+      quotes "ls \"x\" & \"he" 3 ["\"hello world\"", "\"help\""]
+    it "offers / after a closed quote, which finishes the label" do
+      completeWithoutGraph "ls \"a b\""
+        `shouldBe` Completions 0 [Candidate "/" False]
+      completeWithoutGraph "ls #\"a b\""
+        `shouldBe` Completions 0 [Candidate "/" False]
+      completeWithoutGraph "ls (x & \"a b\""
+        `shouldBe` Completions 0 [Candidate "/" False]
+    it "says what a quote replaces without a graph" $
+      completeWithoutGraph "ls a/\"b c" `shouldBe` Completions 4 []
+    -- every candidate, put in place of what it replaces, gives a path
+    -- that parses (once its groups are closed) and has the label in it
+    let paths =
+          [ "",
+            "h",
+            "a",
+            "x",
+            "\"",
+            "\"h",
+            "\"a!",
+            "#",
+            "#t",
+            "#\"",
+            "\"hello world\"/",
+            "\"hello world\"/\"",
+            "(",
+            "(\"",
+            "(z & ",
+            "(z & \"",
+            "\"hello world\"/(y | \"c"
+          ]
+        literals :: Path' p -> [Text]
+        literals = \case
+          Literal t -> [t]
+          Backwards' p -> literals p
+          l ::/ r -> literals l <> literals r
+          l ::& r -> literals l <> literals r
+          Union _ l r -> literals l <> literals r
+          DefaultUnion _ l r -> literals l <> literals r
+          _ -> []
+        -- each candidate put in place, with the label it is for
+        takenIn p = do
+          let c = runIdentity (complete quoting ("ls " <> p))
+              closing = replicate (length (filter (== '(') p)) ')'
+          x <- c.candidates
+          let taken = dropEnd c.replaced p <> x.text
+          pure (taken <> pack closing, parsePath x.text)
+    it "offers candidates for each of the paths" $
+      for_ paths \p ->
+        (p, null (takenIn p)) `shouldBe` (p, False)
+    it "offers only candidates that parse in place, as the label" $
+      for_ paths \p -> for_ (takenIn p) \(taken, candidate) ->
+        case (parsePath taken, candidate) of
+          (Right parsed, Right (Literal l)) ->
+            (taken, l `elem` literals parsed) `shouldBe` (taken, True)
+          (Left e, _) ->
+            expectationFailure (unpack taken <> ": " <> errorBundlePretty e)
+          (_, c) -> expectationFailure (unpack taken <> ": " <> show c)
+    it "offers a label that parses back, quoted or not" $
+      property \(pack -> l) ->
+        let single = withoutGraph {labelsAfter = \_ -> Identity [l]}
+            parsed before =
+              [ either (const Nothing) Just (parsePath x.text)
+              | x <- (runIdentity (complete single before)).candidates
+              ]
+         in (parsed "ls ", parsed "ls \"")
+              === ([Just (Literal l)], [Just (Literal l)])
   describe "without a graph" do
     it "offers / after a term that is not a label" do
       completeWithoutGraph "ls (a & b)"
@@ -364,8 +523,9 @@ spec_complete = do
     nothing "ls %history(0)/"
     -- an incomplete id that no node has
     nothing "ls @x"
-    -- a quote that is not closed, a regex that is not
-    nothing "ls \"a b"
+    -- a quote that does not start a label, an escape not finished, a regex
+    nothing "ls x\"a"
+    nothing "ls \"a\\"
     nothing "ls regex:\"a"
     nothing "ls regex:'a"
     -- a prefix that no command runs: it would copy a meeting point

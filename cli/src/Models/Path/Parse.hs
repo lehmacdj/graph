@@ -3,6 +3,7 @@
 module Models.Path.Parse where
 
 import Control.Monad.Combinators.Expr
+import Data.Char (isDigit, isPrint, ord)
 import Data.Functor
 import Graph.SystemNodes (tagsNID)
 import Models.NID
@@ -17,6 +18,71 @@ import Utils.Testing
 
 pTransition :: Parser Text
 pTransition = ident <|> stringLiteral <?> "<transition>"
+
+-- | Whether a label is written as a plain word, without quotes: one that
+-- 'ident' reads whole.
+isPlainLabel :: Text -> Bool
+isPlainLabel t = not (null t) && all isIdentChar t
+
+-- | A label as a path writes it, which 'pTransition' reads back: as a
+-- plain word when it is one ('isPlainLabel'), otherwise quoted
+-- ('quoteLabel').
+renderLabel :: Text -> Text
+renderLabel t
+  | isPlainLabel t = t
+  | otherwise = quoteLabel t
+
+-- | A label between double quotes, which 'stringLiteral' reads back.
+-- Printable characters are written as they are, others as escapes: the
+-- quote and the backslash as @\\\"@ and @\\\\@, a newline, tab or
+-- carriage return as @\\n@, @\\t@ and @\\r@, anything else by its decimal
+-- code. A digit right after a decimal code is written as one too, since
+-- the parser does not take the @\\&@ that would separate them.
+quoteLabel :: Text -> Text
+quoteLabel t = "\"" <> pack (go False (unpack t)) <> "\""
+  where
+    -- whether the character before was written as a decimal code
+    go :: Bool -> String -> String
+    go _ [] = []
+    go afterCode (c : cs) = case c of
+      '"' -> '\\' : '"' : go False cs
+      '\\' -> '\\' : '\\' : go False cs
+      '\n' -> '\\' : 'n' : go False cs
+      '\t' -> '\\' : 't' : go False cs
+      '\r' -> '\\' : 'r' : go False cs
+      _
+        | isPrint c && not (afterCode && isDigit c) -> c : go False cs
+        | otherwise -> '\\' : show (ord c) <> go True cs
+
+test_renderLabel :: TestTree
+test_renderLabel =
+  testGroup
+    "renderLabel"
+    [ "a" `rendersAs` "a",
+      "it's-a_b.c" `rendersAs` "it's-a_b.c",
+      "\233t\233" `rendersAs` "\233t\233",
+      "" `rendersAs` "\"\"",
+      "a b" `rendersAs` "\"a b\"",
+      "a!b" `rendersAs` "\"a!b\"",
+      "a/b" `rendersAs` "\"a/b\"",
+      "\x1F600" `rendersAs` "\"\x1F600\"",
+      "say \"hi\"" `rendersAs` "\"say \\\"hi\\\"\"",
+      "a\\b" `rendersAs` "\"a\\\\b\"",
+      "a\nb\tc" `rendersAs` "\"a\\nb\\tc\"",
+      "\1\&2" `rendersAs` "\"\\1\\50\"",
+      "\SO\&H" `rendersAs` "\"\\14H\"",
+      testProperty "reads back as the label" \(pack -> l) ->
+        let read' = runParser (pTransition <* eof) ""
+         in either (const Nothing) Just (read' (renderLabel l)) === Just l,
+      testProperty "quotes only a label that is not a plain word" $
+        \(pack -> l) ->
+          ("\"" `isPrefixOf` renderLabel l) === not (isPlainLabel l),
+      testProperty "reads back as a path of one label" \(pack -> l) ->
+        either (const Nothing) Just (parsePath (renderLabel l))
+          === Just (Literal l)
+    ]
+  where
+    rendersAs l e = testCase (show l) $ renderLabel l @?= e
 
 pFullNID :: Parser (NIDVal Partial)
 pFullNID = lexeme p <?> "@<nid>"

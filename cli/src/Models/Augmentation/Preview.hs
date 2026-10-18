@@ -5,8 +5,8 @@ import Models.Augmentation.Tags
 import Models.Augmentation.Timestamps
 import Models.NID
 import Models.Node
+import Models.Path.Parse (renderLabel)
 import MyPrelude hiding (group)
-import Utils.Parsing (isIdentChar)
 import Utils.Prettyprinter
 
 type PreviewAugmentation = Bundled [Tags, Timestamps] -- , FileType]
@@ -51,9 +51,7 @@ docTransitions = annotate Transition . go
       docTransition x <> "/" <> go xs
 
 docTransition :: Text -> Doc a
-docTransition t
-  | all isIdentChar t && not (null t) = pretty t
-  | otherwise = dquotes (pretty t)
+docTransition = pretty . renderLabel
 
 docNid :: NID -> Doc Style
 docNid nid = annotate NIDStyle $ "@" <> pretty (nidRepresentation nid)

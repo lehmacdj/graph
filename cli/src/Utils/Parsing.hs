@@ -48,6 +48,15 @@ stringLiteral =
     L.lexeme s $
       pack <$> (char '"' >> manyTill L.charLiteral (char '"'))
 
+-- | What a string literal says whose closing quote is not typed yet: the
+-- characters after its opening quote, read as 'stringLiteral' reads
+-- them. Nothing when they end in an escape that is not finished.
+openStringLiteral :: Text -> Maybe Text
+openStringLiteral t =
+  case runParser (many L.charLiteral <* eof) "" t of
+    Left _ -> Nothing
+    Right cs -> Just (pack cs)
+
 positiveNumber :: Parser Int
 positiveNumber = L.lexeme s L.decimal
 

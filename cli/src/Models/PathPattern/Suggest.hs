@@ -35,7 +35,7 @@ import Data.Map.Strict qualified as Map
 import Graph.SystemNodes (tagsNID)
 import Models.Graph (Graph)
 import Models.NID
-import Models.Path.Parse (parsePath)
+import Models.Path.Parse (parsePath, renderLabel)
 import Models.Path.Simple
 import Models.Path.TH (path)
 import Models.PathPattern
@@ -43,7 +43,6 @@ import Models.PathPattern.Compile (checkCopies, compileAlternatives, compilePath
 import Models.PathPattern.Residuate
 import Models.PathPattern.TestCorpus
 import MyPrelude
-import Utils.Parsing (isIdentChar)
 import Utils.Testing
 
 -- | What to add after a step: @/\@N@ or @/!{…}@.
@@ -357,12 +356,12 @@ renderSurfacePath = go 0
       One -> "@"
       Zero -> "%never"
       Wild -> "*"
-      Literal t -> label t
+      Literal t -> renderLabel t
       RegexMatch r -> renderRegex r
       Absolute n -> tshow n
       ExcludingNIDs ns -> "!{" <> intercalate ", " (map tshow (toList ns)) <> "}"
       Backwards p -> parens (d > 8) ("~" <> go 9 p)
-      Absolute n :/ Literal t | n == tagsNID -> "#" <> label t
+      Absolute n :/ Literal t | n == tagsNID -> "#" <> renderLabel t
       l :/ r -> parens (d > 7) (go 7 l <> "/" <> go 8 r)
       l :& r -> parens (d > 6) (go 6 l <> " & " <> go 7 r)
       Union k l r ->
@@ -375,9 +374,6 @@ renderSurfacePath = go 0
     symbol Relational = " | "
     symbol Shared = " ++ "
     parens b t = if b then "(" <> t <> ")" else t
-    label t
-      | not (null t) && all isIdentChar t = t
-      | otherwise = tshow t
     -- a pattern is written between quotes it does not contain; one with
     -- both kinds of quote cannot be written (and does not parse back)
     renderRegex r =

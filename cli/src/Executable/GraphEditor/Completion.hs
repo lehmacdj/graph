@@ -76,6 +76,16 @@ spec_completeWith = do
     completedTo oneNode "ls @0" `shouldReturn` ["ls @000000000001"]
   it "adds no space after the / that a term needs" $
     completedTo Core.withoutGraph "ls (a & b)" `shouldReturn` ["ls (a & b)/"]
+  it "quotes a label that has to be, in a quote typed or not" do
+    let quoting =
+          Core.withoutGraph
+            { labelsAfter = \_ -> pure ["hello world", "help"]
+            }
+    completedTo quoting "ls \"hello w" `shouldReturn` ["ls \"hello world\""]
+    completedTo quoting "ls hello"
+      `shouldReturn` ["ls \"hello world\""]
+    completedTo quoting "ls hel"
+      `shouldReturn` ["ls \"hello world\"", "ls \"help\""]
   it "completes the names of commands, the REPL's own too" do
     completedTo Core.withoutGraph "nid; fs" `shouldReturn` ["nid; fsck "]
     completedTo Core.withoutGraph ":q" `shouldReturn` [":q", ":quit"]
