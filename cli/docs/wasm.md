@@ -36,7 +36,8 @@ graph.parsePath("a/)");
 //   message: "unexpected ')'\nexpecting ..."}]}
 graph.parsePath("a/b"); // {ok: true}
 graph.complete("ls %la");
-// {replaced: 3, candidates: [{text: "%last", finished: false}]}
+// {replaced: 3,
+//  candidates: [{text: "%last", finished: false, listed: "%last"}]}
 ```
 
 - `wasm` is the bytes of `graph.wasm`, a compiled `WebAssembly.Module`,
@@ -51,10 +52,12 @@ graph.complete("ls %la");
   what it is about (empty for a place, such as the end of the text), and
   `message` is the parser's, as `errorBundlePretty` words it.
 - `complete(before)` takes the text of the command line before the cursor
-  and gives `{replaced, candidates: [{text, finished}]}`. Each candidate
-  replaces the last `replaced` units of `before`:
+  and gives `{replaced, candidates: [{text, finished, listed}]}`. Each
+  candidate replaces the last `replaced` units of `before`:
   `before.slice(0, before.length - replaced) + candidate.text`. A caller
-  may add a space after the only candidate that is `finished`.
+  may add a space after the only candidate that is `finished`, and shows
+  `listed` for it in a list of the candidates: its text, or of a file path
+  the last component.
 - Offsets and lengths count UTF-16 code units, as JavaScript strings do.
   The Haskell core counts code points; `Wasm.Api` converts.
 - The exports are synchronous: they return JSON text, which `graph.mjs`
@@ -82,14 +85,17 @@ Completion (`Models.Completion`):
 
 - `complete :: Monad m => CompletionLookups m -> Text -> m Completions`,
   with `Completions {replaced :: Int, candidates :: [Candidate]}` and
-  `Candidate {text :: Text, finished :: Bool}`; `replaced` in code points.
+  `Candidate {text :: Text, finished :: Bool, listed :: Text}`
+  (`candidate` makes one listed as its text); `replaced` in code points.
   `completeCommandLine` takes the names of the commands too (the REPL adds
   `:q` and `:quit`).
 - `CompletionLookups m {nodesWithPrefix :: Text -> m [NID], labelsAfter
-  :: Path -> m [Text]}` is all completion asks of a graph. `withoutGraph`
-  has nothing, and `completeWithoutGraph = runIdentity . complete
-  withoutGraph`. What to try in which order (a command name, an id after
-  `@`, a `%` name, then the path) stays in the core whatever the lookups.
+  :: Path -> m [Text], filePathsWithPrefix :: Text -> m [Text]}` is all
+  completion asks of a graph and of the files that `:import` can name.
+  `withoutGraph` has nothing, and `completeWithoutGraph = runIdentity .
+  complete withoutGraph`. What to try in which order (a command name, the
+  path of `:import`, an id after `@`, a `%` name, then the path) stays in
+  the core whatever the lookups.
 - `Wasm.Api`: `pathProblems` and `completions` are the above with UTF-16
   offsets; `completionsWith` takes lookups, for a graph-aware layer;
   `parsePathJson` and `completeJson` are what `Main` exports.

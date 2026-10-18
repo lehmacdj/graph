@@ -2,6 +2,7 @@ module Models.Command.Parse
   ( parseCommand,
     parseCommandLine,
     commandNames,
+    importNames,
     startsCommand,
     test_parseCommand,
     test_startsCommand,
@@ -236,7 +237,7 @@ commandSyntaxes =
     (["nid"], pNodeId),
     ([":debug", ":d"], pDebug),
     (["show-image", "si"], pShowImage),
-    ([":import", ":i"], pImport),
+    (importNames, pImport),
     (["fsck"], pCheck),
     (["fix"], pFix),
     (["mv"], pMove),
@@ -246,6 +247,11 @@ commandSyntaxes =
     (["vi"], pEdit),
     (["back"], pBack)
   ]
+
+-- | The names of the command that imports a directory, whose argument is a
+-- file path.
+importNames :: [Text]
+importNames = [":import", ":i"]
 
 -- | The name of every command, in the order of 'commandSyntaxes'.
 commandNames :: [Text]

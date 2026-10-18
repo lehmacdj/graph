@@ -1337,7 +1337,9 @@ runCommand' open = \case
   -- layers of commands that can be handled at different levels
   Import fp -> do
     guardDangerousDualizedOperation
-    fp' <- subsumeUserError @IOError . untry $ canonicalizePath fp
+    -- the path as the user writes it, with a ~ for the home directory
+    expanded <- subsumeUserError @IOError (expandHome (untry homeDirectory) fp)
+    fp' <- subsumeUserError @IOError . untry $ canonicalizePath expanded
     editing . subsumeUserError @Missing $ importDirectory fp' nilNID
     changeLocation nilNID
   Debug -> do

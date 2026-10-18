@@ -6,6 +6,8 @@ import Control.Concurrent (forkIO, forkIOWithUnmask, killThread, threadDelay)
 import Control.Exception qualified as E
 import Control.Lens
 import DAL.Serialization (nodesWithPrefix, serializeNodeEx)
+import Data.Text qualified as T
+import Effect.IOWrapper.FileSystem (expandHome)
 import Effect.IOWrapper.GetTime
 import Effectful.Provider.List
 import Effectful.Readline (runReadlineNonInteractive)
@@ -23,6 +25,12 @@ import Models.NID
 import Models.Node
 import MyPrelude
 import System.Console.Haskeline
+import System.Directory
+  ( createDirectory,
+    doesDirectoryExist,
+    getHomeDirectory,
+    listDirectory,
+  )
 import System.Random (mkStdGen)
 import Utils.Testing
 import Utils.Testing.TempGraph
@@ -53,7 +61,7 @@ completeWith lookups (i, _) =
     <&> \c ->
       (drop c.replaced i, map completion c.candidates)
   where
-    completion x = Completion (unpack x.text) (unpack x.text) x.finished
+    completion x = Completion (unpack x.text) (unpack x.listed) x.finished
 
 spec_completeWith :: Spec
 spec_completeWith = do
@@ -86,6 +94,17 @@ spec_completeWith = do
       `shouldReturn` ["ls \"hello world\""]
     completedTo quoting "ls hel"
       `shouldReturn` ["ls \"hello world\"", "ls \"help\""]
+  it "completes the path of :import without a space after it" do
+    let files =
+          Core.withoutGraph {filePathsWithPrefix = \_ -> pure ["dir/a b"]}
+    completedTo files ":i dir/a" `shouldReturn` [":i dir/a b"]
+  it "lists a file path as its last component" do
+    let files =
+          Core.withoutGraph
+            { filePathsWithPrefix = \_ -> pure ["dir/a b", "dir/sub/"]
+            }
+    (_, cs) <- completeWith files (reverse ":i dir/", "")
+    map display cs `shouldBe` ["a b", "sub/"]
   it "completes the names of commands, the REPL's own too" do
     completedTo Core.withoutGraph "nid; fs" `shouldReturn` ["nid; fsck "]
     completedTo Core.withoutGraph ":q" `shouldReturn` [":q", ":quit"]
@@ -117,8 +136,76 @@ graphLookups handling env =
             -- here bounds how long a large prefix takes to compile
             -- (docs/path-cost-limits.md): 'completionFunction' gives up
             -- on one that isn't done in time ('completingWithin').
-            toList <$> provideList_ @GraphEditing (completionTransitions nid p)
+            toList <$> provideList_ @GraphEditing (completionTransitions nid p),
+      filePathsWithPrefix = filePathsWithPrefix getHomeDirectory
     }
+
+-- | The files and directories whose path begins with this one, given the
+-- home directory: in the directory that it names, those whose name begins
+-- with its last component, each written after the directory as it is
+-- typed, and a directory's with a @/@ after it. The path is read as
+-- @:import@ reads it: relative to the working directory, and with a @~@
+-- for the home directory ('expandHome'), so a @~@ alone is completed to
+-- @~/@ too. Hidden files, whose name begins with a @.@, are offered once a
+-- @.@ is typed, and so are @./@ and @../@. Where the directory or the
+-- home directory can't be read there are none.
+filePathsWithPrefix :: IO FilePath -> Text -> IO [Text]
+filePathsWithPrefix home typed = handle (\(_ :: IOException) -> pure []) do
+  let (directory, name) = T.breakOnEnd "/" typed
+      shown entry =
+        name `isPrefixOf` entry
+          && ("." `isPrefixOf` name || not ("." `isPrefixOf` entry))
+      -- which listDirectory leaves out
+      dots = [d | d <- [".", ".."], not (null name), name `isPrefixOf` d]
+  listed <-
+    if null directory then pure "." else expandHome home (unpack directory)
+  entries <- filter shown . map pack <$> listDirectory listed
+  -- at once: on a slow file system each takes as long as a round trip
+  marked <- pooledMapConcurrentlyN 16 (marking listed) entries
+  pure . sort . map (directory <>) $
+    ["~/" | typed == "~"] <> map (<> "/") dots <> marked
+  where
+    marking listed entry = do
+      isDirectory <- doesDirectoryExist (listed </> unpack entry)
+      pure (entry <> bool "" "/" isDirectory)
+
+spec_filePathsWithPrefix :: Spec
+spec_filePathsWithPrefix = do
+  -- what is offered after a directory with a.txt, ab, ~x, .hidden and
+  -- sub/b c, which is also the home directory
+  let offeredIn test = withSystemTempDirectory "completion" \dir -> do
+        createDirectory (dir </> "sub")
+        for_ ["a.txt", "ab", "~x", ".hidden", "sub/b c"] \f ->
+          writeFile (dir </> f) ""
+        let inDir = pack dir
+            offered typed =
+              map (drop (length inDir))
+                <$> filePathsWithPrefix (pure dir) (inDir <> typed)
+        test (filePathsWithPrefix (pure dir)) offered
+  it "offers the files and directories that begin with the path" $
+    offeredIn \_ offered -> do
+      offered "/" `shouldReturn` ["/a.txt", "/ab", "/sub/", "/~x"]
+      offered "/a" `shouldReturn` ["/a.txt", "/ab"]
+      offered "/sub/" `shouldReturn` ["/sub/b c"]
+      offered "/sub/b " `shouldReturn` ["/sub/b c"]
+      offered "/missing/" `shouldReturn` []
+  it "offers hidden files, . and .. once a . is typed" $
+    offeredIn \_ offered -> do
+      offered "/." `shouldReturn` ["/../", "/./", "/.hidden"]
+      offered "/.." `shouldReturn` ["/../"]
+      offered "/sub/.." `shouldReturn` ["/sub/../"]
+  it "reads a ~ as the home directory, keeping it as typed" $
+    offeredIn \inHome _ -> do
+      inHome "~/" `shouldReturn` ["~/a.txt", "~/ab", "~/sub/", "~/~x"]
+      inHome "~/sub/" `shouldReturn` ["~/sub/b c"]
+  it "offers files whose name begins with ~ as well as ~/" $
+    offeredIn \inHome offered -> do
+      offered "/~" `shouldReturn` ["/~x"]
+      -- a ~ alone is in the working directory, where there may be more
+      inHome "~" >>= (`shouldContain` ["~/"])
+  it "offers nothing when the home directory can't be found" do
+    let noHome = throwIO (userError "no home directory")
+    filePathsWithPrefix noHome "~/" `shouldReturn` []
 
 spec_graphLookups :: Spec
 spec_graphLookups = do

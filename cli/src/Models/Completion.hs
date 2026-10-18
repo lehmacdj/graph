@@ -9,10 +9,13 @@
 -- needs no graph is offered either way: the names of commands
 -- ('commandNames'), the names after @%@ ('percentNames'), the @/@ that is
 -- all that can follow a term that is not a label, and nothing for a path
--- that no command runs or that has a directive in it.
+-- that no command runs or that has a directive in it. The files that the
+-- argument of @:import@ can name come from the lookups too, which the REPL
+-- reads from the filesystem.
 module Models.Completion
   ( Completions (..),
     Candidate (..),
+    candidate,
     CompletionLookups (..),
     complete,
     completeCommandLine,
@@ -26,7 +29,7 @@ import Control.Monad.State.Strict qualified as S
 import Data.Char (isAlpha, isSpace)
 import Data.Text qualified as T
 import Graph.SystemNodes (tagsNID)
-import Models.Command.Parse (commandNames, startsCommand)
+import Models.Command.Parse (commandNames, importNames, startsCommand)
 import Models.LegacyPartialPath
 import Models.NID
 import Models.Path.Parse
@@ -49,9 +52,16 @@ data Candidate = Candidate
   { text :: Text,
     -- | Whether the word is done with it: a caller may add a space after
     -- the only candidate that is (haskeline's @isFinished@).
-    finished :: Bool
+    finished :: Bool,
+    -- | What a list of the candidates shows for it: its text, or of a file
+    -- path the last component.
+    listed :: Text
   }
   deriving stock (Eq, Ord, Show, Generic)
+
+-- | A candidate that a list shows as it is written.
+candidate :: Text -> Bool -> Candidate
+candidate text finished = Candidate {text, finished, listed = text}
 
 -- | The candidates for the word before the cursor, each to replace the
 -- characters of the word that are typed.
@@ -69,15 +79,22 @@ data CompletionLookups m = CompletionLookups
     nodesWithPrefix :: Text -> m [NID],
     -- | The labels that continue this path from the current node to at
     -- least one match. The path is one that commands run ('checkCopies').
-    labelsAfter :: Path -> m [Text]
+    labelsAfter :: Path -> m [Text],
+    -- | The paths of the files and directories that begin with this
+    -- path, written as it is: in the directory that it names, those whose
+    -- name begins with its last component, a directory's with a @/@ after
+    -- it. A list of them shows each one's last component.
+    filePathsWithPrefix :: Text -> m [Text]
   }
 
--- | Lookups for a caller without a graph: no nodes and no labels.
+-- | Lookups for a caller without a graph: no nodes, no labels and no
+-- files.
 withoutGraph :: (Applicative m) => CompletionLookups m
 withoutGraph =
   CompletionLookups
     { nodesWithPrefix = \_ -> pure [],
-      labelsAfter = \_ -> pure []
+      labelsAfter = \_ -> pure [],
+      filePathsWithPrefix = \_ -> pure []
     }
 
 -- | The completions that need no graph.
@@ -95,6 +112,8 @@ completeWithoutGraph = runIdentity . complete withoutGraph
 -- is completed to the nodes whose id begins with it, each written with
 -- its @\@@, which replaces the one that is typed; when there are none, or
 -- the word is not such a start, it is completed as the end of a path.
+-- The argument of @:import@, the rest of the line, is completed to the
+-- files and directories whose path begins with it ('importPathBefore').
 complete :: (Monad m) => CompletionLookups m -> Text -> m Completions
 complete = completeCommandLine commandNames
 
@@ -103,11 +122,18 @@ complete = completeCommandLine commandNames
 completeCommandLine ::
   (Monad m) => [Text] -> CompletionLookups m -> Text -> m Completions
 completeCommandLine names lookups before
+  | Just typed <- importPathBefore before =
+      lookups.filePathsWithPrefix typed <&> \paths ->
+        Completions
+          { replaced = length typed,
+            -- not finished: a space after it would be in the path
+            candidates = map fileCandidate paths
+          }
   | Just word <- commandNameBefore before =
       pure
         Completions
           { replaced = length word,
-            candidates = [Candidate n True | n <- names, word `isPrefixOf` n]
+            candidates = [candidate n True | n <- names, word `isPrefixOf` n]
           }
   | otherwise = case nidPrefixBefore before of
       Nothing
@@ -116,7 +142,7 @@ completeCommandLine names lookups before
               Completions
                 { replaced = length name + 1,
                   candidates =
-                    [ Candidate ("%" <> n <> bool "" "(" arguments) False
+                    [ candidate ("%" <> n <> bool "" "(" arguments) False
                     | (n, arguments) <- percentNames,
                       name `isPrefixOf` n
                     ]
@@ -129,13 +155,13 @@ completeCommandLine names lookups before
             pure
               Completions
                 { replaced = length prefix + 1,
-                  candidates = [Candidate (tshow n) False | n <- nids]
+                  candidates = [candidate (tshow n) False | n <- nids]
                 }
   where
     pathCompletions = case pathSiteBefore before of
       NoPathSite -> pure noCompletions
       -- not finished: a label follows it, not a space
-      AfterTerm -> pure (Completions 0 [Candidate "/" False])
+      AfterTerm -> pure (Completions 0 [candidate "/" False])
       LabelAfter p typed -> do
         labels <- lookups.labelsAfter p
         let (prefix, replaced) = case typed of
@@ -153,7 +179,7 @@ completeCommandLine names lookups before
         pure
           Completions
             { replaced,
-              candidates = [Candidate (render l) False | l <- matching]
+              candidates = [candidate (render l) False | l <- matching]
             }
 
 noCompletions :: Completions
@@ -166,6 +192,36 @@ nidPrefixBefore before =
   case span isBase62Char (take (nidDigits + 1) (reverse (unpack before))) of
     (reversedPrefix, '@' : _) -> Just (pack (reverse reversedPrefix))
     _ -> Nothing
+
+-- | What is typed of the argument of @:import@, when the text ends in it:
+-- the rest of the line after the name and the spaces after it, as the
+-- command parser reads it, where a command begins before the name
+-- ('startsCommand').
+importPathBefore :: Text -> Maybe Text
+importPathBefore before =
+  headMay
+    [ typed
+    | (start, rest) <- zip (T.inits before) (T.tails before),
+      name <- importNames,
+      Just afterName <- [T.stripPrefix name rest],
+      let (spaces, typed) = T.span isSpace afterName,
+      not (null spaces),
+      startsCommand start
+    ]
+
+-- | A file path that a list shows as its last component, a directory's
+-- with its @/@.
+fileCandidate :: Text -> Candidate
+fileCandidate path =
+  Candidate
+    { text = path,
+      finished = False,
+      listed = case T.stripSuffix "/" path of
+        Just directory -> lastComponent directory <> "/"
+        Nothing -> lastComponent path
+    }
+  where
+    lastComponent = snd . T.breakOnEnd "/"
 
 -- | The word at the end of the text, when a command begins where it
 -- does.
@@ -289,8 +345,12 @@ spec_complete = do
               pure (filter ((prefix `isPrefixOf`) . nidRepresentation) nids),
             labelsAfter = \p -> do
               S.modify (<> ["labels " <> tshow p])
-              pure (labels p)
+              pure (labels p),
+            filePathsWithPrefix = \typed -> do
+              S.modify (<> ["files " <> typed])
+              pure (filter (typed `isPrefixOf`) files)
           }
+      files = ["a.txt", "dir/", "dir/b c", "dir/bin/"]
       completing nids before = S.runState (complete (graph nids) before) []
       -- the text before the cursor after taking each candidate
       completedTo nids before =
@@ -299,7 +359,7 @@ spec_complete = do
       offers before replaced texts =
         it (show before) $
           fst (completing [] before)
-            `shouldBe` Completions replaced [Candidate t False | t <- texts]
+            `shouldBe` Completions replaced [candidate t False | t <- texts]
   describe "labels" do
     offers "ls " 0 ["bar", "baz", "qux"]
     offers "ls ba" 2 ["bar", "baz"]
@@ -354,11 +414,11 @@ spec_complete = do
     -- that is finished
     it "offers / after a finished term" do
       completeWithoutGraph "ls (a "
-        `shouldBe` Completions 0 [Candidate "/" False]
+        `shouldBe` Completions 0 [candidate "/" False]
       completeWithoutGraph "ls (x & a/b "
-        `shouldBe` Completions 0 [Candidate "/" False]
+        `shouldBe` Completions 0 [candidate "/" False]
       completeWithoutGraph "ls ((a & b) "
-        `shouldBe` Completions 0 [Candidate "/" False]
+        `shouldBe` Completions 0 [candidate "/" False]
     let nothingIn before = it (show before) do
           let (completions, looked) = completing [] before
           completions `shouldBe` noCompletions
@@ -378,9 +438,9 @@ spec_complete = do
       snd (completing [] "ls \"(x & y\"/b")
         `shouldBe` ["labels " <> tshow (Literal "(x & y" :: Path)]
       fst (completing [] "ls regex:'(' & ba")
-        `shouldBe` Completions 2 [Candidate t False | t <- ["bar", "baz"]]
+        `shouldBe` Completions 2 [candidate t False | t <- ["bar", "baz"]]
       fst (completing [] "ls regex:\"a(\" & (q")
-        `shouldBe` Completions 1 [Candidate "qux" False]
+        `shouldBe` Completions 1 [candidate "qux" False]
   describe "quoting" do
     -- labels from the origin and after "hello world" and after #
     let quotingLabels = \case
@@ -407,7 +467,7 @@ spec_complete = do
         quotes before replaced texts =
           it (show before) $
             runIdentity (complete quoting before)
-              `shouldBe` Completions replaced [Candidate t False | t <- texts]
+              `shouldBe` Completions replaced [candidate t False | t <- texts]
     describe "quotes a label that is not a plain word" do
       quotes "ls hello" 5 ["\"hello world\""]
       quotes "ls pl" 2 ["plain"]
@@ -440,11 +500,11 @@ spec_complete = do
       quotes "ls \"x\" & \"he" 3 ["\"hello world\"", "\"help\""]
     it "offers / after a closed quote, which finishes the label" do
       completeWithoutGraph "ls \"a b\""
-        `shouldBe` Completions 0 [Candidate "/" False]
+        `shouldBe` Completions 0 [candidate "/" False]
       completeWithoutGraph "ls #\"a b\""
-        `shouldBe` Completions 0 [Candidate "/" False]
+        `shouldBe` Completions 0 [candidate "/" False]
       completeWithoutGraph "ls (x & \"a b\""
-        `shouldBe` Completions 0 [Candidate "/" False]
+        `shouldBe` Completions 0 [candidate "/" False]
     it "says what a quote replaces without a graph" $
       completeWithoutGraph "ls a/\"b c" `shouldBe` Completions 4 []
     -- every candidate, put in place of what it replaces, gives a path
@@ -507,9 +567,9 @@ spec_complete = do
   describe "without a graph" do
     it "offers / after a term that is not a label" do
       completeWithoutGraph "ls (a & b)"
-        `shouldBe` Completions 0 [Candidate "/" False]
+        `shouldBe` Completions 0 [candidate "/" False]
       completeWithoutGraph "ls @"
-        `shouldBe` Completions 0 [Candidate "/" False]
+        `shouldBe` Completions 0 [candidate "/" False]
     it "offers no label" $
       completeWithoutGraph "ls a/b" `shouldBe` Completions 1 []
   describe "nothing to complete" do
@@ -534,7 +594,7 @@ spec_complete = do
     let names before = map (.text) (completeWithoutGraph before).candidates
     it "offers the names that begin with what is typed, finished" do
       completeWithoutGraph "rm"
-        `shouldBe` Completions 2 [Candidate t True | t <- ["rm", "rmnf"]]
+        `shouldBe` Completions 2 [candidate t True | t <- ["rm", "rmnf"]]
       names ":" `shouldBe` [":debug", ":d", ":import", ":i"]
       names "" `shouldBe` commandNames
     it "offers them where a command begins" do
@@ -549,19 +609,46 @@ spec_complete = do
       fst (completing [] "x") `shouldBe` Completions 1 []
     it "offers the names that it is given" $
       runIdentity (completeCommandLine [":q", "nid"] withoutGraph ":")
-        `shouldBe` Completions 1 [Candidate ":q" True]
+        `shouldBe` Completions 1 [candidate ":q" True]
+  describe "the path of :import" do
+    -- the rest of the line after the name and its spaces
+    let importing before replaced texts looked =
+          it (show before) $
+            completing [] before
+              `shouldBe` ( Completions replaced (map fileCandidate texts),
+                           ["files " <> t | t <- looked]
+                         )
+    importing ":i " 0 ["a.txt", "dir/", "dir/b c", "dir/bin/"] [""]
+    importing ":import d" 1 ["dir/", "dir/b c", "dir/bin/"] ["d"]
+    importing ":i  dir/b" 5 ["dir/b c", "dir/bin/"] ["dir/b"]
+    importing ":i dir/b " 6 ["dir/b c"] ["dir/b "]
+    importing "nid; :i a" 1 ["a.txt"] ["a"]
+    importing "at a :i a" 1 ["a.txt"] ["a"]
+    importing "{:i a" 1 ["a.txt"] ["a"]
+    -- the path is the rest of the line: ; and :i are in it
+    importing ":i x; :i a" 7 [] ["x; :i a"]
+    it "completes the name, not a path, before a space" $
+      fst (completing [] ":i")
+        `shouldBe` Completions 2 [candidate ":import" True, candidate ":i" True]
+    it "lists a path as its last component" $
+      map (.listed) (fst (completing [] ":i dir/b")).candidates
+        `shouldBe` ["b c", "bin/"]
+    it "completes no path where no command begins" $
+      for_ ["ls :i a", "desc :i a", "ls \":i a"] \before ->
+        filter ("files " `isPrefixOf`) (snd (completing [] before))
+          `shouldBe` []
   describe "names after %" do
     it "offers the names that begin with what is typed" do
       completeWithoutGraph "ls %"
         `shouldBe` Completions
           1
-          [ Candidate t False
+          [ candidate t False
           | t <- ["%never", "%history(", "%last", "%targets(", "%override("]
           ]
       completeWithoutGraph "ls a/%ta"
-        `shouldBe` Completions 3 [Candidate "%targets(" False]
+        `shouldBe` Completions 3 [candidate "%targets(" False]
       completeWithoutGraph "ls (b & %la"
-        `shouldBe` Completions 3 [Candidate "%last" False]
+        `shouldBe` Completions 3 [candidate "%last" False]
       completeWithoutGraph "ls %x" `shouldBe` Completions 2 []
     it "offers only names that the path parser takes after %" $
       -- a bare name parses as a path; one with arguments is read up to
@@ -585,7 +672,7 @@ spec_complete = do
       offered "ls https://example.com/?q=%l" `shouldBe` []
     it "offers names in a path after another argument" $
       completeWithoutGraph "mv a %la"
-        `shouldBe` Completions 3 [Candidate "%last" False]
+        `shouldBe` Completions 3 [candidate "%last" False]
   describe "ids" do
     -- 000000000001, 000000000002 and 000000001000
     let n1 = smallNID 1
@@ -595,11 +682,11 @@ spec_complete = do
     -- is typed too
     it "offers the nodes whose id begins with what is typed" do
       completing [n1, n2, far] "ls @000000000"
-        `shouldBe` ( Completions 10 [Candidate (tshow n) False | n <- [n1, n2]],
+        `shouldBe` ( Completions 10 [candidate (tshow n) False | n <- [n1, n2]],
                      ["nodes 000000000"]
                    )
       fst (completing [n1] "ls @")
-        `shouldBe` Completions 1 [Candidate (tshow n1) False]
+        `shouldBe` Completions 1 [candidate (tshow n1) False]
     it "leaves one @ before the id it completes" do
       completedTo [n1] "ls @0" `shouldBe` ["ls @000000000001"]
       completedTo [n1] "ls a/@" `shouldBe` ["ls a/@000000000001"]
@@ -608,7 +695,7 @@ spec_complete = do
         `shouldBe` (noCompletions, ["nodes 0000000000"])
     it "completes the @ of a path when there is no node" $
       completing [] "ls @"
-        `shouldBe` (Completions 0 [Candidate "/" False], ["nodes "])
+        `shouldBe` (Completions 0 [candidate "/" False], ["nodes "])
     it "does not take more characters than an id has for one" $
       completing [n1] "ls @0000000000001"
         `shouldBe` (noCompletions, [])

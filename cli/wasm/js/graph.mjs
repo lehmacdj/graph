@@ -40,9 +40,10 @@ export async function load({ wasm, wasi }) {
     // a place, such as the end of the text).
     parsePath: (text) => call("parsePath", text),
     // The completions, without a graph, of the text before the cursor:
-    // {replaced, candidates: [{text, finished}]}. Each candidate's text
-    // replaces before.slice(before.length - replaced); a caller may add a
-    // space after the only candidate that is finished.
+    // {replaced, candidates: [{text, finished, listed}]}. Each
+    // candidate's text replaces before.slice(before.length - replaced); a
+    // caller may add a space after the only candidate that is finished,
+    // and shows listed for it in a list of the candidates.
     complete: (before) => call("complete", before),
   };
 }

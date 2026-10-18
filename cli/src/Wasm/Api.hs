@@ -81,16 +81,19 @@ parsePathValue t = case pathProblems t of
     problem p =
       object ["start" .= p.start, "end" .= p.end, "message" .= p.message]
 
--- | @{"replaced", "candidates": [{"text", "finished"}]}@ ('completions').
+-- | @{"replaced", "candidates": [{"text", "finished", "listed"}]}@
+-- ('completions').
 completeValue :: Text -> Value
 completeValue before =
   object
     [ "replaced" .= cs.replaced,
-      "candidates" .= map candidate cs.candidates
+      "candidates" .= map candidateValue cs.candidates
     ]
   where
     cs = completions before
-    candidate c = object ["text" .= c.text, "finished" .= c.finished]
+    candidateValue c =
+      object
+        ["text" .= c.text, "finished" .= c.finished, "listed" .= c.listed]
 
 parsePathJson :: Text -> Text
 parsePathJson = encodeText . parsePathValue
@@ -148,7 +151,7 @@ spec_completions = do
     (completions ("ls a/b" <> letter)).replaced `shouldBe` 3
   it "replaces the word after an emoji, not counting it" $
     completions ("ls " <> quoted <> " & %la")
-      `shouldBe` Completions 3 [Candidate "%last" False]
+      `shouldBe` Completions 3 [candidate "%last" False]
   it "replaces a quote with an emoji in it, in UTF-16 units" $
     completions ("ls a/\"" <> emoji <> "b") `shouldBe` Completions 4 []
   describe "quoted candidates with characters outside the BMP" do
@@ -171,13 +174,13 @@ spec_completions = do
       completing ("ls \"" <> emoji)
         `shouldBe` Completions
           3
-          [Candidate ("\"" <> emoji <> " smile\"") False]
+          [candidate ("\"" <> emoji <> " smile\"") False]
     it "replaces a plain word, counting its letter twice" $
       completing ("ls " <> letter)
         `shouldBe` Completions
           2
-          [ Candidate ("\"" <> letter <> " x\"") False,
-            Candidate ("\"" <> letter <> "\"") False
+          [ candidate ("\"" <> letter <> " x\"") False,
+            candidate ("\"" <> letter <> "\"") False
           ]
     it "gives text that parses once a candidate is taken" do
       taken ("ls \"" <> emoji)
@@ -194,4 +197,4 @@ spec_json = do
       `shouldSatisfy` ([rq|{"ok":false,"problems":[{"end":6,|] `isPrefixOf`)
   it "gives completions" $
     completeJson "l"
-      `shouldBe` [rq|{"candidates":[{"finished":true,"text":"ls"}],"replaced":1}|]
+      `shouldBe` [rq|{"candidates":[{"finished":true,"listed":"ls","text":"ls"}],"replaced":1}|]

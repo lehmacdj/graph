@@ -82,7 +82,9 @@ saved to the data before that stays. `vi` at a current node whose file
 is gone is refused, as `cd` and `text` are, and starts no editor.
 
 `:i dir` imports the directory `dir` of the file system under the
-origin, and moves there: an edge named after it to a node for it, and so
+origin, and moves there (`dir` is relative to the working directory, and
+a `~` at its start, alone or before a `/`, is the home directory):
+an edge named after it to a node for it, and so
 on for what it holds, each file's content becoming the data of a node (files with the
 same content share one). A directory that can't be read imports nothing
 and fails, saying why with what the system said
@@ -125,7 +127,12 @@ in a quote that is not closed the label is completed and its quote closed
 (`ls "he` to `ls "hello world"`). In a group that is not closed the label
 continues the path to the group (`ls a/(x & b` offers the labels after
 `a`), and a space does not start a new path: after `ls (a ` only an
-operator can follow, and `/` is offered.
+operator can follow, and `/` is offered. After `:i` (`:import`) and a
+space the rest of the line is a file path, read as the command reads it,
+and TAB offers the files and directories whose path begins with what is
+typed, a `~` alone also as `~/`. Hidden files, and `./` and `../`, are
+offered once a `.` is typed. No space is added after a file: it would be
+in the path.
 
 ## 2. Queries
 

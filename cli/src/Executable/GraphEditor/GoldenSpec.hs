@@ -1074,6 +1074,20 @@ spec_importUnreadable = do
         (_, listed, _) <- ge graph "ls tree/* | tree/deep/*"
         map (headEx . words) (lines (uncoloured listed))
           `shouldMatchList` ["tree/deep", "tree/ok.txt", "tree/deep/y"]
+  it "reads a ~ at the start of the path as the home directory" $
+    withTempGraph Nothing \graph ->
+      withSystemTempDirectory "home" \home -> do
+        writeBaseGraph graph "0 -a-> 1\n"
+        createDirectoryIfMissing True (home </> "tree")
+        B.writeFile (home </> "tree" </> "ok.txt") "text"
+        let inHome command = do
+              (code, out, err) <-
+                runGeWith [("HOME", home)] graph ["-e", command] ""
+              pure (code, uncoloured (unpack (decodeUtf8 out)), err)
+        (code, _, err) <- inHome ":i ~/tree"
+        (code, err) `shouldBe` (0, "")
+        (_, listed, _) <- inHome "ls tree/*"
+        map (headEx . words) (lines listed) `shouldBe` ["tree/ok.txt"]
   where
     uncoloured = \case
       '\ESC' : '[' : rest -> uncoloured (drop 1 (dropWhile (/= 'm') rest))

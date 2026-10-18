@@ -76,7 +76,9 @@ test("directive names complete after an emoji", () => {
   const before = `ls ${quoted} & %la`;
   const result = graph.complete(before);
   assert.equal(before.slice(before.length - result.replaced), "%la");
-  assert.deepEqual(result.candidates, [{ text: "%last", finished: false }]);
+  assert.deepEqual(result.candidates, [
+    { text: "%last", finished: false, listed: "%last" },
+  ]);
 });
 
 test("the replaced label counts UTF-16 code units", () => {
@@ -98,6 +100,6 @@ test("an open quote is replaced in UTF-16 code units", () => {
 test("the / after a term completes", () => {
   assert.deepEqual(graph.complete("ls @"), {
     replaced: 0,
-    candidates: [{ text: "/", finished: false }],
+    candidates: [{ text: "/", finished: false, listed: "/" }],
   });
 });
