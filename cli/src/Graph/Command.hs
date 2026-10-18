@@ -1350,8 +1350,8 @@ runCommand' open = \case
     echo "history:"
     get @History >>= echo . show
   Check -> fsck
-  Fix mode -> do
-    result <- tryError @UserError (fix mode)
+  Fix mode scope -> do
+    result <- tryError @UserError (fix mode scope)
     -- Neither the node files that a command which fix is part of read
     -- before it nor the damage that it read past are as it read them: what
     -- fix didn't repair is found again by a later step that reads its files.

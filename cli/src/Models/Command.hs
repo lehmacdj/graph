@@ -16,6 +16,7 @@
 -- 'Graph.Command.expandDirectives').
 module Models.Command where
 
+import Models.NID (NID)
 import Models.Path.ParsedPath
 import MyPrelude
 
@@ -52,8 +53,9 @@ data Command
     Import FilePath
   | -- | fsck
     Check
-  | -- | fix [--dry-run]: repair the damage that fsck lists
-    Fix FixMode
+  | -- | fix [--dry-run] [@nid…]: repair the damage that fsck lists, or only
+    -- the damage that involves the given nodes
+    Fix FixMode FixScope
   | -- | mv
     Move ParsedPath ParsedPath
   | -- | rn [--all-parents]
@@ -111,6 +113,14 @@ data FixMode
   | ListRepairs
   deriving (Eq, Show, Ord, Generic)
 
+-- | Which damage @fix@ repairs: all of it, or the damage that involves one
+-- of the given nodes (@fix \@nid…@), as 'Models.Damage.damagedNodes' has it
+-- (see 'Graph.Fix.inScope')
+data FixScope
+  = AllDamage
+  | DamageOf (Set NID)
+  deriving (Eq, Show, Ord, Generic)
+
 -- | Whether @rm@/@rmnf@ delete what their path selects or only list what
 -- they would delete (@--dry-run@)
 data RemoveMode
@@ -125,6 +135,6 @@ data RemoveMode
 needsOpenGraph :: Command -> Bool
 needsOpenGraph = \case
   Check -> False
-  Fix _ -> False
+  Fix _ _ -> False
   Seq _ -> False
   _ -> True

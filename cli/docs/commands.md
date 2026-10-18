@@ -68,10 +68,7 @@ not undone (section 6).
 | `mg [--keep] p1 [--keep] p2 …` | each one node | `\|` | merges the nodes (2.5) |
 | `%targets(p)` in any path | `p`, a query of its own | `\|`, whatever surrounds it, unless an `%override({plus = …}, …)` is written inside `p` | the nodes `p` reaches, as a union (2.6) |
 
-`dd l` (`dedup`) and `text l …` (`mkt`) take a label, not a path, and
-`desc …` (`describe`) takes free text. The other commands (`nid`, `d`,
-`back n`, `vi`, `si` (`show-image`), `fsck`, `fix` and
-`fix --dry-run`, `:i dir` (`:import`), `:d` (`:debug`)) take no path.
+`dd l` (`dedup`) and `text l …` (`mkt`) take a label, not a path, and `desc …` (`describe`) takes free text. The other commands (`nid`, `d`, `back n`, `vi`, `si` (`show-image`), `fsck`, `fix [--dry-run] [@id …]` (whole node ids, not paths), `:i dir` (`:import`), `:d` (`:debug`)) take no path.
 
 `vi` edits the current node's data with the editor that `$VISUAL`, or
 `$EDITOR`, names (`vim` when neither is set), as Ctrl-G at the prompt

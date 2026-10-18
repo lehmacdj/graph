@@ -13,10 +13,13 @@ import Data.Char (isDigit)
 import Data.Functor
 import Graph.SystemNodes (tagsNID)
 import Models.Command
+import Models.NID (nidDigits, unsafeNID)
 import Models.Path.Parse
 import Models.Path.ParsedPath
 import MyPrelude hiding (some, try)
 import Text.Megaparsec (try)
+import Text.Megaparsec.Char (char)
+import Utils.Base62 (isBase62Char)
 import Utils.Parsing
 import Utils.Testing
 
@@ -69,7 +72,7 @@ commandPaths = \case
   ShowImage -> []
   Import _ -> []
   Check -> []
-  Fix _ -> []
+  Fix _ _ -> []
   Edit -> []
   Back _ -> []
 
@@ -186,9 +189,29 @@ pImport = Import <$> some anySingle
 pCheck :: Parser Command
 pCheck = pure Check
 
+-- | @fix [--dry-run] [\@nid…]@: the nodes are whole ids, since a node that
+-- fix is to rebuild has no file to look a shorter one up in. An id is taken
+-- in each form that @fsck@ shows one in: @\@<id>@, or the name of its file,
+-- @<id>.json@; and bare.
 pFix :: Parser Command
 pFix =
-  Fix <$> (try (command "--dry-run" $> ListRepairs) <|> pure ApplyRepairs)
+  Fix
+    <$> (try (command "--dry-run" $> ListRepairs) <|> pure ApplyRepairs)
+    <*> ( MyPrelude.many nid <&> \case
+            [] -> AllDamage
+            nids -> DamageOf (setFromList nids)
+        )
+  where
+    -- fails without reading anything where no id begins, which ends the ids
+    nid = lexeme do
+      digits <-
+        (char '@' *> takeWhileP Nothing isBase62Char)
+          <|> takeWhile1P Nothing isBase62Char
+      unless (length digits == nidDigits) . fail $
+        "fix takes whole node ids, "
+          <> show nidDigits
+          <> " letters and digits, as fsck shows them: @<id> or <id>.json"
+      unsafeNID digits <$ optional (string ".json")
 
 pMove :: Parser Command
 pMove = Move <$> path <*> path
@@ -353,8 +376,32 @@ test_parseCommand =
         `parsesTo` Seq (twoElemList (At Wild NodeId) ShowImage []),
       "{nid}" `parsesTo` NodeId,
       "fsck" `parsesTo` Check,
-      "fix" `parsesTo` Fix ApplyRepairs,
-      "fix --dry-run" `parsesTo` Fix ListRepairs,
+      "fix" `parsesTo` Fix ApplyRepairs AllDamage,
+      "fix --dry-run" `parsesTo` Fix ListRepairs AllDamage,
+      "fix @000000000001 @000000000002"
+        `parsesTo` Fix
+          ApplyRepairs
+          (DamageOf (setFromList [smallNID 1, smallNID 2])),
+      "fix --dry-run @000000000001"
+        `parsesTo` Fix ListRepairs (DamageOf (singletonSet (smallNID 1))),
+      "fix @000000000001; fsck"
+        `parsesTo` Seq
+          ( twoElemList
+              (Fix ApplyRepairs (DamageOf (singletonSet (smallNID 1))))
+              Check
+              []
+          ),
+      "fix 000000000001 000000000002.json"
+        `parsesTo` Fix
+          ApplyRepairs
+          (DamageOf (setFromList [smallNID 1, smallNID 2])),
+      "fix @0001" `failsWith` "fix takes whole node ids",
+      "fix @0000000000001" `failsWith` "fix takes whole node ids",
+      "fix @" `failsWith` "fix takes whole node ids",
+      "fix @-1" `failsWith` "fix takes whole node ids",
+      "fix a" `failsWith` "fix takes whole node ids",
+      parseFails "fix 000000000001.txt",
+      parseFails "fix @000000000001 --dry-run",
       "mk a" `parsesTo` Make Nothing (Literal "a"),
       "mk --allow-orphans a" `failsWith` "no --allow-orphans any more",
       "mk --max-repairs 2 x/c & d"

@@ -10,6 +10,7 @@ import DAL.RawGraph
 import Data.Aeson qualified as Aeson
 import Data.ByteString qualified as B
 import Data.Map.Strict qualified as Map
+import Data.Set qualified as Set
 import Effect.IOWrapper.Echo
 import Error.UserError
 import Error.Warn
@@ -17,7 +18,7 @@ import Graph.Fix
 import Graph.Fsck
 import Graph.FsckSpec (allRecords, genPlant, genUndamaged, plant)
 import Graph.GraphMetadataEditing (deleteNode)
-import Models.Command (FixMode (..))
+import Models.Command (FixMode (..), FixScope (..))
 import Models.Connect
 import Models.Damage
 import Models.Edge
@@ -54,7 +55,7 @@ test_planFix =
     "planFix"
     [ testProperty "leaves an undamaged graph alone" $
         forAll genUndamaged \files ->
-          let plan = planFix files
+          let plan = planFix AllDamage files
            in (plan.repairs, plan.writes, plan.setAside, plan.notRepaired)
                 === ([], mempty, mempty, []),
       damaged "leaves only damage that it says it doesn't repair" \files plan ->
@@ -75,6 +76,10 @@ test_planFix =
                 . classify (null plan.repairs) "nothing to repair"
                 . classify (not (null plan.setAside)) "a file set aside"
                 $ unexplained === [],
+      damaged "is told every node that damage names" \files _ ->
+        setFromList (concatMap damagedNodes (scanDamage files))
+          `difference` namedNodes files
+          === mempty,
       damaged "gives a reason for all that it doesn't repair" \_ plan ->
         filter ((== "fix has no repair for it") . snd) plan.notRepaired === [],
       damaged "keeps every record that the damaged graph had" \files plan ->
@@ -92,18 +97,60 @@ test_planFix =
               .&&. (keysSet plan.writes `intersection` unreadable)
               === keysSet plan.setAside,
       damaged "has nothing left to do once it is done" \files plan ->
-        (planFix (applyPlan plan files)).repairs === [],
+        (planFix AllDamage (applyPlan plan files)).repairs === [],
       damaged "writes only files that it changes" \files plan ->
         Map.filterWithKey
           (\nid n -> lookup nid files.nodes == Just (Right n))
           plan.writes
-          === mempty
+          === mempty,
+      -- (fix refuses a directory that doesn't look like a graph, where some
+      -- damage is not reported until a file says the right id; so for both)
+      scoped
+        "repairs all damage in scope unless a file's id is in doubt"
+        \files scope plan ->
+          let doubted = filesInDoubt files
+              inDoubt = keysSet doubted <> setFromList (toList doubted)
+           in looksLikeGraph files
+                ==> [ d
+                    | (d, _) <- plan.notRepaired,
+                      not (damageInScope scope d)
+                        || not (any (`member` inDoubt) (damagedNodes d))
+                    ]
+                === [],
+      scoped
+        "leaves no damage that neither the graph had nor a whole fix leaves"
+        \files _ plan ->
+          let full = applyPlan (planFix AllDamage files) files
+           in looksLikeGraph files
+                ==> scanDamage (applyPlan plan files)
+                `difference` (scanDamage files <> scanDamage full)
+                === mempty,
+      scoped "keeps every record that the damaged graph had" \files _ plan ->
+        let repaired = readableNodes (applyPlan plan files)
+         in [ record
+            | record@(nid, side, e) <- allRecords files,
+              not (maybe False (records side e) (lookup nid repaired))
+            ]
+              === []
     ]
   where
+    -- with a scope of some of the nodes that the files or the damage name
+    scoped name holds =
+      testProperty name . withMaxSuccess 1000 $
+        forAll genDamaged \files ->
+          let named =
+                keysSet files.nodes
+                  <> setFromList (concatMap damagedNodes (scanDamage files))
+              genScope = DamageOf . setFromList <$> sublistOf (toList named)
+           in forAll genScope \scope ->
+                let plan = planFix scope files
+                 in counterexample (show scope <> "\n" <> show plan)
+                      . classify (null plan.repairs) "nothing to repair"
+                      $ holds files scope plan
     damaged name holds =
       testProperty name . withMaxSuccess 1000 $
         forAll genDamaged \files ->
-          let plan = planFix files
+          let plan = planFix AllDamage files
            in counterexample (show plan) (holds files plan)
 
 spec_planFix :: Spec
@@ -127,7 +174,7 @@ spec_planFix = do
             [ (nilNID, Right (node' nilNID [] [Connect "b" n1])),
               (n1, Right (node' n1 [Connect "c" nilNID] []))
             ]
-    (planFix files).repairs
+    (planFix AllDamage files).repairs
       `shouldBe` [ AddRecord IncomingRecord (Edge nilNID "b" n1),
                    AddRecord OutgoingRecord (Edge nilNID "c" n1)
                  ]
@@ -137,7 +184,7 @@ spec_planFix = do
             [ (nilNID, Right (node' nilNID [Connect "up" n2] [Connect "b" n2])),
               (n1, Right (node' n1 [Connect "d" n2] []))
             ]
-        plan = planFix files
+        plan = planFix AllDamage files
     plan.repairs `shouldBe` [Rebuild n2 3]
     lookup n2 plan.writes
       `shouldBe` Just
@@ -151,7 +198,7 @@ spec_planFix = do
           (graphFiles [(nilNID, Right (node' nilNID [] [Connect "b" n1])), (n1, Left "garbled")])
             { others = singletonMap n1 (setFromList ["000000000001.json.unparsable", "000000000001.data"])
             }
-        plan = planFix files
+        plan = planFix AllDamage files
     plan.repairs
       `shouldBe` [SetAside n1 "000000000001.json.unparsable-2", Rebuild n1 1]
     describeRepair files (Rebuild n1 1)
@@ -164,11 +211,11 @@ spec_planFix = do
       <> " and so is its data if it had any)"
   it "rebuilds an unreadable node that no node records an edge with as empty" do
     let files = graphFiles [(nilNID, Right (node' nilNID [] [])), (n1, Left "garbled")]
-    lookup n1 (planFix files).writes `shouldBe` Just (node' n1 [] [])
+    lookup n1 (planFix AllDamage files).writes `shouldBe` Just (node' n1 [] [])
   it "rebuilds a missing origin" do
     let files = graphFiles [(n1, Right (node' n1 [Connect "a" nilNID] []))]
-    (planFix files).repairs `shouldBe` [Rebuild nilNID 1]
-    (planFix (graphFiles [(n1, Right (node' n1 [] []))])).repairs
+    (planFix AllDamage files).repairs `shouldBe` [Rebuild nilNID 1]
+    (planFix AllDamage (graphFiles [(n1, Right (node' n1 [] []))])).repairs
       `shouldBe` [Rebuild nilNID 0]
   it "corrects the id of a file whose edges are recorded for its name" do
     let files =
@@ -176,13 +223,13 @@ spec_planFix = do
             [ (nilNID, Right (node' nilNID [] [Connect "b" n2])),
               (n2, Right (node' n3 [Connect "b" nilNID] []))
             ]
-        plan = planFix files
+        plan = planFix AllDamage files
     plan.repairs `shouldBe` [CorrectId n2 n3]
     plan.writes `shouldBe` singletonMap n2 (node' n2 [Connect "b" nilNID] [])
     plan.notRepaired `shouldBe` []
     -- the correction is right only as long as 0.json records the edge for
     -- the node 2
-    plan.derivedFrom `shouldBe` singletonSet nilNID
+    plan.derivedFrom `shouldBe` singletonMap n2 (singletonSet nilNID)
   it "leaves a file alone whose edges are recorded for the node it says it is" do
     -- 2.json is a copy of 3.json
     let files =
@@ -191,7 +238,7 @@ spec_planFix = do
               (n2, Right (node' n3 [Connect "c" nilNID] [])),
               (n3, Right (node' n3 [Connect "c" nilNID] []))
             ]
-        plan = planFix files
+        plan = planFix AllDamage files
     plan.repairs `shouldBe` []
     plan.writes `shouldBe` mempty
     map fst plan.notRepaired
@@ -213,7 +260,7 @@ spec_planFix = do
               (n1, Right (node' n1 [] [])),
               (n2, Right (node' n3 [Connect "c" nilNID] []))
             ]
-        plan = planFix files
+        plan = planFix AllDamage files
     plan.repairs `shouldBe` [AddRecord IncomingRecord (Edge nilNID "a" n1)]
     map fst plan.notRepaired
       `shouldBe` [ OneSidedEdge IncomingRecord (Edge nilNID "c" n2),
@@ -229,7 +276,7 @@ spec_planFix = do
               (n2, Right (node' n3 [] [Connect "x" n3])),
               (n3, Right (node' n3 [Connect "x" n2] []))
             ]
-        plan = planFix files
+        plan = planFix AllDamage files
     filesInDoubt files `shouldBe` singletonMap n2 n3
     plan.repairs `shouldBe` []
     map fst plan.notRepaired `shouldBe` [FileSaysOtherId n2 n3]
@@ -238,7 +285,7 @@ spec_planFix = do
           (graphFiles [(nilNID, Right (node' nilNID [] []))])
             { others = singletonMap n1 (singletonSet "000000000001.data")
             }
-        plan = planFix files
+        plan = planFix AllDamage files
     (plan.repairs, plan.writes, plan.notRepaired) `shouldBe` ([], mempty, [])
   it "removes what a fix kept of a node that has no file, and makes no node of it" do
     let kept = ["000000000001.json.unparsable", "000000000001.json.unparsable-3"]
@@ -246,7 +293,7 @@ spec_planFix = do
           (graphFiles [(nilNID, Right (node' nilNID [] []))])
             { others = singletonMap n1 (setFromList ("000000000001.data" : kept))
             }
-        plan = planFix files
+        plan = planFix AllDamage files
     plan.repairs `shouldBe` [RemoveLeftOver n1 kept]
     plan.removals `shouldBe` singletonMap n1 kept
     (plan.setAside, plan.writes, plan.notRepaired) `shouldBe` (mempty, mempty, [])
@@ -271,7 +318,7 @@ spec_planFix = do
                     "000000000001.json.unparsable-02"
                   ]
             }
-        plan = planFix files
+        plan = planFix AllDamage files
     (plan.repairs, plan.removals, plan.notRepaired) `shouldBe` ([], mempty, [])
     toList (scanDamage files) `shouldBe` []
   it "leaves what was kept of a node that it rebuilds from other nodes' records" do
@@ -279,7 +326,7 @@ spec_planFix = do
           (graphFiles [(nilNID, Right (node' nilNID [] [Connect "b" n1]))])
             { others = singletonMap n1 (singletonSet "000000000001.json.unparsable")
             }
-        plan = planFix files
+        plan = planFix AllDamage files
     plan.repairs `shouldBe` [Rebuild n1 1]
     plan.removals `shouldBe` mempty
     toList (scanDamage (applyPlan plan files)) `shouldBe` []
@@ -294,7 +341,7 @@ spec_planFix = do
         nothingWhile name =
           "nothing is repaired while " <> name <> " can't be read"
         repairsNothing files = do
-          let plan = planFix files
+          let plan = planFix AllDamage files
           (plan.repairs, plan.writes, plan.setAside, plan.derivedFrom)
             `shouldBe` ([], mempty, mempty, mempty)
           map fst plan.notRepaired `shouldBe` toList (scanDamage files)
@@ -310,7 +357,8 @@ spec_planFix = do
             ]
           misnamed = node' n2 [Connect "b" nilNID] [Connect "d" n1]
       repairsNothing (withUnreadable n5 nodes)
-      (planFix (graphFiles ((n5, Right misnamed) : nodes))).repairs `shouldBe` []
+      (planFix AllDamage (graphFiles ((n5, Right misnamed) : nodes))).repairs
+        `shouldBe` []
     it "doesn't add a record that the unreadable file may have a say in" do
       -- 5.json may be a copy of 2.json that records the edge x
       let n5 = smallNID 5
@@ -320,7 +368,8 @@ spec_planFix = do
             ]
           copy = node' n2 [Connect "b" nilNID, Connect "x" nilNID] []
       repairsNothing (withUnreadable n5 nodes)
-      (planFix (graphFiles ((n5, Right copy) : nodes))).repairs `shouldBe` []
+      (planFix AllDamage (graphFiles ((n5, Right copy) : nodes))).repairs
+        `shouldBe` []
     it "makes no repair either that the file seems to have no part in" do
       let n5 = smallNID 5
       repairsNothing . withUnreadable n5 $
@@ -328,6 +377,66 @@ spec_planFix = do
           (n2, Right (node' n2 [] [])),
           (n3, Left "garbled")
         ]
+  describe "with a scope" do
+    let damagedTwice =
+          graphFiles
+            [ (nilNID, Right (node' nilNID [] [Connect "b" n1])),
+              (n1, Right (node' n1 [] [])),
+              (n3, Right (node' n3 [] [Connect "c" n2]))
+            ]
+        repairsOf nids =
+          (planFix (DamageOf (setFromList nids)) damagedTwice).repairs
+    it "repairs only the damage that involves one of the nodes" do
+      repairsOf [n1] `shouldBe` [AddRecord IncomingRecord (Edge nilNID "b" n1)]
+      repairsOf [n2] `shouldBe` [Rebuild n2 1]
+      repairsOf [n3] `shouldBe` [Rebuild n2 1]
+      sort (repairsOf [n1, n2])
+        `shouldBe` sort
+          [AddRecord IncomingRecord (Edge nilNID "b" n1), Rebuild n2 1]
+      repairsOf [] `shouldBe` []
+    it "says nothing about the damage out of scope" do
+      (planFix (DamageOf (singletonSet n1)) damagedTwice).notRepaired
+        `shouldBe` []
+    it "rebuilds a node from every record of it" do
+      let files =
+            graphFiles
+              [ (n1, Right (node' n1 [] [Connect "a" n2])),
+                (n3, Right (node' n3 [] [Connect "c" n2])),
+                (nilNID, Right (node' nilNID [] []))
+              ]
+          plan = planFix (DamageOf (singletonSet n1)) files
+      plan.repairs `shouldBe` [Rebuild n2 2]
+      lookup n2 plan.writes
+        `shouldBe` Just (node' n2 [Connect "a" n1, Connect "c" n3] [])
+    it "adds every record that a file it writes lacks" do
+      -- only 1 records 1 -a-> 2, only 3 records 3 -c-> 2
+      let files =
+            graphFiles
+              [ (nilNID, Right (node' nilNID [] [])),
+                (n1, Right (node' n1 [] [Connect "a" n2])),
+                (n2, Right (node' n2 [] [])),
+                (n3, Right (node' n3 [] [Connect "c" n2]))
+              ]
+          plan = planFix (DamageOf (singletonSet n1)) files
+      lookup n2 plan.writes
+        `shouldBe` Just (node' n2 [Connect "a" n1, Connect "c" n3] [])
+      map fst plan.notRepaired `shouldBe` []
+    it "rebuilds no node whose file was created after the scan" do
+      let files =
+            (graphFiles [(nilNID, Right (node' nilNID [] [Connect "b" n1]))])
+              { unread = singletonSet n1
+              }
+      (planFix AllDamage files).repairs `shouldBe` []
+      (planFix (DamageOf (singletonSet nilNID)) files).repairs `shouldBe` []
+    it "leaves a file that can't be read as a node to a scope that has it" do
+      let files =
+            graphFiles
+              [ (nilNID, Right (node' nilNID [] [Connect "b" n1])),
+                (n1, Left "garbled")
+              ]
+      (planFix (DamageOf (singletonSet nilNID)) files).repairs `shouldBe` []
+      (planFix (DamageOf (singletonSet n1)) files).repairs
+        `shouldBe` [SetAside n1 "000000000001.json.unparsable", Rebuild n1 1]
   it "tells a graph from a directory with a file that is named like a node" do
     looksLikeGraph (graphFiles [(n1, Right (node' n1 [] []))]) `shouldBe` True
     looksLikeGraph (graphFiles [(n1, Left "garbled"), (n2, Right (node' n3 [] []))])
@@ -361,8 +470,9 @@ directoryContentsBut unreadable dir = do
   mapFromList <$> for files \file -> (file,) <$> B.readFile (dir </> file)
 
 -- | What fix printed and how it ended. With @dry@, as @ge --dry-run@.
-runFix :: Bool -> FixMode -> FilePath -> IO ([String], Either UserError ())
-runFix dry mode dir = do
+runFix ::
+  Bool -> FixMode -> FixScope -> FilePath -> IO ([String], Either UserError ())
+runFix dry mode scope dir = do
   printed <- newIORef []
   result <-
     runEff
@@ -374,7 +484,7 @@ runFix dry mode dir = do
             then runGraphMetadataFilesystemOperationsDryRun True
             else runGraphMetadataFilesystemOperationsIO True
         )
-      $ fix mode
+      $ fix mode scope
   (,result) . reverse <$> readIORef printed
 
 spec_fix :: Spec
@@ -453,7 +563,7 @@ spec_fix = do
                 ListNodeMetadata -> listNodeMetadata
                 OnlyDescribesWrites -> onlyDescribesWrites
             )
-          $ fix ApplyRepairs
+          $ fix ApplyRepairs AllDamage
       -- fix, where an interrupt arrives in place of the write of one node's
       -- file: what it warned of, and whether the interrupt went on
       fixInterruptedWriting :: NID -> FilePath -> IO ([String], Bool)
@@ -481,7 +591,7 @@ spec_fix = do
                   ListNodeMetadata -> listNodeMetadata
                   OnlyDescribesWrites -> onlyDescribesWrites
               )
-            $ fix ApplyRepairs
+            $ fix ApplyRepairs AllDamage
         warnings <- reverse <$> readIORef warned
         pure (warnings, either (== E.UserInterrupt) (const False) outcome)
       stopped what after result =
@@ -498,7 +608,7 @@ spec_fix = do
   it "lists its repairs, makes them, and says what is left" $
     withEveryKind \dir -> do
       before <- directoryContents dir
-      (printed, result) <- runFix False ApplyRepairs dir
+      (printed, result) <- runFix False ApplyRepairs AllDamage dir
       printed `shouldBe` "repairs:" : listing
       succeeds result
       scan <- scanned dir
@@ -535,21 +645,21 @@ spec_fix = do
       (keysSet before `difference` keysSet now) `shouldBe` mempty
   it "finds nothing to repair after that" $
     withEveryKind \dir -> do
-      _ <- runFix False ApplyRepairs dir
-      (printed, result) <- runFix False ApplyRepairs dir
+      _ <- runFix False ApplyRepairs AllDamage dir
+      (printed, result) <- runFix False ApplyRepairs AllDamage dir
       printed `shouldBe` ["nothing to repair"]
       succeeds result
   it "only lists its repairs when asked to" $
     withEveryKind \dir -> do
       before <- directoryContents dir
-      (printed, result) <- runFix False ListRepairs dir
+      (printed, result) <- runFix False ListRepairs AllDamage dir
       printed `shouldBe` "repairs (only listed, nothing is written):" : listing
       succeeds result
       directoryContents dir `shouldReturn` before
   it "writes nothing in a dry run of ge" $
     withEveryKind \dir -> do
       before <- directoryContents dir
-      (printed, _) <- runFix True ApplyRepairs dir
+      (printed, _) <- runFix True ApplyRepairs AllDamage dir
       printed `shouldBe` "repairs (only listed, nothing is written):" : listing
       directoryContents dir `shouldReturn` before
   it "says what it would do, not what it did, in a dry run of ge" $
@@ -557,7 +667,7 @@ spec_fix = do
       let readOnly = metadataFile dir n1
       permissions <- getPermissions readOnly
       setPermissions readOnly (setOwnerWritable False permissions)
-      (_, result) <- runFix True ApplyRepairs dir
+      (_, result) <- runFix True ApplyRepairs AllDamage dir
       setPermissions readOnly permissions
       first show result
         `shouldBe` Left
@@ -565,9 +675,24 @@ spec_fix = do
               <> " 000000000001.json in "
               <> dir
           )
+  it "refuses an id that names no node and no damage" $
+    withEmptyTempGraph \dir -> do
+      (printed, result) <-
+        runFix False ApplyRepairs (DamageOf (singletonSet (smallNID 9))) dir
+      printed `shouldBe` []
+      first show result
+        `shouldBe` Left
+          ( "fix did nothing: no file of the graph names @000000000009, so"
+              <> " it is no node of the graph: check it against what fsck lists"
+          )
+  it "says for which nodes there is nothing to repair" $
+    withEmptyTempGraph \dir ->
+      runFix False ApplyRepairs (DamageOf (singletonSet nilNID)) dir
+        >>= (`shouldBe` (["nothing to repair for @000000000000"], Right ()))
+          . second (first show)
   it "says so when there is nothing to repair" $
     withEmptyTempGraph \dir ->
-      runFix False ApplyRepairs dir
+      runFix False ApplyRepairs AllDamage dir
         >>= ( `shouldSatisfy`
                 \case
                   (["nothing to repair"], Right ()) -> True
@@ -585,7 +710,7 @@ spec_fix = do
           . interpret (\_ (Echo _) -> pure ())
           . ignoreWarnings @UserError
           . runGraphMetadataFilesystemOperationsIO True
-          $ repair ApplyRepairs scan
+          $ repair ApplyRepairs AllDamage scan
       first show result
         `shouldBe` Left
           ( "fix wrote nothing: 000000000001.json changed while fix was"
@@ -598,7 +723,7 @@ spec_fix = do
       write dir nilNID $ node' nilNID [] [Connect "x" n1]
       write dir n1 $ node' n1 [] []
       scan <- scanned dir
-      (planFix scan.files).repairs
+      (planFix AllDamage scan.files).repairs
         `shouldBe` [AddRecord IncomingRecord (Edge nilNID "x" n1)]
       -- the edge is removed meanwhile; 1.json, the file to write, is as it was
       write dir nilNID $ node' nilNID [] []
@@ -610,7 +735,7 @@ spec_fix = do
           . interpret (\_ (Echo _) -> pure ())
           . ignoreWarnings @UserError
           . runGraphMetadataFilesystemOperationsIO True
-          $ repair ApplyRepairs scan
+          $ repair ApplyRepairs AllDamage scan
       first show result
         `shouldBe` Left
           ( "fix wrote nothing: 000000000000.json changed while fix was"
@@ -623,7 +748,7 @@ spec_fix = do
       permissions <- getPermissions readOnly
       setPermissions readOnly (setOwnerWritable False permissions)
       before <- directoryContents dir
-      (_, result) <- runFix False ApplyRepairs dir
+      (_, result) <- runFix False ApplyRepairs AllDamage dir
       setPermissions readOnly permissions
       first show result
         `shouldBe` Left
@@ -641,7 +766,7 @@ spec_fix = do
       now <- directoryContents dir
       lookup "000000000003.json" now `shouldBe` Just "{not json"
       lookup "000000000003.json.unparsable" now `shouldBe` Nothing
-      (_, result) <- runFix False ApplyRepairs dir
+      (_, result) <- runFix False ApplyRepairs AllDamage dir
       succeeds result
       scan <- scanned dir
       toList (scanDamage scan.files) `shouldBe` []
@@ -655,7 +780,7 @@ spec_fix = do
                          ],
                          True
                        )
-      (_, result) <- runFix False ApplyRepairs dir
+      (_, result) <- runFix False ApplyRepairs AllDamage dir
       succeeds result
       scan <- scanned dir
       toList (scanDamage scan.files) `shouldBe` []
@@ -692,7 +817,7 @@ spec_fix = do
       toList (scanDamage scan.files) `shouldSatisfy` \case
         [FileSaysOtherId _ _, UnparsableNodeFile nid _] -> nid == n3
         _ -> False
-      (printed, result) <- runFix False ApplyRepairs dir
+      (printed, result) <- runFix False ApplyRepairs AllDamage dir
       succeeds result
       printed
         `shouldBe` [ "repairs:",
@@ -715,7 +840,7 @@ spec_fix = do
       permissions <- getPermissions unreadable
       setPermissions unreadable emptyPermissions
       before <- keysSet <$> directoryContentsBut "000000000001.json" dir
-      (printed, result) <- runFix False ApplyRepairs dir
+      (printed, result) <- runFix False ApplyRepairs AllDamage dir
       now <- keysSet <$> directoryContentsBut "000000000001.json" dir
       setPermissions unreadable permissions
       printed `shouldBe` []
@@ -737,12 +862,12 @@ spec_fix = do
           length (filter (unreadable `isPrefixOf`) (tails file)) `shouldBe` 1
         other -> expectationFailure ("ended with " <> show other)
       -- every repair is made once the file can be read
-      (_, again) <- runFix False ApplyRepairs dir
+      (_, again) <- runFix False ApplyRepairs AllDamage dir
       succeeds again
   it "says of a directory that is named like a node file what to do with it" $
     withEveryKind \dir -> do
       createDirectory (dir </> "000000000009.json")
-      (printed, result) <- runFix False ApplyRepairs dir
+      (printed, result) <- runFix False ApplyRepairs AllDamage dir
       printed `shouldBe` []
       case first (lines . show) result of
         Left [_, file] -> do
@@ -756,7 +881,7 @@ spec_fix = do
       write dir nilNID $ node' nilNID [] [Connect "b" n2]
       createFileLink (dir </> "nowhere.json") (metadataFile dir n2)
       before <- keysSet <$> directoryContentsBut "000000000002.json" dir
-      results <- for [1, 2 :: Int] \_ -> runFix False ApplyRepairs dir
+      results <- for [1, 2 :: Int] \_ -> runFix False ApplyRepairs AllDamage dir
       for_ results \(printed, result) -> do
         printed `shouldBe` []
         case first (lines . show) result of
@@ -774,7 +899,7 @@ spec_fix = do
       (keysSet <$> directoryContentsBut "000000000002.json" dir) `shouldReturn` before
       -- without the link the node is rebuilt
       removeFile (metadataFile dir n2)
-      (_, result) <- runFix False ApplyRepairs dir
+      (_, result) <- runFix False ApplyRepairs AllDamage dir
       succeeds result
   it "says that a file changed if it was deleted while the graph was read" $
     withEmptyTempGraph \dir -> do
@@ -790,7 +915,7 @@ spec_fix = do
           . interpret (\_ (Echo _) -> pure ())
           . ignoreWarnings @UserError
           . runGraphMetadataFilesystemOperationsIO True
-          $ repair ApplyRepairs scan
+          $ repair ApplyRepairs AllDamage scan
       first show result
         `shouldBe` Left
           ( "fix did nothing: 000000000002.json changed while fix was looking"
@@ -806,7 +931,7 @@ spec_fix = do
       write dir upper $ node' upper [Connect "k" nilNID] []
       oneName <- doesFileExist (metadataFile dir lower)
       before <- directoryContents dir
-      results <- for [1, 2 :: Int] \_ -> runFix False ApplyRepairs dir
+      results <- for [1, 2 :: Int] \_ -> runFix False ApplyRepairs AllDamage dir
       if oneName
         then do
           for_ results \(printed, result) -> do
@@ -841,7 +966,7 @@ spec_fix = do
               . interpret (\_ (Echo _) -> pure ())
               . ignoreWarnings @UserError
               . runGraphMetadataFilesystemOperationsIO True
-              $ repair mode scan
+              $ repair mode AllDamage scan
       listed <- repairing ListRepairs
       first show listed `shouldBe` Right ()
       applied <- repairing ApplyRepairs
@@ -857,7 +982,7 @@ spec_fix = do
       write dir nilNID $ node' nilNID [] [Connect "b" n2]
       write dir n2 $ node' n3 [Connect "b" nilNID] []
       scan <- scanned dir
-      (planFix scan.files).repairs `shouldBe` [CorrectId n2 n3]
+      (planFix AllDamage scan.files).repairs `shouldBe` [CorrectId n2 n3]
       -- meanwhile the origin records the edge for the node 3: the file may
       -- be the one of that node now
       write dir nilNID $ node' nilNID [] [Connect "b" n3]
@@ -869,7 +994,7 @@ spec_fix = do
           . interpret (\_ (Echo _) -> pure ())
           . ignoreWarnings @UserError
           . runGraphMetadataFilesystemOperationsIO True
-          $ repair ApplyRepairs scan
+          $ repair ApplyRepairs AllDamage scan
       first show result
         `shouldBe` Left
           ( "fix wrote nothing: 000000000000.json changed while fix was"
@@ -884,9 +1009,9 @@ spec_fix = do
         for_ more \(name, content) -> B.writeFile (dir </> name) content
         before <- directoryContents dir
         let runs =
-              [ runFix False ApplyRepairs,
-                runFix False ListRepairs,
-                runFix True ApplyRepairs
+              [ runFix False ApplyRepairs AllDamage,
+                runFix False ListRepairs AllDamage,
+                runFix True ApplyRepairs AllDamage
               ]
         for_ runs \run -> do
           (printed, result) <- run dir
@@ -902,10 +1027,10 @@ spec_fix = do
   it "has the files that it kept of a node deleted with the node" $
     withEveryKind \dir -> do
       -- twice the same node file that can't be read as a node
-      (_, first') <- runFix False ApplyRepairs dir
+      (_, first') <- runFix False ApplyRepairs AllDamage dir
       succeeds first'
       B.writeFile (metadataFile dir n3) "{nor this"
-      (_, second) <- runFix False ApplyRepairs dir
+      (_, second) <- runFix False ApplyRepairs AllDamage dir
       succeeds second
       kept <- filter ("000000000003.json." `isPrefixOf`) . keys <$> directoryContents dir
       kept
@@ -913,7 +1038,7 @@ spec_fix = do
       runOnDisk dir (deleteNode @Text n3)
       now <- directoryContents dir
       filter ("000000000003.json" `isPrefixOf`) (keys now) `shouldBe` []
-      (printed, third) <- runFix False ApplyRepairs dir
+      (printed, third) <- runFix False ApplyRepairs AllDamage dir
       printed `shouldBe` ["nothing to repair"]
       succeeds third
   it "removes what is left over of a deleted node, and brings no node back" $
@@ -933,7 +1058,7 @@ spec_fix = do
               <> " kept it when it couldn't read that file as a node"
       scan <- scanned dir
       map describeDamage (toList (scanDamage scan.files)) `shouldBe` [leftOver]
-      (printed, result) <- runFix False ApplyRepairs dir
+      (printed, result) <- runFix False ApplyRepairs AllDamage dir
       printed
         `shouldBe` [ "repairs:",
                      "- remove 000000000004.json.unparsable-3, left over from a"
@@ -968,7 +1093,7 @@ spec_fix = do
       scan <- scanned dir
       toList (scanDamage scan.files)
         `shouldBe` [KeptFileWithoutNode n4 ["000000000004.json.unparsable-5"]]
-      (printed, result) <- runFix False ApplyRepairs dir
+      (printed, result) <- runFix False ApplyRepairs AllDamage dir
       printed
         `shouldBe` [ "repairs:",
                      "- remove 000000000004.json.unparsable-5, left over from a"
@@ -988,7 +1113,7 @@ spec_fix = do
       B.readFile (dir </> "notes.txt") `shouldReturn` "of the user"
       after <- scanned dir
       toList (scanDamage after.files) `shouldBe` []
-      (again, _) <- runFix False ApplyRepairs dir
+      (again, _) <- runFix False ApplyRepairs AllDamage dir
       again `shouldBe` ["nothing to repair"]
   it "doesn't remove what has come to be under the name of a left-over copy" $
     -- between listing its repairs and making them
@@ -1017,7 +1142,12 @@ spec_fix = do
       B.writeFile (dir </> "000000000003.JSON.UNPARSABLE-3") "of the user"
       oneName <- doesFileExist (kept "-3")
       let copy = "000000000003.json.unparsable" <> bool "-3" "-4" oneName
-      for_ [runFix False ListRepairs, runFix True ApplyRepairs, runFix False ApplyRepairs] \run -> do
+      let runs =
+            [ runFix False ListRepairs AllDamage,
+              runFix True ApplyRepairs AllDamage,
+              runFix False ApplyRepairs AllDamage
+            ]
+      for_ runs \run -> do
         (printed, result) <- run dir
         take 1 (drop 1 printed)
           `shouldBe` [ "- keep 000000000003.json, which cannot be read as a node,"
@@ -1031,13 +1161,15 @@ spec_fix = do
       pathIsSymbolicLink (kept "-2") `shouldReturn` True
       after <- scanned dir
       toList (scanDamage after.files) `shouldBe` []
-      (again, _) <- runFix False ApplyRepairs dir
+      (again, _) <- runFix False ApplyRepairs AllDamage dir
       again `shouldBe` ["nothing to repair"]
   it "only lists what is left over when asked to, and in a dry run of ge" $
     withEmptyTempGraph \dir -> do
       write dir nilNID $ node' nilNID [] []
       B.writeFile (dir </> "000000000004.json.unparsable") "{not json"
-      for_ [runFix False ListRepairs, runFix True ApplyRepairs] \run -> do
+      let runs =
+            [runFix False ListRepairs AllDamage, runFix True ApplyRepairs AllDamage]
+      for_ runs \run -> do
         (printed, result) <- run dir
         printed
           `shouldBe` [ "repairs (only listed, nothing is written):",
@@ -1050,7 +1182,7 @@ spec_fix = do
   it "does nothing in a directory without node files" $
     withSystemTempDirectory "not-a-graph" \dir -> do
       B.writeFile (dir </> "notes.txt") "not a graph"
-      (printed, result) <- runFix False ApplyRepairs dir
+      (printed, result) <- runFix False ApplyRepairs AllDamage dir
       printed `shouldBe` []
       first show result `shouldSatisfy` \case
         Left message -> "so it doesn't look like a graph" `isSuffixOf` message
@@ -1061,7 +1193,7 @@ spec_fix = do
       B.writeFile (dir </> "tsconfigbase.json") "{\"compilerOptions\": {}}"
       B.writeFile (dir </> "notes.txt") "not a graph"
       before <- directoryContents dir
-      (printed, result) <- runFix False ApplyRepairs dir
+      (printed, result) <- runFix False ApplyRepairs AllDamage dir
       printed `shouldBe` []
       first show result
         `shouldBe` Left

@@ -363,6 +363,8 @@ such a name, and no file with another number than `fix` gives (`-0`, `-1`,
 `-02`) or with anything after the name (`.txt`, `-old`). Those are not
 reported and never removed.
 
+`fix @id …` (after `--dry-run`, if that is given) repairs only the damage that involves one of the given nodes: the damage that `fsck` names one of them in, either end of an edge included. Of what `fix` would do to the whole graph, it does what it does to the files that those repairs write: such a file gets every record that it lacks and its id corrected, also where that is damage of other nodes, and a repair may write another node's file (the record that the node at the other end of an edge lacks). Those records are copied from files that have them, so no further file is written for them. The rest of the damage is not listed and doesn't count for the exit code: run `fsck` for it, and `nothing to repair for @…` means only that the given nodes have no damage. An id is whole, 12 letters and digits, in any form that `fsck` shows one in: `@<id>`, or the name of its file, `<id>.json`; a node to rebuild has no file to look a shorter one up in. An id that no file of the graph names (as a file name, a record or the id in a file) is refused as mistyped: `fix did nothing: no file of the graph names @…, so it is no node of the graph: check it against what fsck lists`. Nothing is repaired while a node file can't be read at all (below), whichever nodes are given.
+
 | damage | repair |
 |---|---|
 | an edge that one node records | the other record is **added**, whichever one is missing (the edge can be removed afterwards; a record that was dropped could not be brought back) |

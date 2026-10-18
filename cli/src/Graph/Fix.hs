@@ -44,7 +44,7 @@ import Error.UserError
 import Error.Warn
 import GHC.IO.Exception (IOErrorType (InappropriateType), IOException (ioe_type))
 import Graph.Fsck
-import Models.Command (FixMode (..))
+import Models.Command (FixMode (..), FixScope (..))
 import Models.Damage
 import Models.Edge
 import Models.NID
@@ -83,10 +83,9 @@ data FixPlan = FixPlan
     removals :: Map NID [FilePath],
     -- | every node file to write, whole
     writes :: Map NID (Node Text ()),
-    -- | the node files that the writes were worked out from, besides the ones
-    -- that they replace: the plan is for the graph as it was when these were
-    -- read
-    derivedFrom :: Set NID,
+    -- | by node file to write, the other node files that it was worked out
+    -- from: the plan is for the graph as it was when these were read
+    derivedFrom :: Map NID (Set NID),
     -- | the damage that will be left, with the reason
     notRepaired :: [(Damage, String)]
   }
@@ -113,27 +112,112 @@ filesInDoubt files =
        in other == claimed
             || maybe False (records (otherSide side) renamed) (lookup other readable)
 
+-- | Whether damage that names the node is in the scope.
+inScope :: FixScope -> NID -> Bool
+inScope = \case
+  AllDamage -> const True
+  DamageOf nids -> (`member` nids)
+
+-- | Whether the damage names a node in the scope ('damagedNodes').
+damageInScope :: FixScope -> Damage -> Bool
+damageInScope scope = any (inScope scope) . damagedNodes
+
+-- | The node whose file the repair of the damage writes, or whose kept
+-- copies it removes.
+repairedFile :: Damage -> NID
+repairedFile = \case
+  OneSidedEdge side e -> snd (recordingNode side e)
+  EdgeToMissingNode side e -> snd (recordingNode side e)
+  FileSaysOtherId name _ -> name
+  UnparsableNodeFile nid _ -> nid
+  MissingOriginFile -> nilNID
+  KeptFileWithoutNode nid _ -> nid
+
+-- | The node whose file a repair writes, or whose kept copies it removes.
+repairFile :: Repair -> NID
+repairFile = \case
+  SetAside nid _ -> nid
+  CorrectId nid _ -> nid
+  Rebuild nid _ -> nid
+  AddRecord side e -> fst (recordingNode side e)
+  RemoveLeftOver nid _ -> nid
+
+-- | Every node that the files of a graph name: in the name of a file, in its
+-- content, in a record or in the name of a kept copy; and the origin, which
+-- every graph has. All damage is of such nodes.
+namedNodes :: GraphFiles -> Set NID
+namedNodes files =
+  keysSet files.nodes
+    <> files.unread
+    <> keysSet (leftOver files)
+    <> singletonSet nilNID
+    <> setFromList
+      [ nid
+      | (name, node) <- mapToList (readableNodes files),
+        nid <-
+          node.nid
+            : [snd (recordingNode side e) | (side, e) <- recordedEdges name node]
+      ]
+
 -- | What 'fix' does to a graph: nothing while a node file can't be read.
-planFix :: GraphFiles -> FixPlan
-planFix files
+--
+-- With a scope of some nodes it makes the repairs of the damage that
+-- involves one of them, and says nothing about the rest: of the plan for the
+-- whole graph, it keeps what it does to the files that those repairs write
+-- (or remove copies of). Such a file is written as for the whole graph, with
+-- every record that it lacks and its id corrected; the records are copied
+-- from files that have them, so no other file is written for them.
+planFix :: FixScope -> GraphFiles -> FixPlan
+planFix scope files
   | null files.unreadable =
-      FixPlan {repairs, setAside, removals, writes, derivedFrom, notRepaired}
+      plan & #notRepaired .~ filter (damageInScope scope . fst) (leftBy plan)
   | otherwise =
-      FixPlan
-        { repairs = [],
-          setAside = mempty,
-          removals = mempty,
-          writes = mempty,
-          derivedFrom = mempty,
-          notRepaired =
-            [ ( damage,
-                "nothing is repaired while "
-                  <> intercalate ", " (map nodeFileName (toList files.unreadable))
-                  <> " can't be read"
-              )
-            | damage <- toList (scanDamage files)
-            ]
-        }
+      FixPlan [] mempty mempty mempty mempty []
+        & #notRepaired
+          .~ [ ( damage,
+                 "nothing is repaired while "
+                   <> intercalate ", " (map nodeFileName (toList files.unreadable))
+                   <> " can't be read"
+               )
+             | damage <- toList (scanDamage files),
+               damageInScope scope damage
+             ]
+  where
+    whole = planWhole files
+    plan = case scope of
+      AllDamage -> whole
+      DamageOf _ ->
+        restrictPlan
+          ( setFromList
+              [ repairedFile damage
+              | damage <- toList (scanDamage files),
+                damageInScope scope damage
+              ]
+          )
+          whole
+    -- the damage that a plan leaves, with the reason
+    leftBy p =
+      [ (damage, whyNotRepaired (filesInDoubt files) damage)
+      | damage <- toList (scanDamage (applyPlan p files))
+      ]
+
+-- | Only what a plan does to the files of these nodes.
+restrictPlan :: Set NID -> FixPlan -> FixPlan
+restrictPlan nids plan =
+  FixPlan
+    { repairs = filter ((`member` nids) . repairFile) plan.repairs,
+      setAside = plan.setAside `Map.restrictKeys` nids,
+      removals = plan.removals `Map.restrictKeys` nids,
+      writes = plan.writes `Map.restrictKeys` nids,
+      derivedFrom = plan.derivedFrom `Map.restrictKeys` nids,
+      notRepaired = []
+    }
+
+-- | The repairs of all damage of a graph that has no file that can't be
+-- read, without what they leave ('notRepaired').
+planWhole :: GraphFiles -> FixPlan
+planWhole files =
+  FixPlan {repairs, setAside, removals, writes, derivedFrom, notRepaired = []}
   where
     readable = readableNodes files
     -- the files whose content is not a node
@@ -165,7 +249,14 @@ planFix files
         maybe True (not . records (otherSide side) e) (lookup other sound)
       ]
     rebuilt =
-      ( setFromList [other | (other, _, _) <- additions, other `notMember` sound]
+      ( setFromList
+          [ other
+          | (other, _, _) <- additions,
+            other `notMember` sound,
+            -- a file that was created after the scan listed the directory is
+            -- there, and nothing is known of it
+            other `notMember` files.unread
+          ]
           <> unparsable
           <> setFromList [nilNID | nilNID `notMember` files.nodes]
       )
@@ -191,17 +282,22 @@ planFix files
     removals =
       leftOver files `Map.withoutKeys` (untouchable <> keysSet writes)
     derivedFrom =
-      setFromList [name | (name, other, _, _) <- derivations, other `member` writes]
-        -- whether an id is corrected depends on what the other nodes of the
-        -- file's edges record
-        <> setFromList
-          [ other
-          | CorrectId name _ <- corrected,
-            node <- toList (lookup name readable),
-            (side, e) <- recordedEdges name node,
-            let other = snd (recordingNode side e),
-            other `member` files.nodes
+      Map.fromListWith
+        (<>)
+        ( [ (other, singletonSet name)
+          | (name, other, _, _) <- derivations,
+            other `member` writes
           ]
+            -- whether an id is corrected depends on what the other nodes of
+            -- the file's edges record
+            <> [ (name, singletonSet other)
+               | CorrectId name _ <- corrected,
+                 node <- toList (lookup name readable),
+                 (side, e) <- recordedEdges name node,
+                 let other = snd (recordingNode side e),
+                 other `member` files.nodes
+               ]
+        )
     -- the first name of this kind that no file of the node has yet (see
     -- 'namesTaken' for what else may have it)
     copyName nid =
@@ -220,21 +316,6 @@ planFix files
              nid `member` sound
            ]
         <> [RemoveLeftOver nid names | (nid, names) <- mapToList removals]
-    notRepaired =
-      [ (damage, whyNotRepaired doubted damage)
-      | damage <-
-          toList . scanDamage $
-            applyPlan
-              FixPlan
-                { repairs,
-                  setAside,
-                  removals,
-                  writes,
-                  derivedFrom,
-                  notRepaired = []
-                }
-              files
-      ]
 
 -- | The files as a plan leaves them.
 applyPlan :: FixPlan -> GraphFiles -> GraphFiles
@@ -346,8 +427,9 @@ counted :: Int -> String -> String
 counted 1 thing = "1 " <> thing
 counted n thing = show n <> " " <> thing <> "s"
 
--- | Repair the damage of the whole graph: list every repair, then make
--- them (unless only the list was asked for). Fails if damage is left, so
+-- | Repair the damage of the whole graph, or the damage that involves the
+-- nodes in scope: list every repair, then make them (unless only the list
+-- was asked for). Fails if damage is left, so
 -- that whoever ran @ge -e fix@ can tell from the exit code.
 fix ::
   ( Members
@@ -356,8 +438,9 @@ fix ::
     Warn UserError :> es
   ) =>
   FixMode ->
+  FixScope ->
   Eff es ()
-fix mode = scanGraph >>= repair mode
+fix mode scope = scanGraph >>= repair mode scope
 
 -- | What fix fails with when node files can't be read: which, why (in
 -- words, then once as the system said it) and what to do about each.
@@ -423,9 +506,10 @@ repair ::
     Warn UserError :> es
   ) =>
   FixMode ->
+  FixScope ->
   GraphScan ->
   Eff es ()
-repair mode scan = do
+repair mode scope scan = do
   directory <- getGraphFilePath
   -- in a dry run of ge the messages say what would be done
   dry <- onlyDescribesWrites
@@ -448,8 +532,22 @@ repair mode scan = do
     unless link . throwText $ "fix did nothing: " <> changedMeanwhile nid
   for_ (NonEmpty.nonEmpty (mapToList scan.failures)) $
     throwText . unreadableFiles
+  -- an id that no file names is most likely mistyped
+  let unknown = case scope of
+        AllDamage -> []
+        DamageOf nids ->
+          filter (`notMember` namedNodes scan.files) (toList nids)
+  for_ (NonEmpty.nonEmpty unknown) \nids -> do
+    let one = length nids == 1
+    throwText $
+      "fix did nothing: no file of the graph names "
+        <> intercalate ", " (map tshow (toList nids))
+        <> (if one then ", so it is no node" else ", so they are no nodes")
+        <> " of the graph: check "
+        <> (if one then "it" else "them")
+        <> " against what fsck lists"
   taken <- namesTaken directory scan.files
-  let plan = planFix (scan.files & #others %~ Map.unionWith (<>) taken)
+  let plan = planFix scope (scan.files & #others %~ Map.unionWith (<>) taken)
       onlyLists = mode == ListRepairs || dry
   -- A file that is to be created must not be there under a name that the
   -- directory doesn't list: where the volume takes names that differ in
@@ -489,7 +587,11 @@ repair mode scan = do
         <> " names apart, or take those edges out of the node files that"
         <> " record them by hand (fsck lists them)"
   if null plan.repairs
-    then echo "nothing to repair"
+    then
+      echo $
+        "nothing to repair" <> case scope of
+          AllDamage -> ""
+          DamageOf nids -> " for " <> intercalate ", " (map show (toList nids))
     else do
       echo $
         if onlyLists
@@ -507,7 +609,8 @@ repair mode scan = do
               <> why
         -- the files that the plan replaces and the ones that it took the new
         -- records from, and the nodes that it takes to have no file
-        relied = keysSet plan.writes <> plan.derivedFrom <> keysSet plan.removals
+        relied =
+          keysSet plan.writes <> fold plan.derivedFrom <> keysSet plan.removals
     -- The plan is for the files as they were scanned: the ones it relies on
     -- are read again, as the directory lists them now, and nothing is
     -- written if any of them is not as it was.
