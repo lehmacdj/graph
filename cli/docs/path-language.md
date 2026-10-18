@@ -83,11 +83,12 @@ A label is written as a *plain word*: letters, digits and the
 characters `-`, `.`, `_` and `'`, with nothing else. So `a.b`, `12` and
 `it's` are labels, and `'a'` is the label with the apostrophes in it.
 Any other label is written between double quotes, where the escapes of
-a Haskell string are interpreted (`"a\tb"` has a tab); `""` is the
-empty label, which `tag` uses. A regex is written `regex:"…"` or
-`regex:'…'`: either quote may delimit it, backslashes inside are kept
-as written for the regex, and the regex cannot contain its own
-delimiter. It is a Perl-compatible regex (PCRE) and it is searched for
+a Haskell character literal are interpreted (`"a\tb"` has a tab,
+`"\233"` is `é`); a string's `\&` and gaps are not, and are refused.
+`""` is the empty label, which `tag` uses. A regex is written
+`regex:"…"` or `regex:'…'`: either quote may delimit it, backslashes
+inside are kept as written for the regex, and the regex cannot contain
+its own delimiter. It is a Perl-compatible regex (PCRE) and it is searched for
 in the label: `regex:"a"` matches every label with an `a` in it, and
 `regex:"^a$"` the label `a` alone. `^` is the start of the label and
 `$` its very end, also when the label ends in a newline (`(?m)` in the
