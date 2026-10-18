@@ -15,8 +15,11 @@ printImage d = do
     then printImageKitten d
     else ITerm.printImage d
 
+-- | The image is shrunk to fit the window in both directions: kitty does not
+-- move the cursor past an image taller than the window, so what follows it
+-- (the next image, the prompt) was drawn over it.
 printImageKitten :: LByteString -> IO ()
 printImageKitten d =
   runProcess_ $
     setStdin (byteStringInput d) $
-      proc "kitten" ["icat", "--stdin=yes"]
+      proc "kitten" ["icat", "--stdin=yes", "--fit=both"]
