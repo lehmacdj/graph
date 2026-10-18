@@ -27,9 +27,11 @@ the Command or Path languages.
   graph's node files, how commands refuse to edit and warn when reading next
   to it, what `fsck` reports and what `fix` repairs.
 
-- **[WebAssembly](docs/wasm.md)** - Design and progress tracking for
-  compiling the path language, completion and graph APIs to WebAssembly for
-  the browser extension.
+- **[WebAssembly](docs/wasm.md)** - Reference for the wasm module
+  (path parsing, syntax feedback, completion) for the browser extension:
+  its JavaScript and Haskell APIs, how to build and test it, and what code
+  it compiles must not reach. Its history and decisions are in
+  [docs/archive/wasm-plan.md](docs/archive/wasm-plan.md).
 
 - **[Testing Best Practices](docs/Testing.md)** - Guidelines for writing tests, including in-file tests, test utilities, golden tests, and avoiding cyclic imports.
 

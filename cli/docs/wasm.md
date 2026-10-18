@@ -1,499 +1,274 @@
-# Graph core to WebAssembly
+# WebAssembly
 
-Design and progress tracking for compiling the path language, completion
-and graph APIs to WebAssembly, so the browser extension can call them.
+`cli/wasm/` builds part of the `cli` library into a WebAssembly module
+that JavaScript calls: path parsing, syntax feedback and completion without
+a graph. It is for the browser extension. This doc is for building the
+module, changing code it compiles, and integrating it into the extension.
+Why things are as they are (the blocker traces, the alternatives tried, the
+history) is in [archive/wasm-plan.md](archive/wasm-plan.md).
 
-Started 2026-10-17. Status: items 1–5, 7 and 8 done: parsing, syntax
-feedback and completion without a graph build for WebAssembly and are
-callable from JavaScript ([The wasm build](#the-wasm-build)).
+## What is in the module
 
-## Goal and scope
+The module exports two functions: `parsePath` (does a path parse, and
+where are its problems) and `complete` (completion of the text before the
+cursor, without a graph). They are built from `Models.Path.Parse`,
+`Utils.Parsing.Problems` and `Models.Completion`, and the modules those
+import: about 45 local modules, listed in `wasm/graph-wasm.cabal`.
 
-Compile the `cli` library's path-language parsers, completion engine and
-higher-level graph APIs to WebAssembly, and call them from the browser
-extension.
+Native-only, deliberately: the REPL (`haskeline`), the node-file storage
+(`DAL.*`), HTTP, running processes (the external editor), image display,
+macOS file coordination, and `terminal-size`. Graph reading and editing
+(`Graph.GraphEditing` and friends, `Graph.PathPattern.Execution`) reach
+none of these and could be built for wasm, but nothing exports them yet:
+they need interpreters that reach a graph (see [Future work](#future-work)).
 
-- **In scope:** `Models.Path.*`, `Models.PathPattern.*`, the completion
-  core (`Models.Completion`; with a graph, `completionTransitions`), the
-  syntax feedback (`Utils.Parsing.Problems`), and graph
-  reading and editing through the effect interfaces (`Graph.GraphEditing`,
-  `Graph.GraphMetadataEditing`, `Graph.PathPattern.Resolve` / `Execution`).
-- **Out of scope:** the REPL (`haskeline`), HTTP fetching, image display,
-  running an external editor, macOS file coordination, and the on-disk
-  storage interpreters. These stay native-only.
-- **Constraint:** the native `ge` build and its tests keep working at every
-  step. Each refactor should be worthwhile on its own, even if the
-  WebAssembly build never ships.
+## The JavaScript API
 
-## Target architecture: hybrid
-
-```
- browser extension
- ┌───────────────────────────────────────────────┐
- │  JS UI ──► graph.wasm                         │
- │            ├─ parsing, syntax feedback (pure) │
- │            ├─ completion core                 │
- │            └─ graph effects ──► JS shim ──────┼──┐
- └───────────────────────────────────────────────┘  │ native messaging
-                                                    ▼
-                                   native host (ge, on-disk graph)
-```
-
-- Parsing and syntax feedback run entirely in WebAssembly: instant, no
-  graph data needed.
-- Graph reads and writes go through the same effect interfaces as native
-  `ge` (`GraphMetadataEditing` and friends). The wasm build interprets them
-  by calling JavaScript, which talks to a native messaging host.
-- GHC's wasm backend can import async JavaScript functions; the calling
-  Haskell thread blocks until the promise resolves, so interpreters keep
-  the same shape as the native ones.
-- The planned SQLite + operation log storage could later replace the native
-  host with an in-browser store (SQLite on OPFS) without changing the
-  effect interfaces.
-- The same effect interfaces are the seam for the storage rewrite: the
-  node files are to be replaced by a database (a triple store with an
-  operation log), used through `Graph.GraphEditing`,
-  `Graph.GraphMetadataEditing` and their siblings, at least at first. So
-  the effects and the logic on them must not depend on `DAL.*`, the file
-  system or the node-file format (item 4).
-
-## Current blockers
-
-The target modules are mostly pure, but their imports reach storage,
-`haskeline`, HTTP and PCRE. Four entry points accounted for every chain
-when traced on 2026-10-17; three are fixed (items 1, 2 and 4), the fourth
-for what needs no graph (item 5), and PCRE (item 3) is what the graph logic
-still reaches. What needs no graph builds for WebAssembly (item 8).
-
-| Entry point | What it drags in | Example chain |
-| --- | --- | --- |
-| ~~`Utils.Testing` (co-located tests)~~ fixed: item 1 | storage layer, `Error.UserError` (HTTP, `haskeline`), macOS file coordination | `Models.Path.Parse` → `Utils.Testing` → `DAL.Serialization` → `DAL.DirectoryFormat` → `DAL.RawGraph` |
-| `MyPrelude` re-exports | ~~`haskeline` via `MyPrelude.Effect` (only to detect its Ctrl-C exception)~~ fixed: item 2; PCRE via `MyPrelude.Regex` | `Models.Path.Parse` → `MyPrelude` → `MyPrelude.Effect` |
-| ~~Effects defined beside their file-backed interpreter~~ fixed: item 4 | `DAL.FileSystemOperations.*`, `DAL.Interpreters` | `Graph.PathPattern.Resolve` → `Graph.GraphMetadataEditing` → `MetadataWriteDiff` → `DAL.Interpreters` |
-| ~~`Error.UserError` carrying native types~~ fixed: item 4 | HTTP (`http-conduit`, `network`), macOS file coordination, `haskeline` via `Error.Interrupt` | `Graph.PathPattern.Execution` → `Error.UserError` → `Network.HTTP.Conduit` |
-| `Effect.IOWrapper.*` effects beside their IO interpreters (not on the path of the graph logic) | HTTP, `typed-process`, `System.Posix`, `directory-tree` | `Graph.Command` → `Effect.IOWrapper.Web` → `Network.Wreq`; `Graph.Import.ByteString` → `Effect.IOWrapper.Web` |
-| ~~Completion tied to the REPL~~ fixed for what needs no graph: item 5 | `haskeline` completion type, `forkIO` / `threadDelay`, full app interpreters | `Executable.GraphEditor.Completion` (89 local modules before; the adapter now) |
-
-Local modules reached from each entry point, counting itself (2026-10-17,
-after items 1, 2 and 4; after items 1 and 2 in brackets):
-
-- `Models.PathPattern.Match`: 29 (29); reaches no `haskeline` or `DAL.*`,
-  only PCRE through `MyPrelude.Regex`.
-- `Models.Path.Parse`: 35 (35); the same: only PCRE.
-- `Graph.GraphEditing`: 31 (51), `Graph.GraphMetadataEditing`: 29 (47),
-  `Graph.PathPattern.Resolve`: 36 (53) and `Graph.PathPattern.Execution`:
-  54 (66). None reaches `DAL.*`, `System.Directory`, `System.FilePath`,
-  file coordination, `haskeline`, `network`/`http-conduit`/`wreq`,
-  `typed-process` or `System.Posix`; what is left of the native libraries
-  is PCRE (item 3). They do reach the test libraries through
-  `Utils.Testing` (see "Decision: co-located tests") and `random`.
-- 24 non-Spec modules under `src/` import `Utils.Testing`; it reaches
-  29 local modules and none of storage, `haskeline` or file coordination.
-- `Models.Completion`: 42 and `Utils.Parsing.Problems`: 38 (43 together,
-  with the command parser for the names of commands and for the errors of
-  a command line; item 5); the same: only PCRE.
-
-## Decision: co-located tests
-
-**Decided:** keep tests co-located and split `Utils.Testing` by weight,
-with no conditional compilation. Add CPP only if the test libraries fail to
-build for WebAssembly.
-
-The storage chain came from two of `Utils.Testing`'s exports:
-`withTempGraph` and `withEmptyTempGraph` (which use `initializeGraph`,
-`directory-tree` and `copyFile`). `representedByJson`, once listed here,
-only needs aeson and stays in `Utils.Testing`. Outside
-`*Spec.hs` files, only `Executable.GraphEditor` and
-`Executable.GraphEditor.Completion` use them, and both stay native-only.
-Moving those helpers to a new `Utils.Testing.TempGraph` cuts the chain from
-every target module. There is precedent: `Utils.Testing.External` already
-splits off light helpers so `MyPrelude` modules avoid cyclic imports.
-
-| | Split `Utils.Testing` only | CPP-gated tests | Move tests out |
-| --- | --- | --- | --- |
-| Tests stay next to code | yes | yes | no |
-| Edits | `Utils.Testing` + 2 modules + Spec files using the helpers | `#if` around imports, test bodies and export-list entries in ~24 modules | every module with tests |
-| Test libraries in the wasm build | tasty, hspec, QuickCheck, tasty-golden must compile for wasm | no | no |
-| ormolu | unaffected | limited CPP support; gated regions may go unformatted | unaffected |
-| Generated `Spec.hs` (tasty-discover, in `src/`) | unchanged | must be excluded from the wasm build | moves with the tests |
-| Risk of rot | none | the gated-off configuration only builds for wasm; CI must build both | none |
-
-Splitting first is a small refactor with no lasting cost, and it may be all
-that is needed. If tasty-golden or another test dependency won't compile
-for wasm32-wasi, one flag (`-DWASM`, from a cabal flag) gates the test
-code. Golden tests read files and wouldn't run under WebAssembly anyway.
-
-Verified 2026-10-17: the test libraries (tasty, hspec, QuickCheck,
-tasty-golden, tasty-hunit) build and run under wasm, and the linker drops
-unused test code entirely (a reactor built from a module with co-located
-tests is the same size as one without them). No CPP is needed. Only the
-generated `src/Spec.hs` must stay out of the wasm build: tasty-discover runs
-as a native preprocessor.
-
-## Work items
-
-Ordered so each step lands independently and keeps native `ge` green.
-
-1. [x] Split `Utils.Testing`: move `withTempGraph` and
-   `withEmptyTempGraph` to `Utils.Testing.TempGraph`.
-2. [x] Move the `haskeline` interrupt check out of `MyPrelude.Effect`: it,
-   `isInterrupt`, `EndedBySignal` and `fromException`/`fromExceptionVia`
-   are now in `Error.Interrupt`, outside `MyPrelude`.
-   Only four native-side modules use them. A predicate supplied by the
-   REPL would have to reach `fromExceptionVia` in every interpreter that
-   catches exceptions, since haskeline throws Ctrl-C at the thread
-   wherever it is; the wasm interpreters will need their own catching
-   helper or a haskeline-free variant if they use these.
-3. [x] Regex for wasm, decided 2026-10-17: cross-compile PCRE 8.45 for
-   wasm32-wasi and keep `pcre-light` / `lens-regex-pcre` and
-   `MyPrelude.Regex` unchanged. Behaviour is identical to native (13
-   checks, quasiquoters included). The build needs both `libpcre.a` and a
-   `libpcre.so` (see Toolchain), set up in item 8.
-4. [x] Separate effect definitions from interpreters. Also a prerequisite
-   for the storage rewrite (a triple store replacing the node files),
-   which is to interpret the same effects. Now:
-   - Effects, with only their in-memory interpreters:
-     `Graph.GraphMetadataEditing`, `Graph.GraphDataEditing`,
-     `Graph.GraphEditing` (and `Graph.Dualizeable`); the error and warning
-     types they use, `Error.UserError` and `Error.Warn`.
-   - Node-file interpreters, which import the effects:
-     `DAL.Interpreters.GraphMetadataEditing` (the transactional cache,
-     damage checks), `DAL.Interpreters.GraphDataEditing`,
-     `DAL.Interpreters.GraphEditing`, over the storage effects in
-     `DAL.FileSystemOperations.*` (moved unchanged; their specs with them).
-   - `Error.UserError` no longer imports HTTP, file coordination or
-     `haskeline`: `NSErrorException` moved to `Error.FileCoordination` (a
-     plain record, re-exported by `System.FileCoordination`); `WebError`
-     keeps the HTTP exception as a `SomeException` (shown the same); the
-     catching of IO exceptions (`embedCatchingErrors` and friends) moved to
-     `Error.Catching`; `notingWhatInterruptLeaves` moved from `Error.Warn`
-     to `Error.Interrupt`. Messages are unchanged.
-   - Not split: the `Effect.IOWrapper.*` effects (web, editor, file
-     system, image display, file types) still sit beside their IO
-     interpreters. The graph logic doesn't reach them; `Graph.Command` and
-     `Graph.Import.*` do, so they matter if the extension calls the command
-     language.
-5. [x] Give completion and syntax feedback a pure core, for what needs no
-   graph (rescoped 2026-10-17): `Models.Completion` and
-   `Utils.Parsing.Problems` (see [The typed API](#the-typed-api)).
-   `Executable.GraphEditor.Completion` is now an adapter: it gives the core
-   lookups that read the graph on disk and turns its completions into
-   haskeline's. The refactor itself left the REPL's behaviour unchanged;
-   the follow-ups after it changed it on purpose: an id completes with one
-   `@`, no space follows the `/` candidate, TAB where a command begins (an
-   empty line, a line's first word, after `;`, `{` or `at` and its path)
-   offers the names of commands instead of labels, a `%` that starts a
-   term offers the names of directives, and `:q`/`:quit` quit with spaces
-   around them (completing `:quit` leaves one after it).
-6. [ ] Re-run the import trace (done for the graph effects and the path
-   logic after item 4, see above); target modules should reach none of
-   `haskeline`, `network`/`wreq`, `typed-process`, `System.Posix`, `DAL.*`.
-7. [x] Toolchain: upgrade to LTS 24.63 (GHC 9.10.3, the same compiler as
-   the wasm 9.10 flavour) and drop `effectful-plugin` (see Toolchain).
-   - Without the plugin, effect types it inferred are written out: 168
-     type applications in 21 modules (116 of them `@Text` on the
-     `GraphMetadataEditing'` operations in
-     `DAL.Interpreters.GraphEditingSpec`), and `AllowAmbiguousTypes` in
-     the 5 modules whose definitions mention a type only in a constraint
-     (`Graph.GraphMetadataEditing`, `Graph.GraphDataEditing`,
-     `Graph.Dualizeable`, `Error.Interrupt`, `MyPrelude.EarlyReturn`).
-   - `conduit-extra`, `html-conduit` and `xml-conduit` were removed: nothing
-     used them.
-   - The upgrade: the generic error helpers (`mapError`, `untry`,
-     `withEarlyReturn`, `fromExceptionVia`) throw with effectful 2.6's
-     `throwError_`, which needs no `Show` and behaves as `throwError` did;
-     `Utils.Testing` hides QuickCheck 2.15's new `Witness`, `witness` and
-     `witnesses`, which clashed with `Models.PathPattern.Match`'s; the
-     uncaught-exception message shows the exception without the backtrace
-     GHC 9.10 adds to `displayException`. aeson 2.2 words its parse errors
-     differently, and an unparsable node file is reported in its words
-     (`Unexpected "not json", expecting record key literal or }` where it
-     said `Error in $: object key > 34: Failed reading: satisfy`); the
-     golden files say so. `extra-deps`: `vary` and `megaparsec` are in the
-     snapshot now; `ixset-typed` is not, so it is pinned (0.5.1.1); the
-     haskeline and prettyprinter forks and `inline-c-objc` stay.
-8. [x] Add a wasm build (cabal project with ghc-wasm-meta); build the pure
-   modules first. Done for parsing, syntax feedback and completion without
-   a graph: see [The wasm build](#the-wasm-build).
-9. [ ] JS-backed interpreters for the graph effects + native messaging
-   host.
-10. [ ] Extension integration: load the wasm module, expose parse /
-    complete / query to the UI.
-
-## The typed API
-
-What the first proof of concept in the extension calls (item 5). All of
-it is pure and reaches none of `haskeline`, `DAL.*`, HTTP, processes,
-`System.Posix` or the macOS bindings; PCRE only through `MyPrelude.Regex`
-(item 3).
-
-Offsets (`Completions.replaced`, `SyntaxProblem.start` and `end`) count
-code points, as `Text` does. The wasm export layer (item 8) converts them
-to UTF-16 code units for JavaScript, whose strings are indexed by those
-(decided 2026-10-17).
-
-Parsing and syntax feedback:
-
-- `Models.Path.Parse.parsePath :: Text -> Either ParseErrorBundle'
-  ParsedPath`: a whole path, directives kept, as commands take it. The path
-  quasiquoter and `Models.PathPattern.Suggest.parseSurfacePath` use it.
-- `Utils.Parsing.Problems.syntaxProblems :: ParseErrorBundle' -> NonEmpty
-  SyntaxProblem`, with `SyntaxProblem {start, end :: Int, message ::
-  Text}`: where each problem is (offsets in code points, end exclusive;
-  custom errors use their source range) and the parser's message for it,
-  as `errorBundlePretty` words it. It takes the errors of any parser that
-  returns a `ParseErrorBundle'`: `parsePath`, or
-  `Models.Command.Parse.parseCommandLine :: Text -> Either
-  ParseErrorBundle' Command` for a whole command line (what
-  `parseCommand` parses with, the REPL's and `ge -e`'s parser).
-
-Completion (`Models.Completion`):
-
-- `complete :: Monad m => CompletionLookups m -> Text -> m Completions`:
-  given the text before the cursor, `Completions {replaced :: Int,
-  candidates :: [Candidate]}`, where each `Candidate {text :: Text,
-  finished :: Bool}` replaces the last `replaced` characters (a caller may
-  add a space after the only candidate that is finished).
-  `completeCommandLine` takes the names of the commands as well, for a
-  command line with more of them (the REPL adds `:q` and `:quit`).
-- `CompletionLookups m {nodesWithPrefix :: Text -> m [NID], labelsAfter ::
-  Path -> m [Text]}` is what completion needs from a graph; `withoutGraph`
-  has none of it, and `completeWithoutGraph = runIdentity . complete
-  withoutGraph`.
-- Without a graph it offers:
-  - the names of commands where a command begins: at the start, after a
-    `;` or `{`, or after `at` and its path (`Models.Command.Parse.
-    startsCommand`, which reads the text with the command parser).
-    Finished. The names are `commandNames`, from `commandSyntaxes`, the
-    table of each command's names and the parser of what follows them,
-    which `pCommandTerm` is made of.
-  - the names after a `%` that starts a term (`%last`, `%never`,
-    `%history(`, `%targets(`, `%override(`): where a label typed instead
-    would be a label of its own, as path completion reads the text. So
-    none in a label, a quote, a regex, a URL or a path with a directive
-    (a directive's arguments included). The names are `Models.Path.Parse.
-    percentNames`, from `namedDirectives`, the table that `pDirective`
-    parses them with, and `%never`. A directive that takes arguments comes
-    with its `(`. Not finished: a `/` or the arguments follow. `%{`
-    (splices) is not offered: commands refuse it.
-  - the `/` after a term that is not a label (`(a & b)`, `@`), not
-    finished;
-  - nothing for a path with a directive, one that does not parse or one
-    that no command runs (`checkCopies`). It also says which word a graph
-    would complete (`replaced`).
-- An id is completed with its `@`, which replaces the typed one: `@0`
-  completes to `@000000000001`.
-- A label is offered as a path writes it (`Models.Path.Parse.
-  renderLabel`, which `renderSurfacePath` and `ls` use too): as it is when
-  it is a plain word (`isPlainLabel`), otherwise between double quotes
-  with escapes that the parser reads back (`quoteLabel`: `"`, `\`,
-  newline, tab and carriage return escaped by name, other characters that
-  aren't printable by their decimal code; printable ones, an emoji
-  included, as they are). When a prefix is typed and one of the labels
-  that begin with it has to be quoted, all are, so that the candidates
-  share a prefix: haskeline puts what they share in place of the word, and
-  `ls hel` with `hello world` and `help` becomes `ls "hel`, not `ls `.
-- In a quote that is not closed, the label typed so far (read as the
-  parser reads a quoted label) is completed, quoted and closed: `ls "he`
-  offers `"hello world"`, and `replaced` covers the opening quote too.
-  Nothing for an escape that is not finished (`ls "a\`) or a quote that
-  does not start a label (`ls x"a`). A label whose quote is closed is
-  finished: `/` is offered after it.
-- In a group that is not closed: each side of it, after its last `&`,
-  `|`, `+` or `++`, starts where the group does, so the label typed there
-  continues the path that leads to the group (`ls a/(x | b` and `ls a/(b`
-  offer the labels after `a` that begin with `b`; `ls (x & a/` those after
-  `a`). The argument goes on to the closing parenthesis, so a space does
-  not start a new path: after a finished label, which only an operator
-  can follow (`ls (a `, two paths side by side do not parse), `/` is
-  offered, as after any finished term. Nothing for a group opened where a
-  term cannot start (`ls x(a`), a reversed group (`ls ~(a/`; what it
-  continues runs the other way) or a directive's arguments. What is in a
-  quote, a regex or a URL is not read as an operator or a parenthesis
-  (`Models.LegacyPartialPath.pathEndBefore`).
-
-A graph-aware layer plugs in by giving `CompletionLookups`: the REPL's
-(`graphLookups` in `Executable.GraphEditor.Completion`) globs the node
-files for ids and runs `Graph.PathPattern.Execution.completionTransitions`
-under the app interpreters for labels. A wasm build would give lookups
-that ask the native messaging host, or run `completionTransitions` over
-JS-backed `PathReading` interpreters, now that item 4 has separated the
-effects from the storage. The order of what is tried (an id after `@`, then the
-path) stays in the core either way.
-
-The two bugs found while doing item 5 are fixed: the doubled `@` of a
-completed id, and the space that haskeline added after the `/` candidate.
-
-Labels that have to be quoted are offered quoted, and a label in an open
-quote is completed (see above).
-
-## The wasm build
-
-`cli/wasm/` builds a WebAssembly reactor of `parsePath`,
-`syntaxProblems` and `completeWithoutGraph`, with an export layer for
-JavaScript (item 8). From a clean checkout, with ghc-wasm-meta's 9.10
-flavour installed (`~/.ghc-wasm`, or `wasm32-wasi-ghc` on `PATH`):
-
-```
-cli/wasm/build.sh        # [--no-test]; [--freeze] after changing the LTS
-```
-
-It writes `cli/wasm/dist/web/`: `graph.wasm`, `ghc_wasm_jsffi.js` (the
-glue GHC's post-linker generates) and `graph.mjs` (the loader), then runs
-the node tests (`cli/wasm/test/graph.test.mjs`). `dist/` and
-`dist-newstyle/` are ignored by git.
-
-Layout:
-
-- `graph-wasm.cabal`: one executable, a reactor (`-no-hs-main
-  -optl-mexec-model=reactor`, exports named with `-optl-Wl,--export=`),
-  whose sources are `wasm/src` (only `Main`, the JSFFI exports) and the
-  native library's `../src`, so no source is copied. Its generated block
-  is written by `sync-cabal.py`, which `build.sh` runs: the extensions,
-  `ghc-options` and `cpp-options` from `package.yaml`, and the modules that
-  `wasm/src` imports, transitively (read from the import lines; an import
-  no source directory has is a package's). A new import in the closure
-  updates the list on the next build (commit the change); `--check` only
-  reports. `build-depends` is by hand: a package missing there fails the
-  build by name.
-- Versions: `cabal.project.freeze`, generated by `build.sh --freeze` from
-  Stackage's `cabal.config` for `stack.yaml`'s resolver, the Hackage
-  extra-deps of `stack.yaml` (`ixset-typed`) and an `index-state`.
-  `build.sh` refuses to build when the freeze names another resolver than
-  `stack.yaml`. `allow-newer: all`, as `stack.yaml` has. The git forks in
-  `stack.yaml` (haskeline, prettyprinter-ansi-terminal) are not used by
-  the wasm build.
-- PCRE: `build.sh` downloads PCRE 8.45 from SourceForge, checks its
-  SHA-256, builds the library alone (`pcretest` needs `setrlimit`, which
-  WASI lacks) into `dist/pcre/prefix`, links `libpcre.so` from it (see
-  Toolchain), and writes `dist/pcre.project`, which `cabal.project`
-  imports, pointing `pcre-light` at it.
-- `Wasm.Api` (in `src/`, the native library): the export layer's logic,
-  as JSON text, so the native tests cover it; `wasm/src/Main.hs` only
-  converts strings and catches exceptions.
-
-The export API, as `graph.mjs` gives it:
+`build.sh` writes `wasm/dist/web/`: `graph.wasm`, `ghc_wasm_jsffi.js` (the
+glue GHC's post-linker generates) and `graph.mjs`, the loader. Ship all
+three together.
 
 ```js
 import { load } from "./graph.mjs";
-const graph = await load({ wasm, wasi }); // bytes, Module or Response;
-                                          // a WASI with args: ["graph"]
+const graph = await load({ wasm, wasi });
 graph.parsePath("a/)");
 // {ok: false, problems: [{start: 2, end: 3,
-//   message: "unexpected ')'\nexpecting ..."}]}; {ok: true} if it parses
+//   message: "unexpected ')'\nexpecting ..."}]}
+graph.parsePath("a/b"); // {ok: true}
 graph.complete("ls %la");
 // {replaced: 3, candidates: [{text: "%last", finished: false}]}
 ```
 
-- Offsets are in UTF-16 code units (decided 2026-10-17): the core counts
-  code points, and `Wasm.Api` converts every `start`, `end` and
-  `replaced` it returns, so `text.slice(start, end)` is a problem's
-  stretch and `before.slice(0, before.length - replaced) + candidate.text`
-  takes a candidate. An emoji is not a label character (a label with one
-  is quoted); a letter outside the Basic Multilingual Plane is.
-  `completionsWith` takes lookups, for a graph-aware layer (item 9); its
-  tests cut the text as JavaScript does, by UTF-16 code units, for quoted
-  candidates with an emoji or such a letter in them.
-- The wasm exports are synchronous (`"parsePath sync"`), returning JSON
-  text that `graph.mjs` parses. A synchronous export cannot pass on a
-  Haskell exception, so `Main` returns `{"error": message}` and
-  `graph.mjs` throws it as an `Error`.
-- `wasi` is node's `node:wasi` in the tests; a browser needs a WASI shim
-  such as `@bjorn3/browser_wasi_shim` (item 10).
+- `wasm` is the bytes of `graph.wasm`, a compiled `WebAssembly.Module`,
+  or a `Response` from `fetch` (compiled while it streams).
+- `wasi` is a WASI preview 1 implementation with `wasiImport` and
+  `initialize(instance)`: `node:wasi` in the tests, a shim such as
+  `@bjorn3/browser_wasi_shim` in a browser. Give it a non-empty `args`
+  (the tests use `["graph"]`): with none, the runtime exits while it
+  initialises, and node reports only `Symbol(kExitCode)`.
+- `parsePath(text)` gives `{ok: true}`, or `{ok: false, problems}` where
+  each problem is `{start, end, message}`: `text.slice(start, end)` is
+  what it is about (empty for a place, such as the end of the text), and
+  `message` is the parser's, as `errorBundlePretty` words it.
+- `complete(before)` takes the text of the command line before the cursor
+  and gives `{replaced, candidates: [{text, finished}]}`. Each candidate
+  replaces the last `replaced` units of `before`:
+  `before.slice(0, before.length - replaced) + candidate.text`. A caller
+  may add a space after the only candidate that is `finished`.
+- Offsets and lengths count UTF-16 code units, as JavaScript strings do.
+  The Haskell core counts code points; `Wasm.Api` converts.
+- The exports are synchronous: they return JSON text, which `graph.mjs`
+  parses. A synchronous export cannot pass on a Haskell exception, so
+  `Main` returns `{"error": message}` and `graph.mjs` throws it as an
+  `Error` (`graph.wasm parsePath: …`).
 
-Size (2026-10-17): `graph.wasm` is 7.4 MB as linked, 3.7 MB after
-`wasm-opt -Oz`, 0.92 MB gzipped (`gzip -9`). Build time: 4 minutes from
-a clean checkout and an empty cabal store (130 packages, PCRE and the
-Hackage index included; an 18-core M5 Max); about 5 seconds after
-editing a module.
+## The Haskell API underneath
 
-## Toolchain
+All pure, and all in the native library, so the native tests cover it.
 
-Tested 2026-10-17 with ghc-wasm-meta (commit `8079eb96`, installed by its
-`setup.sh` into `~/.ghc-wasm`, no nix), by building, not from docs. The test
-projects and logs are in `cli/tmp/wasm-feasibility/` (not committed).
+Parsing and syntax feedback:
 
-- **GHC 9.10.3 is enough.** Template Haskell works under the wasm backend
-  on the 9.10, 9.12 and 9.14 flavours (9.10's is a backport in the
-  haskell-wasm fork; upstream has it from 9.12). The project's own TH works
-  on 9.10: `makeEffect`, `[re|…|]` (PCRE at compile time) and the
-  `[path|…|]` splices in `Models.PathPattern.Suggest`. On aarch64-darwin
-  only 9.10, 9.12 and 9.14 have bindists; 9.6/9.8 stopped updating in
-  2025-02.
-- **Native target: LTS 24.63 (GHC 9.10.3)**, in use since item 7, so
-  native and wasm builds share package versions; importing Stackage's
-  `cabal.config` as constraints works in the wasm cabal project. No LTS
-  ships 9.12 yet. LTS 24's effectful 2.6 makes `throwError` need `Show e`
-  (4 errors in `MyPrelude.Effect` / `MyPrelude.EarlyReturn`);
-  `effectful-th` needs 1.0.0.4 or newer (LTS 24.63 has it).
-- **No compiler plugins.** Every wasm GHC fails with `Plugins require
-  -fno-external-interpreter`, and the cross compiler always uses the
-  external interpreter. `effectful-plugin` is dropped everywhere (item 7)
-  so native and wasm type-check the same code. Without it, 3 of 63 trial
-  modules needed type applications (`MyPrelude.EarlyReturn`,
-  `Graph.FreshNID`, `MyPrelude.Effect.fromException`); the whole project
-  needed 168, most of them in one spec (see item 7).
-- **Dependencies:** everything the wasm modules need builds. Fail:
-  `terminal-size` (no `struct winsize`; used by `Graph.Command`),
-  `network` (no `getaddrinfo`) and what needs it (`http-conduit`, `wreq`):
-  all native-only. `conduit-extra`, `html-conduit` and `xml-conduit` are
-  unused by the project. `effectful-plugin` builds but can't be loaded.
-- **PCRE:** cross-compile 8.45 with
-  `configure --host=wasm32-wasi --disable-shared --enable-static
-  --disable-cpp --enable-utf --enable-unicode-properties CFLAGS="-O2
-  -mcpu=lime1 -fPIC"`, then link a `libpcre.so` from the `.a` with
-  `wasm32-wasi-clang -shared -fPIC -Wl,--experimental-pic
-  -Wl,--whole-archive`. Build only `libpcre.la`: `pcretest` doesn't
-  compile for WASI (`setrlimit`). Point `extra-include-dirs` / `extra-lib-dirs` for
-  `pcre-light` at it in `cabal.project`. Without the `.so`, the
-  compile-time loader fails (`loadArchive: unsupported on wasm`) and **GHC
-  hangs instead of exiting**. Build the `.so` before `pcre-light`.
-  Alternatives checked: `regex-pcre-builtin` (same engine, bundled C, but
-  `MyPrelude.Regex` rewritten), `pcre2` (fails: JIT, `mmap`),
-  `regex-tdfa` (no lookaround, backreferences, `(*UTF8)` or `(?m)`;
-  characters not bytes; multiline by default).
-- **Runtime:** single-threaded, one capability. `forkIO`, `timeout`,
-  `killThread` and `pooledForConcurrentlyN` work, concurrently but not in
-  parallel. `-threaded` / `-with-rtsopts=-N` must not reach wasm
-  executables (link failure).
-- **Async JavaScript imports work on 9.10:** an awaited import blocks only
-  the calling Haskell thread, `killThread` interrupts a thread waiting on a
-  promise, and exported Haskell functions return promises. With node's
-  WASI, `args: []` makes the runtime exit during initialisation (an opaque
-  `Symbol(kExitCode)`); pass `args: ["prog"]`.
-- **Build cost:** the full dependency set takes about 20 minutes the first
-  time; compile-time splices run in node.
-- ghc-wasm-meta builds with `wasm32-wasi-cabal`, not stack, so the wasm
-  build needs its own cabal project and freeze file.
+- `Models.Path.Parse.parsePath :: Text -> Either ParseErrorBundle'
+  ParsedPath`: a whole path, directives kept, as commands take it.
+- `Models.Command.Parse.parseCommandLine :: Text -> Either
+  ParseErrorBundle' Command`: a whole command line, as the REPL and
+  `ge -e` parse it.
+- `Utils.Parsing.Problems.syntaxProblems :: ParseErrorBundle' -> NonEmpty
+  SyntaxProblem`, `SyntaxProblem {start, end :: Int, message :: Text}`:
+  the problems of either parser's errors, offsets in code points, `end`
+  exclusive; a custom error uses its source range.
 
-## Open questions
+Completion (`Models.Completion`):
 
-- Does the extension need to work without a native `ge` installed? If so,
-  the in-browser store needs to come sooner.
-  - no: the native messenger can be assumed
-- Which API does the extension call: the command language, or a narrower
-  typed API (resolve path, list children, suggest)?
-  - a narrow typed API, but made of generic helpers that the command
-    language (the REPL, its completion) uses too, not a second
-    implementation of parts of it. The first proof of concept does path
-    parsing, syntax feedback and the completion that needs no graph;
-    completion from graph data waits for the native messaging host.
-- Do the test libraries compile for wasm32-wasi?
-  - yes, and they run (see "Decision: co-located tests").
+- `complete :: Monad m => CompletionLookups m -> Text -> m Completions`,
+  with `Completions {replaced :: Int, candidates :: [Candidate]}` and
+  `Candidate {text :: Text, finished :: Bool}`; `replaced` in code points.
+  `completeCommandLine` takes the names of the commands too (the REPL adds
+  `:q` and `:quit`).
+- `CompletionLookups m {nodesWithPrefix :: Text -> m [NID], labelsAfter
+  :: Path -> m [Text]}` is all completion asks of a graph. `withoutGraph`
+  has nothing, and `completeWithoutGraph = runIdentity . complete
+  withoutGraph`. What to try in which order (a command name, an id after
+  `@`, a `%` name, then the path) stays in the core whatever the lookups.
+- `Wasm.Api`: `pathProblems` and `completions` are the above with UTF-16
+  offsets; `completionsWith` takes lookups, for a graph-aware layer;
+  `parsePathJson` and `completeJson` are what `Main` exports.
 
-## Progress log
+A graph-aware layer plugs in by giving `CompletionLookups`. The REPL's are
+`graphLookups` in `Executable.GraphEditor.Completion`: it globs the node
+files for ids and runs `Graph.PathPattern.Execution.completionTransitions`
+(over `PathReading`, i.e. `GraphMetadataReading`) for labels. The effects
+(`Graph.GraphMetadataEditing`, `Graph.GraphDataEditing`,
+`Graph.GraphEditing`) are defined apart from their storage interpreters
+(`DAL.Interpreters.*`) and come with in-memory ones only, so a wasm build
+can interpret them by calling JavaScript and run the same graph logic.
 
-| Date | Change |
-| --- | --- |
-| 2026-10-17 | Traced blockers; chose hybrid architecture; proposed splitting `Utils.Testing` over CPP-gated tests. |
-| 2026-10-17 | Items 1 and 2: `Utils.Testing.TempGraph` split off; interrupt predicates moved to `Error.Interrupt`. `Models.Path.Parse` and `Models.PathPattern.Match` now reach neither `haskeline` nor `DAL.*`; PCRE is what remains. |
-| 2026-10-17 | Item 4: node-file interpreters moved to `DAL.Interpreters.*`; `Error.UserError` and `Error.Warn` freed of HTTP, file coordination and `haskeline`. `Graph.PathPattern.Execution` reaches 54 modules (66), `Graph.GraphEditing` 31 (51), none of storage or the native libraries but PCRE. |
-| 2026-10-17 | Item 5, rescoped to what needs no graph: `parsePath`, `Utils.Parsing.Problems` (syntax feedback as data) and `Models.Completion` (completion over `CompletionLookups`); the REPL's completion is an adapter over it. The core reaches 41 local modules, only PCRE of the blockers. |
-| 2026-10-17 | Toolchain tested: GHC 9.10.3 is enough (TH, async JS imports); no compiler plugins; test libraries build and their unused code is dropped; PCRE cross-compiles. Decided: PCRE (item 3), LTS 24.63 and no `effectful-plugin` (item 7). |
-| 2026-10-17 | Item 7: `effectful-plugin` dropped (168 type applications, 5 modules allow ambiguous types); unused conduit packages removed; LTS 24.63 (GHC 9.10.3). Parse errors of node files are now aeson 2.2's wording. |
-| 2026-10-17 | Completion follow-ups: an id completes with one `@`; no space after the `/`; directive names and command names completed without a graph, from the tables their parsers are made of (`namedDirectives`, `commandSyntaxes`); the REPL's `:q`/`:quit` too. The core reaches 43 local modules (`Models.Command`, `Models.Command.Parse` added), still only PCRE of the blockers. |
-| 2026-10-17 | Review fixes: a `%` in a quote, regex or URL is offered no names; `syntaxProblems` takes both ends of a custom error from its range (`mk %{foo}` is (3,9), was (9,9)); `parseCommandLine` gives the command parser's errors as a bundle; the REPL completion's unused helpers and `completePath` removed; label quoting on completion noted as open; offsets documented as code points, UTF-16 at the wasm export. |
-| 2026-10-17 | Completion after a space: a whole path followed by a space (`mv a `, `mv a b `, a tab too) now starts the next path, which completes from the current node; it was read as the label being typed, so TAB took `mv x ` to `mv x xyz` (a bug older than the core: the REPL's `completePathHandling` read it the same way). Space after a `/` stays in the path (`mv a/ ` completes after `a`), as commands read it. |
-| 2026-10-17 | Item 8: `cli/wasm/` builds a reactor of path parsing, syntax feedback and completion without a graph, exported to JavaScript as JSON (`Wasm.Api`, `wasm/src/Main.hs`, `graph.mjs`), offsets in UTF-16 code units; modules and extensions generated from the imports and `package.yaml`, versions frozen from LTS 24.63, PCRE built by `build.sh`. 3.7 MB after `wasm-opt`, 0.92 MB gzipped. |
-| 2026-10-17 | Completion in an open group reads it as the path language does: its last side (after `&`, `\|`, `+` or `++`, all four now) continues the path to the group, and a space in it does not start a new path, so `ls (a ` offers `/` (it offered the labels of a new path, and before the fix for a space after a path the labels beginning with `a`). `takeRelevantFromEnd` replaced by `pathEndBefore`, which reads quotes, regexes and URLs whole: a `(`, `&` or `+` in them is no longer taken for an operator. |
-| 2026-10-17 | Completion quotes a label that is not a plain word, and all the candidates when one is quoted and a prefix is typed; completes a label in an open quote and closes it (`ls "he` to `ls "hello world"`); offers `/` after a closed quote (it offered labels after it). One rendering of labels, `renderLabel`/`quoteLabel` in `Models.Path.Parse`, for completion, `renderSurfacePath` and `ls`: printable characters as they are, escapes the parser reads back (`show` wrote `\&`, which it does not, and `ls` did not escape `"` or `\`). `Wasm.Api.completionsWith` takes lookups; its UTF-16 offsets checked for quoted candidates outside the BMP. |
+## Building and testing
+
+Install ghc-wasm-meta's 9.10 flavour (`FLAVOUR=9.10 setup.sh`, into
+`~/.ghc-wasm` or `$GHC_WASM_DIR`, or put `wasm32-wasi-ghc` on `PATH`). You
+also need python3, curl and node. Then:
+
+```
+cli/wasm/build.sh            # build into wasm/dist/web/, run node tests
+cli/wasm/build.sh --no-test  # skip the node tests
+cli/wasm/build.sh --freeze   # regenerate the freeze file first
+```
+
+- It refuses a `wasm32-wasi-ghc` that is not the native build's GHC
+  (9.10.3) and a freeze file made from another resolver than
+  `stack.yaml`'s.
+- It runs `sync-cabal.py`, builds with `wasm32-wasi-cabal`, post-links the
+  JS glue, runs `wasm-opt -Oz`, copies `js/graph.mjs`, prints the sizes and
+  runs `test/graph.test.mjs` under node (`GRAPH_WASM_DIR` points the tests
+  at another build).
+- `dist/` and `dist-newstyle/` are ignored by git. `wasm32-wasi-cabal`
+  keeps its own cabal store and index inside the ghc-wasm-meta install.
+- As a rough guide (2026-10-17, an 18-core M5 Max): 4 minutes from a clean
+  checkout and an empty store, about 5 seconds after editing a module.
+  `graph.wasm` is 7.4 MB as linked, 3.7 MB after `wasm-opt`, 0.9 MB
+  gzipped.
+
+Test the logic natively: `Wasm.Api` and the modules under it have
+co-located tests that `stack test` runs, including UTF-16 offsets for
+text outside the Basic Multilingual Plane. `test/graph.test.mjs` only
+checks the built module end to end.
+
+### The cabal file, the module list and the freeze file
+
+ghc-wasm-meta builds with cabal, not stack, so `cli/wasm/` is its own
+cabal project, `graph-wasm`: one executable built as a reactor
+(`-no-hs-main -optl-mexec-model=reactor`). Its sources are `wasm/src`
+(only `Main`, the JS FFI exports) and the native `../src`; nothing is
+copied.
+
+- The block between `BEGIN` and `END` in `graph-wasm.cabal` is generated
+  by `sync-cabal.py` (`build.sh` runs it): `default-extensions`,
+  `ghc-options` and `cpp-options` from `package.yaml`'s top-level lists,
+  and `other-modules`, the local modules `wasm/src` imports, transitively,
+  read from the import lines. A new import in the closure changes the list
+  on the next build; commit the change. `sync-cabal.py --check` only
+  reports.
+- `build-depends` is kept by hand. A missing package fails the build by
+  name.
+- A new export needs a `foreign export javascript` in `Main`, its name in
+  the `-optl-Wl,--export=` option, and a wrapper in `graph.mjs`.
+- `cabal.project.freeze` pins the versions to the Stackage snapshot that
+  `stack.yaml` uses. After changing the resolver, run `build.sh --freeze`:
+  it downloads the snapshot's `cabal.config`, adds `stack.yaml`'s Hackage
+  extra-deps (`ixset-typed`), and freezes through `freeze.project`.
+  `stack.yaml`'s git forks (haskeline, prettyprinter-ansi-terminal) are
+  not used by the wasm build. Like `stack.yaml`, `cabal.project` has
+  `allow-newer: all`.
+
+### PCRE
+
+`MyPrelude.Regex` uses `pcre-light` and `lens-regex-pcre`, so the module
+links PCRE 8.45, cross-compiled; it behaves as natively. `build.sh`
+downloads it, checks its SHA-256 and builds it once into `dist/pcre/`:
+
+- `configure --host=wasm32-wasi --disable-shared --enable-static
+  --disable-cpp --enable-utf --enable-unicode-properties`, with
+  `CFLAGS="-O2 -mcpu=lime1 -fPIC"`; only `libpcre.la`, since the test
+  programs need `setrlimit`, which WASI lacks.
+- Then a `libpcre.so` linked from the `.a` (`wasm32-wasi-clang -shared
+  -fPIC -Wl,--experimental-pic -Wl,--whole-archive`).
+- `dist/pcre.project`, which `cabal.project` imports, points `pcre-light`
+  at them.
+
+The `.so` is needed because GHC loads PCRE to run the `[re|…|]` splices at
+compile time. Without it the loader fails (`loadArchive: unsupported on
+wasm`) and **GHC hangs instead of exiting**. If a build hangs compiling a
+module with a regex quasiquoter, check for the `.so`.
+
+## Keeping the closure wasm-clean
+
+Everything `Main` imports, transitively, must build for wasm32-wasi. A
+module in the closure must not reach:
+
+- `haskeline` (the REPL; `Error.Interrupt` holds its Ctrl-C handling,
+  outside `MyPrelude`), `DAL.*` or the file system as storage,
+  `network`/`http-conduit`/`wreq`, `typed-process`, `System.Posix`, the
+  macOS bindings (file coordination, `inline-c-objc`), or `terminal-size`.
+  `network` and `terminal-size` don't compile for WASI; the others make no
+  sense in a browser.
+- Effects defined beside an IO interpreter. Define an effect with its
+  in-memory interpreter only and put the IO one in another module, as
+  `Graph.*` and `DAL.Interpreters.*` are split. The `Effect.IOWrapper.*`
+  effects are not split yet; `Graph.Command` and `Graph.Import.*` reach
+  them, so the command language as a whole is not wasm-clean.
+- `Utils.Testing.TempGraph` (temporary graphs on disk). Co-located tests
+  may stay: the test libraries build for wasm and the linker drops unused
+  test code, so `Utils.Testing` is fine. The generated `src/Spec.hs`
+  (tasty-discover, a native preprocessor) must stay out; nothing imports
+  it, so `sync-cabal.py` never lists it.
+
+The toolchain sets these rules too:
+
+- **No compiler plugins.** The wasm GHC always uses the external
+  interpreter, which can't load plugins (`Plugins require
+  -fno-external-interpreter`). `effectful-plugin` was dropped from the
+  native build too, so both type-check the same code; effect types it
+  inferred are written out with type applications. A later GHC (10.x)
+  may lift this.
+- **Single-threaded runtime.** One capability; `forkIO`, `timeout` and
+  `killThread` work, concurrently but not in parallel. `-threaded` and
+  `-with-rtsopts=-N` fail to link: keep them in the executables'
+  `ghc-options` in `package.yaml`, never the top-level list that
+  `sync-cabal.py` copies.
+- **Same GHC as native.** The native build is on LTS 24.63, GHC 9.10.3,
+  the compiler of ghc-wasm-meta's 9.10 flavour, so both use the same
+  package versions. Template Haskell works under it (`makeEffect`,
+  `[re|…|]`, the `[path|…|]` splices). Move both together: a new LTS needs
+  a ghc-wasm-meta flavour of its GHC, then `build.sh --freeze`.
+
+## Completion, as an integrator sees it
+
+The core and its tests (`spec_complete` in `Models.Completion`,
+`Models.LegacyPartialPath`) have the details. Without a graph, `complete`
+offers:
+
+- the names of commands where a command begins: an empty line, the first
+  word, after `;` or `{`, after `at` and its path (`startsCommand`).
+  Finished.
+- the names after a `%` that starts a term (`percentNames`): `%last`,
+  `%never`, and `%history(`, `%targets(`, `%override(` with their `(`. Not
+  finished. None in a label, a quote, a regex or a URL.
+- `/` after a term that is not a label (`@`, a closed group, a closed
+  quote).
+- nothing else: the labels and ids are the graph's. It still sets
+  `replaced` to the word a graph would complete.
+
+With lookups, ids complete with their `@` (`@0` to `@000000000001`), and
+labels continue the path before the cursor. A label is offered as a path
+writes it (`renderLabel`): a plain word as it is, anything else quoted
+(`quoteLabel`), and all candidates quoted when one is and a prefix is
+typed, so they share it. In an open quote the label is completed and
+closed (`ls "he` to `"hello world"`, `replaced` covering the quote). In an
+open group the last side continues the path that leads to the group
+(`ls a/(x | b` completes labels after `a`). A path with a directive, one
+that does not parse, or one no command runs gets nothing.
+
+## Future work
+
+- **Graph access from the extension** (item 9 in the archive). The
+  intended design is hybrid: parsing, syntax feedback and the completion
+  core run in wasm; graph reads and writes go through the same effects as
+  native `ge`, interpreted in wasm by calling JavaScript, which asks a
+  native messaging host that has the graph on disk. The host could be
+  `ge`, or the planned sync background service could double as it. GHC's
+  wasm backend imports async JavaScript functions: an awaited import
+  blocks only the calling Haskell thread, so these interpreters keep the
+  native ones' shape. An export that awaits must be asynchronous (it
+  returns a promise), unlike today's `sync` exports. Completion with a
+  graph is `completionsWith` over lookups that ask the host, or
+  `completionTransitions` over a JS-backed `GraphMetadataReading`. Later,
+  the planned SQLite and operation log storage could become an in-browser
+  store (SQLite on OPFS) behind the same effects, with no host.
+- **Extension integration** (item 10): load the module with a browser WASI
+  shim and expose parse, complete and, later, queries to the UI.
+- Completion of a path after `;` or inside `{…}` offers nothing: the path
+  reader (`pLastLegacyPartialPath`) reads one command. Command names are
+  offered there.
+- An emoji is not a label character (labels are `isAlphaNum` plus
+  `-._'`), so a label with one is quoted. By design for now.
