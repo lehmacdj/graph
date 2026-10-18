@@ -24,6 +24,7 @@ where
 
 import Control.Monad.State.Strict qualified as S
 import Data.Char (isAlpha, isSpace)
+import Data.Text qualified as T
 import Models.Command.Parse (commandNames, startsCommand)
 import Models.LegacyPartialPath
 import Models.NID
@@ -180,28 +181,62 @@ data PathSite
   = -- | Nothing can be completed: no path, one that does not parse, has a
     -- directive in it or is one that no command runs.
     NoPathSite
-  | -- | A term that is not a label, which only @/@ can follow.
+  | -- | A term that is finished, which only an operator can follow: one
+    -- that is not a label, or in a group a label followed by a space. Of
+    -- the operators @/@ is offered, which goes on along the path.
     AfterTerm
   | -- | A label that is typed after a path: labels that continue the path
     -- and begin with it.
     LabelAfter Path Text
   deriving stock (Eq, Show)
 
+-- | What is before the cursor, as 'pathEndBefore' reads it. Each side of
+-- a group starts where the group does, so it continues the path that
+-- leads to the group; a space in a group is in the path (the argument
+-- goes on to the closing parenthesis), so after a label it ends the label
+-- and not the argument. A group is opened where a term starts: at the
+-- start of an argument, after a @/@ or in another group.
 pathSiteBefore :: Text -> PathSite
-pathSiteBefore before =
-  case getLegacyPartialPath (pack relevant) of
-    Nothing -> NoPathSite
-    Just (MissingSlash _) -> AfterTerm
-    Just (LegacyPartialPath segments partial) ->
-      let p = case segments of
-            [] -> One
-            p0 : rest -> foldl' (:/) p0 rest
-       in -- a prefix that no command runs completes to nothing
-          case checkCopies p of
-            Right _ -> LabelAfter p (pack partial)
-            Left _ -> NoPathSite
+pathSiteBefore before = fromMaybe NoPathSite do
+  end <- pathEndBefore before
+  case unsnoc end.groups of
+    Nothing -> do
+      partial <- getLegacyPartialPath end.outside
+      site end.quoted [] partial False
+    Just (opened, current) -> do
+      guard (startsTerm end.outside)
+      LegacyPartialPath leading "" <- getLegacyPartialPath end.outside
+      inner <- for opened \g -> do
+        guard (startsTerm (T.stripEnd g))
+        LegacyPartialPath segments "" <- getGroupPartialPath g
+        pure segments
+      partial <- getGroupPartialPath current
+      site
+        end.quoted
+        (leading <> concat inner)
+        partial
+        (maybe False isSpace (lastMay current))
   where
-    relevant = takeRelevantFromEnd (reverse (unpack before))
+    -- the path before the label or term, the label or term, and whether
+    -- a space in a group finishes a label there; nothing in a quote that
+    -- is not closed
+    site quoted leading partial finished = case partial of
+      _ | isJust quoted -> Nothing
+      MissingSlash _ -> Just AfterTerm
+      LegacyPartialPath segments label
+        | finished && not (null label) -> Just AfterTerm
+        | otherwise -> labelAfter segments (pack label)
+      where
+        labelAfter segments typed =
+          let p = case leading <> segments of
+                [] -> One
+                p0 : rest -> foldl' (:/) p0 rest
+           in -- a prefix that no command runs completes to nothing
+              case checkCopies p of
+                Right _ -> Just (LabelAfter p typed)
+                Left _ -> Nothing
+    -- an argument starts after a space, a term after a /
+    startsTerm t = maybe True (\c -> isSpace c || c == '/') (lastMay t)
 
 spec_complete :: Spec
 spec_complete = do
@@ -250,6 +285,66 @@ spec_complete = do
     it "looks up the path before the label" $
       snd (completing [] "ls a/c")
         `shouldBe` ["labels " <> tshow (Literal "a" :: Path)]
+  describe "in an open group" do
+    -- the sides before the last &, |, + or ++ of the group start where
+    -- it does, as the last one does; the path before the group leads
+    -- there
+    offers "ls (ba" 2 ["bar", "baz"]
+    offers "ls (" 0 ["bar", "baz", "qux"]
+    offers "ls ( " 0 ["bar", "baz", "qux"]
+    offers "ls (a & ba" 2 ["bar", "baz"]
+    offers "ls (a & " 0 ["bar", "baz", "qux"]
+    offers "ls (a | ba" 2 ["bar", "baz"]
+    offers "ls (a ++ ba" 2 ["bar", "baz"]
+    offers "ls (a + ba" 2 ["bar", "baz"]
+    offers "ls (a/" 0 ["c"]
+    offers "ls (a / " 0 ["c"]
+    offers "ls (x & a/c" 1 ["c"]
+    offers "ls ((a/" 0 ["c"]
+    offers "ls (b & (q | a/" 0 ["c"]
+    offers "ls a/(" 0 ["c"]
+    offers "ls a/(x & " 0 ["c"]
+    offers "ls a/(x | (y & c" 1 ["c"]
+    offers "ls (a & b)/(x & (y | " 0 []
+    -- a group that starts an argument after another
+    offers "mv a (q" 1 ["qux"]
+    offers "mv a (b & q" 1 ["qux"]
+    -- a closed group before is part of the path
+    it "looks up the path through a closed group" $
+      snd (completing [] "ls (a & b)/(x | c")
+        `shouldBe` ["labels " <> tshow (Literal "a" :& Literal "b" :: Path)]
+    -- a space does not end the argument in a group: a finished label is
+    -- followed by an operator, of which / is offered as after any term
+    -- that is finished
+    it "offers / after a finished term" do
+      completeWithoutGraph "ls (a "
+        `shouldBe` Completions 0 [Candidate "/" False]
+      completeWithoutGraph "ls (x & a/b "
+        `shouldBe` Completions 0 [Candidate "/" False]
+      completeWithoutGraph "ls ((a & b) "
+        `shouldBe` Completions 0 [Candidate "/" False]
+    let nothingIn before = it (show before) do
+          let (completions, looked) = completing [] before
+          completions `shouldBe` noCompletions
+          looked `shouldBe` []
+    -- two paths side by side in a group, a group right after a label or
+    -- a reversed group
+    nothingIn "ls (a b"
+    nothingIn "ls (a b/"
+    nothingIn "ls x(a"
+    nothingIn "ls (x(a"
+    nothingIn "ls ~(a/"
+    -- a directive's arguments
+    nothingIn "ls %targets(a & b"
+    nothingIn "ls %override({plus = shared}, a & b"
+    -- what is in a quote or a regex is no operator or parenthesis
+    it "reads no operator in a quote or a regex" do
+      snd (completing [] "ls \"(x & y\"/b")
+        `shouldBe` ["labels " <> tshow (Literal "(x & y" :: Path)]
+      fst (completing [] "ls regex:'(' & ba")
+        `shouldBe` Completions 2 [Candidate t False | t <- ["bar", "baz"]]
+      fst (completing [] "ls regex:\"a(\" & (q")
+        `shouldBe` Completions 1 [Candidate "qux" False]
   describe "without a graph" do
     it "offers / after a term that is not a label" do
       completeWithoutGraph "ls (a & b)"
@@ -269,8 +364,10 @@ spec_complete = do
     nothing "ls %history(0)/"
     -- an incomplete id that no node has
     nothing "ls @x"
-    -- a quote that is not closed
+    -- a quote that is not closed, a regex that is not
     nothing "ls \"a b"
+    nothing "ls regex:\"a"
+    nothing "ls regex:'a"
     -- a prefix that no command runs: it would copy a meeting point
     nothing "ls (a & b)/(((c & y) | k)/@/e & d)/"
   describe "names of commands" do

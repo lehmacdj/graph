@@ -118,7 +118,10 @@ half a second, which includes a node file that cannot be read yet
 (another program is writing it, or it is not downloaded). The prompt is
 usable again after that half second, and Ctrl-C during it gives a new
 prompt at once, on which a line typed runs. Completion prints no
-warning.
+warning. In a group that is not closed the label continues the path to
+the group (`ls a/(x & b` offers the labels after `a`), and a space does
+not start a new path: after `ls (a ` only an operator can follow, and
+`/` is offered.
 
 ## 2. Queries
 

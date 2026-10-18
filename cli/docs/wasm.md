@@ -283,6 +283,18 @@ Completion (`Models.Completion`):
     would complete (`replaced`).
 - An id is completed with its `@`, which replaces the typed one: `@0`
   completes to `@000000000001`.
+- In a group that is not closed: each side of it, after its last `&`,
+  `|`, `+` or `++`, starts where the group does, so the label typed there
+  continues the path that leads to the group (`ls a/(x | b` and `ls a/(b`
+  offer the labels after `a` that begin with `b`; `ls (x & a/` those after
+  `a`). The argument goes on to the closing parenthesis, so a space does
+  not start a new path: after a finished label, which only an operator
+  can follow (`ls (a `, two paths side by side do not parse), `/` is
+  offered, as after any finished term. Nothing for a group opened where a
+  term cannot start (`ls x(a`), a reversed group (`ls ~(a/`; what it
+  continues runs the other way) or a directive's arguments. What is in a
+  quote, a regex or a URL is not read as an operator or a parenthesis
+  (`Models.LegacyPartialPath.pathEndBefore`).
 
 A graph-aware layer plugs in by giving `CompletionLookups`: the REPL's
 (`graphLookups` in `Executable.GraphEditor.Completion`) globs the node
@@ -468,3 +480,4 @@ projects and logs are in `cli/tmp/wasm-feasibility/` (not committed).
 | 2026-10-17 | Review fixes: a `%` in a quote, regex or URL is offered no names; `syntaxProblems` takes both ends of a custom error from its range (`mk %{foo}` is (3,9), was (9,9)); `parseCommandLine` gives the command parser's errors as a bundle; the REPL completion's unused helpers and `completePath` removed; label quoting on completion noted as open; offsets documented as code points, UTF-16 at the wasm export. |
 | 2026-10-17 | Completion after a space: a whole path followed by a space (`mv a `, `mv a b `, a tab too) now starts the next path, which completes from the current node; it was read as the label being typed, so TAB took `mv x ` to `mv x xyz` (a bug older than the core: the REPL's `completePathHandling` read it the same way). Space after a `/` stays in the path (`mv a/ ` completes after `a`), as commands read it. |
 | 2026-10-17 | Item 8: `cli/wasm/` builds a reactor of path parsing, syntax feedback and completion without a graph, exported to JavaScript as JSON (`Wasm.Api`, `wasm/src/Main.hs`, `graph.mjs`), offsets in UTF-16 code units; modules and extensions generated from the imports and `package.yaml`, versions frozen from LTS 24.63, PCRE built by `build.sh`. 3.7 MB after `wasm-opt`, 0.92 MB gzipped. |
+| 2026-10-17 | Completion in an open group reads it as the path language does: its last side (after `&`, `\|`, `+` or `++`, all four now) continues the path to the group, and a space in it does not start a new path, so `ls (a ` offers `/` (it offered the labels of a new path, and before the fix for a space after a path the labels beginning with `a`). `takeRelevantFromEnd` replaced by `pathEndBefore`, which reads quotes, regexes and URLs whole: a `(`, `&` or `+` in them is no longer taken for an operator. |

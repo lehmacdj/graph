@@ -1,14 +1,17 @@
 module Models.LegacyPartialPath
   ( getLegacyPartialPath,
-    takeRelevantFromEnd,
+    getGroupPartialPath,
+    PathEnd (..),
+    pathEndBefore,
     LegacyPartialPath (..),
-    test_takeRelevantFromEnd,
+    test_pathEndBefore,
     test_pLegacyPartialPath,
     test_getLegacyPartialPath,
   )
 where
 
-import Data.Char (isSpace)
+import Data.Char (isAlpha, isSpace)
+import Data.List.NonEmpty qualified as NE
 import Graph.SystemNodes (tagsNID)
 import Models.Path.Parse
 import Models.Path.Simple
@@ -67,29 +70,105 @@ pLastLegacyPartialPath =
       guard (maybe False isSpace (lastMay text))
     c = lexeme (many (oneOf (":.-_" :: String) <|> alphaNumChar) <* lookAhead s)
 
-consUnless :: Bool -> a -> [a] -> [a]
-consUnless False = (:)
-consUnless True = const id
+-- | A path that is all that is typed of a group, from its opening
+-- parenthesis or its last @&@ or union operator, for completion.
+getGroupPartialPath :: Text -> Maybe LegacyPartialPath
+getGroupPartialPath i =
+  case runParser (whitespace *> pLegacyPartialPath <* eof) "<completion>" i of
+    Left _ -> Nothing
+    Right r -> Just r
 
--- | optimization possibility for better autocompletion, we could also
--- handle & and trim the possible auto completions based on &'s that are
--- present before.
--- Unfortunately the semantics make this near impossible so it probably best
--- to ignore this
---
--- THIS NEEDS TO TAKE A REVERSED INPUT STRING AS AN ARGUMENT AND RETURNS A
--- UNREVERSED STRING THAT SHOULD BE FED TO THE PARSER
-takeRelevantFromEnd :: String -> String
-takeRelevantFromEnd i = go (0 :: Int) i False ""
+-- | What of a command line, read up to the cursor, leads to the path that
+-- is completed there. Quotes, regexes and URLs are read whole, so that
+-- what is in them is no operator or parenthesis.
+data PathEnd = PathEnd
+  { -- | The line outside the groups that are open at the cursor, from its
+    -- last @&@ or union operator outside parentheses (the command and the
+    -- arguments before the path when there is none): what leads to the
+    -- outermost open group, or to the cursor.
+    outside :: Text,
+    -- | For each group that is open at the cursor, outermost first, what
+    -- is typed of it from its last @&@ or union operator, or from its
+    -- opening parenthesis: each side of the group starts where the group
+    -- does, so the sides before it are left out.
+    groups :: [Text],
+    -- | What is typed after the opening quote of the label that the cursor
+    -- is in, if it is in one; the quote and this are not in the texts
+    -- above.
+    quoted :: Maybe Text
+  }
+  deriving (Show, Eq, Ord)
+
+-- | A group of a command line being read: everything in it so far and what
+-- is in it from its last operator, both reversed.
+data Frame = Frame
+  { -- | The parentheses of a directive's arguments, not a group.
+    directive :: Bool,
+    whole :: String,
+    side :: String
+  }
+
+-- | Where the cursor is in a command line, given the line up to it:
+-- Nothing when it is in a regex, a URL or a directive's arguments.
+pathEndBefore :: Text -> Maybe PathEnd
+pathEndBefore = go (Frame False "" "" :| []) . unpack
   where
-    go _ "" _ acc = acc
-    go n (')' : rest) d acc = go (n + 1) rest d (consUnless d ')' acc)
-    go n ('(' : rest) d acc
-      | n == 0 = go 0 rest False acc
-      | otherwise = go (n - 1) rest d (consUnless d '(' acc)
-    go 0 ('+' : rest) _ acc = go 0 rest True acc
-    go 0 ('&' : rest) _ acc = go 0 rest True acc
-    go n (x : rest) d acc = go n rest d (consUnless d x acc)
+    go :: NonEmpty Frame -> String -> Maybe PathEnd
+    go frames@(frame :| outer) = \case
+      [] -> finish frames Nothing
+      input@(c : rest)
+        | c `elem` ['"', '\''],
+          ":xeger" `isPrefixOf` frame.side ->
+            -- a regex is read up to its delimiter, escapes and all
+            case break (== c) rest of
+              (pattern', _ : rest') -> go (adding (c : pattern' <> [c])) rest'
+              _ -> Nothing
+        | c == '"' -> case stringBody rest of
+            Right (body, rest') -> go (adding ('"' : body <> "\"")) rest'
+            Left typed -> finish frames (Just typed)
+        | any (`isPrefixOf` input) ["http://", "https://"],
+          maybe True (not . isIdentChar) (headMay frame.whole) ->
+            -- a URL extends to the next space
+            case break isSpace input of
+              (_, []) -> Nothing
+              (url, rest') -> go (adding url) rest'
+        | c == '(' ->
+            let opened = Frame (directiveBefore frame.side) "" ""
+             in go (opened :| (frame : outer)) rest
+        | c == ')',
+          o : os <- outer ->
+            let closed = "(" <> reverse frame.whole <> ")"
+             in go (append closed o :| os) rest
+        | c `elem` ("&|+" :: String) ->
+            go (frame {whole = c : frame.whole, side = ""} :| outer) rest
+        | otherwise -> go (adding [c]) rest
+      where
+        adding t = append t frame :| outer
+    append t f =
+      f {whole = reverse t <> f.whole, side = reverse t <> f.side}
+    -- a % and a name before the parenthesis
+    directiveBefore reversedSide = case span isAlpha reversedSide of
+      (_ : _, '%' : _) -> True
+      _ -> False
+    -- the characters of a string up to its closing quote, and what
+    -- follows it; all of them when it is not closed
+    stringBody = loop ""
+      where
+        loop acc = \case
+          '"' : rest -> Right (reverse acc, rest)
+          '\\' : x : rest -> loop (x : '\\' : acc) rest
+          x : rest -> loop (x : acc) rest
+          [] -> Left (reverse acc)
+    finish frames typed
+      | any (.directive) frames = Nothing
+      | otherwise =
+          Just
+            PathEnd
+              { outside = text (NE.last frames),
+                groups = reverse (map text (NE.init frames)),
+                quoted = pack <$> typed
+              }
+    text f = pack (reverse f.side)
 
 test_pLegacyPartialPath :: TestTree
 test_pLegacyPartialPath =
@@ -131,18 +210,39 @@ test_getLegacyPartialPath =
   where
     reads' i e = testCase (show i) $ getLegacyPartialPath i @?= e
 
-test_takeRelevantFromEnd :: TestTree
-test_takeRelevantFromEnd =
+test_pathEndBefore :: TestTree
+test_pathEndBefore =
   testGroup
-    "takeRelevantFromEnd"
-    [ takeRelevantFromEnd' "a/(b + c" "a/ c",
-      takeRelevantFromEnd' "a/(b + c/d" "a/ c/d",
-      takeRelevantFromEnd' "(a + b)/e + (c + d)" " (c + d)",
-      takeRelevantFromEnd' "(a + b)/(e + (c + d)" "(a + b)/ (c + d)",
-      takeRelevantFromEnd' "a & b/" " b/",
-      takeRelevantFromEnd' "a & b/(a + b & c/(d + e" " b/ c/ e",
-      takeRelevantFromEnd' "@200 + @100/" " @100/",
-      takeRelevantFromEnd' "#foo + #bar/" " #bar/"
+    "pathEndBefore"
+    [ "ls a/b" `endsAs` Just (PathEnd "ls a/b" [] Nothing),
+      "ls a & b/c" `endsAs` Just (PathEnd " b/c" [] Nothing),
+      "ls a/(b + c" `endsAs` Just (PathEnd "ls a/" [" c"] Nothing),
+      "ls a/(b | c/d" `endsAs` Just (PathEnd "ls a/" [" c/d"] Nothing),
+      "ls a/(b ++ c" `endsAs` Just (PathEnd "ls a/" [" c"] Nothing),
+      "ls (a + b)/e + (c + d)" `endsAs` Just (PathEnd " (c + d)" [] Nothing),
+      "ls (a + b)/(e + (c + d)"
+        `endsAs` Just (PathEnd "ls (a + b)/" [" (c + d)"] Nothing),
+      "ls a & b/(a + b & c/(d + e"
+        `endsAs` Just (PathEnd " b/" [" c/", " e"] Nothing),
+      "ls (a " `endsAs` Just (PathEnd "ls " ["a "] Nothing),
+      "ls #foo + #bar/" `endsAs` Just (PathEnd " #bar/" [] Nothing),
+      -- what is in a quote, a regex or a URL is no operator or parenthesis
+      "ls \"a & (b\"/c" `endsAs` Just (PathEnd "ls \"a & (b\"/c" [] Nothing),
+      "ls \"a\\\" & (b\"/c"
+        `endsAs` Just (PathEnd "ls \"a\\\" & (b\"/c" [] Nothing),
+      "ls regex:'(\\' & c" `endsAs` Just (PathEnd " c" [] Nothing),
+      "ls regex:\"(\" & c" `endsAs` Just (PathEnd " c" [] Nothing),
+      "ls https://a.b/?c&(d e"
+        `endsAs` Just (PathEnd "ls https://a.b/?c&(d e" [] Nothing),
+      -- a quote that is not closed
+      "ls \"a b" `endsAs` Just (PathEnd "ls " [] (Just "a b")),
+      "ls x/(y & \"a (b\\\""
+        `endsAs` Just (PathEnd "ls x/" [" "] (Just "a (b\\\"")),
+      -- in a regex, a URL or a directive's arguments
+      "ls regex:\"a" `endsAs` Nothing,
+      "ls https://a.b/" `endsAs` Nothing,
+      "ls %targets(a & b" `endsAs` Nothing,
+      "ls %targets(a)/b" `endsAs` Just (PathEnd "ls %targets(a)/b" [] Nothing)
     ]
   where
-    takeRelevantFromEnd' i e = testCase i $ e @=? (takeRelevantFromEnd . reverse $ i)
+    endsAs i e = testCase (show i) $ pathEndBefore i @?= e
