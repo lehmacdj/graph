@@ -906,29 +906,31 @@ runCommand open c = evalStateLocal (EmptyTargets []) do
       Seq _ -> id
       _ -> asOneDecision
 
--- | Merge the nodes of @mg@'s arguments (paired with the node each
--- resolved to) and return the survivor. Arguments resolving to the same node
--- count once; fewer than two distinct nodes is an error. The @--keep@ node
--- survives with its NID and data, and the others' data is discarded with a
--- warning. Without @--keep@ the first argument's node survives, and at most
--- one node may have data, which the survivor then takes; otherwise nothing
--- changes and the error asks for @--keep@. Empty data counts as no data. A
--- system node ('systemNodeNIDs', e.g. the origin) is never merged away: it
--- survives without @--keep@, and @--keep@ on another node, or merging two
--- system nodes, is an error.
+-- | Merge the nodes of @mg@'s arguments (paired with the nodes each
+-- resolved to, at least one, and one for a @--keep@ argument) and return the
+-- survivor. A node reached more than once counts once; fewer than two
+-- distinct nodes is an error. The @--keep@ node survives with its NID and
+-- data, and the others' data is discarded with a warning. Without @--keep@
+-- the first node of the first argument survives, and at most one node may
+-- have data, which the survivor then takes; otherwise nothing changes and
+-- the error asks for @--keep@. Empty data counts as no data. A system node
+-- ('systemNodeNIDs', e.g. the origin) is never merged away: it survives
+-- without @--keep@, and @--keep@ on another node, or merging two system
+-- nodes, is an error.
 mergeTargets ::
   (CommandEffects effs, HasGraph Text effs) =>
-  [(MergeArgument, NID)] ->
+  [(MergeArgument, Set NID)] ->
   Eff effs NID
 mergeTargets targets = do
-  let nids = ordNub (map snd targets)
+  let pairs = [(a, n) | (a, ns) <- targets, n <- toList ns]
+      nids = ordNub (map snd pairs)
       describeNode n =
         tshow n
           ++ " ("
           ++ intercalate
             ", "
             [ tshow (mergeArgumentPath a)
-            | (a, n') <- targets,
+            | (a, n') <- pairs,
               n' == n
             ]
           ++ ")"
@@ -942,19 +944,28 @@ mergeTargets targets = do
   -- empty data counts as no data
   let withData = [n | (n, Just d) <- zip nids datas, not (null d)]
       dataOf n = join (lookup n (zip nids datas))
-      -- the arguments again, keeping the first node with data
+      -- the arguments again, keeping the first node with data: --keep goes
+      -- before its argument if that reaches only it, else names the node
+      indexed = zip [0 :: Int ..] targets
+      argText = tshow . mergeArgumentPath
       suggestion =
         unwords . ("mg" :) $
-          zipWith
-            ( \i (a, _) ->
-                (if Just i == firstWithData then "--keep " else "")
-                  ++ tshow (mergeArgumentPath a)
-            )
-            [0 :: Int ..]
-            targets
+          case firstWithData of
+            Just (i, ns, _)
+              | length ns == 1 ->
+                  [ (if j == i then "--keep " else "") ++ argText a
+                  | (j, (a, _)) <- indexed
+                  ]
+            Just (_, _, n) -> ("--keep " ++ tshow n) : map (argText . fst) targets
+            Nothing -> map (argText . fst) targets
       firstWithData =
-        fst <$> find ((`elem` withData) . snd . snd) (zip [0 ..] targets)
-      kept = snd <$> find (isKept . fst) targets
+        listToMaybe
+          [ (i, ns, n)
+          | (i, (_, ns)) <- indexed,
+            n <- toList ns,
+            n `elem` withData
+          ]
+      kept = snd <$> find (isKept . fst) pairs
       systemNodes = systemNodesAmong nids
       systemError =
         throwError
@@ -1183,12 +1194,16 @@ runCommand' open = \case
     nid <- currentLocation
     targets <- forM (zip [1 :: Int ..] (toList args)) $ \(i, arg) -> do
       let p0 = mergeArgumentPath arg
-          err =
-            singleErr $
-              "argument " ++ tshow i ++ " of mg (" ++ tshow p0 ++ ")"
+          name = "argument " ++ tshow i ++ " of mg (" ++ tshow p0 ++ ")"
       p <- expandDirectives p0
-      target <- the' err =<< editing (Paths.queryTargets nid p)
-      pure (arg, target)
+      nids <- editing (Paths.queryTargets nid p)
+      when (null nids) . throwError . OtherError $
+        name
+          ++ " needs a path that resolves to at least one node\n"
+          ++ "but it resolved to: []"
+      when (isKept arg) . void $
+        the' (singleErr (name ++ ", marked --keep,")) nids
+      pure (arg, nids)
     survivor <- editing (mergeTargets targets)
     changeLocation survivor
   Remove mode p0 -> do

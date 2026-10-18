@@ -6,8 +6,8 @@
 2 -y-> 3
 ==========input==========
 mg a b/missing
-mg a b + c
-mg a *
+mg a --keep b + c
+mg --keep * a
 ls
 ==========stdout==========
 g> g> g> g> [0m[0;1ma[0m[0m [0;34m@000000000001[0m [0m[0m
@@ -15,11 +15,11 @@ g> g> g> g> [0m[0;1ma[0m[0m [0;34m@000000000001[0m [0m[0m
 [0m[0;1mc[0m[0m [0;34m@000000000003[0m [0m[0m
 g> Goodbye!
 ==========stderr==========
-argument 2 of mg ("b" / "missing") needs a path that resolves to a single node
+argument 2 of mg ("b" / "missing") needs a path that resolves to at least one node
 but it resolved to: []
-argument 2 of mg ("b" + "c") needs a path that resolves to a single node
+argument 2 of mg ("b" + "c"), marked --keep, needs a path that resolves to a single node
 but it resolved to: [@000000000002,@000000000003]
-argument 2 of mg (*) needs a path that resolves to a single node
+argument 1 of mg (*), marked --keep, needs a path that resolves to a single node
 but it resolved to: [@000000000001,@000000000002,@000000000003]
 ==========graph-dump==========
 @000000000000{out=[@000000000001 via "a", @000000000002 via "b", @000000000003 via "c"], in=[@0daCJjMrQel8 via "origin"]}

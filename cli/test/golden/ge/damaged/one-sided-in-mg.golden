@@ -11,7 +11,7 @@ nid
 g> g> g> @000000000000
 g> Goodbye!
 ==========stderr==========
-argument 2 of mg ("b") needs a path that resolves to a single node
+argument 2 of mg ("b") needs a path that resolves to at least one node
 but it resolved to: []
 this change was not written: the graph is damaged where it applies (damaged-graph)
 - the edge @000000000000 -"b"-> @000000000002 is among the incoming edges in 000000000002.json but not among the outgoing edges in 000000000000.json

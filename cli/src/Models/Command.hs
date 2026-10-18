@@ -27,9 +27,9 @@ data Command
     Dualize
   | -- | mk [--max-repairs N]
     Make MaxRepairs ParsedPath
-  | -- | mg [--keep] p1 [--keep] p2 …: merge the nodes, one per argument,
+  | -- | mg [--keep] p1 [--keep] p2 …: merge every node the arguments reach
     -- into one; at most one argument is marked @--keep@ (see 'MergeArgument')
-    Merge (TwoElemList MergeArgument)
+    Merge (NonEmpty MergeArgument)
   | -- | t, tag [--max-repairs N]
     Tag MaxRepairs ParsedPath ParsedPath
   | Text Text Text
@@ -82,8 +82,9 @@ data Command
 -- 'Models.PathPattern.Residuate.defaultMaxRepairs'.
 type MaxRepairs = Maybe RepairsLimit
 
--- | An argument of @mg@: a path that must resolve to a single node. The
--- 'Kept' node survives the merge, keeping its NID and data.
+-- | An argument of @mg@: a path that must reach at least one node; every
+-- node it reaches is merged. A 'Kept' path must reach a single node, which
+-- survives the merge, keeping its NID and data.
 data MergeArgument
   = Merged ParsedPath
   | Kept ParsedPath

@@ -65,7 +65,7 @@ not undone (section 6).
 | `rn [--all-parents] p q`, `cl`/`clone`/`alias [--all-parents] p q` | `p` an edge path, `q` a destination | `\|` | renames or clones the selected edge (3) |
 | `tag [--max-repairs N] p q`, `t …` | `p` constructed, `q` one node | `++` in `p`, `\|` in `q` | links every end of `p`'s first match to `q`'s target with an empty label (4.6) |
 | `at p cmd` | `p`; `cmd` has paths of its own | `\|` | runs `cmd` at each target (2.4) |
-| `mg [--keep] p1 [--keep] p2 …` | each one node | `\|` | merges the nodes (2.5) |
+| `mg [--keep] p1 [--keep] p2 …` | each at least one node; a `--keep` one exactly one | `\|` | merges every node they reach (2.5) |
 | `%targets(p)` in any path | `p`, a query of its own | `\|`, whatever surrounds it, unless an `%override({plus = …}, …)` is written inside `p` | the nodes `p` reaches, as a union (2.6) |
 
 `dd l` (`dedup`) and `text l …` (`mkt`) take a label, not a path, and `desc …` (`describe`) takes free text. The other commands (`nid`, `d`, `back n`, `vi`, `si` (`show-image`), `fsck`, `fix [--dry-run] [@id …]` (whole node ids, not paths), `:i dir` (`:import`), `:d` (`:debug`)) take no path.
@@ -146,7 +146,7 @@ does when its path reaches no node, one, or several:
 | `cd` | error, "resolved to: []" | moves there | error naming the nodes |
 | `rmnf` | nothing, silently | deletes the node | deletes every node |
 | `at` | nothing, silently | runs `cmd` there | runs `cmd` at each in turn |
-| `mg` | error for that argument | that node is merged | error for that argument |
+| `mg` | error for that argument | that node is merged | every node is merged; error for a `--keep` argument |
 | `tag p q` (`q`) | error | links to it | error naming the nodes |
 | `mv p q`, `cp p q` (`q`) | error, "resolved to: []" (checked before `p`) | the edges go there | error naming the nodes |
 | `rm` | changes nothing, with a notice (3) | deletes the selected edge | deletes the selected edge of every match |
@@ -207,7 +207,7 @@ $ tag #t c
 the last argument of tag needs a path that resolves to a single node
 but it resolved to: [@3,@4]
 $ mg zz a
-argument 1 of mg ("zz") needs a path that resolves to a single node
+argument 1 of mg ("zz") needs a path that resolves to at least one node
 but it resolved to: []
 ```
 
@@ -380,23 +380,14 @@ $ at a {cd b}; nid
 
 ### 2.5 `mg`
 
-`mg p1 p2 …` merges nodes, one per argument; it takes two arguments or
-more (one is a parse error), each of which must reach exactly one node.
-The nodes' edges are moved onto the one that survives (edges between
-merged nodes become loops), and the location is then the survivor.
-Which node survives:
+`mg p1 p2 …` merges every node its arguments reach into one; it takes one argument or more, each of which must reach at least one node, and the nodes must be two or more once a node reached more than once is counted once. One argument can reach them all: `mg foo` merges the nodes that the `foo` edges of the current node lead to, which leaves one `foo` edge. The nodes' edges are moved onto the one that survives (edges between merged nodes become loops), and the location is then the survivor. Which node survives:
 
 - A system node (the origin, `tags`, …) is never merged away: if one
   of the nodes is one, it survives whatever the order of the arguments;
   two system nodes, or `--keep` on another node, is an error that
   changes nothing.
-- Otherwise `--keep` before one argument (at most one) marks the
-  survivor, which keeps its NID and its data; the other nodes' data is
-  discarded with a warning.
-- Otherwise the first argument's node survives. At most one of the
-  nodes may then have data, and the survivor takes it, whichever node
-  it came from; with data on several, nothing changes and the error
-  suggests a `--keep`.
+- Otherwise `--keep` before one argument (at most one) marks the survivor, which keeps its NID and its data; the other nodes' data is discarded with a warning. That argument must reach exactly one node.
+- Otherwise the first node of the first argument survives. At most one of the nodes may then have data, and the survivor takes it, whichever node it came from; with data on several, nothing changes and the error suggests a `--keep` (before the argument that reaches the first node with data, or naming that node when its argument reaches others too).
 
 ```ge
 graph: 0 -a-> 1, 1 -b-> 2, 0 -c-> 3, 0 -c-> 4
@@ -406,22 +397,15 @@ $ mg --keep c/@3 a; nid
 + 3 -b-> 2
 - 0 -a-> 1
 - 1 -b-> 2
-$ mg a c
-argument 2 of mg ("c") needs a path that resolves to a single node
+$ mg c; nid
+@3
+- 0 -c-> 4
+$ mg a --keep c
+argument 2 of mg ("c"), marked --keep, needs a path that resolves to a single node
 but it resolved to: [@3,@4]
 $ mg a a
 mg needs at least two distinct nodes to merge
 but its arguments all resolved to @1
-$ mg a
-<interactive>:1:5:
-  |
-1 | mg a
-  |     ^
-unexpected end of input
-expecting "!{", "%history(", "%last", "%never", "%override(", "%targets(",
-    "%{", "++", "--keep", "http://", "https://", '#', '&', '(', '*', '+', '/',
-    '@', '|', '~', <transition>, @<nid>, alphanumeric character, or
-    regex:"<regex>"
 $ mg a @0; nid
 @0
 + 0 -a-> 0

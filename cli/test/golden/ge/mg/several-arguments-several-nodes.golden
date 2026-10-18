@@ -1,0 +1,29 @@
+==========graph==========
+0 -foo-> 1
+0 -foo-> 2
+0 -bar-> 3
+0 -baz-> 4
+3 data "three"
+==========input==========
+mg foo --keep bar baz
+nid
+ls
+==========stdout==========
+g> g> @000000000003
+g> no targets
+g> Goodbye!
+==========stderr==========
+==========graph-dump==========
+@000000000000{out=[@000000000003 via "bar", @000000000003 via "baz", @000000000003 via "foo"], in=[@0daCJjMrQel8 via "origin"]}
+@000000000003{out=[], in=[@000000000000 via "bar", @000000000000 via "baz", @000000000000 via "foo"]}
+@0daCJjMrQel8{out=[@zsBuPkn5mh8F via "file-extensions", @AhQufiPzgyRf via "file-hashes", @3JJvxFUHGAA1 via "historical-special-nodes", @S00KkOYoVpFu via "import-dates", @a0fVkm0kR7KE via "import-urls", @927u9Xyky2pC via "mime-types", @000000000000 via "origin", @pbYxBO6fzBQV via "tags"], in=[]}
+@3JJvxFUHGAA1{out=[@VEfLhuTgZ88Z via "sequence-ids"], in=[@0daCJjMrQel8 via "historical-special-nodes"]}
+@927u9Xyky2pC{out=[], in=[@0daCJjMrQel8 via "mime-types"]}
+@AhQufiPzgyRf{out=[], in=[@0daCJjMrQel8 via "file-hashes"]}
+@S00KkOYoVpFu{out=[], in=[@0daCJjMrQel8 via "import-dates"]}
+@VEfLhuTgZ88Z{out=[], in=[@3JJvxFUHGAA1 via "sequence-ids"]}
+@a0fVkm0kR7KE{out=[], in=[@0daCJjMrQel8 via "import-urls"]}
+@pbYxBO6fzBQV{out=[], in=[@0daCJjMrQel8 via "tags"]}
+@zsBuPkn5mh8F{out=[], in=[@0daCJjMrQel8 via "file-extensions"]}
+==========data==========
+000000000003.data: "three"
